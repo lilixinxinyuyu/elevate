@@ -83,6 +83,47 @@ interface AnswerRecord {
   comboAfter: number;
 }
 
+/**
+ * 把题目的"正确答案"翻译成给 AI tutor 看的人话。
+ *  - 选项题：返回正确选项的 text
+ *  - mini-game（poem_cloze / pair_match / sentence_shuffle）：从 game_data 算出可读字串
+ *  - 都没有就用 stem 兜底
+ */
+function describeCorrectAnswer(q: Question, correctOptionId: string): string {
+  // mini-game
+  if (q.game_data) {
+    if (q.game_data.kind === "poem_cloze") {
+      return `空格依次填：${q.game_data.blanks.join(" / ")}`;
+    }
+    if (q.game_data.kind === "sentence_shuffle") {
+      return q.game_data.fullSentence ?? q.game_data.tokens.join("");
+    }
+    if (q.game_data.kind === "pair_match") {
+      return q.game_data.pairs.map((p) => `${p.left} ↔ ${p.right}`).join("，");
+    }
+  }
+  if (q.options && correctOptionId) {
+    const opt = q.options.find((o) => o.id === correctOptionId);
+    if (opt) return opt.text;
+  }
+  return q.solution_steps?.[0] ?? "（参考解题步骤）";
+}
+
+/** 把 chosen 翻译成人话；mini-game 就描述对错状态。 */
+function describeStudentAnswer(q: Question, chosen: string | null): string {
+  if (chosen === null) return "";
+  if (q.game_data) {
+    return chosen === "__game_correct__"
+      ? "迷你游戏全部配对正确"
+      : "迷你游戏过程中有错配 / 错点";
+  }
+  if (q.options) {
+    const opt = q.options.find((o) => o.id === chosen);
+    if (opt) return opt.text;
+  }
+  return chosen;
+}
+
 export function ChineseTrainPage() {
   const subject = useSubject();
   const [params] = useSearchParams();
@@ -234,9 +275,16 @@ export function ChineseTrainPage() {
               : "这个范围还没题"}
         </div>
         <div className="text-sm text-slate-400">
-          {mode === "review" ? "答错的题会自动出现在这里。" : ""}
+          {mode === "review" ? "答错的题会自动出现在这里。" : "让 AI 给你出几道新的吧～"}
         </div>
-        <Link to="/chinese" className="btn-primary inline-block mt-3">回首页</Link>
+        <div className="flex gap-3 justify-center mt-3">
+          {mode !== "review" && (
+            <Link to="/chinese/admin#ai-gen" className="btn-primary inline-block">
+              🤖 让 AI 自动出题
+            </Link>
+          )}
+          <Link to="/chinese" className="btn-secondary inline-block">回首页</Link>
+        </div>
       </div>
     );
   }
@@ -713,18 +761,8 @@ export function ChineseTrainPage() {
         <TutorPanel
           subjectId="chinese"
           stem={q.stem}
-          correctAnswer={
-            q.options
-              ? q.options.find((o) => o.id === correctOptionId)?.text ?? correctOptionId
-              : "（参考解题步骤）"
-          }
-          studentAnswer={
-            chosen === "__game_correct__"
-              ? "（迷你游戏全对）"
-              : chosen === "__game_wrong__"
-                ? "（迷你游戏没全对）"
-                : (q.options?.find((o) => o.id === chosen)?.text ?? "")
-          }
+          correctAnswer={describeCorrectAnswer(q, correctOptionId)}
+          studentAnswer={describeStudentAnswer(q, chosen)}
           skillName={q.skill_name ?? q.skill_id}
           onClose={() => setShowTutor(false)}
         />

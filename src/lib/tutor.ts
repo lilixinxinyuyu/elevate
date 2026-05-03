@@ -129,7 +129,7 @@ export async function voiceAsk(args: VoiceAskArgs): Promise<VoiceAskResult> {
 // ============================================================
 
 export interface GenerateQuestionsArgs {
-  subjectId: "chinese";
+  subjectId: "chinese" | "math";
   unitId: string;
   unitName?: string;
   skillId: string;
@@ -147,7 +147,10 @@ export interface GenerateQuestionsResult {
   requestedCount: number;
 }
 
-export async function generateChineseQuestions(
+/** 通用：math / chinese 都用这个。函数名保留 "Chinese" 兼容老代码。 */
+export const generateChineseQuestions = generateAiQuestions;
+
+export async function generateAiQuestions(
   args: GenerateQuestionsArgs,
 ): Promise<GenerateQuestionsResult> {
   const r = await fetch("/api/generate/questions", {
@@ -180,6 +183,53 @@ export async function generateChineseQuestions(
     generatedCount: j.generatedCount ?? j.questions.length,
     requestedCount: j.requestedCount ?? args.count,
   };
+}
+
+// ============================================================
+//  3.5 AI 图像生成（勋章 / 图标 / 配图）
+// ============================================================
+
+export interface GenerateImageArgs {
+  prompt: string;
+  /** 默认 qwen-image-2.0-pro */
+  model?: "qwen-image-2.0-pro" | "qwen-image-2.0";
+  /** 默认 512*512（勋章用） */
+  size?: "512*512" | "1024*1024";
+  style?: string;
+  n?: number;
+}
+
+export interface GenerateImageResult {
+  urls: string[];
+  model: string;
+  taskId: string;
+}
+
+export async function generateImage(args: GenerateImageArgs): Promise<GenerateImageResult> {
+  const r = await fetch("/api/generate/image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify(args),
+  });
+  if (!r.ok) {
+    let parsed: { error?: string; detail?: string } | null = null;
+    try {
+      parsed = await r.json();
+    } catch {
+      /* */
+    }
+    throw new TutorError(parsed?.error ?? "request_failed", r.status, parsed?.detail);
+  }
+  const j = (await r.json()) as {
+    ok?: boolean;
+    urls?: string[];
+    model?: string;
+    taskId?: string;
+  };
+  if (!j.ok || !Array.isArray(j.urls) || j.urls.length === 0) {
+    throw new TutorError("empty_response", r.status, "no images in body");
+  }
+  return { urls: j.urls, model: j.model ?? "unknown", taskId: j.taskId ?? "" };
 }
 
 // ============================================================

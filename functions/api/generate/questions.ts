@@ -25,7 +25,7 @@ import { checkAuth, corsHeaders, jsonResponse, type Env } from "../../_shared";
  */
 
 interface GenerateRequest {
-  subjectId?: string;
+  subjectId?: "math" | "chinese";
   unitId?: string;
   unitName?: string;
   skillId?: string;
@@ -38,21 +38,30 @@ interface GenerateRequest {
   gameType?: string;
 }
 
-const SYSTEM_PROMPT = `你是 Selena（4 年级女生，人教版四下）的语文出题助手。你必须严格输出 JSON 数组，每个对象都符合下面给的题目模板。
+function buildSystemPrompt(subjectId: string): string {
+  const subjLabel = subjectId === "math" ? "数学" : "语文";
+  const dictionary =
+    subjectId === "math"
+      ? "（北师大版四年级下册：小数 / 方程 / 三角形 / 立体观察 / 平均数等单元；不要超纲到五年级如比例、函数）"
+      : "（人教版四年级下册：1-4单元字音字形 / 古诗 / 修辞 / 听写词语 / 阅读）";
+  return `你是 Selena（4 年级女生）的${subjLabel}出题助手。${dictionary}
+
+你必须严格输出 JSON 数组，每个对象都符合下面给的题目模板。
 
 题目质量要求：
-1. 内容必须符合人教版四年级下册大纲（不能超纲到五年级以上）
+1. 内容必须符合 4 年级下册大纲（不能超纲）
 2. 题面（stem）写在题目内，不要"请选择"等多余前缀
 3. 4 个选项（id 用 "A" "B" "C" "D"），其中一个正确，三个干扰项必须看似合理但能讲出错因
 4. feedback_correct 用一句话解释为什么对（含知识点要点）
-5. feedback_wrong 用一句话给学习方向，不要批评
+5. feedback_wrong 用一句话给学习方向，不要批评（不要用"笨"等负面词）
 6. solution_steps 给 1-2 步思路文字
 7. 必须有 common_errors，至少 2 项（tag + error + remediation）
-8. 不重复给定的 existingStems 题干（要换不同语境 / 例字）
+8. 不重复给定的 existingStems 题干（要换不同语境 / 例字 / 数字）
 9. difficulty 1-5：1=送分，3=单元中等，5=拔高
-10. 内容安全：不出现真实姓名、广告、负面词（"笨"等）
+10. 内容安全：不出现真实姓名、广告、付费、负面词
 
-输出格式：必须是纯 JSON 数组，不要 markdown 代码块标记，不要解释文字。`;
+输出格式：必须输出顶层 { "questions": [...] } 的 JSON 对象，不要 markdown 代码块标记，不要解释文字。`;
+}
 
 interface QwenChatResponse {
   choices?: { message?: { content?: string } }[];
@@ -136,14 +145,22 @@ function extractJsonArray(text: string): unknown[] | null {
 
 function buildUserPrompt(args: GenerateRequest): string {
   const count = Math.max(1, Math.min(10, args.count ?? 5));
+  const subj = args.subjectId === "math" ? "数学" : "语文";
+  const subjectId = args.subjectId === "math" ? "math" : "chinese";
+  // 数学按 ability 默认 calculation；语文 vocabulary
+  const defaultAbility = subjectId === "math" ? "calculation" : "vocabulary";
+  // 数学常用 errorTag 示例 vs 语文
+  const errorTagExample =
+    subjectId === "math" ? "decimal_point_error" : "wrong_phonics";
+
   const lines: string[] = [];
-  lines.push(`请生成 ${count} 道语文题：`);
+  lines.push(`请生成 ${count} 道${subj}题：`);
   lines.push(`- 单元：${args.unitName ?? args.unitId} (id: ${args.unitId})`);
   lines.push(`- 技能点：${args.skillName ?? args.skillId} (id: ${args.skillId})`);
   lines.push(`- 难度范围：${args.difficulty ?? "2-4"}`);
   lines.push(`- 题型：plain_choice（4 选 1 单选）`);
   if (args.existingStems && args.existingStems.length > 0) {
-    lines.push(`\n以下题干已有，请勿重复同样的语境（可换字 / 换情境 / 换例句）：`);
+    lines.push(`\n以下题干已有，请勿重复同样的语境（可换字 / 换情境 / 换例句 / 换数字）：`);
     for (const s of args.existingStems.slice(0, 30)) {
       lines.push(`- ${s.slice(0, 50)}`);
     }
@@ -154,13 +171,13 @@ function buildUserPrompt(args: GenerateRequest): string {
       lines.push(`- ${s.slice(0, 50)}`);
     }
   }
-  lines.push(`\n严格按照下面的字段结构输出 JSON 数组，question_id 全部以 "AI_${args.skillId}_" 开头加 6 位时间戳后缀，唯一即可：
+  lines.push(`\n严格按照下面的字段结构输出 JSON，question_id 全部以 "AI_${args.skillId}_" 开头加 3 位序号：
 
 {
   "questions": [
     {
       "question_id": "AI_${args.skillId}_001",
-      "subjectId": "chinese",
+      "subjectId": "${subjectId}",
       "version": 1,
       "status": "approved",
       "grade": 4,
@@ -169,7 +186,7 @@ function buildUserPrompt(args: GenerateRequest): string {
       "unit_name": "${args.unitName ?? ""}",
       "skill_id": "${args.skillId}",
       "skill_name": "${args.skillName ?? ""}",
-      "ability_dimension": ["vocabulary"],
+      "ability_dimension": ["${defaultAbility}"],
       "exam_priority": "HIGH_BIG",
       "game_type": "plain_choice",
       "play_as": "plain_choice",
@@ -187,7 +204,7 @@ function buildUserPrompt(args: GenerateRequest): string {
       "answer": { "type": "choice", "value": "A" },
       "solution_steps": ["分析步骤 1"],
       "common_errors": [
-        { "tag": "wrong_phonics", "error": "学生可能这样错", "remediation": "怎样纠正" }
+        { "tag": "${errorTagExample}", "error": "学生可能这样错", "remediation": "怎样纠正" }
       ],
       "feedback_correct": "对的解释",
       "feedback_wrong": "错的提示，鼓励为主",
@@ -228,19 +245,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!body.unitId || !body.skillId) {
     return jsonResponse({ ok: false, error: "missing_unitId_or_skillId" }, 400);
   }
-  if (body.subjectId && body.subjectId !== "chinese") {
-    return jsonResponse(
-      { ok: false, error: "only_chinese_supported_currently" },
-      400,
-    );
-  }
+  const subjectId = body.subjectId === "math" ? "math" : "chinese";
 
-  const userPrompt = buildUserPrompt(body);
+  const systemPrompt = buildSystemPrompt(subjectId);
+  const userPrompt = buildUserPrompt({ ...body, subjectId });
 
   const models = ["qwen-plus", "qwen-flash", "qwen-turbo"];
   const tried: { model: string; status: number; code: string; message: string }[] = [];
   for (const m of models) {
-    const r = await callQwenChat(env.DASHSCOPE_API_KEY, m, SYSTEM_PROMPT, userPrompt);
+    const r = await callQwenChat(env.DASHSCOPE_API_KEY, m, systemPrompt, userPrompt);
     if (!r.ok) {
       tried.push({ model: m, status: r.status, code: r.code, message: r.message });
       if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
@@ -277,7 +290,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return {
         ...obj,
         question_id: `${baseId}__${stamp}_${i}`,
-        subjectId: "chinese",
+        subjectId,
         tags: Array.isArray(obj.tags)
           ? Array.from(new Set([...(obj.tags as string[]), "ai_generated"]))
           : ["ai_generated"],

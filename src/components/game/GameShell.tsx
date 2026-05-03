@@ -89,6 +89,8 @@ export function GameShell(props: GameShellProps) {
     isCorrect: boolean;
     partialCorrect: boolean;
     correctAnswerDisplay: string;
+    /** 用户提交的答案的文字描述（数学 tutor panel 用） */
+    userAnswerDisplay: string;
     points: number;
     repeatDecay?: number;
     newSkillBonus?: number;
@@ -181,6 +183,7 @@ export function GameShell(props: GameShellProps) {
           isCorrect: r.isCorrect,
           partialCorrect: r.partialCorrect,
           correctAnswerDisplay: describeAnswer(question),
+          userAnswerDisplay: describeUserAnswer(question, r.answer),
           points: res.points,
           repeatDecay: res.repeatDecay,
           newSkillBonus: res.newSkillBonus,
@@ -384,6 +387,27 @@ function describeAnswer(q: Question): string {
   return a.steps.map((s) => `${s.step_id}=${s.expected}`).join("；");
 }
 
+/** 把用户提交的 answer（unknown）翻译成给 AI tutor 看的人话。 */
+function describeUserAnswer(q: Question, answer: unknown): string {
+  if (answer === null || answer === undefined) return "（未作答）";
+  if (typeof answer === "number") return `${answer}`;
+  if (typeof answer === "string") {
+    // choice 题：可能是 option id（"A"/"B"…），转成 "A. 选项文本"
+    const opt = (q.options ?? []).find((o) => o.id === answer);
+    if (opt) return `${answer}. ${opt.text}`;
+    return answer;
+  }
+  if (typeof answer === "object") {
+    // multi_step 等结构化答案
+    try {
+      return JSON.stringify(answer).slice(0, 80);
+    } catch {
+      return "（结构化答案）";
+    }
+  }
+  return String(answer);
+}
+
 function FeedbackPanel({
   feedback,
   question,
@@ -391,6 +415,7 @@ function FeedbackPanel({
 }: {
   feedback: {
     isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string;
+    userAnswerDisplay: string;
     points: number; repeatDecay?: number; newSkillBonus?: number;
     errorPattern?: {
       matchedTag: string; tagLabel: string; remediation: string | null;
@@ -500,7 +525,7 @@ function FeedbackPanel({
           subjectId="math"
           stem={question.stem}
           correctAnswer={feedback.correctAnswerDisplay}
-          studentAnswer={isCorrect ? "（你答对了，但想再听一遍解法）" : "（错答；让小进重新讲）"}
+          studentAnswer={feedback.userAnswerDisplay}
           skillName={question.skill_name ?? question.skill_id}
           onClose={() => setShowTutor(false)}
         />

@@ -176,7 +176,7 @@ export function TrainPage() {
             Selena，今天的题都被你做光啦！
           </div>
           <div className="text-sm text-amber-200/90 text-center mt-2">
-            说明你已经很熟练了。让爸爸 / 妈妈给你出几道<span className="font-bold">新</span>的吧～
+            说明你已经很熟练了。让 AI 给你出几道<span className="font-bold">新</span>的来挑战吧～
           </div>
           {(state.starvedSkillNames ?? []).length > 0 && (
             <div className="text-xs text-amber-200/70 text-center mt-2">
@@ -184,7 +184,7 @@ export function TrainPage() {
             </div>
           )}
           <div className="flex gap-3 justify-center mt-4">
-            <Link to="/math/admin" className="btn-primary text-sm">去 AI 出题</Link>
+            <Link to="/math/admin#ai-gen" className="btn-primary text-sm">🤖 让 AI 自动出题</Link>
             <Link to="/math" className="btn-secondary text-sm">回首页</Link>
           </div>
         </div>

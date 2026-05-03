@@ -28,7 +28,7 @@ import {
   resetChineseTestData,
 } from "../../subjects/chinese/service";
 import { CHINESE_TROPHIES } from "../../subjects/chinese/trophies";
-import { generateChineseQuestions } from "../../lib/tutor";
+import { generateChineseQuestions, generateImage } from "../../lib/tutor";
 import type { Attempt, MasteryScore, MistakeReview, Question } from "../../core/types";
 
 /**
@@ -154,9 +154,153 @@ export function ChineseAdminPage() {
       </div>
 
       <div className="card">
+        <div className="font-semibold mb-2">🎨 AI 图像生成（语文勋章 / 古诗配图）</div>
+        <ChineseImageGeneratorPanel />
+      </div>
+
+      <div className="card">
         <div className="font-semibold mb-2">🧹 重置语文测试数据</div>
         <ChineseResetPanel studentId={student?.id} />
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+//  AI 图像生成面板（chinese 风格）
+// ============================================================
+
+function ChineseImageGeneratorPanel() {
+  const [prompt, setPrompt] = useState(
+    "一枚卡通圆形勋章，上面是中国古风「诗」字毛笔字，金色边框，背景樱花和水墨画山水，扁平 3D 插画风，4 年级女生喜欢的可爱风格",
+  );
+  const [size, setSize] = useState<"512*512" | "1024*1024">("512*512");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ urls: string[]; model: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const presets = [
+    {
+      label: "📜 古诗勋章",
+      prompt:
+        "一枚卡通圆形勋章，上面是中国古风「诗」字毛笔字，金色边框，背景樱花和水墨画山水，扁平 3D 插画风，4 年级女生喜欢的可爱风格",
+    },
+    {
+      label: "🎭 修辞勋章",
+      prompt:
+        "一枚紫色卡通圆形勋章，正面是「比喻」「拟人」中文字，背景是云朵和星星，扁平插画，可爱风",
+    },
+    {
+      label: "🎼 听写小能手",
+      prompt:
+        "一枚黄色卡通圆形勋章，中央是耳朵 emoji 加音符，背景蓝色波浪，扁平插画，4 年级女生喜欢",
+    },
+    {
+      label: "🪷 诗词储备家",
+      prompt:
+        "一枚粉色卡通圆形勋章，正面是莲花和卷轴书法，背景金色光晕，中国古风扁平插画，可爱风",
+    },
+  ];
+
+  const onGen = async () => {
+    if (!prompt.trim()) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const r = await generateImage({
+        prompt,
+        size,
+        model: "qwen-image-2.0-pro",
+        n: 1,
+      });
+      setResult({ urls: r.urls, model: r.model });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="text-sm text-slate-300 space-y-3">
+      <div className="text-xs text-slate-400 leading-relaxed">
+        用 Qwen-Image-2.0-Pro 给语文勋章 / 古诗配图生成。生成后右键图片"另存为"
+        到本地，再放到 <code className="text-amber-300">public/badges/chinese/</code> 即可在勋章墙引用。
+      </div>
+
+      <div>
+        <div className="text-[11px] text-slate-500 mb-1">语文专属预设：</div>
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => setPrompt(p.prompt)}
+              className="chip bg-amber-500/15 border border-amber-400/30 text-amber-200 text-xs hover:bg-amber-500/25"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        rows={3}
+        className="field text-sm w-full"
+      />
+
+      <div className="flex items-center gap-2">
+        <select
+          value={size}
+          onChange={(e) => setSize(e.target.value as "512*512" | "1024*1024")}
+          className="rounded-lg border border-slate-600 bg-ink-800 text-slate-200 px-2 py-1.5 text-sm"
+        >
+          <option value="512*512">512×512（勋章）</option>
+          <option value="1024*1024">1024×1024（高清）</option>
+        </select>
+        <button
+          type="button"
+          onClick={onGen}
+          disabled={busy || !prompt.trim()}
+          className="btn-primary text-sm"
+        >
+          {busy ? "🎨 生成中（10-25s）…" : "🎨 生成图"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded p-2 break-all">
+          ⚠ {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2">
+          <div className="text-xs text-slate-400">
+            模型：<span className="text-slate-200">{result.model}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {result.urls.map((u, i) => (
+              <div key={i} className="rounded-xl border border-amber-400/30 overflow-hidden bg-ink-800/40">
+                <img src={u} alt={`generated-${i}`} className="w-full h-auto block" />
+                <div className="p-2 text-[10px] text-slate-400 break-all">
+                  <a
+                    href={u}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-300 hover:underline"
+                  >
+                    打开原图 / 右键另存为
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

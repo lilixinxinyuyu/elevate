@@ -16,6 +16,8 @@ import {
 import { normalizeJsonText } from "../lib/normalizeJsonText";
 import { isTtsAvailable, speakText } from "../lib/tts";
 import { resetChineseTestData } from "../subjects/chinese/service";
+import { generateAiQuestions, generateImage } from "../lib/tutor";
+import type { Question } from "../core/types";
 
 export function AdminPage() {
   const students = useLiveQuery(async () => db.students.toArray(), []);
@@ -191,6 +193,16 @@ export function AdminPage() {
       <div className="card">
         <div className="font-semibold mb-2">云同步</div>
         <CloudSyncPanel />
+      </div>
+
+      <div className="card">
+        <div className="font-semibold mb-2">🤖 AI 自动出题（按薄弱 skill 生成）</div>
+        <MathAIGeneratorPanel />
+      </div>
+
+      <div className="card">
+        <div className="font-semibold mb-2">🎨 AI 图像生成（勋章 / 图标）</div>
+        <ImageGeneratorPanel />
       </div>
 
       <div className="card">
@@ -715,6 +727,364 @@ ${exampleQuestion}
       >
         复制 Prompt
       </button>
+    </div>
+  );
+}
+
+function ImageGeneratorPanel() {
+  const [prompt, setPrompt] = useState(
+    "一枚卡通风格的金色奖杯勋章，上面是数字 100，背景紫色渐变，圆形，扁平插画风，4 年级女生喜欢的可爱风",
+  );
+  const [size, setSize] = useState<"512*512" | "1024*1024">("512*512");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ urls: string[]; model: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // 几个预设：让用户一键试
+  const presets = [
+    {
+      label: "📚 古诗勋章",
+      prompt:
+        "一枚卡通圆形勋章，上面是中国古风毛笔字「诗」字，金色边框，背景樱花和山水水墨画，扁平 3D 插画，4 年级女生喜欢的可爱风格",
+    },
+    {
+      label: "🎯 数学计算勋章",
+      prompt:
+        "一枚卡通圆形勋章，上面是金色加减乘除符号 + - × ÷，紫粉色渐变背景，闪烁星星点缀，扁平插画，可爱风",
+    },
+    {
+      label: "🎓 状元勋章",
+      prompt:
+        "一枚金色卡通圆形勋章，上面是「状元」毛笔字 + 古代状元帽 + 红色绶带，喜庆中国风，扁平插画风",
+    },
+    {
+      label: "🔥 连击勋章",
+      prompt:
+        "一枚卡通圆形勋章，火焰图案围绕，中间是数字「10」，红橙渐变背景，扁平 3D 风格，动感十足",
+    },
+  ];
+
+  const onGen = async () => {
+    if (!prompt.trim()) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const r = await generateImage({
+        prompt,
+        size,
+        model: "qwen-image-2.0-pro",
+        n: 1,
+      });
+      setResult({ urls: r.urls, model: r.model });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="text-sm text-slate-300 space-y-3">
+      <div className="text-xs text-slate-400 leading-relaxed">
+        用 Qwen-Image-2.0-Pro 给勋章 / 图标生成图。生成后右键图片"另存为"
+        到本地，再放到 <code className="text-amber-300">public/badges/</code> 即可在勋章墙引用。
+        异步任务，每次约 10-25 秒。
+      </div>
+
+      <div>
+        <div className="text-[11px] text-slate-500 mb-1">快速预设：</div>
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => setPrompt(p.prompt)}
+              className="chip bg-violet-500/15 border border-violet-400/30 text-violet-200 text-xs hover:bg-violet-500/25"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        rows={3}
+        className="field text-sm w-full"
+        placeholder="描述你想要的图…"
+      />
+
+      <div className="flex items-center gap-2">
+        <select
+          value={size}
+          onChange={(e) => setSize(e.target.value as "512*512" | "1024*1024")}
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+        >
+          <option value="512*512">512×512（勋章）</option>
+          <option value="1024*1024">1024×1024（高清）</option>
+        </select>
+        <button
+          type="button"
+          onClick={onGen}
+          disabled={busy || !prompt.trim()}
+          className="btn-primary text-sm"
+        >
+          {busy ? "🎨 生成中（10-25s）…" : "🎨 生成图"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded p-2 break-all">
+          ⚠ {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2">
+          <div className="text-xs text-slate-400">
+            模型：<span className="text-slate-200">{result.model}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {result.urls.map((u, i) => (
+              <div key={i} className="rounded-xl border border-violet-400/30 overflow-hidden bg-ink-800/40">
+                <img
+                  src={u}
+                  alt={`generated-${i}`}
+                  className="w-full h-auto block"
+                />
+                <div className="p-2 text-[10px] text-slate-400 break-all">
+                  <a
+                    href={u}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-violet-300 hover:underline"
+                  >
+                    打开原图 / 右键另存为
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MathAIGeneratorPanel() {
+  const [unitId, setUnitId] = useState<string>(UNITS[0]?.id ?? "");
+  const [skillId, setSkillId] = useState<string>(
+    SKILLS.find((s) => s.unitId === (UNITS[0]?.id ?? ""))?.id ?? "",
+  );
+  const [count, setCount] = useState(5);
+  const [difficulty, setDifficulty] = useState("2-4");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<null | {
+    generated: Question[];
+    valid: Question[];
+    invalid: { id: string; issues: string[] }[];
+    model: string;
+  }>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [savedCount, setSavedCount] = useState<number | null>(null);
+
+  const skillsForUnit = SKILLS.filter((s) => s.unitId === unitId);
+
+  const onGenerate = async () => {
+    if (!unitId || !skillId) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    setSavedCount(null);
+    try {
+      const unit = UNITS.find((u) => u.id === unitId);
+      const skill = SKILLS.find((s) => s.id === skillId);
+      // 同一 skill 的现有题干 → AI 避免重复语境
+      const existingStems = (await db.questions.where({ skill_id: skillId }).toArray())
+        .map((q) => q.stem)
+        .slice(0, 30);
+
+      const r = await generateAiQuestions({
+        subjectId: "math",
+        unitId,
+        unitName: unit?.name,
+        skillId,
+        skillName: skill?.name,
+        count,
+        difficulty,
+        existingStems,
+      });
+
+      // 用 core/validateQuestion 严格校验（math 用法和 chinese 不同：math 注册表全在 core）
+      const valid: Question[] = [];
+      const invalid: { id: string; issues: string[] }[] = [];
+      for (const q of r.questions) {
+        const v = validateQuestion(q);
+        if (v.ok && v.question) valid.push(v.question);
+        else
+          invalid.push({
+            id: q.question_id,
+            issues: v.issues.map((i) => `${i.severity}: ${i.path} ${i.message}`),
+          });
+      }
+      setResult({ generated: r.questions, valid, invalid, model: r.model });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSave = async () => {
+    if (!result || result.valid.length === 0) return;
+    setBusy(true);
+    try {
+      // 加 subjectId stamp
+      const stamped = result.valid.map((q) => ({ ...q, subjectId: "math" as const }));
+      await db.questions.bulkPut(stamped as never);
+      setSavedCount(stamped.length);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="text-sm space-y-3">
+      <div className="text-xs text-slate-400 leading-relaxed">
+        让 qwen-plus 按当前选的单元 / 技能 / 难度，生成新题。生成后用 validateQuestion
+        校验 → 点 "导入" 写进 db.questions。math train 的 scheduler 会自动从 db 拉到。
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <label className="block">
+          <span className="text-xs text-slate-500">单元</span>
+          <select
+            value={unitId}
+            onChange={(e) => {
+              setUnitId(e.target.value);
+              const first = SKILLS.find((s) => s.unitId === e.target.value);
+              if (first) setSkillId(first.id);
+            }}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5"
+          >
+            {UNITS.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.term} · {u.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-xs text-slate-500">技能</span>
+          <select
+            value={skillId}
+            onChange={(e) => setSkillId(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5"
+          >
+            {skillsForUnit.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="text-xs text-slate-500">数量（1-10）</span>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={count}
+            onChange={(e) =>
+              setCount(Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 1)))
+            }
+            className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs text-slate-500">难度（如 2-4）</span>
+          <input
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5"
+          />
+        </label>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={busy || !unitId || !skillId}
+          className="btn-primary text-sm"
+        >
+          {busy ? "AI 出题中…" : "🤖 让 AI 出题"}
+        </button>
+        {result && result.valid.length > 0 && savedCount === null && (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={busy}
+            className="btn-secondary text-sm border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/10"
+          >
+            💾 导入 {result.valid.length} 道到题库
+          </button>
+        )}
+        {savedCount !== null && (
+          <span className="text-emerald-300 text-xs self-center">
+            ✓ 已写入 {savedCount} 道，回 /math/train 就能练到
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded p-2 break-all">
+          ⚠ {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2">
+          <div className="text-xs text-slate-400">
+            模型：<span className="text-slate-200">{result.model}</span> · 生成{" "}
+            {result.generated.length} 道，校验通过 {result.valid.length} 道，
+            {result.invalid.length > 0 && (
+              <span className="text-rose-300">失败 {result.invalid.length} 道</span>
+            )}
+          </div>
+          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-2">
+            {result.valid.map((q) => (
+              <div
+                key={q.question_id}
+                className="rounded border border-emerald-400/30 bg-emerald-500/5 p-2 text-xs"
+              >
+                <div className="text-slate-100">{q.stem}</div>
+                <div className="text-[10px] text-slate-500 mt-1">
+                  D{q.difficulty} · {(q.options ?? []).length} 选项
+                </div>
+              </div>
+            ))}
+            {result.invalid.map((f) => (
+              <div
+                key={f.id}
+                className="rounded border border-rose-400/30 bg-rose-500/5 p-2 text-xs"
+              >
+                <div className="text-rose-300">✗ {f.id}</div>
+                <ul className="list-disc list-inside text-[10px] text-rose-200/80 mt-1">
+                  {f.issues.slice(0, 3).map((i, k) => (
+                    <li key={k}>{i}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
