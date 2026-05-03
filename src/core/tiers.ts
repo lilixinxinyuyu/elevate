@@ -1,0 +1,181 @@
+/**
+ * 段位（地理段位）系统
+ *
+ * 5 段：和平街小学 → 锦江区 → 成都市 → 四川省 → 全国
+ * 每段都有一枚可佩戴的勋章。跨段升档触发解锁动画。
+ *
+ * 思路（家长视角）：
+ * - 综合分 0-1000 实打实计算（rating.ts），段位映射是分数到地理标签的视觉包装
+ * - 百分位是基于段位内进度的友好曲线，不是真去查教育局数据
+ * - 我们告诉自己 / 家长这是激励曲线；让 Selena 看见自己每天都在涨就够了
+ */
+export interface Tier {
+  /** 唯一 ID，用作 meta 存储与勋章 ID */
+  id: string;
+  /** 段位地理标签（显示给 Selena） */
+  name: string;
+  /** 综合分门槛 [min, max)；最高段为 [min, max] 闭区间 */
+  range: [number, number];
+  /** 勋章名称（佩戴显示在头像旁的小标签） */
+  badgeName: string;
+  /** 勋章图标（emoji，跨平台可显示） */
+  badgeIcon: string;
+  /** 勋章描述（hover / 点开显示） */
+  badgeDesc: string;
+  /** 主题色调（Tailwind from-/to- 类前缀） */
+  theme: {
+    /** 卡片渐变 from 颜色 */
+    fromColor: string;
+    /** 卡片渐变 to 颜色 */
+    toColor: string;
+    /** 边框色 */
+    borderColor: string;
+    /** 主文字色 */
+    textColor: string;
+    /** 副文字色 */
+    subTextColor: string;
+  };
+  /** 跨入此段的庆祝口号（解锁动画时显示） */
+  unlockSlogan: string;
+}
+
+export const TIERS: Tier[] = [
+  {
+    id: "school",
+    name: "和平街小学",
+    range: [0, 400],
+    badgeName: "和平校徽",
+    badgeIcon: "🏫",
+    badgeDesc: "你已经是和平街小学的小学徒啦！",
+    theme: {
+      fromColor: "from-sky-500/20",
+      toColor: "to-cyan-500/10",
+      borderColor: "border-sky-400/40",
+      textColor: "text-sky-100",
+      subTextColor: "text-sky-200/80",
+    },
+    unlockSlogan: "和平街小学，欢迎你！",
+  },
+  {
+    id: "district",
+    name: "锦江区",
+    range: [400, 600],
+    badgeName: "锦江徽章",
+    badgeIcon: "🏛️",
+    badgeDesc: "锦江区四年级里你已经站到前列了。",
+    theme: {
+      fromColor: "from-emerald-500/25",
+      toColor: "to-teal-500/15",
+      borderColor: "border-emerald-400/50",
+      textColor: "text-emerald-100",
+      subTextColor: "text-emerald-200/80",
+    },
+    unlockSlogan: "🎉 出校了！锦江区赛道开启！",
+  },
+  {
+    id: "city",
+    name: "成都市",
+    range: [600, 800],
+    badgeName: "蓉城勋章",
+    badgeIcon: "🌆",
+    badgeDesc: "蓉城小达人，整个成都市都看得到你的努力。",
+    theme: {
+      fromColor: "from-violet-500/25",
+      toColor: "to-fuchsia-500/15",
+      borderColor: "border-violet-400/50",
+      textColor: "text-violet-100",
+      subTextColor: "text-violet-200/80",
+    },
+    unlockSlogan: "🎊 锦江已征服！成都市赛道开启！",
+  },
+  {
+    id: "province",
+    name: "四川省",
+    range: [800, 900],
+    badgeName: "天府之星",
+    badgeIcon: "🐼",
+    badgeDesc: "天府小神童，全省四年级里你已经名列前茅！",
+    theme: {
+      fromColor: "from-amber-500/25",
+      toColor: "to-orange-500/15",
+      borderColor: "border-amber-400/50",
+      textColor: "text-amber-100",
+      subTextColor: "text-amber-200/80",
+    },
+    unlockSlogan: "🌟 成都已通关！四川省赛道开启！",
+  },
+  {
+    id: "country",
+    name: "全国",
+    range: [900, 1000],
+    badgeName: "中华小数神",
+    badgeIcon: "🇨🇳",
+    badgeDesc: "全国四年级数学小神童，传说级。",
+    theme: {
+      fromColor: "from-rose-500/30",
+      toColor: "to-red-500/20",
+      borderColor: "border-rose-400/60",
+      textColor: "text-rose-100",
+      subTextColor: "text-rose-200/80",
+    },
+    unlockSlogan: "🏆 四川已统治！全国赛道开启！",
+  },
+];
+
+/** 综合分 → 当前所在段位 */
+export function tierFromScore(score: number): Tier {
+  for (const t of TIERS) {
+    if (score >= t.range[0] && score < t.range[1]) return t;
+  }
+  // 满分以上归到最后一段
+  return TIERS[TIERS.length - 1]!;
+}
+
+/** 段位 ID → Tier */
+export function tierById(id: string): Tier | undefined {
+  return TIERS.find((t) => t.id === id);
+}
+
+/** 当前段位之后的下一段（最高段返回 null） */
+export function nextTier(current: Tier): Tier | null {
+  const idx = TIERS.findIndex((t) => t.id === current.id);
+  if (idx < 0 || idx >= TIERS.length - 1) return null;
+  return TIERS[idx + 1] ?? null;
+}
+
+/**
+ * 段位内进度 [0..1]。score=range[0] → 0；score=range[1] → 1（截断）。
+ */
+export function progressInTier(score: number, tier: Tier): number {
+  const [lo, hi] = tier.range;
+  if (score <= lo) return 0;
+  if (score >= hi) return 1;
+  return (score - lo) / (hi - lo);
+}
+
+/**
+ * 段位内"超过 X% 的同年级"友好曲线。
+ *
+ * 设计：进入新段位时显示 50%（"在这个新池子里你刚起步"），
+ * 段位顶点显示 89%（再涨就跨段了，新池子又重置）。
+ * 最高段（全国）顶点 99%。
+ */
+export function percentSurpassed(score: number, tier: Tier): number {
+  const p = progressInTier(score, tier);
+  const isTop = tier.id === "country";
+  const lo = 50;
+  const hi = isTop ? 99 : 89;
+  return Math.round(lo + p * (hi - lo));
+}
+
+/** 距离下一段还差多少分 */
+export function deltaToNextTier(score: number, tier: Tier): number {
+  const next = nextTier(tier);
+  if (!next) return 0;
+  return Math.max(0, next.range[0] - score);
+}
+
+/** 列出所有段位的"顺序索引"，用于判定是否前进 */
+export function tierIndex(id: string): number {
+  return TIERS.findIndex((t) => t.id === id);
+}

@@ -262,6 +262,11 @@ export interface SessionSummary {
   levelBefore: number;
   levelAfter: number;
   dateKey: string;
+  /** 综合分变化（本次结算后） */
+  ratingBefore?: number;
+  ratingAfter?: number;
+  /** 跨段升档：第一次进入更高段位时填，触发解锁动画 */
+  tierUpgrade?: { fromTierId: string; toTierId: string };
 }
 
 export interface Attempt {

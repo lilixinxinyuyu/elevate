@@ -151,7 +151,7 @@ def main():
             out.append(f"- {mark} [{it['skill_name']}] {it['stem']}（她答：{it['userAnswer']}）")
 
     out.append("\n---")
-    out.append("\n**给 Selena 数学私教 Agent 的下一步建议**：")
+    out.append("\n**给小进（数学小老师）的下一步建议**：")
     if due_mistakes:
         out.append(f"1. 先开个温暖的玩笑，再把「今日到期的 {len(due_mistakes)} 道错题」中最简单的一道拿出来一起做。")
     elif weak_skills:

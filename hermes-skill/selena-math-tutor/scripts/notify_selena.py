@@ -77,19 +77,19 @@ def main():
             # 今天已经练过 → 鼓励，不烦她
             title = "Selena 你今天数学很努力！"
             message = "再做几道挑战题继续保持！"
-            voice_text = "你今天很棒，再坚持一会儿就更棒啦！"
+            voice_text = "塞莱娜你今天很棒，再坚持一会儿就更棒啦！"
         elif n_due >= 3:
             title = "Selena，数学时间到啦 🌟"
             message = f"今天有 {n_due} 道错题等你复活，5 分钟搞定～"
-            voice_text = f"塞莱娜，今天有 {n_due} 道错题等着你，我们一起搞定它好不好？"
+            voice_text = f"塞莱娜，我是小进，今天有 {n_due} 道错题等着你，我们一起搞定它好不好？"
         elif n_due >= 1:
             title = "Selena，来挑战一下"
             message = f"有 {n_due} 道错题到期了，快来打个卡。"
-            voice_text = f"塞莱娜，今天有 {n_due} 道错题等着你，我们一起搞定它好不好？"
+            voice_text = f"塞莱娜，今天还剩 {n_due} 道错题，要不要一起搞定？"
         elif days_since >= 3:
             title = "Selena，好久没见啦！"
-            message = "数学小老师在这里等你回来玩 🌟"
-            voice_text = "塞莱娜，好几天没见啦，今天来玩一下数学好吗？"
+            message = "小进在这里等你回来玩 🌟"
+            voice_text = "塞莱娜，我是小进，好几天没见啦，今天来玩一下数学好吗？"
         else:
             title = "Selena，今天来打几关？"
             message = "做几道题保持手感！"

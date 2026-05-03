@@ -4,6 +4,8 @@ import { scoreAttempt, levelFromXp } from "../core/scoring";
 import { updateMastery, MASTERY_BOUNDS } from "../core/mastery";
 import { advanceStageOnSuccess, nextReviewAt, regressStageOnFailure, REVIEW_INTERVAL_DAYS } from "../core/spacedReview";
 import { checkAndAwardTrophies, TROPHIES } from "../core/trophies";
+import { computeRating } from "../core/rating";
+import { tierIndex, tierById } from "../core/tiers";
 import type {
   Attempt,
   DailySession,
@@ -230,6 +232,52 @@ export async function getTotalXp(studentId: string): Promise<number> {
   return typeof row.value === "number" ? row.value : 0;
 }
 
+/**
+ * 读上次缓存的综合分（finalizeSession 写入）。
+ * 没有就根据当前 attempts/mastery 实时算一个，但不写入。
+ */
+export async function getCachedRating(studentId: string): Promise<{
+  score: number;
+  tierId: string;
+  computedAt: number;
+} | null> {
+  const row = await db.meta.get(studentKey("rating", studentId));
+  if (!row || typeof row.value !== "object" || !row.value) return null;
+  const v = row.value as { score: number; tierId: string; computedAt: number };
+  return v;
+}
+
+/** 实时计算综合分（用于首页等需要立刻拿到分数的场景）。 */
+export async function computeCurrentRating(studentId: string) {
+  const attempts = await db.attempts.where({ studentId }).toArray();
+  const mastery = await db.mastery.where({ studentId }).toArray();
+  return computeRating(attempts, mastery);
+}
+
+/** 已解锁的段位列表（meta 持久化，跨段升档时追加） */
+export async function getUnlockedTiers(studentId: string): Promise<string[]> {
+  const row = await db.meta.get(studentKey("tiersUnlocked", studentId));
+  if (!row || !Array.isArray(row.value)) return ["school"]; // 进来就拿到学徒
+  return row.value as string[];
+}
+
+/** 当前佩戴的段位勋章（默认最高已解锁段位） */
+export async function getEquippedBadge(studentId: string): Promise<string> {
+  const row = await db.meta.get(studentKey("equippedBadge", studentId));
+  if (row && typeof row.value === "string") return row.value;
+  const unlocked = await getUnlockedTiers(studentId);
+  // 默认佩戴解锁的最高段位
+  return unlocked.reduce((best, id) =>
+    tierIndex(id) > tierIndex(best) ? id : best, "school");
+}
+
+export async function setEquippedBadge(studentId: string, tierId: string): Promise<void> {
+  if (!tierById(tierId)) return;
+  const unlocked = await getUnlockedTiers(studentId);
+  if (!unlocked.includes(tierId)) return; // 没解锁的不能佩戴
+  await db.meta.put({ key: studentKey("equippedBadge", studentId), value: tierId });
+}
+
 function studentKey(name: string, studentId: string): string {
   return `${name}::${studentId}`;
 }
@@ -330,6 +378,36 @@ export async function finalizeSession(
   const levelAfter = levelFromXp(totalXpNow);
   const levelBefore = levelFromXp(totalXpNow - xpGained);
 
+  // 综合分 + 段位升档判定
+  const prevRating = await getCachedRating(studentId);
+  const rating = computeRating(allAttempts, mastery);
+  await db.meta.put({
+    key: studentKey("rating", studentId),
+    value: {
+      score: rating.score,
+      tierId: rating.tier.id,
+      components: rating.components,
+      computedAt: Date.now(),
+    },
+  });
+  // 解锁段位（追加，不删）
+  const prevUnlocked = await getUnlockedTiers(studentId);
+  const unlocked = new Set(prevUnlocked);
+  unlocked.add("school"); // 永远有起步段
+  if (!unlocked.has(rating.tier.id)) unlocked.add(rating.tier.id);
+  if (unlocked.size !== prevUnlocked.length) {
+    await db.meta.put({
+      key: studentKey("tiersUnlocked", studentId),
+      value: Array.from(unlocked),
+    });
+  }
+  // 跨段升档：之前缓存段位 < 现在段位
+  let tierUpgrade: SessionSummary["tierUpgrade"] | undefined;
+  const prevTierId = prevRating?.tierId ?? "school";
+  if (tierIndex(rating.tier.id) > tierIndex(prevTierId)) {
+    tierUpgrade = { fromTierId: prevTierId, toTierId: rating.tier.id };
+  }
+
   const summary: SessionSummary = {
     total,
     correct,
@@ -346,6 +424,9 @@ export async function finalizeSession(
     levelBefore,
     levelAfter,
     dateKey: session.dateKey,
+    ratingBefore: prevRating?.score,
+    ratingAfter: rating.score,
+    tierUpgrade,
   };
 
   session.finishedAt = Date.now();

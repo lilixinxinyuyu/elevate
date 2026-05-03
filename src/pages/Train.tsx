@@ -11,6 +11,8 @@ import { ABILITY_LABELS } from "../core/types";
 import { levelFromXp } from "../core/scoring";
 import { SKILLS } from "../content/skills";
 import { pushToCloud } from "../db/cloudSync";
+import { UnlockCelebration } from "../components/UnlockCelebration";
+import { tierById } from "../core/tiers";
 
 export function TrainPage() {
   const [params] = useSearchParams();
@@ -211,10 +213,25 @@ export function TrainPage() {
 
 function SummaryView({ summary }: { summary: SessionSummary }) {
   const [chestOpened, setChestOpened] = useState(false);
+  const [showTierCelebration, setShowTierCelebration] = useState(
+    !!summary.tierUpgrade,
+  );
   const levelUp = summary.levelAfter > summary.levelBefore;
+  const ratingDelta =
+    summary.ratingBefore !== undefined && summary.ratingAfter !== undefined
+      ? summary.ratingAfter - summary.ratingBefore
+      : 0;
+  const newTier = summary.tierUpgrade ? tierById(summary.tierUpgrade.toTierId) : null;
 
   return (
     <div className="space-y-5 pb-8">
+      {showTierCelebration && summary.tierUpgrade && (
+        <UnlockCelebration
+          fromTierId={summary.tierUpgrade.fromTierId}
+          toTierId={summary.tierUpgrade.toTierId}
+          onClose={() => setShowTierCelebration(false)}
+        />
+      )}
       <div className="text-center">
         <div className="text-xs text-slate-400 uppercase tracking-widest">
           {summary.dateKey}
@@ -231,6 +248,24 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
         <RewardChest onOpened={() => setChestOpened(true)} />
       ) : (
         <div className="space-y-4 animate-slide-up">
+          {newTier && (
+            <div className={`card-glow text-center bg-gradient-to-br ${newTier.theme.fromColor} ${newTier.theme.toColor} ${newTier.theme.borderColor}`}>
+              <div className="text-5xl">{newTier.badgeIcon}</div>
+              <div className={`font-display font-bold text-2xl mt-1 ${newTier.theme.textColor}`}>
+                跨入 {newTier.name}！
+              </div>
+              <div className={`text-xs mt-1 ${newTier.theme.subTextColor}`}>{newTier.unlockSlogan}</div>
+            </div>
+          )}
+          {ratingDelta > 0 && (
+            <div className="card text-center bg-gradient-to-br from-cyan-500/15 to-sky-500/10 border-cyan-400/40">
+              <div className="text-xs text-cyan-200/80 font-display">综合分</div>
+              <div className="font-display font-bold text-3xl text-cyan-100 mt-1">
+                {summary.ratingBefore} → {summary.ratingAfter}
+              </div>
+              <div className="text-xs text-cyan-200 mt-1">+{ratingDelta} 分 ✨</div>
+            </div>
+          )}
           {levelUp && (
             <div className="card-glow text-center bg-gradient-to-br from-amber-500/20 to-orange-500/10 border-amber-400/40">
               <div className="text-5xl">🌟</div>
