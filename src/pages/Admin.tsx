@@ -13,6 +13,8 @@ import {
   pullFromCloud,
   pushToCloud,
 } from "../db/cloudSync";
+import { normalizeJsonText } from "../lib/normalizeJsonText";
+import { isTtsAvailable, speakText } from "../lib/tts";
 
 export function AdminPage() {
   const students = useLiveQuery(async () => db.students.toArray(), []);
@@ -27,9 +29,12 @@ export function AdminPage() {
     setImportResult(null);
     let data: unknown;
     try {
-      data = JSON.parse(importText);
+      data = JSON.parse(normalizeJsonText(importText));
     } catch (e) {
-      setImportResult({ ok: 0, failed: [{ id: "JSON", issues: [(e as Error).message] }] });
+      setImportResult({
+        ok: 0,
+        failed: [{ id: "JSON", issues: [(e as Error).message, "提示：通常是 LLM 把直引号变成了中文弯引号 “”，已自动尝试修正——如果还失败，多半是结构问题（缺括号、多逗号等）。"] }],
+      });
       return;
     }
     const arr = Array.isArray(data) ? data : [data];
@@ -188,8 +193,95 @@ export function AdminPage() {
       </div>
 
       <div className="card">
+        <div className="font-semibold mb-2">TTS 测试（语文听写用）</div>
+        <TtsSmokePanel />
+      </div>
+
+      <div className="card">
         <div className="font-semibold mb-2">AI 出题 Prompt 生成器</div>
         <PromptBuilder />
+      </div>
+    </div>
+  );
+}
+
+function TtsSmokePanel() {
+  const [status, setStatus] = useState<"idle" | "checking" | "ok" | "missing" | "error">("idle");
+  const [reason, setReason] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [text, setText] = useState("你好，我是小晴。今天我们一起练习。");
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("checking");
+    isTtsAvailable().then((r) => {
+      if (cancelled) return;
+      if (!r.ok) {
+        setStatus("error");
+        setReason(r.reason ?? "unknown");
+      } else if (!r.configured) {
+        setStatus("missing");
+      } else {
+        setStatus("ok");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const play = async () => {
+    setPlaying(true);
+    setReason(null);
+    try {
+      await speakText(text);
+    } catch (e) {
+      setReason(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPlaying(false);
+    }
+  };
+
+  return (
+    <div className="text-sm text-slate-300 space-y-3">
+      <div>
+        服务端：
+        {status === "checking" && <span className="text-slate-400">检查中…</span>}
+        {status === "ok" && <span className="text-emerald-300">✓ 已配置 Qwen TTS</span>}
+        {status === "missing" && (
+          <span className="text-amber-300">
+            ⚠ DASHSCOPE_API_KEY 没配。在 Cloudflare Pages → Settings → Environment variables 加上即可。
+          </span>
+        )}
+        {status === "error" && (
+          <span className="text-rose-300">✗ 检查失败：{reason}</span>
+        )}
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={2}
+        className="field text-sm w-full"
+        placeholder="要朗读的文本"
+      />
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          className="btn-primary text-sm"
+          disabled={playing || status !== "ok" || !text.trim()}
+          onClick={play}
+        >
+          {playing ? "播放中…" : "▶ 播放"}
+        </button>
+        {status === "missing" && (
+          <span className="text-xs text-slate-500">需要先在 CF 配 API key</span>
+        )}
+        {reason && status !== "missing" && (
+          <span className="text-xs text-rose-300">{reason}</span>
+        )}
+      </div>
+      <div className="text-[11px] text-slate-500">
+        Phase 2 语文听写、拼音卡、古诗朗读会用同一个管道。
       </div>
     </div>
   );

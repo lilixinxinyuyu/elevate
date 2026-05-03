@@ -4,7 +4,10 @@ import type { Question } from "../../../core/types";
 
 export function SpeedMatchPanel(props: TemplateRenderProps) {
   const { question, onFinish, triggerFx, disabled } = props;
-  const options = useMemo(() => buildOptions(question), [question.question_id]);
+  // 防 memorize：每次进题用一个新随机 salt，让选项位置每次都洗。
+  // 避免 Selena 记住"正确答案永远是第 3 个"。
+  const sessionSalt = useMemo(() => Math.random().toString(36).slice(2), [question.question_id]);
+  const options = useMemo(() => buildOptions(question, sessionSalt), [question.question_id, sessionSalt]);
   const [picked, setPicked] = useState<string | null>(null);
   const [lockedCorrect, setLockedCorrect] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -82,15 +85,16 @@ interface BubbleOption {
   errorTag?: string;
 }
 
-function buildOptions(q: Question): BubbleOption[] {
+function buildOptions(q: Question, salt: string): BubbleOption[] {
   // single_choice 走 options
   if (q.question_format === "single_choice" && q.options) {
-    return q.options.map((o) => ({
+    const opts = q.options.map((o) => ({
       id: o.id,
       display: o.text,
       correct: q.answer.type === "choice" && q.answer.value === o.id,
       errorTag: o.errorTag,
     }));
+    return shuffleWithSeed(opts, `${q.question_id}::${salt}`);
   }
   // numeric / numeric_choice：用 distractors 或生成
   if (q.answer.type === "number") {
@@ -104,7 +108,7 @@ function buildOptions(q: Question): BubbleOption[] {
       const fallback = correct + (merged.length + 1) * (correct === 0 ? 1 : sampleSign());
       if (!merged.includes(fallback)) merged.push(fallback);
     }
-    const shuffled = shuffleWithSeed(merged, q.question_id);
+    const shuffled = shuffleWithSeed(merged, `${q.question_id}::${salt}`);
     return shuffled.map((n, i) => ({
       id: "ABCD"[i]!,
       display: formatNumber(n),

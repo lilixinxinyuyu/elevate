@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { db } from "../db/dexie";
 import { ensureSeeded } from "../db/seed";
-import { finalizeSession, getOrCreateSession, getTotalXp, submitAttempt, trophyById } from "../db/service";
+import { finalizeSession, getOrCreateSession, getTotalXp, submitAttempt, trophyById, recordMockExamCompleted } from "../db/service";
 import type { DailySession, Question, SessionMode, SessionSummary } from "../core/types";
 import { GameShell, type AttemptResult } from "../components/game/GameShell";
 import { RewardChest } from "../components/game/RewardChest";
@@ -132,6 +132,7 @@ export function TrainPage() {
         points: outcome.points,
         repeatDecay: outcome.repeatDecay,
         newSkillBonus: outcome.newSkillBonus,
+        errorPattern: outcome.errorPattern,
       };
     },
     [state],
@@ -147,6 +148,10 @@ export function TrainPage() {
       try {
         const summary = await finalizeSession(state.studentId, state.session.id);
         if (summary.levelAfter > summary.levelBefore) sfx.levelUp();
+        // 考试模拟模式：记录完成时间用于一周节流
+        if (effectiveMode === "mock_exam") {
+          await recordMockExamCompleted(state.studentId);
+        }
         setState({ status: "done", summary, studentId: state.studentId });
         // 后台静默上传到云端，不阻塞 UI
         pushToCloud().catch(() => {/* 忽略：失败下次再试 */});
@@ -179,8 +184,8 @@ export function TrainPage() {
             </div>
           )}
           <div className="flex gap-3 justify-center mt-4">
-            <Link to="/admin" className="btn-primary text-sm">去 AI 出题</Link>
-            <Link to="/" className="btn-secondary text-sm">回首页</Link>
+            <Link to="/math/admin" className="btn-primary text-sm">去 AI 出题</Link>
+            <Link to="/math" className="btn-secondary text-sm">回首页</Link>
           </div>
         </div>
       );
@@ -189,7 +194,7 @@ export function TrainPage() {
       <div className="card">
         <div className="font-semibold mb-2">暂无可用题目</div>
         <div className="text-sm text-slate-400">
-          先到<Link to="/admin" className="text-violet-300">管理页</Link>补一下题库。
+          先到<Link to="/math/admin" className="text-violet-300">管理页</Link>补一下题库。
         </div>
       </div>
     );
@@ -211,6 +216,7 @@ export function TrainPage() {
       onNext={handleNext}
       showStarter={state.index === 0}
       countdownEnabled={true}
+      examMode={effectiveMode === "mock_exam"}
     />
   );
 }
@@ -320,8 +326,8 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
           )}
 
           <div className="flex gap-3 justify-center pt-2">
-            <Link to={`/train?fresh=${Date.now()}`} className="btn-primary">再来一把</Link>
-            <Link to="/" className="btn-secondary">回首页</Link>
+            <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary">再来一把</Link>
+            <Link to="/math" className="btn-secondary">回首页</Link>
           </div>
         </div>
       )}

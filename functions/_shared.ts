@@ -2,13 +2,16 @@
  * Cloudflare Pages Functions 共用工具。
  *
  * 环境变量（在 Cloudflare Pages 设置里配）：
- *   APP_PASSWORD     - 单密码，给 Selena 自己用（家长设置）
- *   DB               - D1 binding（在 Pages → Settings → Functions → D1 database bindings）
+ *   APP_PASSWORD       - 单密码，给 Selena 自己用（家长设置）
+ *   DB                 - D1 binding（在 Pages → Settings → Functions → D1 database bindings）
+ *   DASHSCOPE_API_KEY  - 阿里云 DashScope（Qwen TTS）API key；可选，没设时 /api/tts/generate 返回 503
  */
 
 export interface Env {
   APP_PASSWORD: string;
   DB: D1Database;
+  /** 可选：Qwen TTS。多学科 Phase 1 给语文听写功能用 */
+  DASHSCOPE_API_KEY?: string;
 }
 
 export const corsHeaders = {

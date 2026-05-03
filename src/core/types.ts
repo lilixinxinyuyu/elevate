@@ -1,3 +1,11 @@
+/**
+ * 已登记的学科 id。多学科 Phase 1 包含 math + chinese；english 还没注册。
+ * 加学科：在这里加 union，再去 src/subjects/index.ts 登记 Subject 对象。
+ *
+ * 放在 core/ 而不是 subjects/ 是为了打破循环依赖（subjects/ 依赖 core/）。
+ */
+export type SubjectId = "math" | "chinese";
+
 export type AbilityId =
   | "calculation"
   | "concept"
@@ -52,7 +60,7 @@ export type QuestionFormat =
 
 export type CognitiveLevel = "recall" | "procedural" | "application" | "reasoning";
 
-export type SessionMode = "normal" | "final_sprint" | "midterm" | "weak_skill" | "review" | "free" | "skill";
+export type SessionMode = "normal" | "final_sprint" | "midterm" | "weak_skill" | "review" | "free" | "skill" | "mock_exam";
 
 export type GameTemplate =
   | "speed_match"
@@ -74,6 +82,8 @@ export type GameTemplate =
 
 export interface CurriculumUnit {
   id: string;
+  /** 多学科 v2：所属学科。Dexie 升级时旧数据 stamp 为 "math"。 */
+  subjectId?: SubjectId;
   term: Term;
   orderIndex: number;
   name: string;
@@ -83,6 +93,8 @@ export interface CurriculumUnit {
 
 export interface Skill {
   id: string;
+  /** 多学科 v2 */
+  subjectId?: SubjectId;
   unitId: string;
   name: string;
   ability: AbilityId[];
@@ -175,6 +187,8 @@ export type SubQuestion = ClueSubquestion | ChooseSubquestion | NumericSubquesti
 
 export interface Question {
   question_id: string;
+  /** 多学科 v2 */
+  subjectId?: SubjectId;
   version: number;
   status: "draft" | "validated" | "approved" | "active" | "retired" | "needs_review" | "rejected";
   source?: {
@@ -226,6 +240,8 @@ export interface StudentProfile {
   grade: number;
   textbook: string;
   currentTerm: Term;
+  /** 多学科 v2：上次进入的学科 id，用于 picker 的"继续上次"按钮。 */
+  currentSubject?: SubjectId;
   currentUnitId?: string;
   dailyLimitMin: number;
   createdAt: number;
@@ -235,8 +251,12 @@ export interface StudentProfile {
 export interface DailySession {
   id: string;
   studentId: string;
+  /** 多学科 v2 */
+  subjectId?: SubjectId;
   dateKey: string;
   mode: SessionMode;
+  /** 本次 session 所属的学期；XP 算到这个学期的赛季总分里 */
+  term?: Term;
   plannedMinutes: number;
   questionIds: string[];
   selectedSkillIds?: string[];
@@ -272,6 +292,8 @@ export interface SessionSummary {
 export interface Attempt {
   id: string;
   studentId: string;
+  /** 多学科 v2 */
+  subjectId?: SubjectId;
   questionId: string;
   skillId: string;
   sessionId?: string;
@@ -292,6 +314,8 @@ export interface Attempt {
 export interface MasteryScore {
   id: string;
   studentId: string;
+  /** 多学科 v2 */
+  subjectId?: SubjectId;
   skillId: string;
   score: number;
   attemptsCount: number;
@@ -303,6 +327,8 @@ export interface MasteryScore {
 export interface MistakeReview {
   id: string;
   studentId: string;
+  /** 多学科 v2 */
+  subjectId?: SubjectId;
   questionId: string;
   skillId: string;
   stage: number;
@@ -315,6 +341,8 @@ export interface MistakeReview {
 export interface UserTrophy {
   id: string;
   studentId: string;
+  /** 多学科 v2 */
+  subjectId?: SubjectId;
   trophyId: string;
   unlockedAt: number;
   meta?: Record<string, unknown>;

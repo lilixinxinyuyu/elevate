@@ -64,7 +64,7 @@ export function MistakesPage() {
             <option value="unresolved">未解决</option>
             <option value="all">全部</option>
           </select>
-          <Link to="/train?mode=review" className="btn-primary">
+          <Link to="/math/train?mode=review" className="btn-primary">
             🪄 开始复活
           </Link>
         </div>

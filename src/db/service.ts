@@ -18,10 +18,13 @@ import type {
   UserTrophy,
 } from "../core/types";
 import { SKILLS } from "../content/skills";
+import { UNITS } from "../content/units";
 import { todayKey } from "../lib/date";
 import { uid } from "../lib/format";
+import type { Term } from "../core/types";
 
 const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]));
+const UNIT_TERM = new Map(UNITS.map((u) => [u.id, u.term]));
 
 export async function getDefaultStudent(): Promise<StudentProfile> {
   const list = await db.students.toArray();
@@ -44,17 +47,30 @@ export async function getOrCreateSession(
   if (!student) throw new Error("学生不存在");
   const mode = opts.mode ?? "normal";
   const dateKey = todayKey();
+
+  // 当前选学期决定题库范围：
+  //   "下册" → 只出 G4B unit 的题
+  //   "上册" → 只出 G4A unit 的题
+  //   "综合复习" → 不过滤（上下册混合）
+  // 期中冲刺/期末冲刺有自己的 hard-coded 范围（在 scheduler 里），不被 term 覆盖。
+  const term = await getSelectedTerm(studentId);
+
+  // session cache key 现在带 term，避免"切学期了还在沿用上一学期那套题"
   if (!opts.fresh && !opts.selectedSkillIds) {
     const existing = await db.sessions
       .where({ studentId, dateKey })
-      .filter((s) => s.mode === mode && !s.finishedAt)
+      .filter((s) => s.mode === mode && !s.finishedAt && (s.term ?? "下册") === term)
       .first();
     if (existing) {
       const questions = await fetchQuestionsOrdered(existing.questionIds);
       return { session: existing, questions };
     }
   }
-  const pool = await db.questions.toArray();
+
+  // 按 term 过滤题库
+  const allQuestions = await db.questions.toArray();
+  const pool = filterQuestionsByTerm(allQuestions, mode, term);
+
   const mastery = await db.mastery.where({ studentId }).toArray();
   const mistakes = await db.mistakes.where({ studentId }).toArray();
   const attempts = await db.attempts.where({ studentId }).toArray();
@@ -69,13 +85,15 @@ export async function getOrCreateSession(
     mistakes,
     attempts,
     selectedSkillIds: opts.selectedSkillIds,
-    rngSeed: `${studentId}:${mode}:${dateKey}:${Date.now()}:${Math.random()}`,
+    rngSeed: `${studentId}:${mode}:${term}:${dateKey}:${Date.now()}:${Math.random()}`,
   });
   const session: DailySession = {
     id: uid("s-"),
     studentId,
+    subjectId: "math", // 多学科 v2：service.ts 当前是 math 单学科作用域
     dateKey,
     mode,
+    term, // 把本次 session 锁定到这个学期，结算时算 XP 用
     plannedMinutes: student.dailyLimitMin,
     questionIds: plan.questionIds,
     selectedSkillIds: opts.selectedSkillIds,
@@ -84,6 +102,22 @@ export async function getOrCreateSession(
   await db.sessions.put(session);
   const questions = await fetchQuestionsOrdered(plan.questionIds);
   return { session, questions, poolStarved: plan.poolStarved, starvedSkillIds: plan.starvedSkillIds };
+}
+
+/**
+ * 按学期过滤题库。
+ * - midterm / final_sprint 模式自带 hard-coded 范围 (scheduler 里处理)，term 不再过滤
+ * - "综合复习" 不过滤
+ * - 否则按 unit.term 过滤
+ */
+function filterQuestionsByTerm(
+  qs: Question[],
+  mode: SessionMode,
+  term: Term,
+): Question[] {
+  if (mode === "midterm" || mode === "final_sprint" || mode === "mock_exam") return qs;
+  if (term === "综合复习") return qs;
+  return qs.filter((q) => UNIT_TERM.get(q.unit_id) === term);
 }
 
 async function fetchQuestionsOrdered(ids: string[]): Promise<Question[]> {
@@ -113,6 +147,13 @@ export interface AttemptOutcome {
   repeatDecay: number;
   /** 5 = 这道题让她解锁了新 skill 的首次答对（应高亮） */
   newSkillBonus: number;
+  /** 错题故事化：本次错答命中的 errorTag 在历史上踩过几次 + 几道老题 */
+  errorPattern?: {
+    matchedTag: string;
+    tagLabel: string;
+    remediation: string | null;
+    pastQuestions: { questionId: string; stem: string; happenedAt: number }[];
+  } | null;
 }
 
 export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptOutcome> {
@@ -174,6 +215,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
   const attempt: Attempt = {
     id: uid("a-"),
     studentId,
+    subjectId: "math",
     questionId: question.question_id,
     skillId: question.skill_id,
     sessionId: session.id,
@@ -196,6 +238,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     const next: MasteryScore = {
       id: masteryId(studentId, question.skill_id),
       studentId,
+      subjectId: "math",
       skillId: question.skill_id,
       score: newMasteryScore,
       attemptsCount: (priorMastery?.attemptsCount ?? 0) + 1,
@@ -217,6 +260,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
         const m: MistakeReview = {
           id: uid("m-"),
           studentId,
+          subjectId: "math",
           questionId: question.question_id,
           skillId: question.skill_id,
           stage: 0,
@@ -245,12 +289,29 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     await db.meta.put({ key: studentKey("totalXp", studentId), value: prevXp + delta.total });
   });
 
+  // ROI #3：错题故事化（仅在错且有 errorTag 时计算）。考试模式不计算（节省时间）
+  let errorPattern: AttemptOutcome["errorPattern"] = null;
+  if (!isCorrect && matchedErrorTags.length > 0 && session.mode !== "mock_exam") {
+    try {
+      const raw = await getErrorPatternForAttempt(studentId, matchedErrorTags, question.question_id);
+      if (raw) {
+        errorPattern = {
+          matchedTag: raw.matchedTag,
+          tagLabel: errorTagLabel(raw.matchedTag),
+          remediation: raw.remediation,
+          pastQuestions: raw.pastQuestions,
+        };
+      }
+    } catch { /* 静默：分析失败不影响主流程 */ }
+  }
+
   return {
     attempt,
     points: delta.total,
     comboAfter,
     repeatDecay: delta.repeatDecay,
     newSkillBonus: delta.newSkillBonus,
+    errorPattern,
   };
 }
 
@@ -340,17 +401,36 @@ export async function setSelectedTerm(
   await db.meta.put({ key: studentKey("selectedTerm", studentId), value: term });
 }
 
-function termKey(name: string, studentId: string, term: import("../core/types").Term): string {
+/**
+ * 多学科架构 Phase 1：所有 service.ts 内部的 meta key 都用学科段。
+ * Phase 1 service.ts 还是 math 单学科作用域（chinese 是 ComingSoon 没 DB 写入），
+ * 所以这里硬编码 "math"。Phase 2 chinese 接入真实数据时，这里要改成接受 subjectId
+ * 参数并由调用点传入。
+ *
+ * key 形态（与 Dexie v2 upgrade 产生的形态一致）：
+ *   xpKey     = "totalXp::math::<studentId>"
+ *   termKey   = "rating::math::<studentId>::G4B"
+ *   mockExam  = "mockExamLastAt::math::<studentId>"
+ */
+const SUBJECT_NAMESPACE = "math";
+
+function termKey(
+  name: string,
+  studentId: string,
+  term: import("../core/types").Term,
+): string {
   // 用 ASCII 短码避免中文 key 处处出现
   const code = term === "上册" ? "G4A" : term === "下册" ? "G4B" : "MIX";
-  return `${name}::${studentId}::${code}`;
+  return `${name}::${SUBJECT_NAMESPACE}::${studentId}::${code}`;
 }
 
 function studentKey(name: string, studentId: string): string {
-  return `${name}::${studentId}`;
+  return `${name}::${SUBJECT_NAMESPACE}::${studentId}`;
 }
 
 function masteryId(studentId: string, skillId: string): string {
+  // Phase 1：mastery row id 不动（math 单学科 skill id 不会和 chinese 撞）。
+  // Phase 2 加 chinese 数据时再 bump 成 ${studentId}::${subjectId}::${skillId}。
   return `${studentId}::${skillId}`;
 }
 
@@ -434,6 +514,7 @@ export async function finalizeSession(
       const t: UserTrophy = {
         id: uid("t-"),
         studentId,
+        subjectId: "math",
         trophyId: award.trophyId,
         unlockedAt: Date.now(),
       };
@@ -447,9 +528,14 @@ export async function finalizeSession(
   const levelBefore = levelFromXp(totalXpNow - xpGained);
 
   // 综合分 + 段位升档判定（**按本次会话的学期算**）
-  // 简化：用 student.currentTerm 作为这次 session 所属赛季
+  // session.term 在 getOrCreateSession 时锁定；老 session（v0.16 之前）没有 term 字段，
+  // 退化到当前选学期 / student.currentTerm
   const student = await db.students.get(studentId);
-  const term: import("../core/types").Term = (student?.currentTerm as import("../core/types").Term) ?? "下册";
+  const term: import("../core/types").Term =
+    session.term ??
+    (await getSelectedTerm(studentId).catch(() => null)) ??
+    (student?.currentTerm as import("../core/types").Term) ??
+    "下册";
 
   const prevRating = await getCachedRating(studentId, term);
   const rating = computeRating(allAttempts, mastery, Date.now(), term);
@@ -597,4 +683,189 @@ export async function checkPoolHealth(studentId: string): Promise<{
   }
 
   return { freshTotal: fresh.length, freshMidterm, starvedSkills };
+}
+
+/* ============================================================
+   ROI 改进 #1：错题三阶段 — 红旗 skill 检测
+   ------------------------------------------------------------
+   当一个 skill 出现"反复尝试都过不去"的迹象时，红旗给爸妈关注：
+   - 该 skill 最近 7 天答题 ≥ 3 次
+   - 最近 3 次都错（连错）
+   - mistakes 表中有未解决条目
+   "三天后用同 skill 不同 surface 还错" 的判定通过 mistakes.stage 退步检测。
+   ============================================================ */
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+export async function getStruggleSkills(studentId: string): Promise<{
+  skillId: string;
+  skillName: string;
+  consecutiveWrong: number;
+  totalRecent: number;
+}[]> {
+  const now = Date.now();
+  const attempts = await db.attempts.where({ studentId }).toArray();
+  const recent = attempts.filter((a) => a.createdAt >= now - WEEK);
+
+  // 按 skillId 分组、按时间排序
+  const bySkill = new Map<string, typeof recent>();
+  for (const a of recent) {
+    const arr = bySkill.get(a.skillId) ?? [];
+    arr.push(a);
+    bySkill.set(a.skillId, arr);
+  }
+
+  const out: { skillId: string; skillName: string; consecutiveWrong: number; totalRecent: number }[] = [];
+  for (const [skillId, list] of bySkill) {
+    if (list.length < 3) continue;
+    list.sort((a, b) => b.createdAt - a.createdAt); // 最新优先
+    // 统计末尾连续错的数量
+    let conseq = 0;
+    for (const a of list) {
+      if (a.isCorrect) break;
+      conseq += 1;
+    }
+    if (conseq >= 3) {
+      const skill = SKILL_MAP.get(skillId);
+      out.push({
+        skillId,
+        skillName: skill?.name ?? skillId,
+        consecutiveWrong: conseq,
+        totalRecent: list.length,
+      });
+    }
+  }
+  out.sort((a, b) => b.consecutiveWrong - a.consecutiveWrong);
+  return out;
+}
+
+/* ============================================================
+   ROI 改进 #2：考试模拟 — 周节流
+   ------------------------------------------------------------
+   保证 mock_exam 一周一次（前一次完成至少 6 天后才能再开）。
+   防止把"考试模拟"也当日常刷的高难题包用，失去模拟意义。
+   ============================================================ */
+const MOCK_EXAM_LAST_KEY = "mockExamLastAt";
+export async function getMockExamCooldown(studentId: string): Promise<{
+  available: boolean;
+  daysUntilNext: number;
+  lastAt: number | null;
+}> {
+  const row = await db.meta.get(studentKey(MOCK_EXAM_LAST_KEY, studentId));
+  const lastAt = typeof row?.value === "number" ? (row.value as number) : null;
+  if (lastAt === null) return { available: true, daysUntilNext: 0, lastAt: null };
+  const days = (Date.now() - lastAt) / (24 * 60 * 60 * 1000);
+  if (days >= 6) return { available: true, daysUntilNext: 0, lastAt };
+  return { available: false, daysUntilNext: Math.ceil(6 - days), lastAt };
+}
+
+export async function recordMockExamCompleted(studentId: string): Promise<void> {
+  await db.meta.put({ key: studentKey(MOCK_EXAM_LAST_KEY, studentId), value: Date.now() });
+}
+
+/* ============================================================
+   ROI 改进 #3：错题故事化 — 错误模式分析
+   ------------------------------------------------------------
+   给定本次 attempt 命中的 errorTags，回查历史 attempts 找出该学生
+   在哪些"以往题目"上踩过同样的坑。返回最多 2 道老题做对照，让 Selena
+   看到「我这个错不是第一次了」，把孤立的题目错串成成长叙事。
+   ============================================================ */
+export async function getErrorPatternForAttempt(
+  studentId: string,
+  currentErrorTags: string[],
+  excludeQuestionId?: string,
+): Promise<{
+  matchedTag: string;
+  remediation: string | null;
+  pastQuestions: { questionId: string; stem: string; happenedAt: number }[];
+} | null> {
+  if (currentErrorTags.length === 0) return null;
+  const tagSet = new Set(currentErrorTags);
+
+  // 取最近 50 道错题，找命中相同 errorTag 的
+  const allAttempts = await db.attempts.where({ studentId }).reverse().limit(80).toArray();
+  const sameTagAttempts = allAttempts.filter((a) =>
+    !a.isCorrect &&
+    a.questionId !== excludeQuestionId &&
+    a.errorTags.some((t) => tagSet.has(t)),
+  );
+  if (sameTagAttempts.length === 0) return null;
+
+  // 选最高频的 tag 做主线
+  const tagCount = new Map<string, number>();
+  for (const a of sameTagAttempts) {
+    for (const t of a.errorTags) {
+      if (tagSet.has(t)) tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
+    }
+  }
+  const matchedTag = Array.from(tagCount.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (!matchedTag) return null;
+
+  // 取这个 tag 下最近 2 道题（去重，按时间倒排）
+  const seen = new Set<string>();
+  const pastList: { questionId: string; stem: string; happenedAt: number }[] = [];
+  for (const a of sameTagAttempts) {
+    if (!a.errorTags.includes(matchedTag)) continue;
+    if (seen.has(a.questionId)) continue;
+    seen.add(a.questionId);
+    const q = await db.questions.get(a.questionId);
+    if (q) {
+      pastList.push({
+        questionId: a.questionId,
+        stem: q.stem.length > 50 ? q.stem.slice(0, 50) + "…" : q.stem,
+        happenedAt: a.createdAt,
+      });
+    }
+    if (pastList.length >= 2) break;
+  }
+  if (pastList.length === 0) return null;
+
+  // 找 remediation：从"最近一道含 matchedTag 的题"的 common_errors 里取
+  let remediation: string | null = null;
+  for (const a of sameTagAttempts) {
+    if (!a.errorTags.includes(matchedTag)) continue;
+    const q = await db.questions.get(a.questionId);
+    const e = q?.common_errors.find((ce) => ce.tag === matchedTag);
+    if (e?.remediation) { remediation = e.remediation; break; }
+  }
+
+  return { matchedTag, remediation, pastQuestions: pastList };
+}
+
+/** 把 errorTag 的英文/标识符映射到中文给 UI 显示 */
+export function errorTagLabel(tag: string): string {
+  const map: Record<string, string> = {
+    decimal_point_error: "小数点位置错",
+    careless_reading: "看错题",
+    relation_model_error: "数量关系搞错",
+    concept_confuse: "概念混淆",
+    place_value_error: "数位看错",
+    average_formula_error: "平均数公式错",
+    tail_zero: "末位 0 处理错",
+    reverse: "运算顺序反了",
+    wrong_op: "运算符号选错",
+    wrong_model: "题意建模错",
+    no_unknown: "误判方程",
+    no_equal_sign: "缺等号",
+    not_equation: "误判方程",
+    formula_wrong: "公式记错",
+    median_confuse: "中位数/平均数混淆",
+    place_skip: "数位跳格",
+    place_wrong: "数位写错",
+    subset: "子集分类混淆",
+    confuse: "类别混淆",
+    violation: "三边关系不成立",
+    view_confuse: "视角看错",
+    all_views: "把所有面都数了",
+    all_faces: "把所有面都数了",
+    above_one: "看错位置",
+    missed_3: "漏掉系数",
+    area: "周长/面积混了",
+    perimeter: "周长/面积混了",
+    perimeter_half: "周长/面积混了",
+    format_wrong: "字母表达式简写错",
+    wrong_class: "三角形分类错",
+    wrong_calc: "算错",
+    alternative: "另一种正确写法",
+    missing_50: "漏掉条件",
+  };
+  return map[tag] ?? tag;
 }

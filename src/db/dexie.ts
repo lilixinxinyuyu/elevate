@@ -25,6 +25,7 @@ export class HepingDB extends Dexie {
 
   constructor() {
     super("heping-math-trainer");
+    // v1：单学科（math）数据模型。保留 schema 让升级链能跑。
     this.version(1).stores({
       students: "id, name, currentTerm",
       units: "id, term, orderIndex",
@@ -37,6 +38,95 @@ export class HepingDB extends Dexie {
       trophies: "id, studentId, trophyId, unlockedAt",
       meta: "key",
     });
+
+    // v2（多学科架构 Phase 1）：
+    //  - 所有学生数据表 + 内容表加 subjectId 索引
+    //  - meta key 加 ::<subjectId>:: 段（仅对 per-subject 的 6 类 key 生效）
+    //  - 旧数据全部 stamp subjectId="math" —— Selena 现有数据零损失
+    this.version(2)
+      .stores({
+        students: "id, name, currentTerm, currentSubject",
+        units: "id, subjectId, term, orderIndex",
+        skills: "id, subjectId, unitId",
+        questions:
+          "question_id, subjectId, skill_id, unit_id, status, game_type, difficulty",
+        sessions: "id, studentId, subjectId, dateKey, mode",
+        attempts:
+          "id, studentId, subjectId, questionId, skillId, createdAt, sessionId",
+        mastery: "id, studentId, subjectId, skillId, score",
+        mistakes:
+          "id, studentId, subjectId, skillId, questionId, nextReviewAt, resolved",
+        trophies: "id, studentId, subjectId, trophyId, unlockedAt",
+        meta: "key",
+      })
+      .upgrade(async (tx) => {
+        const SUBJECT_TABLES = [
+          "units",
+          "skills",
+          "questions",
+          "sessions",
+          "attempts",
+          "mastery",
+          "mistakes",
+          "trophies",
+        ] as const;
+        for (const t of SUBJECT_TABLES) {
+          await tx
+            .table(t)
+            .toCollection()
+            .modify((row: Record<string, unknown>) => {
+              if (!row.subjectId) row.subjectId = "math";
+            });
+        }
+        await tx
+          .table("students")
+          .toCollection()
+          .modify((s: Record<string, unknown>) => {
+            if (!s.currentSubject) s.currentSubject = "math";
+          });
+
+        // meta key 命名空间迁移：把六类 per-subject key 加上 ::math:: 段
+        // totalXp::studentId       → totalXp::math::studentId
+        // rating::studentId        → rating::math::studentId
+        // rating::studentId::G4B   → rating::math::studentId::G4B
+        // tiersUnlocked::studentId → tiersUnlocked::math::studentId
+        // tiersUnlocked::studentId::G4B → tiersUnlocked::math::studentId::G4B
+        // equippedBadge::studentId → equippedBadge::math::studentId
+        // selectedTerm::studentId  → selectedTerm::math::studentId
+        // mockExamLastAt::studentId → mockExamLastAt::math::studentId
+        const PER_SUBJ_PREFIXES = [
+          "totalXp",
+          "rating",
+          "tiersUnlocked",
+          "equippedBadge",
+          "selectedTerm",
+          "mockExamLastAt",
+        ];
+        const allMeta = await tx.table("meta").toArray();
+        for (const row of allMeta) {
+          for (const p of PER_SUBJ_PREFIXES) {
+            // 已经包含 ::math:: 的跳过（防止重复迁移）
+            if (
+              row.key.startsWith(`${p}::`) &&
+              !row.key.startsWith(`${p}::math::`)
+            ) {
+              const newKey = row.key.replace(`${p}::`, `${p}::math::`);
+              await tx.table("meta").delete(row.key);
+              await tx.table("meta").put({ ...row, key: newKey });
+              break; // 一行只匹配一个前缀
+            }
+          }
+        }
+
+        // 给现有学生（默认 selena）记一下当前学科 = math
+        const students = await tx.table("students").toArray();
+        for (const s of students) {
+          await tx.table("meta").put({
+            key: `selectedSubject::${s.id}`,
+            value: "math",
+          });
+        }
+      });
   }
 }
 

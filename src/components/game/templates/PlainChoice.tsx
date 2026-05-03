@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { TemplateRenderProps } from "../GameShell";
 
 export function PlainChoicePanel(props: TemplateRenderProps) {
   const { question, onFinish, triggerFx, disabled } = props;
   const [picked, setPicked] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
-  const options = question.options ?? [];
+  const rawOptions = question.options ?? [];
   const correctId = question.answer.type === "choice" ? question.answer.value : null;
+
+  // 防 memorize 答案位置：每次进题都按本次会话的随机种子重排选项。
+  // 同一题 Selena 看到的 A/B/C/D 内容顺序每次都不同 —— 没法死记"正确答案是 B"。
+  // 不动 option.id（id 仍用作 correctId 比较），只洗渲染顺序。
+  const sessionSalt = useMemo(() => Math.random().toString(36).slice(2), [question.question_id]);
+  const options = useMemo(() => shuffleSeeded(rawOptions, `${question.question_id}::${sessionSalt}`), [rawOptions, sessionSalt]);
   const pick = (id: string, ev: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled || locked) return;
     const rect = ev.currentTarget.getBoundingClientRect();
@@ -29,7 +35,10 @@ export function PlainChoicePanel(props: TemplateRenderProps) {
     <div>
       <div className="font-display text-2xl leading-snug mb-4 whitespace-pre-wrap">{question.stem}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {options.map((o) => {
+        {options.map((o, i) => {
+          // displayLabel 跟着洗后位置走（A/B/C/D），但 o.id 是真 id（用来对答案）。
+          // 这样 Selena 看到的字母位置每次都变；脑子里记"正确选项内容"才行。
+          const displayLabel = String.fromCharCode(65 + i);
           const isPicked = picked === o.id;
           const isCorrectOpt = o.id === correctId;
           const showAnswer = disabled || locked;
@@ -39,7 +48,7 @@ export function PlainChoicePanel(props: TemplateRenderProps) {
           else if (showAnswer) klass = "bubble bubble-dimmed";
           return (
             <button key={o.id} type="button" disabled={disabled || locked} onClick={(e) => pick(o.id, e)} className={klass}>
-              <span className="mr-2 text-violet-200 font-bold">{o.id}.</span>
+              <span className="mr-2 text-violet-200 font-bold">{displayLabel}.</span>
               {o.text}
             </button>
           );
@@ -47,4 +56,19 @@ export function PlainChoicePanel(props: TemplateRenderProps) {
       </div>
     </div>
   );
+}
+
+function shuffleSeeded<T>(arr: T[], seed: string): T[] {
+  const out = arr.slice();
+  let s = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    s ^= seed.charCodeAt(i);
+    s = Math.imul(s, 16777619) >>> 0;
+  }
+  for (let i = out.length - 1; i > 0; i--) {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    const j = s % (i + 1);
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
 }

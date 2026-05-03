@@ -4,6 +4,9 @@ import { db } from "../db/dexie";
 import { UNITS } from "../content/units";
 import { SKILLS } from "../content/skills";
 import { masteryColor, masteryLabel } from "../lib/format";
+import { useEffect, useState } from "react";
+import { getSelectedTerm, setSelectedTerm } from "../db/service";
+import type { Term } from "../core/types";
 
 export function SkillsPage() {
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
@@ -18,12 +21,27 @@ export function SkillsPage() {
     return counts;
   });
 
+  const [term, setTerm] = useState<Term>("下册");
+  useEffect(() => {
+    if (!student) return;
+    getSelectedTerm(student.id).then(setTerm);
+  }, [student?.id]);
+  const handleSwitchTerm = async (t: Term) => {
+    if (!student) return;
+    setTerm(t);
+    await setSelectedTerm(student.id, t);
+  };
+
   if (!student) return <div className="card">正在加载…</div>;
   const masteryMap = new Map((mastery ?? []).map((m) => [m.skillId, m]));
 
+  // 综合复习时显示全部，否则只显示当前 term
+  const visibleTerms: Term[] = term === "综合复习" ? ["下册", "上册"] : [term];
+
   return (
     <div className="space-y-6">
-      {(["下册", "上册"] as const).map((term) => {
+      <TermSwitcher term={term} onSwitch={handleSwitchTerm} />
+      {visibleTerms.map((term) => {
         const units = UNITS.filter((u) => u.term === term).sort((a, b) => a.orderIndex - b.orderIndex);
         return (
           <section key={term} className="space-y-3">
@@ -60,7 +78,7 @@ export function SkillsPage() {
                             <div className="text-[11px] text-slate-400 truncate">
                               {s.ability.join("·")} · 题量 {count}
                               {s.examPriority === "MUST_BIG" && (
-                                <span className="ml-2 chip bg-rose-500/20 text-rose-200 border border-rose-400/30">期末重点</span>
+                                <span className="ml-2 chip bg-rose-500/20 text-rose-200 border border-rose-400/30">必考大题</span>
                               )}
                             </div>
                           </div>
@@ -69,7 +87,7 @@ export function SkillsPage() {
                           </span>
                           {!disabled && (
                             <Link
-                              to={`/train?skillId=${encodeURIComponent(s.id)}`}
+                              to={`/math/train?skillId=${encodeURIComponent(s.id)}`}
                               className="btn-primary px-3 py-1 text-xs"
                               title={`单独训练「${s.name}」`}
                             >
@@ -86,6 +104,33 @@ export function SkillsPage() {
           </section>
         );
       })}
+    </div>
+  );
+}
+
+function TermSwitcher({ term, onSwitch }: { term: Term; onSwitch: (t: Term) => void }) {
+  const TERMS: { id: Term; label: string }[] = [
+    { id: "下册", label: "📚 下册" },
+    { id: "上册", label: "📕 上册" },
+    { id: "综合复习", label: "🎯 综合" },
+  ];
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-1">
+      <span className="text-xs text-slate-400 shrink-0">学期：</span>
+      {TERMS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => onSwitch(t.id)}
+          className={`shrink-0 chip text-xs px-3 py-1.5 transition-all ${
+            term === t.id
+              ? "bg-violet-500/30 text-violet-100 border border-violet-400/60 shadow-glow-violet"
+              : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
     </div>
   );
 }

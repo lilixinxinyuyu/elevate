@@ -5,7 +5,7 @@ import { SEED_QUESTIONS } from "../content/questions";
 import { validateQuestion } from "../core/validateQuestion";
 import type { Question, StudentProfile } from "../core/types";
 
-const SEED_VERSION = 15;
+const SEED_VERSION = 18;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

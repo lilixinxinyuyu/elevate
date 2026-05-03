@@ -158,6 +158,22 @@ export function buildDailySession(input: BuildSessionInput): DailySessionPlan {
     });
   }
 
+  if (input.mode === "mock_exam") {
+    return buildMockExam({
+      ...input,
+      now,
+      rng,
+      targetCount,
+      pool: approvedPool,
+      recentCorrectIds,
+      recentSeenCount,
+      recentWrongCooldownIds,
+      masteredQuestionIds,
+      masteryMap,
+      dueMistakes,
+    });
+  }
+
   return buildNormal({
     ...input,
     now,
@@ -246,48 +262,77 @@ function pickQuestionsForSkill(
   forbidIds: Set<string>,
 ): Question[] {
   const mastery = input.masteryMap.get(skill.id);
-  const allowDiff = difficultyCap(mastery?.score ?? 50);
-  const candidates = input.pool.filter(
+  const ratio = targetDifficultyRatio(mastery?.score ?? 50);
+
+  // 候选 = 同 skill + 没被 forbid + 不在"最近做对/错题冷却/已 mastered"三池
+  const available = input.pool.filter(
     (q) =>
       q.skill_id === skill.id &&
-      q.difficulty <= allowDiff &&
-      !forbidIds.has(q.question_id),
-  );
-  // 一级筛：不在最近做对池 + 不在错题冷却池 + 不在 mastered 池 → 主池
-  const available = candidates.filter(
-    (q) =>
+      !forbidIds.has(q.question_id) &&
       !input.recentCorrectIds.has(q.question_id) &&
       !input.recentWrongCooldownIds.has(q.question_id) &&
       !input.masteredQuestionIds.has(q.question_id),
   );
-  // 优先未做过的；错题来源 / 真题来源加权前置
-  const tagged = available.map((q) => {
-    const tags = q.tags ?? [];
-    const fromTest = tags.includes("from_test");
-    const wrongOrigin = tags.includes("wrong_origin");
-    const examPriorityBoost = q.exam_priority === "MUST_BIG" ? -0.3 : q.exam_priority === "MUST_SMALL" ? -0.2 : 0;
-    return {
+
+  // 难度分桶（D5 归到 D4 桶，避免有 D5 题时漏掉）
+  const buckets: Record<1 | 2 | 3 | 4, Question[]> = { 1: [], 2: [], 3: [], 4: [] };
+  for (const q of available) {
+    const d = (q.difficulty >= 4 ? 4 : q.difficulty) as 1 | 2 | 3 | 4;
+    buckets[d].push(q);
+  }
+
+  // 每桶内按"卷面错题 / 真题 / MUST_BIG"优先排序
+  const sortBucket = (qs: Question[]) => {
+    const tagged = qs.map((q) => ({
       q,
       priority:
-        (input.recentCorrectIds.has(q.question_id) ? 2 : 0) +
         (input.recentSeenCount.get(q.question_id) ?? 0) * 0.6 +
-        (wrongOrigin ? -0.6 : 0) +     // 卷面错题强加权
-        (fromTest ? -0.3 : 0) +        // 卷面真题加权
-        examPriorityBoost,
+        ((q.tags ?? []).includes("wrong_origin") ? -0.6 : 0) +
+        ((q.tags ?? []).includes("from_test") ? -0.3 : 0) +
+        (q.exam_priority === "MUST_BIG" ? -0.3 : q.exam_priority === "MUST_SMALL" ? -0.2 : 0),
       jitter: hashSeed(input.dateKey + ":" + q.question_id) / 2 ** 32,
-    };
-  });
-  tagged.sort((a, b) => (a.priority - b.priority) || (a.jitter - b.jitter));
-  const picked = tagged.slice(0, count).map((t) => t.q);
+    }));
+    tagged.sort((a, b) => a.priority - b.priority || a.jitter - b.jitter);
+    return tagged.map((t) => t.q);
+  };
+  buckets[1] = sortBucket(buckets[1]);
+  buckets[2] = sortBucket(buckets[2]);
+  buckets[3] = sortBucket(buckets[3]);
+  buckets[4] = sortBucket(buckets[4]);
 
-  // 若没拿够，放宽（允许 mastered 但仍未做过的更难题）
+  // 按 ratio 算每个难度该取多少道；剩下的归到 D2/D3 主区
+  let t1 = Math.round(count * ratio.d1);
+  let t2 = Math.round(count * ratio.d2);
+  let t3 = Math.round(count * ratio.d3);
+  let t4 = count - t1 - t2 - t3;
+  if (t4 < 0) { t3 += t4; t4 = 0; }
+
+  const picked: Question[] = [];
+  const takeFrom = (bucket: Question[], n: number): number => {
+    const got = bucket.splice(0, n);
+    picked.push(...got);
+    return n - got.length; // 返回欠几道
+  };
+  // 取每桶；不够时溢出到相邻难度桶
+  let owe = takeFrom(buckets[1], t1);
+  if (owe > 0) owe = takeFrom(buckets[2], owe);
+  owe += takeFrom(buckets[2], t2);
+  if (owe > 0) owe = takeFrom(buckets[3], owe);
+  owe += takeFrom(buckets[3], t3);
+  if (owe > 0) owe = takeFrom(buckets[4], owe);
+  owe += takeFrom(buckets[4], t4);
+  // 仍然欠就反向往简单桶捡
+  if (owe > 0) owe = takeFrom(buckets[3], owe);
+  if (owe > 0) owe = takeFrom(buckets[2], owe);
+  if (owe > 0) owe = takeFrom(buckets[1], owe);
+
+  // 若仍然欠（题库枯竭），放宽：允许 recentCorrect / mastered 已做过的题
   if (picked.length < count) {
     const fallback = input.pool.filter(
       (q) =>
         q.skill_id === skill.id &&
         !picked.includes(q) &&
         !forbidIds.has(q.question_id) &&
-        !input.recentCorrectIds.has(q.question_id) &&
         !input.recentWrongCooldownIds.has(q.question_id),
     );
     fallback.sort(() => input.rng() - 0.5);
@@ -296,10 +341,10 @@ function pickQuestionsForSkill(
       picked.push(q);
     }
   }
-  // 这个 skill 完全没有替代题时才放回冷却题，避免训练卡成空题。
+  // 完全没替代题时再放回冷却题，避免空盘
   if (picked.length === 0) {
     const lastResort = input.pool.filter(
-      (q) => q.skill_id === skill.id && !picked.includes(q) && !forbidIds.has(q.question_id),
+      (q) => q.skill_id === skill.id && !forbidIds.has(q.question_id),
     );
     lastResort.sort(() => input.rng() - 0.5);
     for (const q of lastResort) {
@@ -308,6 +353,24 @@ function pickQuestionsForSkill(
     }
   }
   return picked;
+}
+
+/**
+ * 按 skill 当前掌握度，返回每节挑题的难度配比 (D1/D2/D3/D4≥4)。
+ *
+ * 学习心理学的"理想难度"区间（Bjork 的 desirable difficulty）：正确率 75-85% 时学得最好。
+ *   - 低于 70% → 挫败感、放弃
+ *   - 高于 90% → 无聊、不在学新东西
+ *
+ * 因此弱 skill 偏简单（撑准确率），强 skill 偏难（顶下界）。整体目标：每个 skill 维持 ~80% 准确率。
+ *
+ * mastery 来自 MasteryScore（0-100）。新 skill 默认 50。
+ */
+function targetDifficultyRatio(mastery: number): { d1: number; d2: number; d3: number; d4: number } {
+  if (mastery < 50) return { d1: 0.40, d2: 0.40, d3: 0.15, d4: 0.05 };  // struggling
+  if (mastery < 75) return { d1: 0.20, d2: 0.35, d3: 0.30, d4: 0.15 };  // developing
+  if (mastery < 90) return { d1: 0.10, d2: 0.25, d3: 0.40, d4: 0.25 };  // proficient
+  return { d1: 0.05, d2: 0.15, d3: 0.40, d4: 0.40 };                     // mastered
 }
 
 /** 这个 skill 在所有约束下还能不能找到至少一道"新题"——用于检测题库枯竭 */
@@ -537,6 +600,96 @@ function buildBySkills(input: InternalInput): DailySessionPlan {
     })),
     poolStarved,
     starvedSkillIds,
+  };
+}
+
+/**
+ * 周考模拟（mock_exam）：模拟真实期中/期末考的题量和难度分布。
+ *
+ * 设计原则：
+ * - 30 道题，覆盖所有 G4B 单元（按 examPriority 加权）
+ * - 难度分布按真实考试经验：D1:10% / D2:30% / D3:40% / D4-5:20%
+ * - 每题不允许提示（GameShell 那边按 mock_exam 模式隐藏 hint）
+ * - 锁定时钟（前端 Train.tsx 有总倒计时）
+ * - 完成后：按 skill 分组的得分分析
+ *
+ * 用途：考前最后冲刺，让 Selena 在"接近真实考试"的条件下检验真实能力。
+ */
+function buildMockExam(input: InternalInput): DailySessionPlan {
+  const G4B_UNIT_IDS = [
+    "G4B_U1_DECIMAL_ADD_SUB", "G4B_U2_TRI_QUAD",
+    "G4B_U3_DECIMAL_MULTIPLY", "G4B_U4_OBSERVE_OBJECTS",
+    "G4B_U5_EQUATIONS", "G4B_U6_DATA",
+  ];
+  const candidatePool = input.pool.filter((q) => G4B_UNIT_IDS.includes(q.unit_id));
+
+  // 按难度分桶
+  const buckets: Record<1 | 2 | 3 | 4, Question[]> = { 1: [], 2: [], 3: [], 4: [] };
+  for (const q of candidatePool) {
+    const d = (q.difficulty >= 4 ? 4 : q.difficulty) as 1 | 2 | 3 | 4;
+    buckets[d].push(q);
+  }
+
+  // 每桶按 exam_priority 加权排序（MUST_BIG 优先）
+  const weight = (q: Question) =>
+    q.exam_priority === "MUST_BIG" ? 0 :
+    q.exam_priority === "MUST_SMALL" ? 1 :
+    q.exam_priority === "HIGH_BIG" ? 1 :
+    q.exam_priority === "HIGH_SMALL" ? 2 : 3;
+  const sortBucket = (qs: Question[]) => {
+    return qs.map((q) => ({
+      q, w: weight(q), j: hashSeed(input.dateKey + ":mock:" + q.question_id) / 2 ** 32,
+    })).sort((a, b) => a.w - b.w || a.j - b.j).map((x) => x.q);
+  };
+  buckets[1] = sortBucket(buckets[1]);
+  buckets[2] = sortBucket(buckets[2]);
+  buckets[3] = sortBucket(buckets[3]);
+  buckets[4] = sortBucket(buckets[4]);
+
+  // 难度配比 10/30/40/20
+  const total = Math.max(20, Math.min(30, input.targetCount));
+  const t1 = Math.round(total * 0.1);
+  const t2 = Math.round(total * 0.3);
+  const t3 = Math.round(total * 0.4);
+  const t4 = total - t1 - t2 - t3;
+
+  const picked: Question[] = [
+    ...buckets[1].slice(0, t1),
+    ...buckets[2].slice(0, t2),
+    ...buckets[3].slice(0, t3),
+    ...buckets[4].slice(0, t4),
+  ];
+
+  // 同一 skill 不超过 3 道（强制 skill 多样性）
+  const perSkillCap = 3;
+  const perSkillCount = new Map<string, number>();
+  const filtered: Question[] = [];
+  for (const q of picked) {
+    const c = perSkillCount.get(q.skill_id) ?? 0;
+    if (c >= perSkillCap) continue;
+    filtered.push(q);
+    perSkillCount.set(q.skill_id, c + 1);
+  }
+
+  // 不够补回去
+  if (filtered.length < total) {
+    for (const q of [...buckets[2], ...buckets[3]]) {
+      if (filtered.length >= total) break;
+      if (filtered.includes(q)) continue;
+      filtered.push(q);
+    }
+  }
+
+  const finalList = diversifyOrder(filtered.slice(0, total), input.rng);
+  return {
+    mode: input.mode,
+    dateKey: input.dateKey,
+    plannedMinutes: input.targetMinutes,
+    questionIds: finalList.map((q) => q.question_id),
+    focusSkills: Array.from(new Set(finalList.map((q) => q.skill_id))),
+    breakdown: G4B_UNIT_IDS.map((u) => ({
+      bucket: u, count: finalList.filter((q) => q.unit_id === u).length,
+    })),
   };
 }
 

@@ -41,10 +41,23 @@ export interface GameShellProps {
   total: number;
   xp: number;
   combo: number;
-  onSubmit: (result: AttemptResult) => Promise<{ points: number; repeatDecay?: number; newSkillBonus?: number }>;
+  onSubmit: (result: AttemptResult) => Promise<{
+    points: number;
+    repeatDecay?: number;
+    newSkillBonus?: number;
+    /** 错题故事：本次错答命中的 errorTag 在历史上踩过几次 + 踩过的题 */
+    errorPattern?: {
+      matchedTag: string;
+      tagLabel: string;
+      remediation: string | null;
+      pastQuestions: { questionId: string; stem: string; happenedAt: number }[];
+    } | null;
+  }>;
   onNext: () => void;
   showStarter?: boolean;
   countdownEnabled: boolean;
+  /** 考试模拟模式：禁用提示、不允许 retry。 */
+  examMode?: boolean;
 }
 
 /** 每个子模板实现这个接口 */
@@ -65,7 +78,7 @@ export interface TriggerFx {
 }
 
 export function GameShell(props: GameShellProps) {
-  const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled } = props;
+  const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled, examMode } = props;
   const resetKey = `${question.question_id}:${index}`;
   const [starterDone, setStarterDone] = useState(!showStarter);
   const [hintsOpened, setHintsOpened] = useState(0);
@@ -78,9 +91,14 @@ export function GameShell(props: GameShellProps) {
     points: number;
     repeatDecay?: number;
     newSkillBonus?: number;
+    errorPattern?: GameShellProps["onSubmit"] extends (...args: any) => Promise<infer R>
+      ? R extends { errorPattern?: infer EP } ? EP : never : never;
   } | null>(null);
   const [shake, setShake] = useState(false);
   const [floaters, setFloaters] = useState<Floater[]>([]);
+  // ROI 改进 #1：第一次错时不立刻提交，给一次行内重做机会（考试模式禁用）
+  const [retryStage, setRetryStage] = useState<"none" | "showing_hint">("none");
+  const [panelKey, setPanelKey] = useState(0); // 改这个值能让 TemplatePanel 整体重置
   const cardRef = useRef<HTMLDivElement>(null);
   const activeResetKeyRef = useRef(resetKey);
   const submitInFlightRef = useRef(false);
@@ -95,6 +113,8 @@ export function GameShell(props: GameShellProps) {
     setFeedback(null);
     setShake(false);
     setFloaters([]);
+    setRetryStage("none");
+    setPanelKey(0);
     submitInFlightRef.current = false;
     finishedResetKeyRef.current = null;
   }, [resetKey]);
@@ -133,6 +153,19 @@ export function GameShell(props: GameShellProps) {
     async (r: Omit<AttemptResult, "hintsOpened" | "elapsedSeconds" | "correctAnswerDisplay">) => {
       if (activeResetKeyRef.current !== resetKey) return;
       if (submitInFlightRef.current || finishedResetKeyRef.current === resetKey || submitting || feedback) return;
+
+      // ROI 改进 #1：第一次答错且非考试模式 → 不入库，进入"行内重做"阶段
+      // - 显示步骤提示 + "再做一次" 按钮
+      // - 第二次提交才真的入库（无论对错都最终化）
+      // 考试模式下跳过这个分支，错就是错，立即入库。
+      if (!r.isCorrect && !examMode && retryStage === "none") {
+        sfx.wrong();
+        setShake(true);
+        window.setTimeout(() => setShake(false), 450);
+        setRetryStage("showing_hint");
+        return; // 不调 onSubmit，等用户点"再做一次"
+      }
+
       submitInFlightRef.current = true;
       setSubmitting(true);
       try {
@@ -150,6 +183,7 @@ export function GameShell(props: GameShellProps) {
           points: res.points,
           repeatDecay: res.repeatDecay,
           newSkillBonus: res.newSkillBonus,
+          errorPattern: res.errorPattern ?? null,
         });
         finishedResetKeyRef.current = resetKey;
         if (r.isCorrect) {
@@ -164,8 +198,17 @@ export function GameShell(props: GameShellProps) {
         setSubmitting(false);
       }
     },
-    [submitting, feedback, resetKey, startedAt, hintsOpened, onSubmit, question],
+    [submitting, feedback, resetKey, startedAt, hintsOpened, onSubmit, question, examMode, retryStage],
   );
+
+  // 用户点击"再做一次"时调用：清掉提示状态，强制 panel 重新挂载
+  const handleRetry = useCallback(() => {
+    setRetryStage("none");
+    // 把 hintsOpened 标 1，等价于"用了 1 级提示"，扣 1 分
+    setHintsOpened((n) => Math.max(n, 1));
+    setStartedAt(Date.now());
+    setPanelKey((k) => k + 1);
+  }, []);
 
   const onPickFeedback = useCallback((kind: "correct" | "wrong") => {
     if (kind === "wrong") {
@@ -182,7 +225,8 @@ export function GameShell(props: GameShellProps) {
     onFinish: handleFinish,
     triggerFx,
     onPickFeedback,
-    disabled: !!feedback || submitting,
+    // 显示 retry 提示时也要禁用 panel，避免重复提交
+    disabled: !!feedback || submitting || retryStage === "showing_hint",
   };
   const TemplatePanel = pickPanel(templateId);
 
@@ -228,9 +272,17 @@ export function GameShell(props: GameShellProps) {
             ))}
         </div>
 
-        <TemplatePanel key={resetKey} {...common} />
+        <TemplatePanel key={`${resetKey}::${panelKey}`} {...common} />
 
-        {hints.length > 0 && !feedback && (
+        {/* 行内重做提示（错 1 次后显示）。考试模式不会进这里。 */}
+        {retryStage === "showing_hint" && !feedback && (
+          <RetryHintPanel
+            stem={question.solution_steps[0] ?? "再仔细读一遍题目，注意小数点和单位。"}
+            onRetry={handleRetry}
+          />
+        )}
+
+        {hints.length > 0 && !feedback && retryStage === "none" && !examMode && (
           <div className="mt-4">
             <HintLadder hints={hints} opened={hintsOpened} onOpen={openHint} disabled={!starterDone} />
           </div>
@@ -336,11 +388,18 @@ function FeedbackPanel({
   question,
   onNext,
 }: {
-  feedback: { isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string; points: number; repeatDecay?: number; newSkillBonus?: number };
+  feedback: {
+    isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string;
+    points: number; repeatDecay?: number; newSkillBonus?: number;
+    errorPattern?: {
+      matchedTag: string; tagLabel: string; remediation: string | null;
+      pastQuestions: { questionId: string; stem: string; happenedAt: number }[];
+    } | null;
+  };
   question: Question;
   onNext: () => void;
 }) {
-  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus } = feedback;
+  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, errorPattern } = feedback;
   // 标签：重做递减 / 新知识点
   const labels: string[] = [];
   if (isCorrect && repeatDecay !== undefined && repeatDecay < 1.0 && repeatDecay > 0) {
@@ -396,10 +455,56 @@ function FeedbackPanel({
           </ol>
         </details>
       )}
+      {/* ROI 改进 #3：错题故事化 —— 你之前在哪些题也踩过这个坑 */}
+      {!isCorrect && errorPattern && errorPattern.pastQuestions.length > 0 && (
+        <div className="rounded-xl border border-violet-400/30 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/5 p-3 text-sm">
+          <div className="font-display font-bold text-violet-100 flex items-center gap-2 mb-1">
+            🔍 这个错你之前也踩过
+            <span className="chip text-[11px] px-2 py-0.5 bg-violet-500/30 border border-violet-400/40 text-violet-100">
+              {errorPattern.tagLabel}
+            </span>
+          </div>
+          <ul className="list-disc list-inside text-violet-200/85 space-y-0.5">
+            {errorPattern.pastQuestions.map((p) => (
+              <li key={p.questionId}>{p.stem}</li>
+            ))}
+          </ul>
+          {errorPattern.remediation && (
+            <div className="mt-2 text-emerald-200/90 text-xs">
+              💡 怎么改：{errorPattern.remediation}
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex justify-end">
         <button type="button" className="btn-primary" onClick={onNext}>
           下一题 →
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ROI 改进 #1：第 1 次错时显示的"行内提示 + 再做一次"面板。
+ * 不入库、不算分，只给一次"读完提示再来"的机会。
+ * 第 2 次提交（不管对错）才真的走 onSubmit 入库。
+ */
+function RetryHintPanel({ stem, onRetry }: { stem: string; onRetry: () => void }) {
+  return (
+    <div className="mt-4 rounded-xl border border-amber-400/40 bg-gradient-to-br from-amber-500/15 to-rose-500/10 p-4 animate-slide-up">
+      <div className="flex items-start gap-3">
+        <div className="text-3xl">💡</div>
+        <div className="flex-1">
+          <div className="font-display font-bold text-amber-100 mb-1">先别急——给你一个提示</div>
+          <div className="text-sm text-amber-200/90 mb-3 leading-relaxed">{stem}</div>
+          <button type="button" className="btn-primary text-sm py-2 px-4" onClick={onRetry}>
+            再做一次 →
+          </button>
+          <div className="text-[11px] text-amber-200/60 mt-2">
+            重做一次只扣 1 分提示费。第二次还错才会算错题。
+          </div>
+        </div>
       </div>
     </div>
   );
