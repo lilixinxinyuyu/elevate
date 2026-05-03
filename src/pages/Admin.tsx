@@ -571,7 +571,7 @@ function RatingDiagnostics() {
     tier: string;
     subRank: string;
     components: { accuracy: number; mastery: number; continuity: number; volume: number };
-    raw: { accuracy7d: number; weightedMastery: number; skillsPracticed: number; breadthFactor: number; streak: number; cumulativeDays: number; totalAttempts: number };
+    raw: { accuracy7d: number; rawWeightedMastery: number; weightedMastery: number; skillsPracticed: number; avgUniqueQuestionsPerSkill: number; breadthFactor: number; streak: number; cumulativeDays: number; totalAttempts: number };
   }>(null);
   useEffect(() => {
     (async () => {
@@ -595,13 +595,14 @@ function RatingDiagnostics() {
   }, []);
 
   if (!rating) return <div className="text-sm text-slate-400">载入中…</div>;
+  const masteryDeflation = rating.raw.rawWeightedMastery - rating.raw.weightedMastery;
   return (
     <div className="text-sm space-y-3">
       <div className="rounded-lg bg-amber-500/10 border border-amber-400/30 p-3 text-amber-200/90 text-xs">
-        ⚠️ <strong>家长须知</strong>：综合分反映的是孩子在 app 上的<strong>练习广度 + 熟练度 + 准确率 + 持续性</strong>，
-        <strong>不是</strong>她和班里同学在试卷上的客观排名。
-        Selena 因为坚持练（429 题、32 个 skill 都摸过、平均 mastery 76），段位会比"完全不练"的孩子高。
-        段位是激励性的、地图式的，不是教育局排名。
+        ⚠️ <strong>家长须知（v3 校准）</strong>：综合分 0-1000，按"金字塔分布"映射段位 ——
+        <strong>大多数孩子的家是和平街小学（0-700, 占 70%）</strong>，
+        进锦江/成都/四川/全国一段比一段难。Selena 在 app 上的"客观努力"会反映在分数上，
+        但题库小或重复刷题不会让 mastery 虚高（独立题数封顶机制）。
       </div>
       <div className="font-display font-bold text-lg">
         {rating.score} 分 · {rating.tier} {rating.subRank}
@@ -611,12 +612,21 @@ function RatingDiagnostics() {
           <th className="text-left">分量</th><th className="text-right">得分</th><th className="text-right">最大</th><th className="text-right">原始指标</th>
         </tr></thead>
         <tbody>
-          <tr><td>准确率（最近 7 天）</td><td className="text-right">{rating.components.accuracy}</td><td className="text-right text-slate-400">/ 230</td><td className="text-right">{Math.round(rating.raw.accuracy7d * 100)}%</td></tr>
-          <tr><td>熟练度（加权 × 广度）</td><td className="text-right">{rating.components.mastery}</td><td className="text-right text-slate-400">/ 500</td><td className="text-right">{Math.round(rating.raw.weightedMastery)} × {rating.raw.skillsPracticed}/30 skill</td></tr>
-          <tr><td>持续性</td><td className="text-right">{rating.components.continuity}</td><td className="text-right text-slate-400">/ 130</td><td className="text-right">连 {rating.raw.streak} 天 · 共 {rating.raw.cumulativeDays} 天</td></tr>
-          <tr><td>题量</td><td className="text-right">{rating.components.volume}</td><td className="text-right text-slate-400">/ 140</td><td className="text-right">{rating.raw.totalAttempts} 题</td></tr>
+          <tr><td>准确率（最近 7 天）</td><td className="text-right">{rating.components.accuracy}</td><td className="text-right text-slate-400">/ 250</td><td className="text-right">{Math.round(rating.raw.accuracy7d * 100)}%</td></tr>
+          <tr><td>熟练度（独立题封顶 × 广度）</td><td className="text-right">{rating.components.mastery}</td><td className="text-right text-slate-400">/ 400</td><td className="text-right">eff {Math.round(rating.raw.weightedMastery)} × {rating.raw.skillsPracticed}/30</td></tr>
+          <tr><td>持续性</td><td className="text-right">{rating.components.continuity}</td><td className="text-right text-slate-400">/ 200</td><td className="text-right">连 {rating.raw.streak} · 共 {rating.raw.cumulativeDays} 天</td></tr>
+          <tr><td>题量</td><td className="text-right">{rating.components.volume}</td><td className="text-right text-slate-400">/ 150</td><td className="text-right">{rating.raw.totalAttempts} 题</td></tr>
         </tbody>
       </table>
+      {masteryDeflation > 5 && (
+        <div className="rounded-lg bg-rose-500/10 border border-rose-400/30 p-3 text-rose-200/90 text-xs">
+          🔍 <strong>反刷分诊断</strong>：原始 mastery 加权平均是 {Math.round(rating.raw.rawWeightedMastery)}，
+          被独立题数封顶后变成 <strong>{Math.round(rating.raw.weightedMastery)}</strong>
+          —— 因为每个 skill 平均只看过 <strong>{rating.raw.avgUniqueQuestionsPerSkill.toFixed(1)}</strong> 道独立题。
+          说明她做的题不少但题目重复多，不能据此说她真的"掌握"了。
+          {rating.raw.avgUniqueQuestionsPerSkill < 12 && " 建议：让 AI 出更多新题（admin 页面 prompt 生成器）。"}
+        </div>
+      )}
     </div>
   );
 }

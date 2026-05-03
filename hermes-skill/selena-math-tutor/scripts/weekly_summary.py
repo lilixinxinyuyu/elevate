@@ -42,12 +42,24 @@ EXAM_PRIORITY_WEIGHT = {
 }
 
 TIERS = [
-    ("school", "和平街小学", 0, 400, "🏫"),
-    ("district", "锦江区", 400, 600, "🏛️"),
-    ("city", "成都市", 600, 800, "🌆"),
-    ("province", "四川省", 800, 900, "🐼"),
-    ("country", "全国", 900, 1000, "🇨🇳"),
+    # v3 金字塔分布：和平街小学 占 70%，越往上越窄
+    ("school", "和平街小学", 0, 700, "🏫"),
+    ("district", "锦江区", 700, 850, "🏛️"),
+    ("city", "成都市", 850, 930, "🌆"),
+    ("province", "四川省", 930, 980, "🐼"),
+    ("country", "全国", 980, 1000, "🇨🇳"),
 ]
+
+# v3 校准常量（和 src/core/rating.ts 同步）
+ACCURACY_BASELINE = 0.5
+ACCURACY_MAX = 250
+MASTERY_MAX = 400
+MASTERY_MULT = 4
+MASTERY_BASE_CAP = 40
+UNIQUE_Q_PER_LEVEL = 5
+MASTERY_BREADTH_TARGET = 30
+CONTINUITY_MAX = 200
+VOLUME_MAX = 150
 
 
 def tier_for_score(score: int):
@@ -76,19 +88,32 @@ def compute_rating(attempts, mastery, skills_index_by_id):
     recent = [a for a in attempts if a.get("createdAt", 0) >= cutoff_7d]
     acc7d = (sum(1 for a in recent if a.get("isCorrect")) / len(recent)) if recent else 0.0
 
-    # 加权 mastery
+    # 独立题数 / skill（用于 mastery cap）
+    unique_q_by_skill = {}
+    for a in attempts:
+        sk = a.get("skillId")
+        qid = a.get("questionId")
+        if not sk or not qid:
+            continue
+        unique_q_by_skill.setdefault(sk, set()).add(qid)
+
+    # 加权 effective mastery（按独立题数封顶）
     total_w, weighted_sum = 0.0, 0.0
     skills_practiced = 0
     for m in mastery:
-        skill = skills_index_by_id.get(m.get("skillId"))
+        sk_id = m.get("skillId")
+        skill = skills_index_by_id.get(sk_id)
         if not skill:
             continue
         skills_practiced += 1
+        uniq = len(unique_q_by_skill.get(sk_id, set()))
+        cap = min(100, MASTERY_BASE_CAP + uniq * UNIQUE_Q_PER_LEVEL)
+        eff_score = min(m.get("score", 0), cap)
         w = EXAM_PRIORITY_WEIGHT.get(skill.get("examPriority"), 0.4)
         total_w += w
-        weighted_sum += m.get("score", 0) * w
+        weighted_sum += eff_score * w
     weighted_mastery = (weighted_sum / total_w) if total_w > 0 else 0.0
-    breadth = min(1.0, skills_practiced / 30.0)
+    breadth = min(1.0, skills_practiced / MASTERY_BREADTH_TARGET)
 
     # streak / cum days
     days = set()
@@ -105,11 +130,11 @@ def compute_rating(attempts, mastery, skills_index_by_id):
         streak += 1
         cur -= timedelta(days=1)
 
-    # v2 校准（与 src/core/rating.ts 同步）
-    accuracy_comp = clamp((acc7d - 0.5) / 0.5 * 230, 0, 230)
-    mastery_comp = clamp(weighted_mastery * breadth * 5, 0, 500)
-    continuity_comp = clamp(streak * 4 + cum_days * 1.5, 0, 130)
-    volume_comp = clamp(math.log10(len(attempts) + 1) * 60 - 50, 0, 140)
+    # v3 校准（和 src/core/rating.ts 同步）
+    accuracy_comp = clamp((acc7d - ACCURACY_BASELINE) / (1 - ACCURACY_BASELINE) * ACCURACY_MAX, 0, ACCURACY_MAX)
+    mastery_comp = clamp(weighted_mastery * breadth * MASTERY_MULT, 0, MASTERY_MAX)
+    continuity_comp = clamp(streak * 5 + cum_days * 1.5, 0, CONTINUITY_MAX)
+    volume_comp = clamp(math.log10(len(attempts) + 1) * 60 - 50, 0, VOLUME_MAX)
 
     score = round(clamp(accuracy_comp + mastery_comp + continuity_comp + volume_comp, 0, 1000))
     tier = tier_for_score(score)

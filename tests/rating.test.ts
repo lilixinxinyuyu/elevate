@@ -55,36 +55,72 @@ describe("computeRating", () => {
     expect(r.percentSurpassed).toBe(50); // 段位起点 → 50%
   });
 
-  it("Selena 当前数据应该在和平街小学（v2 校准 - 班里中等水平）", () => {
-    // 模拟：429 道题，最近 7 天 76% 正确率，8 天连胜，平均 mastery 65，仅 7 个 skill 有记录
+  it("题库小 + 重复刷不能让 mastery 飞", () => {
+    // 5 道独立题，每道做 50 次，全对。mastery 真值会被 EWMA 顶到 95
     const attempts: Attempt[] = [];
-    for (let i = 0; i < 100; i++) {
-      attempts.push(mkAttempt({ isCorrect: i < 76, daysAgo: i % 7 }));
+    const skills = ["decimal_meaning_place", "decimal_add_sub_vertical"];
+    for (const sk of skills) {
+      for (let qi = 0; qi < 5; qi++) {
+        for (let n = 0; n < 50; n++) {
+          attempts.push(mkAttempt({
+            isCorrect: true,
+            skillId: sk,
+            questionId: `${sk}_q${qi}`,
+            daysAgo: n % 30,
+          }));
+        }
+      }
     }
-    for (let i = 0; i < 329; i++) {
-      attempts.push(mkAttempt({ isCorrect: true, daysAgo: 8 + (i % 20) }));
-    }
-    const mastery = [
-      "decimal_meaning_place",
-      "decimal_add_sub_vertical",
-      "decimal_mul_vertical",
-      "triangle_inequality",
-      "triangle_angle_sum",
-      "decimal_inverse_problem",
-      "decimal_unit_conversion",
-    ].map((id) => mkMastery(id, 65));
-
+    // 真实 mastery 95（EWMA 顶到这）
+    const mastery = skills.map((id) => mkMastery(id, 95));
     const r = computeRating(attempts, mastery, NOW);
-    // v2 校准目标：Selena 落在 和平街小学 ★III/IV 中段
+    // effective_mastery 因为只看了 5 道独立题被封到 65（40 + 5×5）
+    expect(r.raw.weightedMastery).toBeLessThanOrEqual(65);
+    // 真原始 mastery 应该高得多
+    expect(r.raw.rawWeightedMastery).toBeGreaterThanOrEqual(90);
+    // 段位仍在和平街小学（防止刷分混到锦江）
     expect(r.tier.id).toBe("school");
-    expect(r.score).toBeGreaterThanOrEqual(200);
-    expect(r.score).toBeLessThan(400);
-    // 应该在 ★III 或 ★IV（高段，因为她确实练得勤）
-    expect(r.subRank).toBeGreaterThanOrEqual(3);
   });
 
-  it("练得广 + 准确率高 → 段位上得去", () => {
-    // 30 个 skill 都达到 85 mastery（广度因子接近 1）
+  it("Selena 当前数据落在和平街小学（v3 校准）", () => {
+    // 429 题，最近 7 天 76% 正确率，但题库小 → 大量重复
+    // 32 个 skill 都摸过，但每个 skill 只见过 ~3-4 道独立题（小池）
+    const attempts: Attempt[] = [];
+    const skills = [
+      "decimal_meaning_place", "decimal_add_sub_vertical", "decimal_mul_vertical",
+      "triangle_inequality", "triangle_angle_sum", "decimal_inverse_problem",
+      "decimal_unit_conversion",
+    ];
+    // 7 天内 100 题，76% 正确
+    for (let i = 0; i < 100; i++) {
+      const sk = skills[i % skills.length]!;
+      const qi = i % 4; // 每 skill 4 道独立题，循环
+      attempts.push(mkAttempt({
+        isCorrect: i < 76,
+        skillId: sk,
+        questionId: `${sk}_q${qi}`,
+        daysAgo: i % 7,
+      }));
+    }
+    // 之前 329 题，重复刷
+    for (let i = 0; i < 329; i++) {
+      const sk = skills[i % skills.length]!;
+      const qi = i % 4;
+      attempts.push(mkAttempt({
+        isCorrect: true,
+        skillId: sk,
+        questionId: `${sk}_q${qi}`,
+        daysAgo: 8 + (i % 20),
+      }));
+    }
+    const mastery = skills.map((id) => mkMastery(id, 76));
+    const r = computeRating(attempts, mastery, NOW);
+    // v3 目标：和平街小学（不应虚高到锦江/成都）
+    expect(r.tier.id).toBe("school");
+  });
+
+  it("练得广 + 真做了多种独立题 + 高准确率 → 段位上得去", () => {
+    // 30 个 skill，每个 skill 12+ 道独立题，95% 正确率
     const REAL_30 = [
       "large_place_value", "large_read_write", "large_compare", "large_rewrite_wan_yi",
       "large_approx_rounding", "angle_types", "angle_measure", "int_mul_3_by_2",
@@ -95,28 +131,27 @@ describe("computeRating", () => {
       "triangle_classification", "decimal_mul_meaning", "decimal_point_shift", "decimal_mul_vertical",
       "decimal_product_digits", "decimal_mul_mix",
     ];
-    const mastery = REAL_30.map((id) => mkMastery(id, 85));
-    // 7 天 90% 准确率
+    const mastery = REAL_30.map((id) => mkMastery(id, 90));
     const attempts: Attempt[] = [];
-    for (let i = 0; i < 100; i++) {
-      attempts.push(mkAttempt({ isCorrect: i < 90, daysAgo: i % 7 }));
-    }
-    for (let day = 7; day < 30; day++) {
-      for (let j = 0; j < 30; j++) attempts.push(mkAttempt({ isCorrect: true, daysAgo: day }));
-    }
-    const r = computeRating(attempts, mastery, NOW);
-    // 30 个 skill 都到 85 + 90% 准确率 + 30 天 → 应该上到成都/四川
-    expect(["city", "province"]).toContain(r.tier.id);
-  });
-
-  it("超高分数据应该解锁全国段", () => {
-    const attempts: Attempt[] = [];
-    // 大量题目，几乎 100% 正确率，120 天每天练
-    for (let day = 0; day < 120; day++) {
-      for (let i = 0; i < 30; i++) {
-        attempts.push(mkAttempt({ isCorrect: i < 30, daysAgo: day }));
+    for (let s = 0; s < REAL_30.length; s++) {
+      const sk = REAL_30[s]!;
+      // 每个 skill 12 道独立题，每道 3 次
+      for (let q = 0; q < 12; q++) {
+        for (let n = 0; n < 3; n++) {
+          attempts.push(mkAttempt({
+            isCorrect: q < 11,
+            skillId: sk,
+            questionId: `${sk}_q${q}`,
+            daysAgo: (s + n) % 30,
+          }));
+        }
       }
     }
+    const r = computeRating(attempts, mastery, NOW);
+    expect(["district", "city", "province"]).toContain(r.tier.id);
+  });
+
+  it("传说级选手 → 应该解锁全国段（30 个 skill 全 100, 每 skill 看过 12+ 道独立题, 100% 正确率, 120 天）", () => {
     const REAL_SKILLS = [
       "large_place_value", "large_read_write", "large_compare", "large_rewrite_wan_yi",
       "large_approx_rounding", "angle_types", "angle_measure", "int_mul_3_by_2",
@@ -127,6 +162,20 @@ describe("computeRating", () => {
       "triangle_classification", "decimal_mul_meaning", "decimal_point_shift", "decimal_mul_vertical",
       "decimal_product_digits", "decimal_mul_mix",
     ];
+    const attempts: Attempt[] = [];
+    // 每个 skill 15 道独立题 × 全对，120 天每天练
+    for (let day = 0; day < 120; day++) {
+      for (let s = 0; s < REAL_SKILLS.length; s++) {
+        for (let q = 0; q < 15; q++) {
+          attempts.push(mkAttempt({
+            isCorrect: true,
+            skillId: REAL_SKILLS[s]!,
+            questionId: `${REAL_SKILLS[s]}_q${q}`,
+            daysAgo: day,
+          }));
+        }
+      }
+    }
     const mastery = REAL_SKILLS.map((id) => mkMastery(id, 100));
     const r = computeRating(attempts, mastery, NOW);
     expect(r.score).toBeGreaterThanOrEqual(900);
@@ -165,35 +214,36 @@ describe("TIERS", () => {
     expect(TIERS[TIERS.length - 1]!.range[1]).toBe(1000);
   });
 
-  it("段位映射正确", () => {
+  it("段位映射正确（v3 金字塔分布）", () => {
     expect(tierFromScore(0).id).toBe("school");
-    expect(tierFromScore(399).id).toBe("school");
-    expect(tierFromScore(400).id).toBe("district");
-    expect(tierFromScore(599).id).toBe("district");
-    expect(tierFromScore(600).id).toBe("city");
-    expect(tierFromScore(799).id).toBe("city");
-    expect(tierFromScore(800).id).toBe("province");
-    expect(tierFromScore(899).id).toBe("province");
-    expect(tierFromScore(900).id).toBe("country");
+    expect(tierFromScore(699).id).toBe("school");
+    expect(tierFromScore(700).id).toBe("district");
+    expect(tierFromScore(849).id).toBe("district");
+    expect(tierFromScore(850).id).toBe("city");
+    expect(tierFromScore(929).id).toBe("city");
+    expect(tierFromScore(930).id).toBe("province");
+    expect(tierFromScore(979).id).toBe("province");
+    expect(tierFromScore(980).id).toBe("country");
     expect(tierFromScore(1000).id).toBe("country");
   });
 
   it("段内进度从 0 到 1", () => {
-    expect(progressInTier(0, TIERS[0]!)).toBe(0);
-    expect(progressInTier(200, TIERS[0]!)).toBe(0.5);
-    expect(progressInTier(400, TIERS[0]!)).toBe(1);
+    const school = TIERS[0]!; // 0-700
+    expect(progressInTier(0, school)).toBe(0);
+    expect(progressInTier(350, school)).toBe(0.5);
+    expect(progressInTier(700, school)).toBe(1);
   });
 
   it("小段计算：4 档划分 25% / 50% / 75%", () => {
-    const school = TIERS[0]!; // 0-400
+    const school = TIERS[0]!; // 0-700
     expect(subRank(0, school)).toBe(1);
-    expect(subRank(99, school)).toBe(1);
-    expect(subRank(100, school)).toBe(2);
-    expect(subRank(199, school)).toBe(2);
-    expect(subRank(200, school)).toBe(3);
-    expect(subRank(299, school)).toBe(3);
-    expect(subRank(300, school)).toBe(4);
-    expect(subRank(399, school)).toBe(4);
+    expect(subRank(174, school)).toBe(1);
+    expect(subRank(175, school)).toBe(2);
+    expect(subRank(349, school)).toBe(2);
+    expect(subRank(350, school)).toBe(3);
+    expect(subRank(524, school)).toBe(3);
+    expect(subRank(525, school)).toBe(4);
+    expect(subRank(699, school)).toBe(4);
 
     expect(subRankRoman(1)).toBe("I");
     expect(subRankRoman(4)).toBe("IV");
@@ -203,9 +253,9 @@ describe("TIERS", () => {
 
   it("百分位段内单调递增，全国段顶 99%", () => {
     expect(percentSurpassed(0, TIERS[0]!)).toBe(50);
-    expect(percentSurpassed(200, TIERS[0]!)).toBeGreaterThan(50);
-    expect(percentSurpassed(399, TIERS[0]!)).toBeGreaterThanOrEqual(89);
-    expect(percentSurpassed(900, TIERS[4]!)).toBe(50);
+    expect(percentSurpassed(350, TIERS[0]!)).toBeGreaterThan(50);
+    expect(percentSurpassed(699, TIERS[0]!)).toBeGreaterThanOrEqual(89);
+    expect(percentSurpassed(980, TIERS[4]!)).toBe(50);
     expect(percentSurpassed(1000, TIERS[4]!)).toBe(99);
   });
 });

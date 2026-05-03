@@ -1,23 +1,44 @@
 /**
- * 综合评分 0-1000（Elevate 风格）。
+ * 综合评分 0-1000（v3 校准）。
  *
- * v2 校准（更严格，让"在和平街小学班里中等"的孩子真的落在 200-300 段）。
+ * 设计哲学：
+ * - **大多数孩子的家是和平街小学（0-700, 70%）**。突破出去是真本事。
+ * - 真实游戏的金字塔分布：上一段比下一段难得多。
+ * - 反"刷分"：题库小、重复做、强制打卡 都不该让分数虚高。
  *
- * 4 个分量（最大值约 230 + 500 + 130 + 140 = 1000）：
- * - 准确率 (0-230)：最近 7 天答题正确率。<50% → 0，100% → 230（线性）。
- * - 熟练度 (0-500)：weighted mastery × **广度因子** × 5
- *     广度因子 = min(1.0, num_skills_practiced / 35)
- *     —— 只练了几个 skill 不能因为 mastery 高就直接到全国
- * - 持续性 (0-130)：streak * 4 + 累计练习天数 * 1.5。
- *     —— 鼓励持续，但不让"刷天数"超过实际能力
- * - 题量   (0-140)：log10(attempts+1) * 60 - 50。
- *     —— 进步阶段加分快，过 1000 题后接近饱和
+ * 4 个分量（最大 = 250 + 400 + 200 + 150 = 1000）。当前预算：
+ * - 准确率 (0-250)：最近 7 天答题正确率。<50% → 0，100% → 250 线性。
+ * - 熟练度 (0-400)：effective_mastery × 广度因子 × 4
+ *     **effective_mastery** = 真 mastery 但被"独立题数"封顶
+ *       cap_per_skill = min(100, MASTERY_BASE_CAP + UNIQUE_Q_PER_LEVEL × 看过的独立题数)
+ *       默认 cap = 40 + 5×N。看过 1 道独立题 cap=45；12 道 cap=100。
+ *       —— 杀死"刷 5 道题刷 50 次堆 mastery 90"的漏洞
+ *     广度因子 = min(1.0, num_skills_practiced / 30)
+ * - 持续性 (0-200)：streak * 5 + 累计练习天数 * 1.5
+ * - 题量 (0-150)：log10(attempts+1) * 60 - 50
+ *     —— 200 题后接近饱和。不让"刷题量"超过实际能力。
  *
- * 校准目标：Selena 当前数据（最近 7d 76% 准确率、8 天连胜、429 题、平均 mastery ~65、~7 个 skill 有记录）
- * → 综合分 ≈ 280-340，落在和平街小学 ★III/IV，再加把劲就出校了。
+ * 单分量满分总和 1000 —— 真正的"完美选手"才能进 全国 段。
+ * 大多数孩子（哪怕勤奋）天花板在 500-700（和平街小学 ★III-IV）。
  *
- * 这与"在班里中等水平"的家长判断对得上。
+ * 所有"魔法数字"都在下面 CALIBRATION 常量里，想调整改这一处就行。
  */
+
+// === CALIBRATION CONSTANTS ===========================================
+// 想让分数更难拿，把这些数字调小；想更容易，调大。
+const ACCURACY_BASELINE = 0.5;        // 准确率起点（< baseline → 0 分）
+const ACCURACY_MAX_POINTS = 250;
+const MASTERY_MAX_POINTS = 400;
+const MASTERY_MULTIPLIER = 4;         // weighted_mastery × breadth × 这个 = mastery_comp
+const MASTERY_BASE_CAP = 40;          // 没看过任何独立题时 mastery 最高只能 40
+const UNIQUE_Q_PER_LEVEL = 5;         // 每多看 1 道独立题，mastery cap +5
+const MASTERY_BREADTH_TARGET = 30;    // 练满 30 个 skill 广度因子=1.0
+const CONTINUITY_MAX_POINTS = 200;
+const CONTINUITY_STREAK_WEIGHT = 5;
+const CONTINUITY_CUMDAYS_WEIGHT = 1.5;
+const VOLUME_MAX_POINTS = 150;
+const VOLUME_LOG_MULTIPLIER = 60;
+const VOLUME_LOG_OFFSET = 50;
 import type { Attempt, MasteryScore } from "./types";
 import { SKILLS } from "../content/skills";
 import {
@@ -81,8 +102,13 @@ export interface RatingResult {
   /** 调试用：原始指标 */
   raw: {
     accuracy7d: number;
+    /** 真 mastery 加权平均（未封顶） */
+    rawWeightedMastery: number;
+    /** 经过"独立题数封顶"后的 mastery 加权平均 */
     weightedMastery: number;
     skillsPracticed: number;
+    /** 平均每个 skill 看过多少道独立题（用于诊断重复刷题） */
+    avgUniqueQuestionsPerSkill: number;
     breadthFactor: number;
     streak: number;
     cumulativeDays: number;
@@ -107,7 +133,31 @@ export function computeAccuracy7d(attempts: Attempt[], now = Date.now()): number
   return recent.filter((a) => a.isCorrect).length / recent.length;
 }
 
-/** 加权 mastery 平均（按 examPriority），返回 0-100 */
+/**
+ * effective_mastery：把真实 mastery 按"看过的独立题数量"封顶。
+ *
+ * 漏洞场景：题库只有 5 道题，孩子做 50 次都对，mastery EWMA 上去到 90。
+ * 修复：你只见过 5 道独立题 → mastery 最高只能到 65（40 + 5×5）。
+ *
+ * 返回的是 mastery 数组的"等价"版本——每个 score 已经按独立题数封顶过。
+ */
+export function effectiveMastery(
+  mastery: MasteryScore[],
+  attempts: Attempt[],
+): MasteryScore[] {
+  const uniqueQByskill = new Map<string, Set<string>>();
+  for (const a of attempts) {
+    if (!uniqueQByskill.has(a.skillId)) uniqueQByskill.set(a.skillId, new Set());
+    uniqueQByskill.get(a.skillId)!.add(a.questionId);
+  }
+  return mastery.map((m) => {
+    const uniq = uniqueQByskill.get(m.skillId)?.size ?? 0;
+    const cap = Math.min(100, MASTERY_BASE_CAP + uniq * UNIQUE_Q_PER_LEVEL);
+    return { ...m, score: Math.min(m.score, cap) };
+  });
+}
+
+/** 加权 mastery 平均（按 examPriority），返回 0-100。建议先经过 effectiveMastery 处理 */
 export function computeWeightedMastery(mastery: MasteryScore[]): number {
   let totalWeight = 0;
   let weightedSum = 0;
@@ -127,8 +177,8 @@ export function countSkillsPracticed(mastery: MasteryScore[]): number {
   return mastery.filter((m) => SKILL_MAP.has(m.skillId)).length;
 }
 
-/** 广度因子：练得越多越接近 1.0；30 个 skill 满分（一年最多深度掌握 30 个 skill） */
-export function breadthFactor(skillsPracticed: number, target = 30): number {
+/** 广度因子：练得越多越接近 1.0；MASTERY_BREADTH_TARGET 个 skill 满分 */
+export function breadthFactor(skillsPracticed: number, target = MASTERY_BREADTH_TARGET): number {
   return Math.min(1.0, skillsPracticed / target);
 }
 
@@ -162,26 +212,38 @@ export function computeRating(
   now = Date.now(),
 ): RatingResult {
   const acc7d = computeAccuracy7d(attempts, now);
-  const weightedMastery = computeWeightedMastery(mastery);
+  // 关键：mastery 先按独立题数封顶，再加权平均
+  const cappedMastery = effectiveMastery(mastery, attempts);
+  const weightedMastery = computeWeightedMastery(cappedMastery);
   const skillsPracticed = countSkillsPracticed(mastery);
   const breadth = breadthFactor(skillsPracticed);
   const streak = computeStreak(attempts, now);
   const cumulativeDays = computeCumulativeDays(attempts);
   const totalAttempts = attempts.length;
 
-  // v2 校准：让"和平街小学班里中等"的孩子真的落在 200-300 段
-  // 准确率 0-230：50% 起步，100% 满分 230
-  const accuracyComp = clamp((acc7d - 0.5) / 0.5 * 230, 0, 230);
+  // 准确率：< baseline → 0；100% → MAX
+  const accuracyComp = clamp(
+    ((acc7d - ACCURACY_BASELINE) / (1 - ACCURACY_BASELINE)) * ACCURACY_MAX_POINTS,
+    0,
+    ACCURACY_MAX_POINTS,
+  );
 
-  // 熟练度 0-500：mastery × 广度因子 × 5
-  // —— 关键：只练 7 个 skill 的人，breadth=0.2，mastery 100 也只拿 100/500
-  const masteryComp = clamp(weightedMastery * breadth * 5, 0, 500);
+  // 熟练度：effective mastery × 广度 × 倍率
+  const masteryComp = clamp(weightedMastery * breadth * MASTERY_MULTIPLIER, 0, MASTERY_MAX_POINTS);
 
-  // 持续性 0-130：streak * 4 + cumDays * 1.5
-  const continuityComp = clamp(streak * 4 + cumulativeDays * 1.5, 0, 130);
+  // 持续性
+  const continuityComp = clamp(
+    streak * CONTINUITY_STREAK_WEIGHT + cumulativeDays * CONTINUITY_CUMDAYS_WEIGHT,
+    0,
+    CONTINUITY_MAX_POINTS,
+  );
 
-  // 题量 0-140：log10 曲线，过 1000 题接近饱和
-  const volumeComp = clamp(Math.log10(totalAttempts + 1) * 60 - 50, 0, 140);
+  // 题量（log10 曲线）
+  const volumeComp = clamp(
+    Math.log10(totalAttempts + 1) * VOLUME_LOG_MULTIPLIER - VOLUME_LOG_OFFSET,
+    0,
+    VOLUME_MAX_POINTS,
+  );
 
   const rawScore = accuracyComp + masteryComp + continuityComp + volumeComp;
   const score = Math.round(clamp(rawScore, 0, 1000));
@@ -215,8 +277,20 @@ export function computeRating(
     deltaToNextSubRank,
     raw: {
       accuracy7d: acc7d,
+      rawWeightedMastery: computeWeightedMastery(mastery),
       weightedMastery,
       skillsPracticed,
+      avgUniqueQuestionsPerSkill: (() => {
+        const set = new Map<string, Set<string>>();
+        for (const a of attempts) {
+          if (!set.has(a.skillId)) set.set(a.skillId, new Set());
+          set.get(a.skillId)!.add(a.questionId);
+        }
+        if (set.size === 0) return 0;
+        let total = 0;
+        set.forEach((s) => (total += s.size));
+        return total / set.size;
+      })(),
       breadthFactor: breadth,
       streak,
       cumulativeDays,
