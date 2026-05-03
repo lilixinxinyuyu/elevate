@@ -233,49 +233,89 @@ export async function getTotalXp(studentId: string): Promise<number> {
 }
 
 /**
- * 读上次缓存的综合分（finalizeSession 写入）。
- * 没有就根据当前 attempts/mastery 实时算一个，但不写入。
+ * Per-学期缓存的综合分。每个学期是独立赛季。
  */
-export async function getCachedRating(studentId: string): Promise<{
-  score: number;
-  tierId: string;
-  computedAt: number;
-} | null> {
-  const row = await db.meta.get(studentKey("rating", studentId));
+export async function getCachedRating(
+  studentId: string,
+  term: import("../core/types").Term | null = null,
+): Promise<{ score: number; tierId: string; computedAt: number } | null> {
+  const key = term ? termKey("rating", studentId, term) : studentKey("rating", studentId);
+  const row = await db.meta.get(key);
   if (!row || typeof row.value !== "object" || !row.value) return null;
-  const v = row.value as { score: number; tierId: string; computedAt: number };
-  return v;
+  return row.value as { score: number; tierId: string; computedAt: number };
 }
 
-/** 实时计算综合分（用于首页等需要立刻拿到分数的场景）。 */
-export async function computeCurrentRating(studentId: string) {
+/**
+ * 实时计算综合分（按学期过滤）。term=null 时算所有数据（兼容旧 UI）。
+ */
+export async function computeCurrentRating(
+  studentId: string,
+  term: import("../core/types").Term | null = null,
+) {
   const attempts = await db.attempts.where({ studentId }).toArray();
   const mastery = await db.mastery.where({ studentId }).toArray();
-  return computeRating(attempts, mastery);
+  return computeRating(attempts, mastery, Date.now(), term);
 }
 
-/** 已解锁的段位列表（meta 持久化，跨段升档时追加） */
-export async function getUnlockedTiers(studentId: string): Promise<string[]> {
-  const row = await db.meta.get(studentKey("tiersUnlocked", studentId));
-  if (!row || !Array.isArray(row.value)) return ["school"]; // 进来就拿到学徒
+/** 已解锁的段位列表（每学期独立） */
+export async function getUnlockedTiers(
+  studentId: string,
+  term: import("../core/types").Term | null = null,
+): Promise<string[]> {
+  const key = term ? termKey("tiersUnlocked", studentId, term) : studentKey("tiersUnlocked", studentId);
+  const row = await db.meta.get(key);
+  if (!row || !Array.isArray(row.value)) return ["school"];
   return row.value as string[];
 }
 
-/** 当前佩戴的段位勋章（默认最高已解锁段位） */
+/** 当前佩戴的段位勋章（**全局共享**，不分学期：你只戴一枚） */
 export async function getEquippedBadge(studentId: string): Promise<string> {
   const row = await db.meta.get(studentKey("equippedBadge", studentId));
   if (row && typeof row.value === "string") return row.value;
-  const unlocked = await getUnlockedTiers(studentId);
-  // 默认佩戴解锁的最高段位
-  return unlocked.reduce((best, id) =>
-    tierIndex(id) > tierIndex(best) ? id : best, "school");
+  // 默认佩戴所有学期里最高的段位
+  const allTerms: import("../core/types").Term[] = ["上册", "下册", "综合复习"];
+  let best = "school";
+  for (const t of allTerms) {
+    const u = await getUnlockedTiers(studentId, t);
+    for (const id of u) {
+      if (tierIndex(id) > tierIndex(best)) best = id;
+    }
+  }
+  return best;
 }
 
 export async function setEquippedBadge(studentId: string, tierId: string): Promise<void> {
   if (!tierById(tierId)) return;
-  const unlocked = await getUnlockedTiers(studentId);
-  if (!unlocked.includes(tierId)) return; // 没解锁的不能佩戴
+  // 校验：任何一个学期里解锁过都行
+  const allTerms: import("../core/types").Term[] = ["上册", "下册", "综合复习"];
+  let unlockedSomewhere = false;
+  for (const t of allTerms) {
+    const u = await getUnlockedTiers(studentId, t);
+    if (u.includes(tierId)) { unlockedSomewhere = true; break; }
+  }
+  if (!unlockedSomewhere) return;
   await db.meta.put({ key: studentKey("equippedBadge", studentId), value: tierId });
+}
+
+/** 当前选择的学期（UI selector），默认 student.currentTerm */
+export async function getSelectedTerm(studentId: string): Promise<import("../core/types").Term> {
+  const row = await db.meta.get(studentKey("selectedTerm", studentId));
+  if (row && typeof row.value === "string") return row.value as import("../core/types").Term;
+  const student = await db.students.get(studentId);
+  return (student?.currentTerm as import("../core/types").Term) ?? "下册";
+}
+
+export async function setSelectedTerm(
+  studentId: string,
+  term: import("../core/types").Term,
+): Promise<void> {
+  await db.meta.put({ key: studentKey("selectedTerm", studentId), value: term });
+}
+
+function termKey(name: string, studentId: string, term: import("../core/types").Term): string {
+  // 用 ASCII 短码避免中文 key 处处出现
+  const code = term === "上册" ? "G4A" : term === "下册" ? "G4B" : "MIX";
+  return `${name}::${studentId}::${code}`;
 }
 
 function studentKey(name: string, studentId: string): string {
@@ -378,11 +418,15 @@ export async function finalizeSession(
   const levelAfter = levelFromXp(totalXpNow);
   const levelBefore = levelFromXp(totalXpNow - xpGained);
 
-  // 综合分 + 段位升档判定
-  const prevRating = await getCachedRating(studentId);
-  const rating = computeRating(allAttempts, mastery);
+  // 综合分 + 段位升档判定（**按本次会话的学期算**）
+  // 简化：用 student.currentTerm 作为这次 session 所属赛季
+  const student = await db.students.get(studentId);
+  const term: import("../core/types").Term = (student?.currentTerm as import("../core/types").Term) ?? "下册";
+
+  const prevRating = await getCachedRating(studentId, term);
+  const rating = computeRating(allAttempts, mastery, Date.now(), term);
   await db.meta.put({
-    key: studentKey("rating", studentId),
+    key: termKey("rating", studentId, term),
     value: {
       score: rating.score,
       tierId: rating.tier.id,
@@ -390,14 +434,14 @@ export async function finalizeSession(
       computedAt: Date.now(),
     },
   });
-  // 解锁段位（追加，不删）
-  const prevUnlocked = await getUnlockedTiers(studentId);
+  // 解锁段位（追加，不删）—— per-term
+  const prevUnlocked = await getUnlockedTiers(studentId, term);
   const unlocked = new Set(prevUnlocked);
   unlocked.add("school"); // 永远有起步段
   if (!unlocked.has(rating.tier.id)) unlocked.add(rating.tier.id);
   if (unlocked.size !== prevUnlocked.length) {
     await db.meta.put({
-      key: studentKey("tiersUnlocked", studentId),
+      key: termKey("tiersUnlocked", studentId, term),
       value: Array.from(unlocked),
     });
   }

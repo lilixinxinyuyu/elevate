@@ -10,14 +10,18 @@
  * - 进入市/省/国级越来越难（top 10% / 5% / 1%）
  * - 最高段（全国）极其罕见，留给真正的超凡选手
  *
- * 实际宽度分配：
- *   0-700  和平街小学  (70%)  ← 大多数孩子的"家"
- *   700-850 锦江区      (15%) ← 突破班级、区级前列
- *   850-930 成都市      (8%)  ← 全市拔尖
- *   930-980 四川省      (5%)  ← 省级佼佼者
- *   980-1000 全国       (2%)  ← 传说级
+ * **每学期一局**：
+ * - 学期 4 个月就是一局完整赛季，结束清零下学期重开
+ * - 4 个月 perfect = 1000 = 全国（顶段）
+ * - 上册/下册是独立赛季，互不串
  *
- * 综合分本身的"获取难度"由 rating.ts 控制（见那里的 CALIBRATION 注释）。
+ * 实际宽度分配（pyramid，反映学期末分布）：
+ *   0-600    和平街小学  60% 孩子的家
+ *   600-780  锦江区        中上 25%
+ *   780-880  成都市        顶 10%
+ *   880-960  四川省        顶 4%
+ *   960-1000 全国          顶 1%（4 月 perfect）
+ *
  * 段位区间想调整就改下面的 range —— 全部都是变量。
  */
 export interface Tier {
@@ -54,8 +58,8 @@ export const TIERS: Tier[] = [
   {
     id: "school",
     name: "和平街小学",
-    // 占总分 70%——大多数同学的家，进出门都需要长时间稳定练习
-    range: [0, 700],
+    // 0-600：60% 孩子的家
+    range: [0, 600],
     badgeName: "和平校徽",
     badgeIcon: "🏫",
     badgeDesc: "你已经是和平街小学的小学徒啦！",
@@ -71,8 +75,8 @@ export const TIERS: Tier[] = [
   {
     id: "district",
     name: "锦江区",
-    // 占 15%——区前 30% 才能进
-    range: [700, 850],
+    // 600-780：中上 25%
+    range: [600, 780],
     badgeName: "锦江徽章",
     badgeIcon: "🏛️",
     badgeDesc: "锦江区四年级里你已经站到前列了。",
@@ -88,8 +92,8 @@ export const TIERS: Tier[] = [
   {
     id: "city",
     name: "成都市",
-    // 占 8%——市拔尖
-    range: [850, 930],
+    // 780-880：顶 10%
+    range: [780, 880],
     badgeName: "蓉城勋章",
     badgeIcon: "🌆",
     badgeDesc: "蓉城小达人，整个成都市都看得到你的努力。",
@@ -105,8 +109,8 @@ export const TIERS: Tier[] = [
   {
     id: "province",
     name: "四川省",
-    // 占 5%——省佼佼者
-    range: [930, 980],
+    // 880-960：顶 4%
+    range: [880, 960],
     badgeName: "天府之星",
     badgeIcon: "🐼",
     badgeDesc: "天府小神童，全省四年级里你已经名列前茅！",
@@ -122,8 +126,8 @@ export const TIERS: Tier[] = [
   {
     id: "country",
     name: "全国",
-    // 占 2%——传说级
-    range: [980, 1000],
+    // 960-1000：顶 1%，基本只有 4 个月 perfect 才能进
+    range: [960, 1000],
     badgeName: "中华小数神",
     badgeIcon: "🇨🇳",
     badgeDesc: "全国四年级数学小神童，传说级。",
@@ -171,9 +175,7 @@ export function progressInTier(score: number, tier: Tier): number {
 
 /**
  * 段位内"超过 X% 的同年级"友好曲线。
- *
- * 设计：进入新段位时显示 50%（"在这个新池子里你刚起步"），
- * 段位顶点显示 89%（再涨就跨段了，新池子又重置）。
+ * 进入新段位时显示 50%（新池子刚起步），段位顶点显示 89%（再涨跨段）。
  * 最高段（全国）顶点 99%。
  */
 export function percentSurpassed(score: number, tier: Tier): number {

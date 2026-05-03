@@ -42,22 +42,23 @@ EXAM_PRIORITY_WEIGHT = {
 }
 
 TIERS = [
-    # v3 金字塔分布：和平街小学 占 70%，越往上越窄
-    ("school", "和平街小学", 0, 700, "🏫"),
-    ("district", "锦江区", 700, 850, "🏛️"),
-    ("city", "成都市", 850, 930, "🌆"),
-    ("province", "四川省", 930, 980, "🐼"),
-    ("country", "全国", 980, 1000, "🇨🇳"),
+    # v5 pyramid: 学期赛季内分布，4 月 perfect = 全国
+    ("school", "和平街小学", 0, 600, "🏫"),
+    ("district", "锦江区", 600, 780, "🏛️"),
+    ("city", "成都市", 780, 880, "🌆"),
+    ("province", "四川省", 880, 960, "🐼"),
+    ("country", "全国", 960, 1000, "🇨🇳"),
 ]
 
-# v3 校准常量（和 src/core/rating.ts 同步）
+# v5 校准常量（和 src/core/rating.ts 同步）
 ACCURACY_BASELINE = 0.5
 ACCURACY_MAX = 250
+ACCURACY_WARMUP = 100
 MASTERY_MAX = 400
 MASTERY_MULT = 4
 MASTERY_BASE_CAP = 40
 UNIQUE_Q_PER_LEVEL = 5
-MASTERY_BREADTH_TARGET = 30
+MASTERY_BREADTH_TARGET = 25
 CONTINUITY_MAX = 200
 VOLUME_MAX = 150
 
@@ -130,8 +131,9 @@ def compute_rating(attempts, mastery, skills_index_by_id):
         streak += 1
         cur -= timedelta(days=1)
 
-    # v3 校准（和 src/core/rating.ts 同步）
-    accuracy_comp = clamp((acc7d - ACCURACY_BASELINE) / (1 - ACCURACY_BASELINE) * ACCURACY_MAX, 0, ACCURACY_MAX)
+    # v5 校准（和 src/core/rating.ts 同步）
+    warmup = min(1, len(attempts) / ACCURACY_WARMUP)
+    accuracy_comp = clamp((acc7d - ACCURACY_BASELINE) / (1 - ACCURACY_BASELINE) * ACCURACY_MAX * warmup, 0, ACCURACY_MAX)
     mastery_comp = clamp(weighted_mastery * breadth * MASTERY_MULT, 0, MASTERY_MAX)
     continuity_comp = clamp(streak * 5 + cum_days * 1.5, 0, CONTINUITY_MAX)
     volume_comp = clamp(math.log10(len(attempts) + 1) * 60 - 50, 0, VOLUME_MAX)

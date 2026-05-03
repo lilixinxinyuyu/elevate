@@ -151,7 +151,7 @@ describe("computeRating", () => {
     expect(["district", "city", "province"]).toContain(r.tier.id);
   });
 
-  it("传说级选手 → 应该解锁全国段（30 个 skill 全 100, 每 skill 看过 12+ 道独立题, 100% 正确率, 120 天）", () => {
+  it("4 个月 perfect 选手 → 应该解锁全国段（≥960）", () => {
     const REAL_SKILLS = [
       "large_place_value", "large_read_write", "large_compare", "large_rewrite_wan_yi",
       "large_approx_rounding", "angle_types", "angle_measure", "int_mul_3_by_2",
@@ -178,7 +178,7 @@ describe("computeRating", () => {
     }
     const mastery = REAL_SKILLS.map((id) => mkMastery(id, 100));
     const r = computeRating(attempts, mastery, NOW);
-    expect(r.score).toBeGreaterThanOrEqual(900);
+    expect(r.score).toBeGreaterThanOrEqual(960);
     expect(r.tier.id).toBe("country");
   });
 
@@ -214,36 +214,36 @@ describe("TIERS", () => {
     expect(TIERS[TIERS.length - 1]!.range[1]).toBe(1000);
   });
 
-  it("段位映射正确（v3 金字塔分布）", () => {
+  it("段位映射正确（v5 金字塔分布）", () => {
     expect(tierFromScore(0).id).toBe("school");
-    expect(tierFromScore(699).id).toBe("school");
-    expect(tierFromScore(700).id).toBe("district");
-    expect(tierFromScore(849).id).toBe("district");
-    expect(tierFromScore(850).id).toBe("city");
-    expect(tierFromScore(929).id).toBe("city");
-    expect(tierFromScore(930).id).toBe("province");
-    expect(tierFromScore(979).id).toBe("province");
-    expect(tierFromScore(980).id).toBe("country");
+    expect(tierFromScore(599).id).toBe("school");
+    expect(tierFromScore(600).id).toBe("district");
+    expect(tierFromScore(779).id).toBe("district");
+    expect(tierFromScore(780).id).toBe("city");
+    expect(tierFromScore(879).id).toBe("city");
+    expect(tierFromScore(880).id).toBe("province");
+    expect(tierFromScore(959).id).toBe("province");
+    expect(tierFromScore(960).id).toBe("country");
     expect(tierFromScore(1000).id).toBe("country");
   });
 
   it("段内进度从 0 到 1", () => {
-    const school = TIERS[0]!; // 0-700
+    const school = TIERS[0]!; // 0-600
     expect(progressInTier(0, school)).toBe(0);
-    expect(progressInTier(350, school)).toBe(0.5);
-    expect(progressInTier(700, school)).toBe(1);
+    expect(progressInTier(300, school)).toBe(0.5);
+    expect(progressInTier(600, school)).toBe(1);
   });
 
   it("小段计算：4 档划分 25% / 50% / 75%", () => {
-    const school = TIERS[0]!; // 0-700
+    const school = TIERS[0]!; // 0-600
     expect(subRank(0, school)).toBe(1);
-    expect(subRank(174, school)).toBe(1);
-    expect(subRank(175, school)).toBe(2);
-    expect(subRank(349, school)).toBe(2);
-    expect(subRank(350, school)).toBe(3);
-    expect(subRank(524, school)).toBe(3);
-    expect(subRank(525, school)).toBe(4);
-    expect(subRank(699, school)).toBe(4);
+    expect(subRank(149, school)).toBe(1);
+    expect(subRank(150, school)).toBe(2);
+    expect(subRank(299, school)).toBe(2);
+    expect(subRank(300, school)).toBe(3);
+    expect(subRank(449, school)).toBe(3);
+    expect(subRank(450, school)).toBe(4);
+    expect(subRank(599, school)).toBe(4);
 
     expect(subRankRoman(1)).toBe("I");
     expect(subRankRoman(4)).toBe("IV");
@@ -253,9 +253,9 @@ describe("TIERS", () => {
 
   it("百分位段内单调递增，全国段顶 99%", () => {
     expect(percentSurpassed(0, TIERS[0]!)).toBe(50);
-    expect(percentSurpassed(350, TIERS[0]!)).toBeGreaterThan(50);
-    expect(percentSurpassed(699, TIERS[0]!)).toBeGreaterThanOrEqual(89);
-    expect(percentSurpassed(980, TIERS[4]!)).toBe(50);
+    expect(percentSurpassed(300, TIERS[0]!)).toBeGreaterThan(50);
+    expect(percentSurpassed(599, TIERS[0]!)).toBeGreaterThanOrEqual(89);
+    expect(percentSurpassed(960, TIERS[4]!)).toBe(50);
     expect(percentSurpassed(1000, TIERS[4]!)).toBe(99);
   });
 });

@@ -6,8 +6,10 @@ import {
   checkPoolHealth,
   computeCurrentRating,
   getEquippedBadge,
+  getSelectedTerm,
   getUnlockedTiers,
   setEquippedBadge,
+  setSelectedTerm,
 } from "../db/service";
 import { tierById, TIERS, tierIndex } from "../core/tiers";
 import { TierCard } from "../components/TierCard";
@@ -15,6 +17,7 @@ import { TrophyWall } from "../components/TrophyWall";
 import { BadgeInventory } from "../components/BadgeInventory";
 import { UnlockCelebration } from "../components/UnlockCelebration";
 import type { RatingResult } from "../core/rating";
+import type { Term } from "../core/types";
 import { useEffect, useState } from "react";
 
 /** 把毫秒时间戳格式成本地日期字符串 YYYY-MM-DD（与 todayKey 一致） */
@@ -44,6 +47,7 @@ export function HomePage() {
   const [rating, setRating] = useState<RatingResult | null>(null);
   const [unlockedTiers, setUnlockedTiers] = useState<string[]>(["school"]);
   const [equippedTierId, setEquippedTierId] = useState<string>("school");
+  const [term, setTerm] = useState<Term>("下册");
   const [poolHealth, setPoolHealth] = useState<{
     freshTotal: number;
     freshMidterm: number;
@@ -51,29 +55,35 @@ export function HomePage() {
   } | null>(null);
   const [celebrationToTier, setCelebrationToTier] = useState<string | null>(null);
 
-  // 重新计算综合分（attempts/mastery 变化时）
+  // 加载初始 selectedTerm
+  useEffect(() => {
+    if (!student) return;
+    getSelectedTerm(student.id).then(setTerm);
+  }, [student?.id]);
+
+  // 重新计算综合分（学期切换或数据变化时）
   useEffect(() => {
     if (!student) return;
     let cancelled = false;
     (async () => {
-      const r = await computeCurrentRating(student.id);
+      const r = await computeCurrentRating(student.id, term);
       if (cancelled) return;
       setRating(r);
 
-      // 解锁段位：当前段位及以下所有段位都视为已解锁（防止跳级跳过中间段）
-      const prevUnlocked = await getUnlockedTiers(student.id);
+      // 解锁段位（按当前 term）
+      const prevUnlocked = await getUnlockedTiers(student.id, term);
       const currentIdx = tierIndex(r.tier.id);
       const shouldBeUnlocked = TIERS.slice(0, currentIdx + 1).map((t) => t.id);
       const newUnlocked = Array.from(new Set([...prevUnlocked, ...shouldBeUnlocked]));
       const grewBy = newUnlocked.filter((id) => !prevUnlocked.includes(id));
 
       if (grewBy.length > 0) {
+        const code = term === "上册" ? "G4A" : term === "下册" ? "G4B" : "MIX";
         await db.meta.put({
-          key: `tiersUnlocked::${student.id}`,
+          key: `tiersUnlocked::${student.id}::${code}`,
           value: newUnlocked,
         });
-        // 仅当**已经有过解锁记录**且新解锁的段位 > 旧最高时才庆祝
-        // （首次加载老数据不弹通告，避免吓到孩子）
+        // 庆祝条件
         const prevMaxIdx = prevUnlocked.length > 0
           ? Math.max(...prevUnlocked.map(tierIndex))
           : -1;
@@ -88,12 +98,18 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [student?.id, attempts?.length]);
+  }, [student?.id, attempts?.length, term]);
 
   const handleEquip = async (tierId: string) => {
     if (!student) return;
     await setEquippedBadge(student.id, tierId);
     setEquippedTierId(tierId);
+  };
+
+  const handleSwitchTerm = async (t: Term) => {
+    if (!student) return;
+    setTerm(t);
+    await setSelectedTerm(student.id, t);
   };
 
   if (!student) return <div className="card">正在初始化…</div>;
@@ -108,8 +124,33 @@ export function HomePage() {
 
   const equippedBadge = tierById(equippedTierId) ?? tierById("school")!;
 
+  const TERMS: { id: Term; label: string }[] = [
+    { id: "下册", label: "📚 四年级下册（当前）" },
+    { id: "上册", label: "📕 四年级上册" },
+    { id: "综合复习", label: "🎯 综合复习" },
+  ];
+
   return (
     <div className="space-y-6">
+      {/* 学期切换器 */}
+      <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-1">
+        <span className="text-xs text-slate-400 shrink-0">赛季：</span>
+        {TERMS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => handleSwitchTerm(t.id)}
+            className={`shrink-0 chip text-xs px-3 py-1.5 transition-all ${
+              term === t.id
+                ? "bg-violet-500/30 text-violet-100 border border-violet-400/60 shadow-glow-violet"
+                : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Hero：综合分 + 段位 + 佩戴的勋章 */}
       {rating ? (
         <TierCard studentName={student.name} rating={rating} equippedBadge={equippedBadge} />
