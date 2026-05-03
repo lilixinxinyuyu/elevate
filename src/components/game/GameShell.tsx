@@ -41,7 +41,7 @@ export interface GameShellProps {
   total: number;
   xp: number;
   combo: number;
-  onSubmit: (result: AttemptResult) => Promise<{ points: number }>;
+  onSubmit: (result: AttemptResult) => Promise<{ points: number; repeatDecay?: number; newSkillBonus?: number }>;
   onNext: () => void;
   showStarter?: boolean;
   countdownEnabled: boolean;
@@ -76,6 +76,8 @@ export function GameShell(props: GameShellProps) {
     partialCorrect: boolean;
     correctAnswerDisplay: string;
     points: number;
+    repeatDecay?: number;
+    newSkillBonus?: number;
   } | null>(null);
   const [shake, setShake] = useState(false);
   const [floaters, setFloaters] = useState<Floater[]>([]);
@@ -146,6 +148,8 @@ export function GameShell(props: GameShellProps) {
           partialCorrect: r.partialCorrect,
           correctAnswerDisplay: describeAnswer(question),
           points: res.points,
+          repeatDecay: res.repeatDecay,
+          newSkillBonus: res.newSkillBonus,
         });
         finishedResetKeyRef.current = resetKey;
         if (r.isCorrect) {
@@ -332,11 +336,21 @@ function FeedbackPanel({
   question,
   onNext,
 }: {
-  feedback: { isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string; points: number };
+  feedback: { isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string; points: number; repeatDecay?: number; newSkillBonus?: number };
   question: Question;
   onNext: () => void;
 }) {
-  const { isCorrect, partialCorrect } = feedback;
+  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus } = feedback;
+  // 标签：重做递减 / 新知识点
+  const labels: string[] = [];
+  if (isCorrect && repeatDecay !== undefined && repeatDecay < 1.0 && repeatDecay > 0) {
+    labels.push(`重做 ×${Math.round(repeatDecay * 100)}%`);
+  } else if (isCorrect && repeatDecay === 0) {
+    labels.push("已熟练，不再加分");
+  }
+  if (newSkillBonus && newSkillBonus > 0) {
+    labels.push(`🎓 新知识点 +${newSkillBonus}`);
+  }
   return (
     <div className="mt-4 space-y-3 animate-slide-up">
       <div
@@ -348,8 +362,22 @@ function FeedbackPanel({
               : "bg-rose-500/15 text-rose-100 border-rose-400/40"
         }`}
       >
-        <div className="font-semibold mb-1">
-          {isCorrect ? `太棒了 +${feedback.points}` : partialCorrect ? "方向对了一部分" : "再试一次，离答案很近了"}
+        <div className="font-semibold mb-1 flex items-center gap-2 flex-wrap">
+          <span>
+            {isCorrect ? `太棒了 +${feedback.points} XP` : partialCorrect ? "方向对了一部分" : "再试一次，离答案很近了"}
+          </span>
+          {labels.map((l, i) => (
+            <span
+              key={i}
+              className={`text-[11px] px-1.5 py-0.5 rounded-full font-normal ${
+                l.startsWith("🎓")
+                  ? "bg-amber-400/20 text-amber-100 border border-amber-300/40"
+                  : "bg-slate-700/60 text-slate-300 border border-slate-500/40"
+              }`}
+            >
+              {l}
+            </span>
+          ))}
         </div>
         <div>{isCorrect ? question.feedback_correct : question.feedback_wrong}</div>
         {!isCorrect && (

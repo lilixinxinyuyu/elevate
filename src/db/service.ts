@@ -109,6 +109,10 @@ export interface AttemptOutcome {
   attempt: Attempt;
   points: number;
   comboAfter: number;
+  /** 0-1 倍率：0.5 / 0.2 / 0.1 / 0 表示重做递减；1.0 表示首次答对（不显示） */
+  repeatDecay: number;
+  /** 5 = 这道题让她解锁了新 skill 的首次答对（应高亮） */
+  newSkillBonus: number;
 }
 
 export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptOutcome> {
@@ -124,6 +128,22 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
 
   const comboAfter = isCorrect ? comboBeforeAttempt + 1 : 0;
 
+  // 重复递减：之前答对过这道题的次数
+  const priorCorrectCount = isCorrect
+    ? await db.attempts
+        .where("studentId").equals(studentId)
+        .filter((a) => a.questionId === question.question_id && a.isCorrect)
+        .count()
+    : 0;
+
+  // 新知识点首次答对：之前从来没有答对过该 skill 的任何一道题
+  const isNewSkill = isCorrect
+    ? (await db.attempts
+        .where("studentId").equals(studentId)
+        .filter((a) => a.skillId === question.skill_id && a.isCorrect)
+        .count()) === 0
+    : false;
+
   const delta = scoreAttempt({
     question,
     isCorrect,
@@ -132,6 +152,8 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     elapsedSeconds,
     isReview,
     comboAfter,
+    priorCorrectCount,
+    isNewSkill,
   });
 
   const priorMastery = await db.mastery.get(masteryId(studentId, question.skill_id));
@@ -223,7 +245,13 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     await db.meta.put({ key: studentKey("totalXp", studentId), value: prevXp + delta.total });
   });
 
-  return { attempt, points: delta.total, comboAfter };
+  return {
+    attempt,
+    points: delta.total,
+    comboAfter,
+    repeatDecay: delta.repeatDecay,
+    newSkillBonus: delta.newSkillBonus,
+  };
 }
 
 export async function getTotalXp(studentId: string): Promise<number> {

@@ -128,7 +128,11 @@ export function TrainPage() {
           : s,
       );
       if (outcome.comboAfter >= 3 && outcome.comboAfter % 3 === 0) sfx.combo();
-      return { points: outcome.points };
+      return {
+        points: outcome.points,
+        repeatDecay: outcome.repeatDecay,
+        newSkillBonus: outcome.newSkillBonus,
+      };
     },
     [state],
   );

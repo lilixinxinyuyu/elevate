@@ -19,6 +19,7 @@ import { UnlockCelebration } from "../components/UnlockCelebration";
 import type { RatingResult } from "../core/rating";
 import type { Term } from "../core/types";
 import { useEffect, useState } from "react";
+import { ackMigrationNotice, getMigrationNoticeUnacked } from "../db/seed";
 
 /** 把毫秒时间戳格式成本地日期字符串 YYYY-MM-DD（与 todayKey 一致） */
 function localDayKey(ts: number): string {
@@ -54,6 +55,11 @@ export function HomePage() {
     starvedSkills: { skillId: string; skillName: string }[];
   } | null>(null);
   const [celebrationToTier, setCelebrationToTier] = useState<string | null>(null);
+  const [showMigrationNotice, setShowMigrationNotice] = useState(false);
+
+  useEffect(() => {
+    getMigrationNoticeUnacked().then(setShowMigrationNotice);
+  }, []);
 
   // 加载初始 selectedTerm
   useEffect(() => {
@@ -132,6 +138,36 @@ export function HomePage() {
 
   return (
     <div className="space-y-6">
+      {/* 迁移通知（只显示一次） */}
+      {showMigrationNotice && (
+        <div className="rounded-2xl bg-gradient-to-br from-amber-500/20 to-rose-500/15 border border-amber-400/40 p-4 relative">
+          <button
+            type="button"
+            onClick={async () => {
+              await ackMigrationNotice();
+              setShowMigrationNotice(false);
+            }}
+            className="absolute top-2 right-3 text-amber-200/60 hover:text-amber-100 text-lg leading-none"
+            aria-label="知道了"
+          >
+            ×
+          </button>
+          <div className="flex gap-3">
+            <div className="text-2xl">✨</div>
+            <div className="flex-1 text-sm text-amber-100">
+              <div className="font-display font-bold mb-1">计分规则升级啦！</div>
+              <div className="text-xs text-amber-200/90 leading-relaxed">
+                同一道题重复答对会**递减**：第 2 次 50%、第 3 次 20%、第 4 次 10%、之后不加分。
+                <br />
+                <span className="text-emerald-200">学到新知识点首次答对 +5 XP 奖励 🎓</span>
+                <br />
+                你的历史 XP 已经按新规则重算啦——多做新题更划算！
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 学期切换器 */}
       <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-1">
         <span className="text-xs text-slate-400 shrink-0">赛季：</span>

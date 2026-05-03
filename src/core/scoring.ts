@@ -9,6 +9,10 @@ export interface ScoreInput {
   elapsedSeconds: number;
   isReview: boolean;
   comboAfter: number; // 本题答完后的连击数
+  /** 之前答对过这道题几次（仅 isCorrect=true 的次数）。0 = 第一次答对（无递减） */
+  priorCorrectCount?: number;
+  /** 是否是该 skill 的首次答对（学到新知识点 +5 XP） */
+  isNewSkill?: boolean;
 }
 
 export interface ScoreDelta {
@@ -18,6 +22,10 @@ export interface ScoreDelta {
   hintPenalty: number;
   comboMul: number;
   timeBonus: number;
+  /** 重做递减倍率（0-1）。1.0 = 首次答对；0.5/0.2/0.1 = 第 2/3/4 次；0 = 第 5+ 次 */
+  repeatDecay: number;
+  /** 新知识点首次答对的奖励 XP（5 或 0） */
+  newSkillBonus: number;
 }
 
 export function comboMultiplier(combo: number): number {
@@ -25,6 +33,26 @@ export function comboMultiplier(combo: number): number {
   if (combo >= 5) return 1.5;
   if (combo >= 3) return 1.2;
   return 1.0;
+}
+
+/**
+ * 重复递减倍率：同一道题已经答对过 N 次后，再次答对的 XP 倍率。
+ * 配合 priorCorrectCount 使用：
+ *   priorCorrect 0 (本次是第 1 次对) → 1.0 (满分)
+ *   priorCorrect 1 (本次是第 2 次对) → 0.5
+ *   priorCorrect 2 (本次是第 3 次对) → 0.2
+ *   priorCorrect 3 (本次是第 4 次对) → 0.1
+ *   priorCorrect 4+ (第 5 次以后)   → 0   （**纯刷量不加分**）
+ *
+ * 累计：一道题最多挤出 1.0+0.5+0.2+0.1 = 1.8 倍 base XP。
+ */
+export const REPEAT_DECAY = [1.0, 0.5, 0.2, 0.1] as const;
+export const NEW_SKILL_BONUS = 5;
+
+export function repeatDecayMultiplier(priorCorrectCount: number): number {
+  if (priorCorrectCount < 0) return 1.0;
+  if (priorCorrectCount >= REPEAT_DECAY.length) return 0;
+  return REPEAT_DECAY[priorCorrectCount] ?? 0;
 }
 
 export function scoreAttempt(input: ScoreInput): ScoreDelta {
@@ -39,7 +67,19 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
   const comboMul = isCorrect ? comboMultiplier(comboAfter) : 1;
 
   const raw = base * difficultyMul * correctFactor + timeBonus + hintPenalty + stepBonus + reviewBonus;
-  const total = Math.max(1, Math.round(raw * comboMul));
+
+  // 重做递减：只对答对的题应用（错答本来就只拿 0.2× base 极少分，不再扣）
+  const repeatDecay = isCorrect ? repeatDecayMultiplier(input.priorCorrectCount ?? 0) : 1.0;
+
+  // 新知识点首次答对：固定 +5 XP（不受 decay 影响）
+  const newSkillBonus = isCorrect && input.isNewSkill ? NEW_SKILL_BONUS : 0;
+
+  // 答错保持原 1 分下限；答对走 decay 后允许为 0（5+ 次纯刷不给分）
+  const decayed = raw * comboMul * repeatDecay;
+  const totalRaw = decayed + newSkillBonus;
+  const total = isCorrect
+    ? Math.max(0, Math.round(totalRaw))
+    : Math.max(1, Math.round(decayed));
 
   const abilities = question.ability_dimension.length > 0 ? question.ability_dimension : (["calculation"] as AbilityId[]);
   const share = Math.max(1, Math.round(total / abilities.length));
@@ -47,7 +87,7 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
   for (const a of abilities) byAbility[a] = share;
   if (isReview && isCorrect) byAbility.habit = (byAbility.habit ?? 0) + 1;
 
-  return { total, byAbility, base, hintPenalty, comboMul, timeBonus };
+  return { total, byAbility, base, hintPenalty, comboMul, timeBonus, repeatDecay, newSkillBonus };
 }
 
 export function levelFromXp(xp: number): number {
