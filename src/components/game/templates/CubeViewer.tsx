@@ -313,6 +313,9 @@ function GridSvg({ grid, cell = 22 }: { grid: Grid2D; cell?: number }) {
 /**
  * 等轴侧视图：x 向右、y 向上、z 向"屏幕里"（往后）。
  * 屏幕坐标：sx = (x - z) * cos30 * u；sy = (x + z) * sin30 * u - y * u
+ *
+ * 每个 cube 只画"暴露在外"的面（邻居不存在 → 画；邻居存在 → 不画）。
+ * 这样无论形状如何，看上去都是完整闭合的立体——内部不会出现"洞"。
  */
 export function SolidIso({ cubes, unit = 28, className = "" }: { cubes: Cube[]; unit?: number; className?: string }) {
   if (cubes.length === 0) return null;
@@ -320,7 +323,6 @@ export function SolidIso({ cubes, unit = 28, className = "" }: { cubes: Cube[]; 
   const sin30 = Math.sin(Math.PI / 6);
   const xs = cubes.map((c) => (c.x - c.z) * cos30 * unit);
   const ys = cubes.map((c) => (c.x + c.z) * sin30 * unit - c.y * unit);
-  // 加上一个单位立方体的最远点
   const minX = Math.min(...xs) - cos30 * unit;
   const maxX = Math.max(...xs) + cos30 * unit;
   const minY = Math.min(...ys) - unit;
@@ -328,7 +330,11 @@ export function SolidIso({ cubes, unit = 28, className = "" }: { cubes: Cube[]; 
   const W = maxX - minX + 8;
   const H = maxY - minY + 8;
 
-  // 画顺序：z 大的先（后面），y 小的先（底层），x 小的先（左）
+  const cubeSet = new Set(cubes.map((c) => `${c.x},${c.y},${c.z}`));
+  const has = (x: number, y: number, z: number) => cubeSet.has(`${x},${y},${z}`);
+
+  // 画顺序（painter）：先画后/下/左面（背朝观察者），再画前/上/右面（朝观察者）。
+  // 跨 cube 排序：z 大的先 → 朝观察者方向后画（覆盖效果正确）。
   const sorted = cubes.slice().sort((a, b) => {
     if (b.z !== a.z) return b.z - a.z;
     if (a.y !== b.y) return a.y - b.y;
@@ -343,16 +349,43 @@ export function SolidIso({ cubes, unit = 28, className = "" }: { cubes: Cube[]; 
       className={`block ${className}`}
     >
       {sorted.map((c, i) => (
-        <CubeShape key={i} c={c} unit={unit} />
+        <CubeShape
+          key={i}
+          c={c}
+          unit={unit}
+          showTop={!has(c.x, c.y + 1, c.z)}
+          showBottom={!has(c.x, c.y - 1, c.z)}
+          showFront={!has(c.x, c.y, c.z - 1)}
+          showBack={!has(c.x, c.y, c.z + 1)}
+          showRight={!has(c.x + 1, c.y, c.z)}
+          showLeft={!has(c.x - 1, c.y, c.z)}
+        />
       ))}
     </svg>
   );
 }
 
-function CubeShape({ c, unit }: { c: Cube; unit: number }) {
+function CubeShape({
+  c,
+  unit,
+  showTop = true,
+  showBottom = false,
+  showFront = true,
+  showBack = false,
+  showRight = true,
+  showLeft = false,
+}: {
+  c: Cube;
+  unit: number;
+  showTop?: boolean;
+  showBottom?: boolean;
+  showFront?: boolean;
+  showBack?: boolean;
+  showRight?: boolean;
+  showLeft?: boolean;
+}) {
   const cos30 = Math.cos(Math.PI / 6);
   const sin30 = Math.sin(Math.PI / 6);
-  // 立方体 8 顶点的屏幕坐标（基于该 unit cube 的"最近底前左"角）
   const ox = (c.x - c.z) * cos30 * unit;
   const oy = (c.x + c.z) * sin30 * unit - c.y * unit;
 
@@ -361,19 +394,29 @@ function CubeShape({ c, unit }: { c: Cube; unit: number }) {
     y: oy + (dx + dz) * sin30 * unit - dy * unit,
   });
 
-  // 顶面 (y=1): (0,1,0) (1,1,0) (1,1,1) (0,1,1)
-  const top = [v(0, 1, 0), v(1, 1, 0), v(1, 1, 1), v(0, 1, 1)];
-  // 左前面 (z=0): (0,0,0) (1,0,0) (1,1,0) (0,1,0)
-  const front = [v(0, 0, 0), v(1, 0, 0), v(1, 1, 0), v(0, 1, 0)];
-  // 右面 (x=1): (1,0,0) (1,0,1) (1,1,1) (1,1,0)
-  const right = [v(1, 0, 0), v(1, 0, 1), v(1, 1, 1), v(1, 1, 0)];
+  // 6 个面的顶点
+  const top = [v(0, 1, 0), v(1, 1, 0), v(1, 1, 1), v(0, 1, 1)];        // y=1, 朝上
+  const bottom = [v(0, 0, 0), v(1, 0, 0), v(1, 0, 1), v(0, 0, 1)];     // y=0, 朝下
+  const front = [v(0, 0, 0), v(1, 0, 0), v(1, 1, 0), v(0, 1, 0)];      // z=0, 朝前
+  const back = [v(0, 0, 1), v(1, 0, 1), v(1, 1, 1), v(0, 1, 1)];       // z=1, 朝后
+  const right = [v(1, 0, 0), v(1, 0, 1), v(1, 1, 1), v(1, 1, 0)];      // x=1, 朝右
+  const left = [v(0, 0, 0), v(0, 0, 1), v(0, 1, 1), v(0, 1, 0)];       // x=0, 朝左
 
-  const pts = (arr: { x: number; y: number }[]) => arr.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+  const pts = (arr: { x: number; y: number }[]) =>
+    arr.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+  const stroke = "#1e1b4b";
+
+  // 颜色：朝向观察者的 3 个面亮，背面 3 个面暗（统一暗紫，不再区分细节）
   return (
     <g>
-      <polygon points={pts(top)} fill="#c4b5fd" stroke="#1e1b4b" strokeWidth={1} />
-      <polygon points={pts(front)} fill="#a78bfa" stroke="#1e1b4b" strokeWidth={1} />
-      <polygon points={pts(right)} fill="#7c3aed" stroke="#1e1b4b" strokeWidth={1} />
+      {/* 暗面：先画（被前面盖住的不会显示） */}
+      {showBack && <polygon points={pts(back)} fill="#3b1e7a" stroke={stroke} strokeWidth={1} />}
+      {showBottom && <polygon points={pts(bottom)} fill="#3b1e7a" stroke={stroke} strokeWidth={1} />}
+      {showLeft && <polygon points={pts(left)} fill="#5b21b6" stroke={stroke} strokeWidth={1} />}
+      {/* 亮面：后画（覆盖在暗面之上） */}
+      {showTop && <polygon points={pts(top)} fill="#c4b5fd" stroke={stroke} strokeWidth={1} />}
+      {showFront && <polygon points={pts(front)} fill="#a78bfa" stroke={stroke} strokeWidth={1} />}
+      {showRight && <polygon points={pts(right)} fill="#7c3aed" stroke={stroke} strokeWidth={1} />}
     </g>
   );
 }
