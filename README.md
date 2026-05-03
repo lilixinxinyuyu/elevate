@@ -1,11 +1,12 @@
-# Selena's Elevate · 数学挑战 (v0.7)
+# Selena's Elevate · 数学挑战 (v0.8.1)
 
-像 Elevate 一样的、给 Selena 一个人玩的数学游戏化训练 App。本地优先，浏览器即开即玩。
+像 Elevate 一样的、给 Selena 一个人玩的数学游戏化训练 App。**已上线 https://selena-elevate.pages.dev**（Cloudflare Pages + D1 云同步），本地优先 + 多设备无缝同步。
 
-> **怎么把更新部署到 Selena 的电脑？** 见 [UPGRADE.md](./UPGRADE.md)。
+> 部署 / 升级流程见 [DEPLOY.md](./DEPLOY.md)，日常更新跑 `./deploy.sh` 即可。
 
-## 当前状态（截至本提交）
+## 当前状态（v0.8.1）
 
+- **生产 URL**：https://selena-elevate.pages.dev
 - **22 种奖杯**（含计数式 ×N），分布在里程碑 / 连击 / 技能领域 / 掌握度四类
 - **14 个游戏模板** + 兜底 2 个 = **16 套互动**（v0.7 新增立体观察、三角形法庭，全 SVG 视觉）
 - **~225 道题**（含 ~85 道试卷错题包），每个 skill 都有题，难度 1-4 都覆盖
@@ -14,7 +15,10 @@
 - **掌握度门槛**：一道题连续答对 3 次后暂退主调度池，30 天后回炉抽查 → **不会重复刷已经会的题**
 - **题库快用完时主动提示**：首页弹「Selena 你都很熟啦，让爸妈给你出新题吧」卡片，一键跳 AI 出题
 - **期中冲刺模式** `/train?mode=midterm`：锁定下册 1-4 单元，错题 25% + 每单元 ≥ 3 道
-- 本地 IndexedDB，全部离线，开 `/admin` 页一键 "只清空进度数据" 或 "完全清空"
+- **多设备云同步**：Cloudflare Pages Functions + D1 SQLite。完成挑战自动上传，新设备输密码自动拉取最新进度
+- **PWA**：可"添加到主屏幕"作为应用启动，紫粉渐变图标
+- **密码门**：单密码（`APP_PASSWORD` env var）保护，HTTPS + Bearer header
+- 本地 IndexedDB（离线也能玩），`/admin` 一键 "只清空进度数据" / "完全清空" / 手动同步
 
 ## 游戏感卖点
 

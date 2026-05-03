@@ -18,10 +18,21 @@ export const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+/** API 响应永不缓存（避免 Cloudflare 边缘缓存把同步状态卡住） */
+export const noCacheHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 export function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders },
+    headers: {
+      "Content-Type": "application/json",
+      ...corsHeaders,
+      ...noCacheHeaders,
+    },
   });
 }
 

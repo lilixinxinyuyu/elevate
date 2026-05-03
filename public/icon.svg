@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="50%" stop-color="#d946ef"/>
+      <stop offset="100%" stop-color="#f472b6"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" ry="96" fill="url(#g)"/>
+  <!-- 数学的"+"号变成奖杯柄 -->
+  <g transform="translate(256 256)">
+    <!-- 大字 SE -->
+    <text x="0" y="36" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-weight="800" font-size="200" fill="white" letter-spacing="-8">SE</text>
+    <!-- 小星星点缀 -->
+    <g fill="url(#g2)" stroke="#fbbf24" stroke-width="6">
+      <polygon points="-180,-160 -170,-130 -140,-130 -163,-110 -154,-80 -180,-100 -206,-80 -197,-110 -220,-130 -190,-130"/>
+    </g>
+  </g>
+</svg>

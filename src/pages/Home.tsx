@@ -7,6 +7,15 @@ import { TROPHIES } from "../core/trophies";
 import { checkPoolHealth, getTotalXp } from "../db/service";
 import { useEffect, useState } from "react";
 
+/** 把毫秒时间戳格式成本地日期字符串 YYYY-MM-DD（与 todayKey 一致） */
+function localDayKey(ts: number): string {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function HomePage() {
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
   const attempts = useLiveQuery(
@@ -34,13 +43,14 @@ export function HomePage() {
   }, [student?.id, attempts?.length]);
 
   if (!student) return <div className="card">正在初始化…</div>;
+  // 用本地日期（与 todayKey 一致），避免 UTC 时区导致连续天数错判
   const practiceDays = new Set(
-    (attempts ?? []).map((a) => new Date(a.createdAt).toISOString().slice(0, 10)),
+    (attempts ?? []).map((a) => localDayKey(a.createdAt)),
   );
   const streak = computeStreak(Array.from(practiceDays));
   const today = todayKey();
   const todayAttempts = (attempts ?? []).filter(
-    (a) => new Date(a.createdAt).toISOString().slice(0, 10) === today,
+    (a) => localDayKey(a.createdAt) === today,
   );
   const unresolvedMistakes = (mistakes ?? []).filter((m) => !m.resolved).length;
   const dueMistakes = (mistakes ?? []).filter((m) => !m.resolved && m.nextReviewAt <= Date.now()).length;
@@ -99,8 +109,13 @@ export function HomePage() {
         </Link>
       </div>
 
-      {/* 题库快用完了 → 提示找家长 / 用 AI 出题 */}
-      {poolHealth && (poolHealth.freshTotal < 12 || poolHealth.starvedSkills.length >= 3) && (
+      {/* 题库快用完了 → 提示找家长 / 用 AI 出题
+          触发条件：全库新题 < 30 OR 期中范围（U1-U4）新题 < 15 OR 主要 skill ≥ 5 个已枯竭 */}
+      {poolHealth && (
+        poolHealth.freshTotal < 30 ||
+        poolHealth.freshMidterm < 15 ||
+        poolHealth.starvedSkills.length >= 5
+      ) && (
         <section className="card-glow border-amber-400/50 bg-gradient-to-br from-amber-500/15 to-rose-500/10">
           <div className="flex items-start gap-3">
             <div className="text-3xl">🌟</div>
@@ -109,12 +124,14 @@ export function HomePage() {
                 Selena，这些题你都很熟啦！
               </div>
               <div className="text-sm text-amber-200/90 mt-1">
-                还剩 <span className="font-bold">{poolHealth.freshTotal}</span> 道新题没做
-                {poolHealth.starvedSkills.length > 0 && (
-                  <>，{poolHealth.starvedSkills.slice(0, 3).map((s) => s.skillName).join("、")}
-                  {poolHealth.starvedSkills.length > 3 ? " 等" : ""} 已经全做过了。</>
-                )}
+                还剩 <span className="font-bold">{poolHealth.freshTotal}</span> 道新题没做（期中范围 {poolHealth.freshMidterm} 道）。
               </div>
+              {poolHealth.starvedSkills.length > 0 && (
+                <div className="text-sm text-amber-200/90 mt-1">
+                  这些技能你已经做完了：{poolHealth.starvedSkills.slice(0, 4).map((s) => s.skillName).join("、")}
+                  {poolHealth.starvedSkills.length > 4 ? " 等" : ""}。
+                </div>
+              )}
               <div className="text-sm text-amber-200/90 mt-1">
                 让爸爸 / 妈妈给你出新题吧～
               </div>
@@ -134,7 +151,9 @@ export function HomePage() {
             {trophyCounts.size} / {TROPHIES.length} 种 · 共 {totalTrophyCount} 枚
           </div>
         </div>
-        <div className="flex gap-3 overflow-x-auto pb-1">
+        {/* pt-3 / pr-3 给 absolute -top -right 的 ×N badge 留缓冲，
+            避免 overflow-x-auto 把 badge 上沿和右沿剪掉 */}
+        <div className="flex gap-3 overflow-x-auto pb-1 pt-3 pr-3 -mt-3 -mr-3">
           {TROPHIES.map((t) => {
             const count = trophyCounts.get(t.id) ?? 0;
             const got = count > 0;
@@ -149,7 +168,7 @@ export function HomePage() {
                 title={t.description + (got ? ` （已获得 ${count} 次）` : "")}
               >
                 {count > 1 && (
-                  <span className="absolute -top-2 -right-2 chip bg-rose-500 text-white border border-rose-300 font-display font-bold px-2 py-0.5 shadow-glow-rose">
+                  <span className="absolute -top-2 -right-2 chip bg-rose-500 text-white border border-rose-300 font-display font-bold px-2 py-0.5 shadow-glow-rose whitespace-nowrap">
                     × {count}
                   </span>
                 )}
@@ -168,10 +187,12 @@ function computeStreak(dateKeys: string[]): number {
   if (dateKeys.length === 0) return 0;
   const set = new Set(dateKeys);
   let streak = 0;
-  const cursor = new Date();
-  while (true) {
-    const key = cursor.toISOString().slice(0, 10);
-    if (!set.has(key)) break;
+  const cursor = new Date(); // 本地时区
+  // 如果今天还没练，从昨天起算（不会让"今天没练"打断昨天的连续）
+  if (!set.has(localDayKey(cursor.getTime()))) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  while (set.has(localDayKey(cursor.getTime()))) {
     streak += 1;
     cursor.setDate(cursor.getDate() - 1);
   }

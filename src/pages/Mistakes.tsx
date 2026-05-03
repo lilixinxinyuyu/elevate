@@ -37,13 +37,21 @@ export function MistakesPage() {
     return true;
   });
 
+  const allCount = mistakes?.length ?? 0;
+  const unresolvedCount = (mistakes ?? []).filter((m) => !m.resolved).length;
+  const dueCount = (mistakes ?? []).filter((m) => !m.resolved && m.nextReviewAt <= Date.now()).length;
+
   return (
     <div className="space-y-4">
       <div className="card-glow flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div>
           <div className="font-display font-bold text-xl">错题复活</div>
           <div className="text-sm text-slate-400">
-            共 {mistakes?.length ?? 0} 道 · 今日到期 {filtered.length} 道
+            未解决 <span className="text-slate-100 font-semibold">{unresolvedCount}</span> 道
+            <span className="mx-1.5 text-slate-600">·</span>
+            今日到期 <span className="text-amber-300 font-semibold">{dueCount}</span> 道
+            <span className="mx-1.5 text-slate-600">·</span>
+            <span className="text-slate-500">历史 {allCount}</span>
           </div>
         </div>
         <div className="flex gap-2 items-center">
@@ -78,7 +86,7 @@ export function MistakesPage() {
                     {unit?.term} · {unit?.name} · {skill?.name}
                   </span>
                   <span>
-                    阶段 {m.stage} · 下次 {new Date(m.nextReviewAt).toLocaleDateString()}
+                    阶段 {m.stage} · 下次 {new Date(m.nextReviewAt).toLocaleDateString("zh-CN")}
                   </span>
                 </div>
                 <div className="text-sm leading-relaxed text-slate-100">

@@ -123,7 +123,7 @@ export function AdminPage() {
           className="w-full rounded-lg border border-slate-300 p-2 text-sm font-mono"
           placeholder='[{ "question_id": "...", ... }]'
         />
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex gap-2 flex-wrap">
           <button type="button" className="btn-primary" onClick={handleImport} disabled={!importText.trim()}>
             校验并导入
           </button>
@@ -132,7 +132,7 @@ export function AdminPage() {
           </button>
           <button
             type="button"
-            className="btn-ghost text-amber-300"
+            className="btn-ghost text-amber-300 whitespace-nowrap"
             onClick={async () => {
               if (confirm("将清空所有训练记录、错题、奖杯和经验值。题库和档案保留。继续？")) {
                 await resetProgressOnly();
@@ -145,7 +145,7 @@ export function AdminPage() {
           </button>
           <button
             type="button"
-            className="btn-ghost text-rose-400"
+            className="btn-ghost text-rose-400 whitespace-nowrap"
             onClick={async () => {
               if (confirm("会清空所有数据（包括题库），需要重新载入。继续？")) await resetAllData();
             }}

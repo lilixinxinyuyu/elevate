@@ -418,20 +418,28 @@ export async function checkPoolHealth(studentId: string): Promise<{
   const MIDTERM_UNIT_IDS = ["G4B_U1_DECIMAL_ADD_SUB", "G4B_U2_TRI_QUAD", "G4B_U3_DECIMAL_MULTIPLY", "G4B_U4_OBSERVE_OBJECTS"];
   const freshMidterm = fresh.filter((q) => MIDTERM_UNIT_IDS.includes(q.unit_id)).length;
 
-  // 哪些 skill 已经"用完"了（且之前确实做过 ≥ 3 次，避免冷门 skill 误报）
+  // 哪些 skill 已经"用完"了：要求做过 ≥ 5 次（不是 3）+ pool 里至少有过 ≥ 3 道题
+  // 这样冷门、题量少的 skill（比如"万/亿级认识"只有 1-2 题）不会误报
   const skillAttemptCount = new Map<string, number>();
   for (const a of attempts) {
     skillAttemptCount.set(a.skillId, (skillAttemptCount.get(a.skillId) ?? 0) + 1);
   }
   const skillFreshCount = new Map<string, number>();
+  const skillTotalCount = new Map<string, number>();
+  for (const q of pool) {
+    skillTotalCount.set(q.skill_id, (skillTotalCount.get(q.skill_id) ?? 0) + 1);
+  }
   for (const q of fresh) {
     skillFreshCount.set(q.skill_id, (skillFreshCount.get(q.skill_id) ?? 0) + 1);
   }
   const starvedSkills: { skillId: string; skillName: string }[] = [];
   for (const s of SKILLS) {
     const did = skillAttemptCount.get(s.id) ?? 0;
+    const total = skillTotalCount.get(s.id) ?? 0;
     const left = skillFreshCount.get(s.id) ?? 0;
-    if (did >= 3 && left === 0) {
+    // 只在"题量本来就不少（≥3 道）+ 学生练过 ≥ 5 次 + 真没新题"时才算枯竭。
+    // 避免「数位顺序表」这种只有 1-2 题的小 skill 被算成枯竭。
+    if (total >= 3 && did >= 5 && left === 0) {
       starvedSkills.push({ skillId: s.id, skillName: s.name });
     }
   }
