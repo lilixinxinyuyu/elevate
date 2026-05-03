@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { db } from "../db/dexie";
 import { ensureSeeded } from "../db/seed";
 import { finalizeSession, getOrCreateSession, getTotalXp, submitAttempt, trophyById, recordMockExamCompleted } from "../db/service";
@@ -10,12 +10,15 @@ import { sfx } from "../lib/sfx";
 import { ABILITY_LABELS } from "../core/types";
 import { levelFromXp } from "../core/scoring";
 import { SKILLS } from "../content/skills";
+import { UNITS } from "../content/units";
 import { pushToCloud } from "../db/cloudSync";
 import { UnlockCelebration } from "../components/UnlockCelebration";
+import { AutoGenerateOnEmpty } from "../components/AutoGenerateOnEmpty";
 import { tierById } from "../core/tiers";
 
 export function TrainPage() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const mode = (params.get("mode") as SessionMode | null) ?? "normal";
   const freshParam = params.get("fresh");
   const skillIdSingle = params.get("skillId");
@@ -168,35 +171,29 @@ export function TrainPage() {
   if (state.status === "loading") return <div className="card">准备今日挑战…</div>;
   if (state.status === "error") return <div className="card text-rose-300">出错了：{state.message}</div>;
   if (state.status === "empty") {
-    if (state.starved) {
-      return (
-        <div className="card-glow border-amber-400/50 bg-gradient-to-br from-amber-500/15 to-rose-500/10">
-          <div className="text-3xl text-center">🌟</div>
-          <div className="font-display font-bold text-amber-100 text-xl text-center mt-2">
-            Selena，今天的题都被你做光啦！
-          </div>
-          <div className="text-sm text-amber-200/90 text-center mt-2">
-            说明你已经很熟练了。让 AI 给你出几道<span className="font-bold">新</span>的来挑战吧～
-          </div>
-          {(state.starvedSkillNames ?? []).length > 0 && (
-            <div className="text-xs text-amber-200/70 text-center mt-2">
-              重点想再练：{state.starvedSkillNames!.slice(0, 4).join("、")}
-            </div>
-          )}
-          <div className="flex gap-3 justify-center mt-4">
-            <Link to="/math/admin#ai-gen" className="btn-primary text-sm">🤖 让 AI 自动出题</Link>
-            <Link to="/math" className="btn-secondary text-sm">回首页</Link>
-          </div>
-        </div>
-      );
-    }
+    // 触发 reload：往 URL 加 fresh 参数，initKey 变化 → useEffect 自然重跑
+    const reloadSession = () => {
+      const newParams = new URLSearchParams(params);
+      newParams.set("fresh", String(Date.now()));
+      navigate({ search: `?${newParams.toString()}` }, { replace: true });
+    };
     return (
-      <div className="card">
-        <div className="font-semibold mb-2">暂无可用题目</div>
-        <div className="text-sm text-slate-400">
-          先到<Link to="/math/admin" className="text-violet-300">管理页</Link>补一下题库。
-        </div>
-      </div>
+      <AutoGenerateOnEmpty
+        subjectId="math"
+        skills={SKILLS}
+        units={UNITS}
+        seedQuestions={[]}
+        studentId={undefined}
+        onGenerated={reloadSession}
+        autoStart={true}
+        headlineText={
+          state.starved
+            ? "今天的题都被你做光啦！"
+            : "题库还没准备好，让 AI 帮你出几道～"
+        }
+        count={5}
+        preferredSkillId={selectedSkillIds?.[0]}
+      />
     );
   }
 

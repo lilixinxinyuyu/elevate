@@ -278,30 +278,66 @@ export function TutorPanel(props: TutorPanelProps) {
         ? "bg-amber-500/30 animate-pulse"
         : "";
 
+  // 关闭：清理麦 + 停 audio + 通知父组件
+  const closePanel = () => {
+    recorderRef.current?.release();
+    recorderRef.current = null;
+    audioRef.current?.pause();
+    audioRef.current = null;
+    props.onClose();
+  };
+
+  // 监听 Escape 键关闭（键盘 a11y）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePanel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4">
-      <div className="card-glow w-full sm:max-w-md max-h-[90vh] flex flex-col bg-ink-900/95 border border-violet-400/40 animate-slide-up overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4"
+      onClick={(e) => {
+        // 点击 backdrop（不在 card 内部）= 关闭
+        if (e.target === e.currentTarget) closePanel();
+      }}
+    >
+      {/* 浮动关闭按钮 — 永远固定在视口右上角，确保即便 panel 高度异常也能关掉 */}
+      <button
+        type="button"
+        onClick={closePanel}
+        className="fixed top-3 right-3 sm:top-4 sm:right-4 z-[60] w-10 h-10 rounded-full bg-ink-900/90 border border-violet-400/40 text-slate-200 hover:bg-rose-500/30 hover:text-rose-100 hover:border-rose-400/60 text-2xl leading-none shadow-glow flex items-center justify-center transition-all"
+        aria-label="关闭面板"
+        title="关闭（Esc）"
+      >
+        ×
+      </button>
+
+      {/* 主面板：用 dvh 而不是 vh（dvh 排除 iOS Safari 地址栏，避免顶部被吃掉） */}
+      <div
+        className="card-glow w-full sm:max-w-md flex flex-col bg-ink-900/95 border border-violet-400/40 animate-slide-up overflow-hidden"
+        style={{ maxHeight: "min(85dvh, 85vh)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* header */}
-        <div className="flex items-center justify-between p-3 border-b border-ink-700/60">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-rose-400 text-white flex items-center justify-center font-display font-bold shadow-glow text-sm">
+        <div className="flex items-center justify-between p-3 border-b border-ink-700/60 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-rose-400 text-white flex items-center justify-center font-display font-bold shadow-glow text-sm shrink-0">
               小进
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="font-display font-bold text-amber-200">AI 引导</div>
-              <div className="text-[10px] text-slate-400">小进姐姐 · {props.skillName ?? props.subjectId}</div>
+              <div className="text-[10px] text-slate-400 truncate">小进姐姐 · {props.skillName ?? props.subjectId}</div>
             </div>
           </div>
+          {/* 内嵌 × 兜底（如果浮动 × 被某个布局遮住） */}
           <button
             type="button"
-            onClick={() => {
-              recorderRef.current?.release();
-              recorderRef.current = null;
-              audioRef.current?.pause();
-              audioRef.current = null;
-              props.onClose();
-            }}
-            className="text-slate-400 hover:text-slate-200 text-2xl leading-none px-2"
+            onClick={closePanel}
+            className="text-slate-400 hover:text-slate-200 text-2xl leading-none px-3 py-1 rounded shrink-0"
             aria-label="关闭"
           >
             ×

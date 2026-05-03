@@ -60,8 +60,23 @@ const ENDPOINT_CREATE =
 const ENDPOINT_TASK = (id: string) =>
   `https://dashscope-intl.aliyuncs.com/api/v1/tasks/${id}`;
 
-/** 候选模型链 */
-const MODELS = ["qwen-image-2.0-pro", "qwen-image-2.0", "wanx-v1"];
+/**
+ * 候选模型链（按降序质量 / 升序通用度）。
+ * 用户截图显示 Qwen-Image 是按日期命名的（qwen-image-2.0-pro-2026-04-22 等），
+ * 裸 alias 不一定存在 → 把所有候选都试一遍。
+ */
+const MODELS = [
+  // Qwen-Image 系列（按用户 Model Square 截图）
+  "qwen-image-2.0-pro-2026-04-22",
+  "qwen-image-2.0-2026-03-03",
+  "qwen-image-pro",
+  "qwen-image-plus",
+  "qwen-image",
+  // 万相 wanx 系列（更通用，高概率所有 plan 都可用）
+  "wanx2.1-t2i-plus",
+  "wanx2.1-t2i-turbo",
+  "wanx-v1",
+];
 
 async function createTask(
   apiKey: string,
@@ -103,6 +118,64 @@ async function createTask(
     return { ok: false, status: r.status, code: "no_task_id", message: "task_id missing" };
   }
   return { ok: true, taskId };
+}
+
+/**
+ * OpenAI-compatible 同步 endpoint，部分新模型（qwen-image）走这里更稳。
+ * POST /compatible-mode/v1/images/generations
+ *   { model, prompt, n, size }
+ * 直接返回 { data: [{url}] } 或 { data: [{b64_json}] }
+ */
+async function callSyncImageGen(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  size: string,
+  n: number,
+): Promise<{ ok: true; urls: string[] } | { ok: false; status: number; code: string; message: string }> {
+  // OpenAI image gen 用 1024x1024 这种格式，不是 1024*1024
+  const sizeOpenAi = size.replace("*", "x");
+  const r = await fetch(
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/images/generations",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        prompt,
+        n: Math.max(1, Math.min(4, n)),
+        size: sizeOpenAi,
+      }),
+    },
+  );
+  type SyncImageResponse = {
+    data?: { url?: string; b64_json?: string }[];
+    error?: { code?: string; message?: string };
+  };
+  let json: SyncImageResponse;
+  try {
+    json = (await r.json()) as SyncImageResponse;
+  } catch {
+    return { ok: false, status: r.status, code: "non_json", message: "sync image non-JSON" };
+  }
+  if (!r.ok || json.error) {
+    return {
+      ok: false,
+      status: r.status,
+      code: json.error?.code ?? "http_error",
+      message: json.error?.message ?? `upstream ${r.status}`,
+    };
+  }
+  const urls = (json.data ?? [])
+    .map((d) => d.url)
+    .filter((u): u is string => typeof u === "string");
+  if (urls.length === 0) {
+    return { ok: false, status: 200, code: "no_urls", message: "sync image returned no URLs" };
+  }
+  return { ok: true, urls };
 }
 
 async function pollTask(
@@ -167,13 +240,37 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const size = body.size ?? "512*512";
   const n = body.n ?? 1;
 
-  const modelOverride = body.model && MODELS.includes(body.model) ? [body.model] : MODELS;
-  const tried: { model: string; status: number; code: string; message: string }[] = [];
+  // 用户传 model = 只跑那一个；否则跑全链
+  const modelChain = body.model ? [body.model] : MODELS;
+  const tried: { model: string; endpoint: string; status: number; code: string; message: string }[] = [];
 
-  for (const m of modelOverride) {
+  for (const m of modelChain) {
+    const isQwenImage = m.startsWith("qwen-image");
+    // qwen-image 系列：先试 sync OpenAI-compat（稳定）；wanx 系列：用 async task
+    if (isQwenImage) {
+      const sync = await callSyncImageGen(env.DASHSCOPE_API_KEY, m, fullPrompt, size, n);
+      if (sync.ok) {
+        return jsonResponse({ ok: true, urls: sync.urls, model: m, endpoint: "sync" });
+      }
+      tried.push({
+        model: m,
+        endpoint: "sync",
+        status: sync.status,
+        code: sync.code,
+        message: sync.message,
+      });
+      if (sync.code === "InvalidApiKey" || sync.code === "AccessDenied") break;
+      // sync 失败也试一次 async（有些模型走 async 才行）
+    }
     const created = await createTask(env.DASHSCOPE_API_KEY, m, fullPrompt, size, n);
     if (!created.ok) {
-      tried.push({ model: m, status: created.status, code: created.code, message: created.message });
+      tried.push({
+        model: m,
+        endpoint: "async",
+        status: created.status,
+        code: created.code,
+        message: created.message,
+      });
       if (created.code === "InvalidApiKey" || created.code === "AccessDenied") break;
       continue;
     }
@@ -183,18 +280,30 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         ok: true,
         urls: polled.urls,
         model: m,
+        endpoint: "async",
         taskId: created.taskId,
       });
     }
-    tried.push({ model: m, status: polled.status, code: polled.code, message: polled.message });
+    tried.push({
+      model: m,
+      endpoint: "async",
+      status: polled.status,
+      code: polled.code,
+      message: polled.message,
+    });
   }
 
   console.error("[generate.image] all models failed", tried);
+  // 给前端一个可读的 detail（前几个失败的 model + reason）
+  const briefDetail = tried
+    .slice(0, 4)
+    .map((t) => `${t.model}(${t.endpoint}):${t.code}`)
+    .join(", ");
   return jsonResponse(
     {
       ok: false,
       error: "no_model_worked",
-      detail: tried.map((t) => `${t.model}:${t.code}`).join(", "),
+      detail: briefDetail,
       tried,
     },
     502,

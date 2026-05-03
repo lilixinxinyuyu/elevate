@@ -36,6 +36,7 @@ import {
   type GameResult,
 } from "../../components/chinese/games/ChineseGameDispatcher";
 import { TutorPanel } from "../../components/tutor/TutorPanel";
+import { AutoGenerateOnEmpty } from "../../components/AutoGenerateOnEmpty";
 import type { Question } from "../../core/types";
 
 type TrainMode = "practice" | "review" | "mock_exam";
@@ -264,28 +265,44 @@ export function ChineseTrainPage() {
   }
 
   if (questions.length === 0) {
+    // review 模式没错题 = 真的没什么可练，直接回首页
+    if (mode === "review") {
+      return (
+        <div className="card text-center">
+          <div className="text-3xl mb-2">🎉</div>
+          <div className="font-semibold mb-1">暂时没有需要复活的错题</div>
+          <div className="text-sm text-slate-400">答错的题会自动出现在这里。</div>
+          <Link to="/chinese" className="btn-primary inline-block mt-3">回首页</Link>
+        </div>
+      );
+    }
+    // mock_exam 题不够 = 自动凑足；practice 没题 = 自动出
+    const reloadSession = () => {
+      // chinese train 用 fresh 参数触发 useEffect 重跑
+      navigate(
+        `/chinese/train?mode=${mode}${unitId ? `&unitId=${unitId}` : ""}${
+          skillId ? `&skillId=${skillId}` : ""
+        }&fresh=${Date.now()}`,
+        { replace: true },
+      );
+    };
     return (
-      <div className="card text-center">
-        <div className="text-3xl mb-2">{mode === "review" ? "🎉" : "📭"}</div>
-        <div className="font-semibold mb-1">
-          {mode === "review"
-            ? "暂时没有需要复活的错题"
-            : mode === "mock_exam"
-              ? "题库不够，模拟测试需要题量更多"
-              : "这个范围还没题"}
-        </div>
-        <div className="text-sm text-slate-400">
-          {mode === "review" ? "答错的题会自动出现在这里。" : "让 AI 给你出几道新的吧～"}
-        </div>
-        <div className="flex gap-3 justify-center mt-3">
-          {mode !== "review" && (
-            <Link to="/chinese/admin#ai-gen" className="btn-primary inline-block">
-              🤖 让 AI 自动出题
-            </Link>
-          )}
-          <Link to="/chinese" className="btn-secondary inline-block">回首页</Link>
-        </div>
-      </div>
+      <AutoGenerateOnEmpty
+        subjectId="chinese"
+        skills={subject.skills}
+        units={subject.units}
+        seedQuestions={subject.seedQuestions}
+        studentId={student?.id}
+        onGenerated={reloadSession}
+        autoStart={true}
+        headlineText={
+          mode === "mock_exam"
+            ? "模拟测试题量不够，AI 先帮你补几道"
+            : "这个范围还没题，AI 给你出几道～"
+        }
+        count={mode === "mock_exam" ? 10 : 5}
+        preferredSkillId={skillId ?? undefined}
+      />
     );
   }
 
