@@ -48,14 +48,14 @@ export function TierCard({
           </div>
         </div>
 
-        {/* 分数 */}
+        {/* XP 累计 */}
         <div className="mt-3 flex items-baseline gap-2">
           <div
-            className={`font-display font-bold text-5xl sm:text-6xl ${t.theme.textColor} drop-shadow-glow`}
+            className={`font-display font-bold text-5xl sm:text-6xl ${t.theme.textColor} drop-shadow-glow tabular-nums`}
           >
-            {rating.score}
+            {rating.score.toLocaleString()}
           </div>
-          <div className={`text-sm ${t.theme.subTextColor}`}>分</div>
+          <div className={`text-sm ${t.theme.subTextColor}`}>XP</div>
         </div>
 
         {/* 段位 + 小段星级 */}
@@ -80,17 +80,17 @@ export function TierCard({
           <div className={`mt-1.5 text-xs ${t.theme.subTextColor}`}>
             {rating.subRank < 4 ? (
               <>
-                再涨 <span className="font-bold">{rating.deltaToNextSubRank}</span> 分升 ★{["I","II","III","IV"][rating.subRank]}
+                再得 <span className="font-bold tabular-nums">{rating.deltaToNextSubRank.toLocaleString()}</span> XP 升 ★{["I","II","III","IV"][rating.subRank]}
               </>
             ) : rating.nextTier ? (
               <>
-                再涨 <span className="font-bold">{rating.deltaToNext}</span> 分跨入
+                再得 <span className="font-bold tabular-nums">{rating.deltaToNext.toLocaleString()}</span> XP 跨入
                 <span className={`ml-1 ${t.theme.textColor} font-display`}>
                   {rating.nextTier.badgeIcon} {rating.nextTier.name}
                 </span>
               </>
             ) : (
-              <>已抵达全国最高段位 · 传说级 🏆</>
+              <>🏆 全国段位 · 永远在涨</>
             )}
           </div>
         </div>

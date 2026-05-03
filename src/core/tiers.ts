@@ -10,17 +10,18 @@
  * - 进入市/省/国级越来越难（top 10% / 5% / 1%）
  * - 最高段（全国）极其罕见，留给真正的超凡选手
  *
- * **每学期一局**：
- * - 学期 4 个月就是一局完整赛季，结束清零下学期重开
- * - 4 个月 perfect = 1000 = 全国（顶段）
+ * **每学期一局，纯 XP 累计**：
+ * - 每答一题给 XP（已经在 scoreAttempt 里：base × 难度倍率 × 答对系数 × 连击倍率 + 各种奖励）
+ * - 学期内 attempts 的 XP 累加 = 当前赛季分数
+ * - **没有上限**——每题都加分。学期结束清零下学期重开
  * - 上册/下册是独立赛季，互不串
  *
- * 实际宽度分配（pyramid，反映学期末分布）：
- *   0-600    和平街小学  60% 孩子的家
- *   600-780  锦江区        中上 25%
- *   780-880  成都市        顶 10%
- *   880-960  四川省        顶 4%
- *   960-1000 全国          顶 1%（4 月 perfect）
+ * 段位区间（基于"完美 4 月 ≈ 48,000 XP"反推）：
+ *   0-10,000     和平街小学    1 月内大多数孩子
+ *   10,000-22,000 锦江区       1-2 月中上
+ *   22,000-32,000 成都市       2-3 月强者
+ *   32,000-40,000 四川省       3-4 月接近完美
+ *   40,000+      全国          4 月 perfect / 无上限
  *
  * 段位区间想调整就改下面的 range —— 全部都是变量。
  */
@@ -58,8 +59,8 @@ export const TIERS: Tier[] = [
   {
     id: "school",
     name: "和平街小学",
-    // 0-600：60% 孩子的家
-    range: [0, 600],
+    // 0-10,000 XP：1 月内大多数孩子
+    range: [0, 10000],
     badgeName: "和平校徽",
     badgeIcon: "🏫",
     badgeDesc: "你已经是和平街小学的小学徒啦！",
@@ -75,8 +76,8 @@ export const TIERS: Tier[] = [
   {
     id: "district",
     name: "锦江区",
-    // 600-780：中上 25%
-    range: [600, 780],
+    // 10k-22k：中上 25%
+    range: [10000, 22000],
     badgeName: "锦江徽章",
     badgeIcon: "🏛️",
     badgeDesc: "锦江区四年级里你已经站到前列了。",
@@ -92,8 +93,8 @@ export const TIERS: Tier[] = [
   {
     id: "city",
     name: "成都市",
-    // 780-880：顶 10%
-    range: [780, 880],
+    // 22k-32k：顶 10%
+    range: [22000, 32000],
     badgeName: "蓉城勋章",
     badgeIcon: "🌆",
     badgeDesc: "蓉城小达人，整个成都市都看得到你的努力。",
@@ -109,8 +110,8 @@ export const TIERS: Tier[] = [
   {
     id: "province",
     name: "四川省",
-    // 880-960：顶 4%
-    range: [880, 960],
+    // 32k-40k：顶 4%
+    range: [32000, 40000],
     badgeName: "天府之星",
     badgeIcon: "🐼",
     badgeDesc: "天府小神童，全省四年级里你已经名列前茅！",
@@ -126,8 +127,8 @@ export const TIERS: Tier[] = [
   {
     id: "country",
     name: "全国",
-    // 960-1000：顶 1%，基本只有 4 个月 perfect 才能进
-    range: [960, 1000],
+    // 40k+：4 月 perfect / 无上限。range[1] 用大数表示"无穷"
+    range: [40000, 999999],
     badgeName: "中华小数神",
     badgeIcon: "🇨🇳",
     badgeDesc: "全国四年级数学小神童，传说级。",
@@ -176,14 +177,17 @@ export function progressInTier(score: number, tier: Tier): number {
 /**
  * 段位内"超过 X% 的同年级"友好曲线。
  * 进入新段位时显示 50%（新池子刚起步），段位顶点显示 89%（再涨跨段）。
- * 最高段（全国）顶点 99%。
+ * 最高段（全国，无上限）：log 曲线渐近 99%
+ *   40,000 → 50% / 50,000 → 75% / 80,000 → 90% / ∞ → 99%
  */
 export function percentSurpassed(score: number, tier: Tier): number {
+  if (tier.id === "country") {
+    const over = Math.max(0, score - tier.range[0]);
+    const pct = 50 + 49 * (1 - 1 / (1 + over / 10000));
+    return Math.min(99, Math.round(pct));
+  }
   const p = progressInTier(score, tier);
-  const isTop = tier.id === "country";
-  const lo = 50;
-  const hi = isTop ? 99 : 89;
-  return Math.round(lo + p * (hi - lo));
+  return Math.round(50 + p * (89 - 50));
 }
 
 /** 距离下一段还差多少分 */

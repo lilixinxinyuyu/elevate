@@ -169,9 +169,9 @@ export function HomePage() {
         <span className="chip bg-violet-500/20 text-violet-100 border border-violet-400/30">
           今日已做 {todayAttempts.length}
         </span>
-        {rating && (
-          <span className="chip bg-cyan-500/20 text-cyan-100 border border-cyan-400/30" title="最近 7 天答题正确率">
-            🎯 {Math.round(rating.raw.accuracy7d * 100)}% 准
+        {rating && rating.raw.totalAttempts > 0 && (
+          <span className="chip bg-cyan-500/20 text-cyan-100 border border-cyan-400/30" title="本学期答题正确率">
+            🎯 {Math.round(rating.raw.accuracy * 100)}% 准
           </span>
         )}
         <Link to="/train" className="btn-primary ml-auto text-base px-5 py-2.5">

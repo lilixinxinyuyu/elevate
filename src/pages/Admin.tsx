@@ -566,65 +566,82 @@ ${exampleQuestion}
 }
 
 function RatingDiagnostics() {
-  const [rating, setRating] = useState<null | {
-    score: number;
-    tier: string;
-    subRank: string;
-    components: { accuracy: number; mastery: number; continuity: number; volume: number };
-    raw: { accuracy7d: number; rawWeightedMastery: number; weightedMastery: number; skillsPracticed: number; avgUniqueQuestionsPerSkill: number; breadthFactor: number; streak: number; cumulativeDays: number; totalAttempts: number };
+  const [data, setData] = useState<null | {
+    seasonXp: number;
+    seasonTier: string;
+    seasonSub: string;
+    avgXpPerAttempt: number;
+    totalAttempts: number;
+    ability: import("../core/rating").AbilityDiagnostic;
   }>(null);
   useEffect(() => {
     (async () => {
       const { computeCurrentRating } = await import("../db/service");
+      const { computeAbilityDiagnostic } = await import("../core/rating");
       const students = await db.students.toArray();
       if (!students[0]) return;
-      const r = await computeCurrentRating(students[0].id);
-      setRating({
-        score: r.score,
-        tier: r.tier.name + " " + r.subRankRoman,
-        subRank: r.subRankStars,
-        components: {
-          accuracy: Math.round(r.components.accuracy),
-          mastery: Math.round(r.components.mastery),
-          continuity: Math.round(r.components.continuity),
-          volume: Math.round(r.components.volume),
-        },
-        raw: r.raw,
+      const sid = students[0].id;
+      const r = await computeCurrentRating(sid, "下册");
+      const allAttempts = await db.attempts.where({ studentId: sid }).toArray();
+      const allMastery = await db.mastery.where({ studentId: sid }).toArray();
+      const ability = computeAbilityDiagnostic(allAttempts, allMastery, "下册");
+      setData({
+        seasonXp: r.score,
+        seasonTier: r.tier.name + " " + r.subRankRoman,
+        seasonSub: r.subRankStars,
+        avgXpPerAttempt: r.raw.avgXpPerAttempt,
+        totalAttempts: r.raw.totalAttempts,
+        ability,
       });
     })();
   }, []);
 
-  if (!rating) return <div className="text-sm text-slate-400">载入中…</div>;
-  const masteryDeflation = rating.raw.rawWeightedMastery - rating.raw.weightedMastery;
+  if (!data) return <div className="text-sm text-slate-400">载入中…</div>;
+  const ability = data.ability;
+  const masteryDeflation = ability.raw.rawWeightedMastery - ability.raw.weightedMastery;
   return (
     <div className="text-sm space-y-3">
       <div className="rounded-lg bg-amber-500/10 border border-amber-400/30 p-3 text-amber-200/90 text-xs">
-        ⚠️ <strong>家长须知（v3 校准）</strong>：综合分 0-1000，按"金字塔分布"映射段位 ——
-        <strong>大多数孩子的家是和平街小学（0-700, 占 70%）</strong>，
-        进锦江/成都/四川/全国一段比一段难。Selena 在 app 上的"客观努力"会反映在分数上，
-        但题库小或重复刷题不会让 mastery 虚高（独立题数封顶机制）。
+        ⚠️ <strong>家长须知</strong>：主显示是<strong>本学期累计 XP</strong>（每答一题加分，永远在涨）。
+        段位区间反推自"完美 4 月 ≈ 48,000 XP"：和平街 0-10k / 锦江 10-22k / 成都 22-32k / 四川 32-40k / 全国 40k+。
       </div>
-      <div className="font-display font-bold text-lg">
-        {rating.score} 分 · {rating.tier} {rating.subRank}
+
+      {/* 主：赛季 XP */}
+      <div>
+        <div className="text-xs text-slate-400">本学期（下册）赛季分</div>
+        <div className="font-display font-bold text-lg tabular-nums">
+          {data.seasonXp.toLocaleString()} XP · {data.seasonTier} {data.seasonSub}
+        </div>
+        <div className="text-xs text-slate-500">
+          平均 {data.avgXpPerAttempt.toFixed(1)} XP/题 · 共 {data.totalAttempts} 题
+        </div>
       </div>
-      <table className="w-full text-xs">
-        <thead className="text-slate-400"><tr>
-          <th className="text-left">分量</th><th className="text-right">得分</th><th className="text-right">最大</th><th className="text-right">原始指标</th>
-        </tr></thead>
-        <tbody>
-          <tr><td>准确率（最近 7 天）</td><td className="text-right">{rating.components.accuracy}</td><td className="text-right text-slate-400">/ 250</td><td className="text-right">{Math.round(rating.raw.accuracy7d * 100)}%</td></tr>
-          <tr><td>熟练度（独立题封顶 × 广度）</td><td className="text-right">{rating.components.mastery}</td><td className="text-right text-slate-400">/ 400</td><td className="text-right">eff {Math.round(rating.raw.weightedMastery)} × {rating.raw.skillsPracticed}/30</td></tr>
-          <tr><td>持续性</td><td className="text-right">{rating.components.continuity}</td><td className="text-right text-slate-400">/ 200</td><td className="text-right">连 {rating.raw.streak} · 共 {rating.raw.cumulativeDays} 天</td></tr>
-          <tr><td>题量</td><td className="text-right">{rating.components.volume}</td><td className="text-right text-slate-400">/ 150</td><td className="text-right">{rating.raw.totalAttempts} 题</td></tr>
-        </tbody>
-      </table>
+
+      {/* 辅：能力诊断（独立 0-1000 综合分） */}
+      <div className="border-t border-slate-700 pt-3 mt-3">
+        <div className="text-xs text-slate-400 mb-1">能力诊断（与 XP 无关，0-1000，反映学习"质量"）</div>
+        <div className="font-display font-bold">
+          {ability.score} / 1000
+        </div>
+        <table className="w-full text-xs mt-2">
+          <thead className="text-slate-400"><tr>
+            <th className="text-left">分量</th><th className="text-right">得分</th><th className="text-right">最大</th><th className="text-right">原始</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>准确率（7天）</td><td className="text-right">{Math.round(ability.components.accuracy)}</td><td className="text-right text-slate-400">/ 250</td><td className="text-right">{Math.round(ability.raw.accuracy7d * 100)}%</td></tr>
+            <tr><td>熟练度</td><td className="text-right">{Math.round(ability.components.mastery)}</td><td className="text-right text-slate-400">/ 400</td><td className="text-right">eff {Math.round(ability.raw.weightedMastery)}</td></tr>
+            <tr><td>持续性</td><td className="text-right">{Math.round(ability.components.continuity)}</td><td className="text-right text-slate-400">/ 200</td><td className="text-right">连{ability.raw.streak}·共{ability.raw.cumulativeDays}天</td></tr>
+            <tr><td>题量</td><td className="text-right">{Math.round(ability.components.volume)}</td><td className="text-right text-slate-400">/ 150</td><td className="text-right">{ability.raw.totalAttempts}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
       {masteryDeflation > 5 && (
         <div className="rounded-lg bg-rose-500/10 border border-rose-400/30 p-3 text-rose-200/90 text-xs">
-          🔍 <strong>反刷分诊断</strong>：原始 mastery 加权平均是 {Math.round(rating.raw.rawWeightedMastery)}，
-          被独立题数封顶后变成 <strong>{Math.round(rating.raw.weightedMastery)}</strong>
-          —— 因为每个 skill 平均只看过 <strong>{rating.raw.avgUniqueQuestionsPerSkill.toFixed(1)}</strong> 道独立题。
-          说明她做的题不少但题目重复多，不能据此说她真的"掌握"了。
-          {rating.raw.avgUniqueQuestionsPerSkill < 12 && " 建议：让 AI 出更多新题（admin 页面 prompt 生成器）。"}
+          🔍 <strong>反刷分诊断</strong>：原始 mastery 加权平均 {Math.round(ability.raw.rawWeightedMastery)}，
+          按独立题数封顶后变成 <strong>{Math.round(ability.raw.weightedMastery)}</strong>
+          —— 每个 skill 平均只见过 <strong>{ability.raw.avgUniqueQuestionsPerSkill.toFixed(1)}</strong> 道独立题。
+          {ability.raw.avgUniqueQuestionsPerSkill < 12 && " 建议：让 AI 出更多新题。"}
         </div>
       )}
     </div>

@@ -430,7 +430,6 @@ export async function finalizeSession(
     value: {
       score: rating.score,
       tierId: rating.tier.id,
-      components: rating.components,
       computedAt: Date.now(),
     },
   });

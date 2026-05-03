@@ -259,11 +259,11 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
           )}
           {ratingDelta > 0 && (
             <div className="card text-center bg-gradient-to-br from-cyan-500/15 to-sky-500/10 border-cyan-400/40">
-              <div className="text-xs text-cyan-200/80 font-display">综合分</div>
-              <div className="font-display font-bold text-3xl text-cyan-100 mt-1">
-                {summary.ratingBefore} → {summary.ratingAfter}
+              <div className="text-xs text-cyan-200/80 font-display">本学期累计 XP</div>
+              <div className="font-display font-bold text-3xl text-cyan-100 mt-1 tabular-nums">
+                {(summary.ratingBefore ?? 0).toLocaleString()} → {(summary.ratingAfter ?? 0).toLocaleString()}
               </div>
-              <div className="text-xs text-cyan-200 mt-1">+{ratingDelta} 分 ✨</div>
+              <div className="text-xs text-cyan-200 mt-1 tabular-nums">+{ratingDelta.toLocaleString()} XP ✨</div>
             </div>
           )}
           {levelUp && (

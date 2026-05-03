@@ -1,29 +1,23 @@
 /**
- * 综合评分 v5：每学期一局，0-1000 分，4 个月 perfect = 全国（≈990+）。
+ * 综合评分 v6：纯 XP 累计，每学期一局，无上限。
  *
- * 核心模型：
- * - 每个学期（上册 / 下册 / ...）是独立的赛季
- * - 学期开始 = 0 分，4 个月 perfect = 顶段（全国）
- * - 段位金字塔分布：大多数孩子停在和平街小学
+ * 设计哲学：
+ * - 学生答的每道题给 XP（scoring.ts::scoreAttempt 已经处理：base × 难度 × 答对系数 × 连击 + 各种奖励 - 提示惩罚）
+ * - 学期内 attempts 的 XP 累加 = 当前赛季分数
+ * - **没有上限**——每答一题都加分。学期结束清零下学期重开。
+ * - 上册 / 下册 / 综合复习 是独立赛季，互不串。
  *
- * 4 个分量（最大 = 250 + 400 + 200 + 150 = 1000）：
- * - 准确率 (0-250)：(acc-50%)/50% × 250 × warmup_factor
- *     warmup = min(1, attempts/100)，新手前 100 题不能直接拿满
- * - 熟练度 (0-400)：effective_mastery × breadth × 4
- *     effective = 真 mastery 被独立题数封顶（cap = 40 + 5×独立题数）
- *     breadth = min(1, 这学期练过的 skill / 全部 skill)
- * - 持续性 (0-200)：streak * 5 + cumDays * 1.5
- * - 题量 (0-150)：log10(attempts+1) × 60 - 50
+ * 段位区间（XP 尺度，与 tiers.ts 一致）：
+ *   0-10k    🏫 和平街小学
+ *   10k-22k  🏛️ 锦江区
+ *   22k-32k  🌆 成都市
+ *   32k-40k  🐼 四川省
+ *   40k+     🇨🇳 全国（无上限）
  *
- * 段位映射（pyramid，与 tiers.ts 一致）：
- *   0-600   和平街小学   60% 孩子
- *   600-780 锦江区        25%
- *   780-880 成都市        10%
- *   880-960 四川省        4%
- *   960-1000 全国         1%（4 月 perfect）
+ * 4 月 perfect 选手 ≈ 48,000 XP（120 天 × 18 题/天 × ~22 XP/题）。
  *
- * **学期过滤**：调用方传 termFilter，我们只用属于那个学期的 attempts/mastery 算分。
- * 上册/下册/综合复习 是独立的赛季，互不串。
+ * 这个文件还导出"能力诊断"composite 分数（accuracy/mastery/streak/volume）
+ * 给 admin 用，但**主显示是 XP**。
  */
 import type { Attempt, MasteryScore, Term } from "./types";
 import { SKILLS } from "../content/skills";
@@ -44,27 +38,6 @@ import {
 const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]));
 const UNIT_MAP = new Map(UNITS.map((u) => [u.id, u]));
 
-// === CALIBRATION CONSTANTS ===========================================
-const ACCURACY_BASELINE = 0.5;
-const ACCURACY_MAX_POINTS = 250;
-const ACCURACY_WARMUP_ATTEMPTS = 100;
-
-const MASTERY_MAX_POINTS = 400;
-const MASTERY_MULTIPLIER = 4;
-const MASTERY_BASE_CAP = 40;
-const UNIQUE_Q_PER_LEVEL = 5;
-// 学期内目标 skill 数（下册有 ~30 个，上册 ~20 个）。这个值后面会按学期动态算
-const MASTERY_BREADTH_DEFAULT_TARGET = 25;
-
-const CONTINUITY_MAX_POINTS = 200;
-const CONTINUITY_STREAK_WEIGHT = 5;
-const CONTINUITY_CUMDAYS_WEIGHT = 1.5;
-
-const VOLUME_MAX_POINTS = 150;
-const VOLUME_LOG_MULTIPLIER = 60;
-const VOLUME_LOG_OFFSET = 50;
-
-/** 与 scheduler.ts 保持一致 */
 const EXAM_PRIORITY_WEIGHT: Record<string, number> = {
   MUST_BIG: 1.0,
   HIGH_BIG: 0.85,
@@ -77,53 +50,13 @@ const EXAM_PRIORITY_WEIGHT: Record<string, number> = {
   EXTENSION: 0.1,
 };
 
-export interface RatingComponents {
-  accuracy: number;
-  mastery: number;
-  continuity: number;
-  volume: number;
-}
-
-export interface RatingResult {
-  /** 综合分 0-1000 */
-  score: number;
-  components: RatingComponents;
-  tier: Tier;
-  nextTier: Tier | null;
-  progressInTier: number;
-  percentSurpassed: number;
-  deltaToNext: number;
-  subRank: number;
-  subRankRoman: string;
-  subRankStars: string;
-  /** 距离下一个小段还差多少分 */
-  deltaToNextSubRank: number;
-  /** 这次评分对应的学期（用于显示"四下 / 四上"） */
-  term: Term | null;
-  raw: {
-    accuracy7d: number;
-    rawWeightedMastery: number;
-    weightedMastery: number;
-    skillsPracticed: number;
-    breadthFactor: number;
-    breadthTarget: number;
-    avgUniqueQuestionsPerSkill: number;
-    streak: number;
-    cumulativeDays: number;
-    totalAttempts: number;
-  };
-}
+// ============ 共用工具 ============
 
 function localDayKey(ts: number): string {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
-}
-
-/** 给定 skillId，查它属于哪个 term（上册 / 下册 / 综合复习） */
 export function termOfSkill(skillId: string): Term | null {
   const skill = SKILL_MAP.get(skillId);
   if (!skill) return null;
@@ -131,7 +64,6 @@ export function termOfSkill(skillId: string): Term | null {
   return unit?.term ?? null;
 }
 
-/** 该 term 共有多少个 skill（用于动态 breadth target） */
 export function skillCountInTerm(term: Term): number {
   let n = 0;
   for (const s of SKILLS) {
@@ -141,61 +73,64 @@ export function skillCountInTerm(term: Term): number {
   return n;
 }
 
-/** 把 attempts/mastery 过滤到只包含某个学期的 skill */
 export function filterByTerm<T extends { skillId: string }>(items: T[], term: Term): T[] {
   return items.filter((it) => termOfSkill(it.skillId) === term);
 }
 
-export function computeAccuracy7d(attempts: Attempt[], now = Date.now()): number {
-  const cutoff = now - 7 * 24 * 60 * 60 * 1000;
-  const recent = attempts.filter((a) => a.createdAt >= cutoff);
-  if (recent.length === 0) return 0;
-  return recent.filter((a) => a.isCorrect).length / recent.length;
+// ============ 主入口：computeRating（XP-based） ============
+
+export interface RatingResult {
+  /** 累计 XP（这个学期内 attempts 的 scoreDelta.total 之和，无上限） */
+  score: number;
+  tier: Tier;
+  nextTier: Tier | null;
+  progressInTier: number;
+  percentSurpassed: number;
+  deltaToNext: number;
+  subRank: number;
+  subRankRoman: string;
+  subRankStars: string;
+  deltaToNextSubRank: number;
+  term: Term | null;
+  /** 给家长 admin 看的辅助指标 */
+  raw: {
+    totalAttempts: number;
+    correctAttempts: number;
+    accuracy: number;
+    avgXpPerAttempt: number;
+    streak: number;
+    cumulativeDays: number;
+    skillsPracticed: number;
+  };
 }
 
-export function effectiveMastery(
-  mastery: MasteryScore[],
+/**
+ * 学期赛季分：把这个学期的所有 attempt 的 XP（scoreDelta.total）加起来。
+ *
+ * `term=null` → 所有 attempts（旧行为）。
+ */
+export function computeRating(
   attempts: Attempt[],
-): MasteryScore[] {
-  const uniqueQByskill = new Map<string, Set<string>>();
-  for (const a of attempts) {
-    if (!uniqueQByskill.has(a.skillId)) uniqueQByskill.set(a.skillId, new Set());
-    uniqueQByskill.get(a.skillId)!.add(a.questionId);
-  }
-  return mastery.map((m) => {
-    const uniq = uniqueQByskill.get(m.skillId)?.size ?? 0;
-    const cap = Math.min(100, MASTERY_BASE_CAP + uniq * UNIQUE_Q_PER_LEVEL);
-    return { ...m, score: Math.min(m.score, cap) };
-  });
-}
+  mastery: MasteryScore[],
+  _now: number = Date.now(),
+  term: Term | null = null,
+): RatingResult {
+  const filteredAttempts = term ? filterByTerm(attempts, term) : attempts;
+  const filteredMastery = term ? filterByTerm(mastery, term) : mastery;
 
-export function computeWeightedMastery(mastery: MasteryScore[]): number {
-  let totalWeight = 0;
-  let weightedSum = 0;
-  for (const m of mastery) {
-    const skill = SKILL_MAP.get(m.skillId);
-    if (!skill) continue;
-    const w = EXAM_PRIORITY_WEIGHT[skill.examPriority] ?? 0.4;
-    totalWeight += w;
-    weightedSum += m.score * w;
-  }
-  if (totalWeight === 0) return 0;
-  return weightedSum / totalWeight;
-}
+  // 主：XP 累计
+  const score = filteredAttempts.reduce((sum, a) => sum + (a.scoreDelta?.total ?? 0), 0);
 
-export function countSkillsPracticed(mastery: MasteryScore[]): number {
-  return mastery.filter((m) => SKILL_MAP.has(m.skillId)).length;
-}
+  // 辅：诊断指标
+  const totalAttempts = filteredAttempts.length;
+  const correctAttempts = filteredAttempts.filter((a) => a.isCorrect).length;
+  const accuracy = totalAttempts > 0 ? correctAttempts / totalAttempts : 0;
+  const avgXpPerAttempt = totalAttempts > 0 ? score / totalAttempts : 0;
 
-export function breadthFactor(skillsPracticed: number, target: number): number {
-  return Math.min(1.0, skillsPracticed / target);
-}
-
-export function computeStreak(attempts: Attempt[], now = Date.now()): number {
-  if (attempts.length === 0) return 0;
-  const days = new Set(attempts.map((a) => localDayKey(a.createdAt)));
+  const days = new Set(filteredAttempts.map((a) => localDayKey(a.createdAt)));
+  const cumulativeDays = days.size;
   let streak = 0;
-  const cursor = new Date(now);
+  const cursor = new Date();
   if (!days.has(localDayKey(cursor.getTime()))) {
     cursor.setDate(cursor.getDate() - 1);
   }
@@ -203,68 +138,9 @@ export function computeStreak(attempts: Attempt[], now = Date.now()): number {
     streak += 1;
     cursor.setDate(cursor.getDate() - 1);
   }
-  return streak;
-}
+  const skillsPracticed = filteredMastery.filter((m) => SKILL_MAP.has(m.skillId)).length;
 
-export function computeCumulativeDays(attempts: Attempt[]): number {
-  return new Set(attempts.map((a) => localDayKey(a.createdAt))).size;
-}
-
-/**
- * 主入口：计算综合分。
- *
- * 如果传 term，就只用那个学期的数据。否则用全部（旧行为）。
- */
-export function computeRating(
-  attempts: Attempt[],
-  mastery: MasteryScore[],
-  now: number = Date.now(),
-  term: Term | null = null,
-): RatingResult {
-  // 学期过滤
-  const filteredAttempts = term ? filterByTerm(attempts, term) : attempts;
-  const filteredMastery = term ? filterByTerm(mastery, term) : mastery;
-
-  const acc7d = computeAccuracy7d(filteredAttempts, now);
-  const cappedMastery = effectiveMastery(filteredMastery, filteredAttempts);
-  const weightedMastery = computeWeightedMastery(cappedMastery);
-  const skillsPracticed = countSkillsPracticed(filteredMastery);
-  // breadth 目标：该学期总 skill 数（动态）；没传 term 用默认值
-  const breadthTarget = term ? Math.max(1, skillCountInTerm(term)) : MASTERY_BREADTH_DEFAULT_TARGET;
-  const breadth = breadthFactor(skillsPracticed, breadthTarget);
-  const streak = computeStreak(filteredAttempts, now);
-  const cumulativeDays = computeCumulativeDays(filteredAttempts);
-  const totalAttempts = filteredAttempts.length;
-
-  // 准确率 + warmup（新手前 100 题不能直接拿满）
-  const warmupFactor = Math.min(1, totalAttempts / ACCURACY_WARMUP_ATTEMPTS);
-  const accuracyComp = clamp(
-    ((acc7d - ACCURACY_BASELINE) / (1 - ACCURACY_BASELINE)) * ACCURACY_MAX_POINTS * warmupFactor,
-    0,
-    ACCURACY_MAX_POINTS,
-  );
-
-  const masteryComp = clamp(
-    weightedMastery * breadth * MASTERY_MULTIPLIER,
-    0,
-    MASTERY_MAX_POINTS,
-  );
-
-  const continuityComp = clamp(
-    streak * CONTINUITY_STREAK_WEIGHT + cumulativeDays * CONTINUITY_CUMDAYS_WEIGHT,
-    0,
-    CONTINUITY_MAX_POINTS,
-  );
-
-  const volumeComp = clamp(
-    Math.log10(totalAttempts + 1) * VOLUME_LOG_MULTIPLIER - VOLUME_LOG_OFFSET,
-    0,
-    VOLUME_MAX_POINTS,
-  );
-
-  const rawScore = accuracyComp + masteryComp + continuityComp + volumeComp;
-  const score = Math.round(clamp(rawScore, 0, 1000));
-
+  // 段位映射
   const tier = tierFromScore(score);
   const next = nextTier(tier);
   const sub = subRank(score, tier);
@@ -276,12 +152,6 @@ export function computeRating(
 
   return {
     score,
-    components: {
-      accuracy: accuracyComp,
-      mastery: masteryComp,
-      continuity: continuityComp,
-      volume: volumeComp,
-    },
     tier,
     nextTier: next,
     progressInTier: progressInTier(score, tier),
@@ -293,25 +163,126 @@ export function computeRating(
     deltaToNextSubRank,
     term,
     raw: {
-      accuracy7d: acc7d,
-      rawWeightedMastery: computeWeightedMastery(filteredMastery),
-      weightedMastery,
-      skillsPracticed,
-      breadthFactor: breadth,
-      breadthTarget,
-      avgUniqueQuestionsPerSkill: (() => {
-        const set = new Map<string, Set<string>>();
-        for (const a of filteredAttempts) {
-          if (!set.has(a.skillId)) set.set(a.skillId, new Set());
-          set.get(a.skillId)!.add(a.questionId);
-        }
-        if (set.size === 0) return 0;
-        let total = 0;
-        set.forEach((s) => (total += s.size));
-        return total / set.size;
-      })(),
+      totalAttempts,
+      correctAttempts,
+      accuracy,
+      avgXpPerAttempt,
       streak,
       cumulativeDays,
+      skillsPracticed,
+    },
+  };
+}
+
+// ============ 能力诊断（给家长 admin 用，0-1000 综合分）============
+
+export interface AbilityDiagnostic {
+  /** 综合能力分 0-1000（独立于 XP 的"质量"指标） */
+  score: number;
+  components: { accuracy: number; mastery: number; continuity: number; volume: number };
+  raw: {
+    accuracy7d: number;
+    rawWeightedMastery: number;
+    weightedMastery: number;
+    avgUniqueQuestionsPerSkill: number;
+    skillsPracticed: number;
+    breadthFactor: number;
+    streak: number;
+    cumulativeDays: number;
+    totalAttempts: number;
+  };
+}
+
+const ACC_BASE = 0.5;
+const ACC_MAX = 250;
+const ACC_WARMUP = 100;
+const MASTERY_MAX = 400;
+const MASTERY_MULT = 4;
+const MASTERY_BASE_CAP = 40;
+const UNIQUE_Q_PER_LEVEL = 5;
+const CONT_MAX = 200;
+const VOL_MAX = 150;
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+export function computeAbilityDiagnostic(
+  attempts: Attempt[],
+  mastery: MasteryScore[],
+  term: Term | null = null,
+  now: number = Date.now(),
+): AbilityDiagnostic {
+  const filteredAttempts = term ? filterByTerm(attempts, term) : attempts;
+  const filteredMastery = term ? filterByTerm(mastery, term) : mastery;
+
+  const cutoff7d = now - 7 * 24 * 60 * 60 * 1000;
+  const recent = filteredAttempts.filter((a) => a.createdAt >= cutoff7d);
+  const acc7d = recent.length === 0 ? 0 : recent.filter((a) => a.isCorrect).length / recent.length;
+
+  // 独立题数封顶 mastery
+  const uniqueQByskill = new Map<string, Set<string>>();
+  for (const a of filteredAttempts) {
+    if (!uniqueQByskill.has(a.skillId)) uniqueQByskill.set(a.skillId, new Set());
+    uniqueQByskill.get(a.skillId)!.add(a.questionId);
+  }
+  let totalW = 0, weightedSum = 0, rawSum = 0, skillCount = 0;
+  for (const m of filteredMastery) {
+    const skill = SKILL_MAP.get(m.skillId);
+    if (!skill) continue;
+    skillCount += 1;
+    const uniq = uniqueQByskill.get(m.skillId)?.size ?? 0;
+    const cap = Math.min(100, MASTERY_BASE_CAP + uniq * UNIQUE_Q_PER_LEVEL);
+    const eff = Math.min(m.score, cap);
+    const w = EXAM_PRIORITY_WEIGHT[skill.examPriority] ?? 0.4;
+    totalW += w;
+    weightedSum += eff * w;
+    rawSum += m.score * w;
+  }
+  const weightedMastery = totalW > 0 ? weightedSum / totalW : 0;
+  const rawWeightedMastery = totalW > 0 ? rawSum / totalW : 0;
+
+  const target = term ? Math.max(1, skillCountInTerm(term)) : 30;
+  const breadth = Math.min(1.0, skillCount / target);
+
+  const days = new Set(filteredAttempts.map((a) => localDayKey(a.createdAt)));
+  const cumDays = days.size;
+  let streak = 0;
+  const cursor = new Date();
+  if (!days.has(localDayKey(cursor.getTime()))) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  while (days.has(localDayKey(cursor.getTime()))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  const totalAttempts = filteredAttempts.length;
+  const warmup = Math.min(1, totalAttempts / ACC_WARMUP);
+  const accComp = clamp(((acc7d - ACC_BASE) / (1 - ACC_BASE)) * ACC_MAX * warmup, 0, ACC_MAX);
+  const masComp = clamp(weightedMastery * breadth * MASTERY_MULT, 0, MASTERY_MAX);
+  const contComp = clamp(streak * 5 + cumDays * 1.5, 0, CONT_MAX);
+  const volComp = clamp(Math.log10(totalAttempts + 1) * 60 - 50, 0, VOL_MAX);
+
+  let avgUniq = 0;
+  if (uniqueQByskill.size > 0) {
+    let total = 0;
+    uniqueQByskill.forEach((s) => (total += s.size));
+    avgUniq = total / uniqueQByskill.size;
+  }
+
+  return {
+    score: Math.round(clamp(accComp + masComp + contComp + volComp, 0, 1000)),
+    components: { accuracy: accComp, mastery: masComp, continuity: contComp, volume: volComp },
+    raw: {
+      accuracy7d: acc7d,
+      rawWeightedMastery,
+      weightedMastery,
+      avgUniqueQuestionsPerSkill: avgUniq,
+      skillsPracticed: skillCount,
+      breadthFactor: breadth,
+      streak,
+      cumulativeDays: cumDays,
       totalAttempts,
     },
   };

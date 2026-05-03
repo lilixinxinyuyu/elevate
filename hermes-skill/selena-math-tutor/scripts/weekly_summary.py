@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""周日晚的"小进"周报：综合分变化 + 段位 + 这周亮点 / 软肋。
+"""周日晚的"小进"周报：本学期 XP 累计 + 段位 + 这周亮点 / 软肋。
 
 由 Hermes cron 周日 19:30 调用。
-- 拉云端快照（attempts 7 天 + 全量 mastery）
-- 用一份与前端 rating.ts 等价的简化算法重算综合分
-- 比对上周末的缓存分数，给出涨幅
-- macOS 通知 + Tingting 语音
+- 拉云端快照（attempts + mastery + skills 元数据）
+- 按"下册"过滤，累加 attempts 的 scoreDelta.total = 学期 XP
+- 比对上周末缓存，给出 XP 涨幅
+- macOS 通知 + 小进 Cherry 嗓子语音播报
 
 用法：
   weekly_summary.py        # 自动判定状况
@@ -14,7 +14,6 @@
 
 import argparse
 import json
-import math
 import os
 import shutil
 import subprocess
@@ -22,45 +21,20 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from _common import get_snapshot
+from _common import get_snapshot, get_skills_index
 
 CACHE_DIR = Path.home() / ".hermes" / "selena-cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 LAST_RATING_FILE = CACHE_DIR / "last_weekly_rating.json"
 
-# 与 src/core/scheduler.ts 一致
-EXAM_PRIORITY_WEIGHT = {
-    "MUST_BIG": 1.0,
-    "HIGH_BIG": 0.85,
-    "MUST_SMALL": 0.75,
-    "VERY_HIGH_SMALL": 0.7,
-    "HIGH_SMALL": 0.6,
-    "NORMAL": 0.4,
-    "LOW_SMALL": 0.25,
-    "LOW": 0.2,
-    "EXTENSION": 0.1,
-}
-
+# v6 段位区间（XP 尺度，与 src/core/tiers.ts 同步）
 TIERS = [
-    # v5 pyramid: 学期赛季内分布，4 月 perfect = 全国
-    ("school", "和平街小学", 0, 600, "🏫"),
-    ("district", "锦江区", 600, 780, "🏛️"),
-    ("city", "成都市", 780, 880, "🌆"),
-    ("province", "四川省", 880, 960, "🐼"),
-    ("country", "全国", 960, 1000, "🇨🇳"),
+    ("school", "和平街小学", 0, 10000, "🏫"),
+    ("district", "锦江区", 10000, 22000, "🏛️"),
+    ("city", "成都市", 22000, 32000, "🌆"),
+    ("province", "四川省", 32000, 40000, "🐼"),
+    ("country", "全国", 40000, 999999, "🇨🇳"),
 ]
-
-# v5 校准常量（和 src/core/rating.ts 同步）
-ACCURACY_BASELINE = 0.5
-ACCURACY_MAX = 250
-ACCURACY_WARMUP = 100
-MASTERY_MAX = 400
-MASTERY_MULT = 4
-MASTERY_BASE_CAP = 40
-UNIQUE_Q_PER_LEVEL = 5
-MASTERY_BREADTH_TARGET = 25
-CONTINUITY_MAX = 200
-VOLUME_MAX = 150
 
 
 def tier_for_score(score: int):
@@ -72,56 +46,43 @@ def tier_for_score(score: int):
 
 def percent_in_tier(score: int, tier) -> int:
     lo, hi = tier[2], tier[3]
+    if tier[0] == "country":
+        # 无上限：log 渐近 99%
+        over = max(0, score - lo)
+        return min(99, round(50 + 49 * (1 - 1 / (1 + over / 10000))))
     p = max(0.0, min(1.0, (score - lo) / max(1, hi - lo)))
-    is_top = tier[0] == "country"
-    return round(50 + p * (49 if is_top else 39))
+    return round(50 + p * 39)
 
 
-def clamp(v, lo, hi):
-    return max(lo, min(hi, v))
+def sub_rank_stars(score: int, tier) -> str:
+    lo, hi = tier[2], tier[3]
+    if tier[0] == "country":
+        return "★★★★"
+    p = max(0.0, min(1.0, (score - lo) / max(1, hi - lo)))
+    n = min(4, max(1, int(p * 4) + 1))
+    return "★" * n + "☆" * (4 - n)
 
 
-def compute_rating(attempts, mastery, skills_index_by_id):
-    """与前端 src/core/rating.ts 同算法（简化）。"""
-    now = datetime.now().timestamp() * 1000
-    cutoff_7d = now - 7 * 24 * 60 * 60 * 1000
-
-    recent = [a for a in attempts if a.get("createdAt", 0) >= cutoff_7d]
-    acc7d = (sum(1 for a in recent if a.get("isCorrect")) / len(recent)) if recent else 0.0
-
-    # 独立题数 / skill（用于 mastery cap）
-    unique_q_by_skill = {}
-    for a in attempts:
-        sk = a.get("skillId")
-        qid = a.get("questionId")
-        if not sk or not qid:
-            continue
-        unique_q_by_skill.setdefault(sk, set()).add(qid)
-
-    # 加权 effective mastery（按独立题数封顶）
-    total_w, weighted_sum = 0.0, 0.0
-    skills_practiced = 0
-    for m in mastery:
-        sk_id = m.get("skillId")
-        skill = skills_index_by_id.get(sk_id)
-        if not skill:
-            continue
-        skills_practiced += 1
-        uniq = len(unique_q_by_skill.get(sk_id, set()))
-        cap = min(100, MASTERY_BASE_CAP + uniq * UNIQUE_Q_PER_LEVEL)
-        eff_score = min(m.get("score", 0), cap)
-        w = EXAM_PRIORITY_WEIGHT.get(skill.get("examPriority"), 0.4)
-        total_w += w
-        weighted_sum += eff_score * w
-    weighted_mastery = (weighted_sum / total_w) if total_w > 0 else 0.0
-    breadth = min(1.0, skills_practiced / MASTERY_BREADTH_TARGET)
-
-    # streak / cum days
+def compute_season_xp(attempts, term_filter, skills_index_by_id, units_by_id):
+    """学期 XP = 该学期 attempts 的 scoreDelta.total 之和"""
+    total = 0
+    n = 0
+    correct = 0
     days = set()
     for a in attempts:
-        d = datetime.fromtimestamp(a.get("createdAt", 0) / 1000)
-        days.add(d.strftime("%Y-%m-%d"))
-    cum_days = len(days)
+        sk = skills_index_by_id.get(a.get("skillId"))
+        if not sk:
+            continue
+        unit = units_by_id.get(sk.get("unitId"))
+        if not unit or unit.get("term") != term_filter:
+            continue
+        delta = a.get("scoreDelta", {}).get("total", 0)
+        total += delta
+        n += 1
+        if a.get("isCorrect"):
+            correct += 1
+        ts = a.get("createdAt", 0) / 1000
+        days.add(datetime.fromtimestamp(ts).strftime("%Y-%m-%d"))
 
     streak = 0
     cur = datetime.now()
@@ -131,27 +92,13 @@ def compute_rating(attempts, mastery, skills_index_by_id):
         streak += 1
         cur -= timedelta(days=1)
 
-    # v5 校准（和 src/core/rating.ts 同步）
-    warmup = min(1, len(attempts) / ACCURACY_WARMUP)
-    accuracy_comp = clamp((acc7d - ACCURACY_BASELINE) / (1 - ACCURACY_BASELINE) * ACCURACY_MAX * warmup, 0, ACCURACY_MAX)
-    mastery_comp = clamp(weighted_mastery * breadth * MASTERY_MULT, 0, MASTERY_MAX)
-    continuity_comp = clamp(streak * 5 + cum_days * 1.5, 0, CONTINUITY_MAX)
-    volume_comp = clamp(math.log10(len(attempts) + 1) * 60 - 50, 0, VOLUME_MAX)
-
-    score = round(clamp(accuracy_comp + mastery_comp + continuity_comp + volume_comp, 0, 1000))
-    tier = tier_for_score(score)
     return {
-        "score": score,
-        "tier": tier,
-        "percentSurpassed": percent_in_tier(score, tier),
-        "deltaToNext": max(0, tier[3] - score) if tier[0] != "country" else 0,
-        "raw": {
-            "acc7d": acc7d,
-            "streak": streak,
-            "cumDays": cum_days,
-            "totalAttempts": len(attempts),
-            "weightedMastery": weighted_mastery,
-        },
+        "xp": total,
+        "attempts": n,
+        "correct": correct,
+        "accuracy": correct / n if n > 0 else 0,
+        "streak": streak,
+        "cum_days": len(days),
     }
 
 
@@ -211,6 +158,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--no-voice", action="store_true")
+    ap.add_argument("--term", default="下册", help="学期：上册 / 下册 / 综合复习")
     args = ap.parse_args()
 
     snap = get_snapshot()
@@ -219,72 +167,67 @@ def main():
         return 1
 
     attempts = snap["payload"].get("attempts", [])
-    mastery = snap["payload"].get("mastery", [])
-
-    # 拉技能元数据
+    skills_idx = {s["id"]: s for s in get_skills_index()}
+    # 拉 units 元数据
     try:
-        from _common import get_skills_index
-        skills = {s["id"]: s for s in get_skills_index()}
+        from _common import fetch_json
+        units_list = fetch_json("/agent/units.json")
+        units_idx = {u["id"]: u for u in units_list}
     except Exception:
-        skills = {}
+        units_idx = {}
 
-    cur = compute_rating(attempts, mastery, skills)
+    cur = compute_season_xp(attempts, args.term, skills_idx, units_idx)
+    tier = tier_for_score(cur["xp"])
+    tier_id, tier_name, tier_lo, tier_hi, tier_icon = tier
+    pct = percent_in_tier(cur["xp"], tier)
+    stars = sub_rank_stars(cur["xp"], tier)
+
     last = load_last()
-    delta = cur["score"] - (last["score"] if last else cur["score"])
-
-    tier_name = cur["tier"][1]
-    tier_icon = cur["tier"][0]  # tier ID
-    badge_icon = cur["tier"][4]
-    pct = cur["percentSurpassed"]
+    delta = cur["xp"] - (last.get("xp", 0) if last else 0)
 
     # 文本
     if last is None:
-        title = "小进的第一周报"
-        message = f"{badge_icon} {tier_name} · {cur['score']} 分 · 超过 {pct}%"
+        title = f"小进的第一周报（{args.term}）"
+        message = f"{tier_icon} {tier_name} {stars} · {cur['xp']:,} XP · 超过 {pct}%"
         voice_text = (
-            f"塞莱娜，我是小进。这是你第一份周报，"
-            f"你现在是{tier_name}四年级的{cur['score']}分，超过了{pct}%的同学，继续努力哦！"
+            f"塞莱娜，我是小进。这是你这学期的第一份周报，"
+            f"你现在是{tier_name}{stars}，累计{cur['xp']}经验，超过了{pct}%的同学，继续加油！"
         )
     elif delta > 0:
-        # 升了
-        moved_tier = (last and last.get("tierId") != cur["tier"][0])
+        moved_tier = (last.get("tierId") != tier_id)
         if moved_tier:
-            title = f"🎉 {badge_icon} 升入{tier_name}！"
+            title = f"🎉 {tier_icon} 升入{tier_name}！"
+            voice_text = (
+                f"塞莱娜，我是小进，恭喜你升入{tier_name}啦！这周涨了{delta}经验，太厉害了！"
+            )
         else:
-            title = f"📈 这周涨了 {delta} 分！"
-        message = f"{cur['score']} 分 · {tier_name} · 超过 {pct}%"
-        voice_text = (
-            f"塞莱娜，我是小进，这周你从{last['score']}分涨到了{cur['score']}分，"
-            + (f"升入了{tier_name}！太厉害了！" if moved_tier
-               else f"现在是{tier_name}的前{100-pct}%。")
-            + (f"再加油{cur['deltaToNext']}分就能解锁下一段啦！" if cur['deltaToNext'] > 0 and cur['deltaToNext'] < 100 else "")
-        )
-    elif delta < 0:
-        title = "本周有点掉分，下周一起追回来！"
-        message = f"{cur['score']} 分（下降 {-delta} 分） · {tier_name}"
-        voice_text = (
-            f"塞莱娜，我是小进。这周分数稍微动了一点，没关系，"
-            f"下周我们一起做几道熟练的题就能涨回来！"
-        )
+            title = f"📈 这周涨了 {delta:,} XP！"
+            voice_text = (
+                f"塞莱娜，我是小进。这周你涨了{delta}经验，"
+                f"现在累计{cur['xp']}，{tier_name}{stars}，继续保持！"
+            )
+        message = f"{tier_icon} {tier_name} {stars} · {cur['xp']:,} XP · 超过 {pct}%"
+    elif delta == 0:
+        title = "本周没练数学呢"
+        message = f"{tier_icon} {tier_name} · {cur['xp']:,} XP（持平）"
+        voice_text = "塞莱娜，本周还没怎么练数学，要不周末来打几道题？"
     else:
-        title = "本周稳住啦！"
-        message = f"{cur['score']} 分 · {tier_name} · 超过 {pct}%"
-        voice_text = (
-            f"塞莱娜，本周稳稳保持{cur['score']}分。"
-            f"下周冲一冲下一段位吧！"
-        )
+        # 不应该发生（XP 不会减），但兜底
+        title = "本周状态"
+        message = f"{tier_icon} {tier_name} · {cur['xp']:,} XP"
+        voice_text = f"塞莱娜，本周累计{cur['xp']}经验，再坚持就能升档。"
 
-    # 友好亮点：streak / cumDays / acc7d
-    raw = cur["raw"]
+    # 友好亮点
     extras = []
-    if raw["streak"] >= 3:
-        extras.append(f"🔥 连续 {raw['streak']} 天")
-    if raw["acc7d"] >= 0.85:
-        extras.append(f"🎯 准确率 {round(raw['acc7d']*100)}%")
+    if cur["streak"] >= 3:
+        extras.append(f"🔥 连续 {cur['streak']} 天")
+    if cur["accuracy"] >= 0.85:
+        extras.append(f"🎯 准确率 {round(cur['accuracy']*100)}%")
     if extras:
         message += " · " + " · ".join(extras)
 
-    print(f"[{datetime.now()}] {title}\n  {message}")
+    print(f"[{datetime.now()}] {title}")
+    print(f"  {message}")
     print(f"  voice: {voice_text}")
     if args.dry:
         return 0
@@ -293,11 +236,10 @@ def main():
     if not args.no_voice:
         macos_speak(voice_text)
 
-    # 保存当前状态供下周比对
     save_last({
-        "score": cur["score"],
-        "tierId": cur["tier"][0],
-        "percentSurpassed": pct,
+        "xp": cur["xp"],
+        "tierId": tier_id,
+        "term": args.term,
         "computedAt": datetime.now().isoformat(),
     })
     return 0
