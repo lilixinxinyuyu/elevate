@@ -29,8 +29,79 @@ import {
 } from "../../subjects/chinese/service";
 import { CHINESE_TROPHIES } from "../../subjects/chinese/trophies";
 import { generateChineseQuestions } from "../../lib/tutor";
-import { validateQuestion } from "../../core/validateQuestion";
 import type { Attempt, MasteryScore, MistakeReview, Question } from "../../core/types";
+
+/**
+ * 简化版 chinese 题校验：core/validateQuestion 只认 math 的 UNITS/SKILLS，
+ * 这里给 chinese 写一份轻量校验，保证字段完整 + unit/skill id 在 chinese 注册表里。
+ */
+function validateChineseQuestion(
+  raw: unknown,
+  knownUnitIds: Set<string>,
+  knownSkillIds: Set<string>,
+): { ok: boolean; question?: Question; issues: { path: string; message: string; severity: "error" | "warning" }[] } {
+  const issues: { path: string; message: string; severity: "error" | "warning" }[] = [];
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, issues: [{ path: ".", message: "不是对象", severity: "error" }] };
+  }
+  const o = raw as Record<string, unknown>;
+  const need = ["question_id", "stem", "unit_id", "skill_id", "options", "answer", "difficulty"];
+  for (const f of need) {
+    if (o[f] === undefined || o[f] === null || o[f] === "") {
+      issues.push({ path: f, message: `字段缺失 ${f}`, severity: "error" });
+    }
+  }
+  if (!Array.isArray(o.options) || (o.options as unknown[]).length < 2) {
+    issues.push({ path: "options", message: "至少 2 个选项", severity: "error" });
+  } else {
+    const optIds = new Set(
+      (o.options as Array<{ id?: string }>).map((x) => x.id ?? ""),
+    );
+    const ans = o.answer as { type?: string; value?: string };
+    if (ans?.type !== "choice") {
+      issues.push({ path: "answer.type", message: "必须为 choice", severity: "error" });
+    } else if (!optIds.has(ans.value ?? "")) {
+      issues.push({ path: "answer.value", message: `${ans.value} 不在 options id 集合内`, severity: "error" });
+    }
+  }
+  if (typeof o.unit_id === "string" && !knownUnitIds.has(o.unit_id)) {
+    issues.push({ path: "unit_id", message: `未知单元 ${o.unit_id}（chinese 注册表里没有）`, severity: "error" });
+  }
+  if (typeof o.skill_id === "string" && !knownSkillIds.has(o.skill_id)) {
+    issues.push({ path: "skill_id", message: `未知技能 ${o.skill_id}（chinese 注册表里没有）`, severity: "error" });
+  }
+  // 内容安全（与 core 一致的子集）
+  const FORBIDDEN = [/笨|粗心鬼|真差|没用/, /充值|抽奖|点击领取|付费/];
+  const stem = typeof o.stem === "string" ? o.stem : "";
+  for (const re of FORBIDDEN) {
+    if (re.test(stem)) {
+      issues.push({ path: "stem", message: `命中禁词 ${re}`, severity: "error" });
+    }
+  }
+  const hasError = issues.some((i) => i.severity === "error");
+  if (hasError) return { ok: false, issues };
+  // 补全 default 字段方便存 db（先散开 raw，再补空缺字段）
+  const fromRaw = o as unknown as Question;
+  const q: Question = {
+    ...fromRaw,
+    version: fromRaw.version ?? 1,
+    status: fromRaw.status ?? "approved",
+    grade: fromRaw.grade ?? 4,
+    term: fromRaw.term ?? "下册",
+    estimated_time_seconds: fromRaw.estimated_time_seconds ?? 25,
+    cognitive_level: fromRaw.cognitive_level ?? "conceptual",
+    ability_dimension: fromRaw.ability_dimension ?? ["vocabulary"],
+    exam_priority: fromRaw.exam_priority ?? "HIGH_BIG",
+    question_format: fromRaw.question_format ?? "single_choice",
+    game_type: fromRaw.game_type ?? "plain_choice",
+    common_errors: fromRaw.common_errors ?? [],
+    feedback_correct: fromRaw.feedback_correct ?? "",
+    feedback_wrong: fromRaw.feedback_wrong ?? "",
+    solution_steps: fromRaw.solution_steps ?? [],
+    subjectId: "chinese",
+  };
+  return { ok: true, question: q, issues };
+}
 
 export function ChineseAdminPage() {
   const subject = useSubject();
@@ -140,11 +211,13 @@ function AIQuestionGeneratorPanel() {
         existingStems,
       });
 
-      // 客户端再校验一次（用 validateQuestion 跑严格 schema）
+      // 用 chinese-specific 校验（core/validateQuestion 只认 math 的 unit/skill）
+      const knownUnits = new Set(subject.units.map((u) => u.id));
+      const knownSkills = new Set(subject.skills.map((s) => s.id));
       const valid: Question[] = [];
       const invalid: { id: string; issues: string[] }[] = [];
       for (const q of r.questions) {
-        const v = validateQuestion(q);
+        const v = validateChineseQuestion(q, knownUnits, knownSkills);
         if (v.ok && v.question) valid.push(v.question);
         else
           invalid.push({

@@ -204,7 +204,10 @@ export interface MicRecorder {
  */
 export async function createMicRecorder(): Promise<MicRecorder> {
   if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-    throw new TutorError("no_mic_api", 0, "browser doesn't support getUserMedia");
+    throw new TutorError("no_mic_api", 0, "浏览器不支持麦克风（getUserMedia）");
+  }
+  if (typeof window.MediaRecorder === "undefined") {
+    throw new TutorError("no_media_recorder", 0, "浏览器不支持 MediaRecorder（试试 Chrome / Safari 14+）");
   }
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   // 选第一个浏览器接受的 mime
