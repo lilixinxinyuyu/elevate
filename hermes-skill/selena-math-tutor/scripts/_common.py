@@ -11,6 +11,30 @@ CACHE_DIR = Path.home() / ".hermes" / "selena-cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_TTL = 60  # 60 秒缓存：避免一次会话内多次脚本重复拉远端
 
+
+def _load_env_file(path: Path) -> None:
+    """如果 os.environ 里没有，从 .env 文件加载（KEY=VALUE 格式，#注释 OK）。"""
+    if not path.exists():
+        return
+    try:
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            if k and k not in os.environ:
+                os.environ[k] = v
+    except Exception:
+        pass
+
+
+# Hermes cron 等场景下脚本进程没继承 shell 的 .env，要自己读
+_load_env_file(Path.home() / ".hermes" / ".env")
+
 API_BASE = os.environ.get("SELENA_API_BASE", "https://selena-elevate.pages.dev")
 PASSWORD = os.environ.get("SELENA_PASSWORD", "")
 

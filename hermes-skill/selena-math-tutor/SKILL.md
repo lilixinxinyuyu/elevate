@@ -120,9 +120,13 @@ Selena（或者爸爸/妈妈代她）说出以下任意之一，立即激活：
 | 脚本 | 作用 |
 |---|---|
 | `scripts/fetch_context.py` | 从 https://selena-elevate.pages.dev 拉最新进度 + 错题。**每次会话第一步必跑**。 |
+| `scripts/timeline.py [n=20] [--skill SK] [--wrong-only]` | 看最近 N 道题的细致动作流（开提示几次、用时、连击）。判断"她到底是哪一步卡了"。 |
 | `scripts/get_question.py <question_id>` | 拿一道具体题（含选项、提示、解答）。 |
 | `scripts/get_practice.py <skill_id> [n]` | 拿 N 道某 skill 的练习题。 |
 | `scripts/log_session.py --notes "..." --learned skill_id` | 记录这次辅导（之后家长可在 admin 看到）。 |
+| `scripts/prompt_question_template.py <skill_id> [n=5]` | 输出"为某 skill 出 N 道新题"的完整 prompt 给你（agent 自己读后照写）。 |
+| `scripts/save_questions.py` | stdin 读 JSON 数组 → 校验 + POST 到云端。家长说"给她出几道新的"时用：先读 prompt → 你生成 JSON → echo \\| save_questions.py。|
+| `scripts/notify_selena.py [--dry] [--no-voice]` | 弹 macOS 通知 + 语音提醒。一般由 Hermes cron 调用，不用手动跑。 |
 
 环境变量（在 `~/.hermes/.env` 里设）：
 - `SELENA_API_BASE` = `https://selena-elevate.pages.dev`（默认值，无需改）
@@ -165,8 +169,17 @@ Selena（或者爸爸/妈妈代她）说出以下任意之一，立即激活：
 ## 家长视角（如果说话的人是爸/妈）
 
 如果对话里出现 "她最近怎么样"、"哪里弱"、"给我出张试卷"，识别为家长在问，切换到家长报告模式：
+- 跑 `fetch_context.py`，再跑 `timeline.py 30 --wrong-only` 看具体错题模式
 - 给出最近 7 天 / 30 天数据看板
 - 列出 top 3 弱 skill + 建议
 - 列出本周已掌握的 skill
 - 主动建议："要不要我现在生成几道她最弱知识点的题，导入题库？"
-- 家长说"好"，调 `python scripts/generate_questions.py <skill_id>` 用 LLM 生成 + 自动校验 + 推到云端
+
+家长说"好"出新题：
+1. 跑 `prompt_question_template.py <skill_id> 5` 拿到出题任务规范
+2. **你**（agent，按规范）生成 5 道严格 JSON 数组的新题。题目要：
+   - **基于** Selena 真错过的题型 / 数字范围
+   - 难度对她合适（不要太简单也不要太难）
+   - 场景生活化（文具、跳绳、家庭、学校）
+3. 把整个 JSON 数组通过 `echo '<JSON>' | save_questions.py` 入库
+4. 告诉家长结果：「我入库了 N 道新题，Selena 下次刷新就能做到了」

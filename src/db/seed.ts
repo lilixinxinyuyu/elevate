@@ -3,10 +3,12 @@ import { UNITS } from "../content/units";
 import { SKILLS } from "../content/skills";
 import { SEED_QUESTIONS } from "../content/questions";
 import { validateQuestion } from "../core/validateQuestion";
-import type { StudentProfile } from "../core/types";
+import type { Question, StudentProfile } from "../core/types";
 
 const SEED_VERSION = 15;
 const SEED_KEY = "seedVersion";
+const AGENT_PULL_KEY = "agentQuestionsPulledAt";
+const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
 
 export async function ensureSeeded(): Promise<void> {
   const existing = await db.meta.get(SEED_KEY);
@@ -53,6 +55,50 @@ export async function ensureSeeded(): Promise<void> {
 
     await db.meta.put({ key: SEED_KEY, value: SEED_VERSION });
   });
+
+  // seed 完后顺手拉一次 agent 题（不阻塞首屏）
+  pullAgentQuestionsIfStale().catch(() => {/* 网络问题 / 后端没启都不报 */});
+}
+
+/**
+ * 拉 agent 出的题（/api/agent/questions）合并到本地题库。
+ * 每小时拉一次。失败静默：app 主体不依赖这个。
+ */
+export async function pullAgentQuestionsIfStale(force = false): Promise<{ added: number; skipped: number } | null> {
+  try {
+    const last = await db.meta.get(AGENT_PULL_KEY);
+    const lastTs = typeof last?.value === "number" ? (last.value as number) : 0;
+    if (!force && Date.now() - lastTs < AGENT_PULL_INTERVAL) return null;
+
+    const resp = await fetch("/api/agent/questions");
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as { ok: boolean; questions?: Question[] };
+    if (!data.ok || !Array.isArray(data.questions)) return null;
+
+    let added = 0;
+    let skipped = 0;
+    const accepted: Question[] = [];
+    for (const q of data.questions) {
+      const r = validateQuestion(q);
+      if (r.ok && r.question) {
+        accepted.push(r.question);
+        added += 1;
+      } else {
+        skipped += 1;
+      }
+    }
+    if (accepted.length > 0) {
+      await db.questions.bulkPut(accepted);
+    }
+    await db.meta.put({ key: AGENT_PULL_KEY, value: Date.now() });
+    if (added > 0) {
+      console.log(`[seed] pulled ${added} agent question(s); skipped ${skipped}`);
+    }
+    return { added, skipped };
+  } catch (e) {
+    console.warn("[seed] agent question pull failed", e);
+    return null;
+  }
 }
 
 export async function resetAllData(): Promise<void> {
