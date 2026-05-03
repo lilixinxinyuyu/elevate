@@ -15,6 +15,7 @@
 import { SKILLS_CHINESE } from "./skills";
 import { UNITS_CHINESE } from "./units";
 import { SEED_QUESTIONS_CHINESE } from "./questions";
+import { SEED_QUESTIONS_CHINESE_V2 } from "./questionPack2";
 import type {
   Subject,
   SubjectAbilityDef,
@@ -50,7 +51,7 @@ export const chineseSubject: Subject = {
 
   units: UNITS_CHINESE,
   skills: SKILLS_CHINESE,
-  seedQuestions: SEED_QUESTIONS_CHINESE,
+  seedQuestions: [...SEED_QUESTIONS_CHINESE, ...SEED_QUESTIONS_CHINESE_V2],
 
   abilities: CHINESE_ABILITIES,
   errorTags: [],

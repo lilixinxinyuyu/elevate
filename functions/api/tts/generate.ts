@@ -51,11 +51,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ? Math.min(2.0, Math.max(0.5, body.speed))
     : 1.0;
 
-  // DashScope 同步 HTTP TTS：CosyVoice v1 走 /audio/tts/generation；
-  // 模型名 cosyvoice-v1（之前误写成不存在的 "qwen-tts-v1" 导致 502）。
-  // 文档：https://help.aliyun.com/zh/model-studio/cosyvoice-quick-start
+  // Alibaba Cloud Model Studio (International, ap-southeast-1) 端点：
+  //   dashscope-intl.aliyuncs.com  (用户账号在 Singapore 区)
+  // 国内 DashScope (dashscope.aliyuncs.com) 是另一套服务，key 不互通。
+  // 模型名 cosyvoice-v1，voice longxiaochun（童声）。
   const upstream = await fetch(
-    "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/generation",
+    "https://dashscope-intl.aliyuncs.com/api/v1/services/audio/tts/generation",
     {
       method: "POST",
       headers: {

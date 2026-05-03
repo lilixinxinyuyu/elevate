@@ -209,7 +209,7 @@ function TtsSmokePanel() {
   const [status, setStatus] = useState<"idle" | "checking" | "ok" | "missing" | "error">("idle");
   const [reason, setReason] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [text, setText] = useState("你好，我是小晴。今天我们一起练习。");
+  const [text, setText] = useState("你好，我是小进。今天我们一起练习。");
 
   useEffect(() => {
     let cancelled = false;

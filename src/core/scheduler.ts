@@ -282,6 +282,9 @@ function pickQuestionsForSkill(
   }
 
   // 每桶内按"卷面错题 / 真题 / MUST_BIG"优先排序
+  // jitter 用 input.rng()（来自 rngSeed=Date.now()+Math.random()），保证每次进 train
+  // 拿到不同顺序——之前用 dateKey+question_id 同一天永远同一序，user 看到的"每次同一题"
+  // 就是这里。
   const sortBucket = (qs: Question[]) => {
     const tagged = qs.map((q) => ({
       q,
@@ -290,7 +293,7 @@ function pickQuestionsForSkill(
         ((q.tags ?? []).includes("wrong_origin") ? -0.6 : 0) +
         ((q.tags ?? []).includes("from_test") ? -0.3 : 0) +
         (q.exam_priority === "MUST_BIG" ? -0.3 : q.exam_priority === "MUST_SMALL" ? -0.2 : 0),
-      jitter: hashSeed(input.dateKey + ":" + q.question_id) / 2 ** 32,
+      jitter: input.rng(),
     }));
     tagged.sort((a, b) => a.priority - b.priority || a.jitter - b.jitter);
     return tagged.map((t) => t.q);
