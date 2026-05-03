@@ -35,6 +35,7 @@ import {
   hasChineseMiniGame,
   type GameResult,
 } from "../../components/chinese/games/ChineseGameDispatcher";
+import { TutorPanel } from "../../components/tutor/TutorPanel";
 import type { Question } from "../../core/types";
 
 type TrainMode = "practice" | "review" | "mock_exam";
@@ -112,6 +113,7 @@ export function ChineseTrainPage() {
   const [questionStartAt, setQuestionStartAt] = useState<number>(Date.now());
   const [allUnlockedTrophies, setAllUnlockedTrophies] = useState<string[]>([]);
   const [finishCelebrated, setFinishCelebrated] = useState(false);
+  const [showTutor, setShowTutor] = useState(false);
 
   // 选题：3 模式分别处理。fresh / mode / unitId / skillId 任一变化 = 全 state 重置
   // → 修 "再来一组" 卡在 summary 卡片不刷新的 bug（组件不卸载，state 不会自动清）
@@ -132,16 +134,27 @@ export function ChineseTrainPage() {
     setFinishCelebrated(false);
     setSessionId(createChineseSessionId());
     (async () => {
+      // 合并题源：seedQuestions（静态） + db.questions（AI 生成的动态题，subjectId=chinese）
+      const dbQs = (await db.questions.toArray()).filter(
+        (q) => q.subjectId === "chinese",
+      ) as unknown as Question[];
+      const seenIds = new Set<string>();
+      const mergedPool: Question[] = [];
+      for (const q of [...subject.seedQuestions, ...dbQs]) {
+        if (seenIds.has(q.question_id)) continue;
+        seenIds.add(q.question_id);
+        mergedPool.push(q);
+      }
       let qs: Question[] = [];
       if (mode === "review") {
         const ids = await getChineseMistakeQuestionIds(student.id, REVIEW_SIZE * 2);
         const idSet = new Set(ids);
-        qs = subject.seedQuestions.filter((q) => idSet.has(q.question_id));
+        qs = mergedPool.filter((q) => idSet.has(q.question_id));
         qs = shuffle(qs).slice(0, REVIEW_SIZE);
       } else if (mode === "mock_exam") {
-        qs = buildMockExamQuestions(subject.seedQuestions);
+        qs = buildMockExamQuestions(mergedPool);
       } else {
-        let pool = subject.seedQuestions;
+        let pool = mergedPool;
         if (skillId) pool = pool.filter((q) => q.skill_id === skillId);
         else if (unitId) pool = pool.filter((q) => q.unit_id === unitId);
         qs = shuffle(pool).slice(0, PRACTICE_SIZE);
@@ -173,6 +186,7 @@ export function ChineseTrainPage() {
     setAudioState("idle");
     setAudioError(null);
     setQuestionStartAt(Date.now());
+    setShowTutor(false);
     // 听写题进题面自动播一次（让娃免得忘了点 ▶）
     if (q.audio_text) {
       void speakText(q.audio_text).catch(() => {
@@ -674,12 +688,46 @@ export function ChineseTrainPage() {
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center gap-2">
+            {/* 错答时弹出"小进姐姐讲一讲"按钮；答对也允许（解密更深的知识点） */}
+            <button
+              type="button"
+              onClick={() => setShowTutor(true)}
+              className={`text-sm px-4 py-2 rounded-xl border transition-all hover:scale-105 ${
+                lastResult?.attempt.isCorrect === false
+                  ? "bg-amber-500/20 border-amber-400/40 text-amber-100 animate-pulse"
+                  : "bg-violet-500/10 border-violet-400/30 text-violet-200 hover:bg-violet-500/20"
+              }`}
+            >
+              👩‍🏫 让小进讲一讲
+            </button>
             <button type="button" onClick={handleNext} className="btn-primary">
               {idx + 1 < questions.length ? "下一题 →" : "查看结果 →"}
             </button>
           </div>
         </div>
+      )}
+
+      {/* AI 讲题面板 */}
+      {showTutor && q && (
+        <TutorPanel
+          subjectId="chinese"
+          stem={q.stem}
+          correctAnswer={
+            q.options
+              ? q.options.find((o) => o.id === correctOptionId)?.text ?? correctOptionId
+              : "（参考解题步骤）"
+          }
+          studentAnswer={
+            chosen === "__game_correct__"
+              ? "（迷你游戏全对）"
+              : chosen === "__game_wrong__"
+                ? "（迷你游戏没全对）"
+                : (q.options?.find((o) => o.id === chosen)?.text ?? "")
+          }
+          skillName={q.skill_name ?? q.skill_id}
+          onClose={() => setShowTutor(false)}
+        />
       )}
 
       {/* mock exam 模式底部退出按钮（不强制锁，但有警告） */}

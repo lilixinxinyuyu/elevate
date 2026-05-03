@@ -6,6 +6,7 @@ import { HintLadder } from "./HintLadder";
 import { FloatLayer, makeFloater, type Floater } from "./FloatPlus";
 import { StarterOverlay } from "./StarterOverlay";
 import { sfx } from "../../lib/sfx";
+import { TutorPanel } from "../tutor/TutorPanel";
 import type { Question } from "../../core/types";
 import { SpeedMatchPanel } from "./templates/SpeedMatch";
 import { ShopCounterPanel } from "./templates/ShopCounter";
@@ -400,6 +401,7 @@ function FeedbackPanel({
   onNext: () => void;
 }) {
   const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, errorPattern } = feedback;
+  const [showTutor, setShowTutor] = useState(false);
   // 标签：重做递减 / 新知识点
   const labels: string[] = [];
   if (isCorrect && repeatDecay !== undefined && repeatDecay < 1.0 && repeatDecay > 0) {
@@ -476,11 +478,33 @@ function FeedbackPanel({
           )}
         </div>
       )}
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center gap-2">
+        {/* 错答时弹出"小进姐姐讲一讲"，答对也允许（学更深的解法 / 概念） */}
+        <button
+          type="button"
+          onClick={() => setShowTutor(true)}
+          className={`text-sm px-4 py-2 rounded-xl border transition-all hover:scale-105 ${
+            !isCorrect
+              ? "bg-amber-500/20 border-amber-400/40 text-amber-100 animate-pulse"
+              : "bg-violet-500/10 border-violet-400/30 text-violet-200 hover:bg-violet-500/20"
+          }`}
+        >
+          👩‍🏫 让小进讲一讲
+        </button>
         <button type="button" className="btn-primary" onClick={onNext}>
           下一题 →
         </button>
       </div>
+      {showTutor && (
+        <TutorPanel
+          subjectId="math"
+          stem={question.stem}
+          correctAnswer={feedback.correctAnswerDisplay}
+          studentAnswer={isCorrect ? "（你答对了，但想再听一遍解法）" : "（错答；让小进重新讲）"}
+          skillName={question.skill_name ?? question.skill_id}
+          onClose={() => setShowTutor(false)}
+        />
+      )}
     </div>
   );
 }
