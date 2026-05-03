@@ -30,6 +30,11 @@ import {
   type ChineseAttemptResult,
 } from "../../subjects/chinese/service";
 import { CHINESE_TROPHIES } from "../../subjects/chinese/trophies";
+import {
+  ChineseGameDispatcher,
+  hasChineseMiniGame,
+  type GameResult,
+} from "../../components/chinese/games/ChineseGameDispatcher";
 import type { Question } from "../../core/types";
 
 type TrainMode = "practice" | "review" | "mock_exam";
@@ -92,11 +97,40 @@ export function ChineseTrainPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [questionsLoaded, setQuestionsLoaded] = useState(false);
 
-  // 选题：3 模式分别处理
+  // 一组训练一个 sessionId（每次 fresh 变化时重新生成）
+  const [sessionId, setSessionId] = useState(() => createChineseSessionId());
+
+  const [idx, setIdx] = useState(0);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [optionOrder, setOptionOrder] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
+  const [comboBefore, setComboBefore] = useState(0);
+  const [lastResult, setLastResult] = useState<ChineseAttemptResult | null>(null);
+  const [audioState, setAudioState] = useState<"idle" | "playing" | "error">("idle");
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [questionStartAt, setQuestionStartAt] = useState<number>(Date.now());
+  const [allUnlockedTrophies, setAllUnlockedTrophies] = useState<string[]>([]);
+  const [finishCelebrated, setFinishCelebrated] = useState(false);
+
+  // 选题：3 模式分别处理。fresh / mode / unitId / skillId 任一变化 = 全 state 重置
+  // → 修 "再来一组" 卡在 summary 卡片不刷新的 bug（组件不卸载，state 不会自动清）
   useEffect(() => {
     if (!student?.id) return;
     let cancelled = false;
     setQuestionsLoaded(false);
+    // 全量 reset 一次组训练相关的 state
+    setIdx(0);
+    setChosen(null);
+    setRevealed(false);
+    setAnswers([]);
+    setComboBefore(0);
+    setLastResult(null);
+    setAudioState("idle");
+    setAudioError(null);
+    setAllUnlockedTrophies([]);
+    setFinishCelebrated(false);
+    setSessionId(createChineseSessionId());
     (async () => {
       let qs: Question[] = [];
       if (mode === "review") {
@@ -121,22 +155,6 @@ export function ChineseTrainPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, subject.id, unitId, skillId, fresh, mode]);
-
-  // 一组训练一个 sessionId
-  const [sessionId] = useState(() => createChineseSessionId());
-
-  const [idx, setIdx] = useState(0);
-  const [chosen, setChosen] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState(false);
-  const [optionOrder, setOptionOrder] = useState<number[]>([]);
-  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
-  const [comboBefore, setComboBefore] = useState(0);
-  const [lastResult, setLastResult] = useState<ChineseAttemptResult | null>(null);
-  const [audioState, setAudioState] = useState<"idle" | "playing" | "error">("idle");
-  const [audioError, setAudioError] = useState<string | null>(null);
-  const [questionStartAt, setQuestionStartAt] = useState<number>(Date.now());
-  const [allUnlockedTrophies, setAllUnlockedTrophies] = useState<string[]>([]);
-  const [finishCelebrated, setFinishCelebrated] = useState(false);
 
   const q = questions[idx];
 
@@ -219,11 +237,27 @@ export function ChineseTrainPage() {
       <div className="space-y-4">
         {/* 撒花动画区 */}
         <div className="relative card-glow text-center overflow-hidden">
-          {/* 顶部 emoji 烟花 */}
-          <div className="absolute inset-x-0 top-0 flex justify-around text-2xl pointer-events-none animate-slide-up">
-            <span>🎉</span><span>✨</span><span>🎊</span><span>⭐</span><span>🎉</span>
+          {/* 背景光晕 burst */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 rounded-full bg-violet-400/20 animate-burst" />
+            <div
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 rounded-full bg-amber-400/15 animate-burst"
+              style={{ animationDelay: "120ms" }}
+            />
           </div>
-          <div className="text-6xl pt-6">
+          {/* 顶部 emoji 撒花，每个错开 30ms */}
+          <div className="absolute inset-x-0 top-0 flex justify-around text-2xl pointer-events-none">
+            {["🎉", "✨", "🎊", "⭐", "🎉"].map((e, i) => (
+              <span
+                key={i}
+                className="animate-slide-up inline-block"
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
+                {e}
+              </span>
+            ))}
+          </div>
+          <div className="text-6xl pt-6 animate-pop relative">
             {accuracy === 100 ? "🏆" : accuracy >= 90 ? "🌟" : accuracy >= 70 ? "🎉" : "💪"}
           </div>
           <div className="font-display font-bold text-2xl text-brand mt-2">
@@ -298,10 +332,69 @@ export function ChineseTrainPage() {
     );
   }
 
-  if (!q || !q.options) return null;
+  if (!q) return null;
 
+  const isMiniGame = hasChineseMiniGame(q);
   const isDictation = !!q.audio_text;
-  const correctOptionId = (q.answer as { type: "choice"; value: string }).value;
+  const correctOptionId = q.options
+    ? (q.answer as { type: "choice"; value: string }).value
+    : "";
+
+  // 新游戏的 result handler：把 GameResult 转成与 handleChoose 等价的提交流程
+  const handleGameResult = async (r: GameResult) => {
+    if (revealed || !student?.id) return;
+    setRevealed(true);
+    const isCorrect = r.correct;
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - questionStartAt) / 1000));
+    setChosen(isCorrect ? "__game_correct__" : "__game_wrong__");
+
+    // 注意：mini-game 内部已经放过 sfx.correct/sfx.wrong；这里只补 combo
+    if (isCorrect && comboBefore + 1 >= 3) {
+      setTimeout(() => sfx.combo(), 250);
+    }
+
+    try {
+      const result = await submitChineseAttempt({
+        studentId: student.id,
+        sessionId,
+        question: q,
+        isCorrect,
+        chosenOptionId: isCorrect ? "__game_correct__" : "__game_wrong__",
+        elapsedSeconds,
+        comboBefore,
+        isReview: mode === "review",
+      });
+      setLastResult(result);
+      setComboBefore(result.comboAfter);
+      setAnswers((prev) => [
+        ...prev,
+        {
+          qid: q.question_id,
+          chosen: isCorrect ? "__game_correct__" : "__game_wrong__",
+          correct: isCorrect,
+          points: result.points,
+          comboAfter: result.comboAfter,
+        },
+      ]);
+      if (result.newTrophyIds.length > 0) {
+        sfx.chest();
+        setAllUnlockedTrophies((prev) => [...prev, ...result.newTrophyIds]);
+      }
+    } catch (e) {
+      console.error("[chinese-train] mini-game submit failed", e);
+      setComboBefore(isCorrect ? comboBefore + 1 : 0);
+      setAnswers((prev) => [
+        ...prev,
+        {
+          qid: q.question_id,
+          chosen: isCorrect ? "__game_correct__" : "__game_wrong__",
+          correct: isCorrect,
+          points: 0,
+          comboAfter: isCorrect ? comboBefore + 1 : 0,
+        },
+      ]);
+    }
+  };
 
   const handleChoose = async (oid: string) => {
     if (revealed || !student?.id) return;
@@ -393,7 +486,10 @@ export function ChineseTrainPage() {
           />
         </div>
         {comboBefore >= 2 && (
-          <div className="chip bg-amber-500/20 text-amber-200 border border-amber-400/40 text-xs">
+          <div
+            key={`combo-${comboBefore}`}
+            className="chip bg-amber-500/20 text-amber-200 border border-amber-400/40 text-xs animate-combo-pop"
+          >
             🔥 ×{comboBefore}
           </div>
         )}
@@ -406,7 +502,11 @@ export function ChineseTrainPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 text-white text-2xl flex items-center justify-center shadow-glow shrink-0 hover:scale-105 transition-transform disabled:opacity-50"
+              className={`w-14 h-14 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 text-white text-2xl flex items-center justify-center shadow-glow shrink-0 transition-transform disabled:opacity-50 ${
+                audioState === "playing"
+                  ? "scale-110 animate-pulse"
+                  : "hover:scale-105 animate-sparkle"
+              }`}
               onClick={handlePlayAudio}
               disabled={audioState === "playing"}
               aria-label="播放朗读"
@@ -428,21 +528,31 @@ export function ChineseTrainPage() {
         </div>
       )}
 
-      {/* 题面 */}
-      <div className="card-glow">
+      {/* 题面 — key 强制 remount 出题时有 slide-up 入场感 */}
+      <div key={q.question_id} className="card-glow animate-slide-up">
         <div className="font-display font-bold text-lg leading-relaxed">{q.stem}</div>
       </div>
 
-      {/* 选项 */}
-      <div className="grid grid-cols-1 gap-2">
+      {/* 新游戏模板（pair_match / sentence_shuffle / poem_cloze） */}
+      {isMiniGame && (
+        <ChineseGameDispatcher
+          question={q}
+          frozen={revealed}
+          onResult={handleGameResult}
+        />
+      )}
+
+      {/* 选项（plain_choice / dictation 模式） */}
+      {!isMiniGame && q.options && (
+        <div className="grid grid-cols-1 gap-2">
         {optionOrder.map((origIdx, displayIdx) => {
           const o = q.options![origIdx]!;
           const isCorrect = o.id === correctOptionId;
           const isChosen = o.id === chosen;
           let cls = "card text-left flex items-center gap-3 hover:bg-ink-700/60 transition-colors";
           if (revealed) {
-            if (isCorrect) cls += " bg-emerald-500/15 border-emerald-400/40 ring-2 ring-emerald-400/40 animate-slide-up";
-            else if (isChosen) cls += " bg-rose-500/15 border-rose-400/40 ring-1 ring-rose-400/30";
+            if (isCorrect) cls += " bg-emerald-500/15 border-emerald-400/40 ring-2 ring-emerald-400/40 animate-pop";
+            else if (isChosen) cls += " bg-rose-500/15 border-rose-400/40 ring-1 ring-rose-400/30 animate-shake";
             else cls += " opacity-60";
           }
           const label = String.fromCharCode("A".charCodeAt(0) + displayIdx);
@@ -471,21 +581,24 @@ export function ChineseTrainPage() {
             </button>
           );
         })}
-      </div>
+        </div>
+      )}
 
-      {/* 反馈 */}
+      {/* 反馈（统一处理 plain_choice 和 mini-game：根据 lastResult.attempt.isCorrect 判定） */}
       {revealed && (
         <div className="space-y-3">
           <div
             className={`card text-sm ${
-              chosen === correctOptionId
+              (lastResult?.attempt.isCorrect ?? chosen === correctOptionId)
                 ? "bg-emerald-500/10 border-emerald-400/30 text-emerald-100"
                 : "bg-rose-500/10 border-rose-400/30 text-rose-100"
             }`}
           >
             <div className="flex items-center justify-between">
               <div className="font-semibold">
-                {chosen === correctOptionId ? "✓ 答对了" : "✗ 再想一想"}
+                {(lastResult?.attempt.isCorrect ?? chosen === correctOptionId)
+                  ? "✓ 答对了"
+                  : "✗ 再想一想"}
               </div>
               {lastResult && lastResult.points > 0 && (
                 <div className="chip bg-violet-500/20 text-violet-200 border border-violet-400/40 text-xs animate-pulse">
@@ -494,7 +607,9 @@ export function ChineseTrainPage() {
               )}
             </div>
             <div className="text-xs leading-relaxed text-slate-200/90 mt-1">
-              {chosen === correctOptionId ? q.feedback_correct : q.feedback_wrong}
+              {(lastResult?.attempt.isCorrect ?? chosen === correctOptionId)
+                ? q.feedback_correct
+                : q.feedback_wrong}
             </div>
             {q.solution_steps && q.solution_steps.length > 0 && (
               <div className="text-[11px] mt-2 text-slate-300/80 leading-relaxed">
@@ -502,11 +617,37 @@ export function ChineseTrainPage() {
               </div>
             )}
             {lastResult && lastResult.masteryFrom !== lastResult.masteryTo && (
-              <div className="text-[11px] mt-2 text-slate-400">
-                {q.skill_name ?? q.skill_id} 掌握度：{lastResult.masteryFrom} →{" "}
-                <span className={lastResult.masteryTo > lastResult.masteryFrom ? "text-emerald-300" : "text-rose-300"}>
-                  {lastResult.masteryTo}
-                </span>
+              <div className="mt-2 space-y-1">
+                <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>{q.skill_name ?? q.skill_id} 掌握度</span>
+                  <span>
+                    {lastResult.masteryFrom} →{" "}
+                    <span
+                      className={
+                        lastResult.masteryTo > lastResult.masteryFrom
+                          ? "text-emerald-300 font-semibold"
+                          : "text-rose-300 font-semibold"
+                      }
+                    >
+                      {lastResult.masteryTo}
+                    </span>
+                  </span>
+                </div>
+                {/* 双层进度条：底层是变化前，上层渐变到变化后 */}
+                <div className="relative h-1.5 rounded-full bg-ink-700/60 overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-slate-500/50 transition-all duration-300"
+                    style={{ width: `${lastResult.masteryFrom}%` }}
+                  />
+                  <div
+                    className={`absolute inset-y-0 left-0 transition-all duration-700 ease-out ${
+                      lastResult.masteryTo > lastResult.masteryFrom
+                        ? "bg-gradient-to-r from-emerald-400 to-amber-300"
+                        : "bg-gradient-to-r from-rose-400 to-amber-400"
+                    }`}
+                    style={{ width: `${lastResult.masteryTo}%` }}
+                  />
+                </div>
               </div>
             )}
           </div>

@@ -239,6 +239,49 @@ export interface Question {
   review_interval_days?: number[];
   tags?: string[];
   safety_check?: Record<string, boolean>;
+
+  /**
+   * 多学科 Phase 3：语文新游戏模板的可选数据载荷。
+   * 不存在时模板回退到 plain_choice 渲染。
+   *
+   * pair_match: 拖/点配对（近反义词、量词、多音字、汉字-拼音 等）
+   * sentence_shuffle: 词块按正确顺序点亮组成一句（句子排序、古诗排序、关联词补全）
+   * poem_cloze: 填空（古诗 / 课内段落，从字池里挑字进空格）
+   *
+   * 数学侧不读这些字段，零影响。
+   */
+  game_data?: ChinesePairMatchData | ChineseSentenceShuffleData | ChinesePoemClozeData;
+}
+
+/** 配对题：左右两列 tile，点左边再点右边配成对，全配对完点提交 */
+export interface ChinesePairMatchData {
+  kind: "pair_match";
+  /** 配对组：left=左列 tile 文本，right=右列 tile 文本 */
+  pairs: { left: string; right: string }[];
+  /** 左列展示标签（默认 "字 / 词"） */
+  leftLabel?: string;
+  /** 右列展示标签（默认 "拼音 / 解释"） */
+  rightLabel?: string;
+}
+
+/** 句子重排：把正确顺序的 tokens 打乱让用户按序点击 */
+export interface ChineseSentenceShuffleData {
+  kind: "sentence_shuffle";
+  /** 正确顺序的词块 */
+  tokens: string[];
+  /** 完成后展示用的可读句子（默认 join("")） */
+  fullSentence?: string;
+}
+
+/** 古诗 / 段落填空：模板里 ___ 占位符 + 字池 */
+export interface ChinesePoemClozeData {
+  kind: "poem_cloze";
+  /** 模板，用 ___（三下划线）作为空位占位 */
+  template: string;
+  /** 按 ___ 出现顺序对应的正确答案 */
+  blanks: string[];
+  /** 用户可拖/点的字池（包含答案 + 干扰项） */
+  pool: string[];
 }
 
 export interface StudentProfile {

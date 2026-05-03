@@ -12,6 +12,7 @@ import { AdminPage } from "./pages/Admin";
 import { ChineseHomePage } from "./pages/chinese/ChineseHome";
 import { ChineseTrainPage } from "./pages/chinese/ChineseTrain";
 import { ChinesePickerPage } from "./pages/chinese/ChinesePicker";
+import { ChineseAdminPage } from "./pages/chinese/ChineseAdmin";
 import { useSubject } from "./subjects/context";
 
 /**
@@ -51,6 +52,13 @@ function MathOnlyRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminRoute() {
+  const subject = useSubject();
+  if (subject.id === "math") return <AdminPage />;
+  if (subject.id === "chinese") return <ChineseAdminPage />;
+  return <ComingSoonPage />;
+}
+
 /**
  * 路由结构（多学科 v2 / Phase 2 MVP）：
  *
@@ -80,7 +88,7 @@ export const router = createBrowserRouter([
       { path: "skills", element: <MathOnlyRoute><SkillsPage /></MathOnlyRoute> },
       { path: "mistakes", element: <MathOnlyRoute><MistakesPage /></MathOnlyRoute> },
       { path: "report", element: <MathOnlyRoute><ReportPage /></MathOnlyRoute> },
-      { path: "admin", element: <AdminPage /> },
+      { path: "admin", element: <AdminRoute /> },
       { path: "*", element: <ComingSoonPage /> },
     ],
   },

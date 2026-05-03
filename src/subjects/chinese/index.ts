@@ -16,6 +16,7 @@ import { SKILLS_CHINESE } from "./skills";
 import { UNITS_CHINESE } from "./units";
 import { SEED_QUESTIONS_CHINESE } from "./questions";
 import { SEED_QUESTIONS_CHINESE_V2 } from "./questionPack2";
+import { SEED_QUESTIONS_CHINESE_V3 } from "./questionPack3";
 import type {
   Subject,
   SubjectAbilityDef,
@@ -36,6 +37,7 @@ const CHINESE_NAV_ITEMS: SubjectNavItem[] = [
   { to: "", label: "首页", exact: true },
   { to: "train", label: "今日挑战" },
   { to: "free-practice", label: "选单元" },
+  { to: "admin", label: "管理", subtle: true },
 ];
 
 export const chineseSubject: Subject = {
@@ -51,7 +53,11 @@ export const chineseSubject: Subject = {
 
   units: UNITS_CHINESE,
   skills: SKILLS_CHINESE,
-  seedQuestions: [...SEED_QUESTIONS_CHINESE, ...SEED_QUESTIONS_CHINESE_V2],
+  seedQuestions: [
+    ...SEED_QUESTIONS_CHINESE,
+    ...SEED_QUESTIONS_CHINESE_V2,
+    ...SEED_QUESTIONS_CHINESE_V3,
+  ],
 
   abilities: CHINESE_ABILITIES,
   errorTags: [],
