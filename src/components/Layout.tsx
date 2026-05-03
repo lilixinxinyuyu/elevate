@@ -158,7 +158,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.18.1
+        本地优先 · v0.19.0
       </footer>
     </div>
   );

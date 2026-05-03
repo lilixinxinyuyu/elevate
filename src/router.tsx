@@ -9,41 +9,63 @@ import { SkillPickerPage } from "./pages/SkillPicker";
 import { MistakesPage } from "./pages/Mistakes";
 import { ReportPage } from "./pages/Report";
 import { AdminPage } from "./pages/Admin";
+import { ChineseHomePage } from "./pages/chinese/ChineseHome";
+import { ChineseTrainPage } from "./pages/chinese/ChineseTrain";
+import { ChinesePickerPage } from "./pages/chinese/ChinesePicker";
 import { useSubject } from "./subjects/context";
 
 /**
- * MathOnly：Phase 1 的"内容就绪"网关。
+ * SubjectAware：按当前 useSubject().id 分发到 math / chinese 不同的 page 组件。
  *
- * Phase 1 只有 math 学科有题、有 mastery、有 trophies；chinese 是空。访问
- * /chinese/* 路由时不能让 math 页面（HomePage 等）跑——它们 import service.ts
- * 的 math 数据，empty 状态没意义。这里直接拦下来 render ComingSoon。
+ * Phase 2 MVP：math 路由用现有数学 page；chinese 路由用 ChineseHome/Train/Picker；
+ * 别的 subject id 都回 ComingSoon。
  *
- * Phase 2 chinese 内容到位后：
- *  - 要么改这个判断为 `subject.units.length > 0`
- *  - 要么按学科 + 路由维护一个 ready map
- *  - 现在硬编码 math 是最简单且不容易出 bug 的做法
+ * 这种"按 subject 分发"的好处：math 完全不动；chinese 有自己简化版的 page；
+ * 期中后真去耦合时，可以让两边都用通用的 GenericTrainPage(subject)，
+ * 把这一层 dispatch 拆掉。
  */
-function MathOnly({ children }: { children: React.ReactNode }) {
+function HomeRoute() {
+  const subject = useSubject();
+  if (subject.id === "math") return <HomePage />;
+  if (subject.id === "chinese") return <ChineseHomePage />;
+  return <ComingSoonPage />;
+}
+
+function TrainRoute() {
+  const subject = useSubject();
+  if (subject.id === "math") return <TrainPage />;
+  if (subject.id === "chinese") return <ChineseTrainPage />;
+  return <ComingSoonPage />;
+}
+
+function FreePracticeRoute() {
+  const subject = useSubject();
+  if (subject.id === "math") return <SkillPickerPage />;
+  if (subject.id === "chinese") return <ChinesePickerPage />;
+  return <ComingSoonPage />;
+}
+
+function MathOnlyRoute({ children }: { children: React.ReactNode }) {
   const subject = useSubject();
   if (subject.id !== "math") return <ComingSoonPage />;
   return <>{children}</>;
 }
 
 /**
- * 路由结构（多学科 v2）：
+ * 路由结构（多学科 v2 / Phase 2 MVP）：
  *
- *   /                      → SubjectPickerPage（登录后落地这里）
- *   /:subject              → SubjectShell（校验 subject id + 注入 SubjectProvider）
- *      ├ index             → HomePage（包 MathOnly）
- *      ├ train             → TrainPage（包 MathOnly）
- *      ├ skills            → SkillsPage（包 MathOnly）
- *      ├ free-practice     → SkillPickerPage（旧路由 /picker）
- *      ├ mistakes          → MistakesPage
- *      ├ report            → ReportPage
- *      ├ admin             → AdminPage（不包：管理页跨学科可用）
- *      └ * (catch-all)     → ComingSoonPage（chinese 的 vocab/poems/writing 等）
+ *   /                      → SubjectPickerPage
+ *   /:subject              → SubjectShell（注入 SubjectProvider）
+ *      ├ index             → HomeRoute       (math: HomePage / chinese: ChineseHomePage)
+ *      ├ train             → TrainRoute      (math: TrainPage / chinese: ChineseTrainPage)
+ *      ├ free-practice     → FreePracticeRoute (math: SkillPicker / chinese: ChinesePicker)
+ *      ├ skills            → MathOnly(SkillsPage)        — chinese 期中后再做
+ *      ├ mistakes          → MathOnly(MistakesPage)      — chinese 期中后再做
+ *      ├ report            → MathOnly(ReportPage)        — chinese 期中后再做
+ *      ├ admin             → AdminPage（跨学科共用）
+ *      └ * (catch-all)     → ComingSoonPage
  *
- * 老路径兜底：/train → /math/train 之类
+ * 老路径兜底依旧是 /train → /math/train 等。
  */
 export const router = createBrowserRouter([
   { path: "/", element: <SubjectPickerPage /> },
@@ -52,17 +74,17 @@ export const router = createBrowserRouter([
     element: <SubjectShell />,
     errorElement: <RouteError />,
     children: [
-      { index: true, element: <MathOnly><HomePage /></MathOnly> },
-      { path: "train", element: <MathOnly><TrainPage /></MathOnly> },
-      { path: "skills", element: <MathOnly><SkillsPage /></MathOnly> },
-      { path: "free-practice", element: <MathOnly><SkillPickerPage /></MathOnly> },
-      { path: "mistakes", element: <MathOnly><MistakesPage /></MathOnly> },
-      { path: "report", element: <MathOnly><ReportPage /></MathOnly> },
+      { index: true, element: <HomeRoute /> },
+      { path: "train", element: <TrainRoute /> },
+      { path: "free-practice", element: <FreePracticeRoute /> },
+      { path: "skills", element: <MathOnlyRoute><SkillsPage /></MathOnlyRoute> },
+      { path: "mistakes", element: <MathOnlyRoute><MistakesPage /></MathOnlyRoute> },
+      { path: "report", element: <MathOnlyRoute><ReportPage /></MathOnlyRoute> },
       { path: "admin", element: <AdminPage /> },
       { path: "*", element: <ComingSoonPage /> },
     ],
   },
-  // 老路径重定向：保护已经装在 Selena 设备上的 PWA / 已分享的链接
+  // 老路径重定向：保护 PWA 已装的 Selena 设备
   { path: "/train", element: <Navigate to="/math/train" replace /> },
   { path: "/skills", element: <Navigate to="/math/skills" replace /> },
   { path: "/picker", element: <Navigate to="/math/free-practice" replace /> },

@@ -189,6 +189,13 @@ export interface Question {
   question_id: string;
   /** 多学科 v2 */
   subjectId?: SubjectId;
+  /**
+   * 多学科 Phase 2（语文）：听写题需要播报的文本。
+   * 可能与 stem 不同——stem 是题面（"听一听，选出正确的字"），audio_text
+   * 是被播报的词（"蜻蜓"）。客户端听写模板 DictationPick 用 src/lib/tts.ts
+   * 的 speakText(audio_text) 调 Qwen Cherry 朗读。
+   */
+  audio_text?: string;
   version: number;
   status: "draft" | "validated" | "approved" | "active" | "retired" | "needs_review" | "rejected";
   source?: {

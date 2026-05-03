@@ -1,18 +1,20 @@
 /**
- * chineseSubject：语文学科 Phase 1 占位骨架。
+ * chineseSubject — Phase 2 MVP 真实接入。
  *
- * 当前 status.available = true 但所有内容为空。SubjectShell 会读 status 决定
- * 是不是直接 render ComingSoon 页（即使 available=true，子页面也会因为 units
- * 为空 + 守卫逻辑回到 ComingSoon）。期中后填实内容。
+ * 已就绪：
+ *  - 4 单元 / 12 技能 / 60+ 题（src/subjects/chinese/{units,skills,questions}.ts）
+ *  - 听写题接 src/lib/tts.ts（Qwen Cherry / longxiaochun）
+ *  - 独立 ChineseHome / ChineseTrain 页面，不复用 math 的 GameShell
  *
- * Phase 2 落地清单：
- *  - units / skills / seedQuestions 真实数据（人教版 2025 版四下，至少前 4 单元）
- *  - 拼音/字音/字形/词汇/句子/阅读/表达/积累 7 个 ability
- *  - 听写题接 src/lib/tts.ts 的 speakText (Qwen Cherry)
- *  - 6+ 个语文专用游戏模板（pinyin_match、dictation_listen、cloze 等）
- *  - 错题标签字典（错字混淆、声韵母混淆、平翘舌混淆等）
+ * 还没做（期中后）：
+ *  - mastery / trophy / 错题复活
+ *  - 句子排序 / 病句修改 / 课内阅读 多步题
+ *  - 内容扩展到 200+ 题、覆盖第 5-8 单元
  */
 
+import { SKILLS_CHINESE } from "./skills";
+import { UNITS_CHINESE } from "./units";
+import { SEED_QUESTIONS_CHINESE } from "./questions";
 import type {
   Subject,
   SubjectAbilityDef,
@@ -20,7 +22,6 @@ import type {
 } from "../types";
 
 const CHINESE_ABILITIES: SubjectAbilityDef[] = [
-  // 占位：期中后细化。先放 6 个常见维度让 ability 雷达图能渲染骨架。
   { id: "phonics", label: "字音" },
   { id: "glyph", label: "字形" },
   { id: "vocabulary", label: "词汇" },
@@ -33,29 +34,23 @@ const CHINESE_ABILITIES: SubjectAbilityDef[] = [
 const CHINESE_NAV_ITEMS: SubjectNavItem[] = [
   { to: "", label: "首页", exact: true },
   { to: "train", label: "今日挑战" },
-  { to: "vocab", label: "字词游戏" },
-  { to: "poems", label: "古诗角" },
-  { to: "writing", label: "写字本" },
+  { to: "free-practice", label: "选单元" },
 ];
-
-/** 期中后开放：5月7日 0:00 当地时间 */
-const RELEASE_AT = new Date(2026, 4, 7, 0, 0, 0).getTime();
 
 export const chineseSubject: Subject = {
   id: "chinese",
   label: "语文",
   shortLabel: "语",
-  homeTagline: "人教版四年级下册 · 期中后开放",
+  homeTagline: "人教版四年级下册 · 期中冲刺",
   themeColor: "from-amber-400 to-rose-400",
   status: {
+    // Phase 2 MVP：上线
     available: true,
-    comingSoonLabel: "期中后开放（5月7日）",
-    releaseAt: RELEASE_AT,
   },
 
-  units: [],
-  skills: [],
-  seedQuestions: [],
+  units: UNITS_CHINESE,
+  skills: SKILLS_CHINESE,
+  seedQuestions: SEED_QUESTIONS_CHINESE,
 
   abilities: CHINESE_ABILITIES,
   errorTags: [],
@@ -63,6 +58,6 @@ export const chineseSubject: Subject = {
 
   navItems: CHINESE_NAV_ITEMS,
 
-  // Phase 1 不会被实际调用（subject 内没题）
+  // chinese 用独立的 plain_choice 模板；听写题靠 audio_text 字段触发 ▶ 按钮
   resolveGameTemplate: () => "plain_choice",
 };
