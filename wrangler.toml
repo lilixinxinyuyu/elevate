@@ -1,0 +1,21 @@
+# Cloudflare Pages 配置（仅供本地 wrangler dev / wrangler deploy 用）
+#
+# 实际生产：
+#  - GitHub → Cloudflare Pages 自动构建（wrangler.toml 不参与）
+#  - D1 binding 和环境变量在 Pages dashboard 里配
+#
+# 这个文件主要给：
+#  1. `wrangler pages dev` 本地预览 functions
+#  2. 让仓库里有一份最低参考
+
+name = "selena-elevate"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+# 本地开发时的 D1 binding（生产请在 Pages dashboard 配同名 binding）
+# 创建数据库：wrangler d1 create selena-elevate-db
+# 然后把生成的 database_id 替换下面这一行；本地也会用同一个 D1 实例
+[[d1_databases]]
+binding = "DB"
+database_name = "selena-elevate-db"
+database_id = "REPLACE_ME"

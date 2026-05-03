@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-ink-950 text-slate-100 antialiased;
+  background-image:
+    radial-gradient(1200px 700px at 15% -10%, rgba(167,139,250,0.18), transparent 60%),
+    radial-gradient(900px 600px at 90% 10%, rgba(244,114,182,0.13), transparent 60%),
+    radial-gradient(800px 500px at 50% 110%, rgba(52,211,153,0.10), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Buttons */
+.btn {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed select-none;
+}
+.btn-primary {
+  @apply btn text-white bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 shadow-glow hover:brightness-110 active:scale-[0.98];
+}
+.btn-secondary {
+  @apply btn text-slate-100 bg-ink-700/70 border border-ink-600/70 hover:bg-ink-700 active:scale-[0.98];
+}
+.btn-ghost {
+  @apply btn text-slate-300 hover:bg-white/5 active:scale-[0.98];
+}
+.btn-emerald {
+  @apply btn text-white bg-emerald-500 shadow-glow-emerald hover:brightness-110 active:scale-[0.98];
+}
+.btn-rose {
+  @apply btn text-white bg-rose-500 shadow-glow-rose hover:brightness-110 active:scale-[0.98];
+}
+
+/* Cards */
+.card {
+  @apply bg-ink-800/60 border border-ink-700/70 rounded-2xl p-4 backdrop-blur-sm;
+}
+.card-glow {
+  @apply card shadow-glow;
+}
+.chip {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+
+/* Form controls in dark theme */
+input, select, textarea {
+  color-scheme: dark;
+}
+.field {
+  @apply w-full rounded-xl bg-ink-800 border border-ink-600 px-3 py-2 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500;
+}
+
+/* Choice bubble - Elevate style */
+.bubble {
+  @apply relative w-full rounded-2xl px-4 py-4 text-xl font-display font-semibold text-slate-100 bg-gradient-to-br from-ink-700 to-ink-800 border border-ink-600 shadow-lg transition-all active:scale-[0.97] hover:brightness-110;
+}
+.bubble-correct {
+  @apply bg-gradient-to-br from-emerald-500 to-emerald-600 border-emerald-300 shadow-glow-emerald;
+}
+.bubble-wrong {
+  @apply bg-gradient-to-br from-rose-500 to-rose-600 border-rose-300 shadow-glow-rose;
+}
+.bubble-dimmed {
+  @apply opacity-40;
+}
+
+/* Text gradients */
+.text-brand {
+  @apply bg-clip-text text-transparent bg-gradient-to-br from-violet-300 via-fuchsia-300 to-pink-300;
+}
+.text-xp {
+  @apply bg-clip-text text-transparent bg-gradient-to-br from-amber-300 to-orange-400;
+}
+
+/* Tick/cross overlays for feedback */
+.tick-overlay, .cross-overlay {
+  @apply absolute inset-0 flex items-center justify-center text-5xl pointer-events-none;
+}
+
+/* Floating +N points */
+.float-plus {
+  @apply absolute font-display font-bold text-3xl text-amber-300 pointer-events-none;
+  text-shadow: 0 0 18px rgba(251,191,36,0.8);
+}
+
+/* Progress bar */
+.timer-bar {
+  @apply h-1.5 rounded-full bg-gradient-to-r from-violet-400 via-pink-400 to-amber-300 transition-[width] duration-200 ease-linear;
+}
+.timer-track {
+  @apply h-1.5 w-full bg-white/5 rounded-full overflow-hidden;
+}
+
+/* Starter overlay */
+.starter-overlay {
+  @apply fixed inset-0 z-50 bg-ink-950/80 backdrop-blur-md flex items-center justify-center;
+}
+
+/* Utility text */
+.kbd {
+  @apply inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-mono bg-white/5 border border-white/10 rounded;
+}
+
+/* Scrollbar polish */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }

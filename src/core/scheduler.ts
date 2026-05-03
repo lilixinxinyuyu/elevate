@@ -1,0 +1,609 @@
+import { FINAL_SPRINT_G4B } from "../content/examPriorities";
+import { SKILLS } from "../content/skills";
+import type { Attempt, MasteryScore, MistakeReview, Question, SessionMode, Skill } from "./types";
+
+export interface BuildSessionInput {
+  studentId: string;
+  mode: SessionMode;
+  currentUnitId?: string;
+  targetMinutes: number;
+  dateKey: string;
+  pool: Question[];
+  mastery: MasteryScore[];
+  mistakes: MistakeReview[];
+  attempts: Attempt[];
+  selectedSkillIds?: string[];
+  now?: number;
+  rng?: () => number;
+  rngSeed?: string;
+}
+
+export interface DailySessionPlan {
+  mode: SessionMode;
+  dateKey: string;
+  plannedMinutes: number;
+  questionIds: string[];
+  breakdown: { bucket: string; count: number }[];
+  focusSkills: string[];
+  /** 题库枯竭：抽不出 targetCount 道有效题（即使放宽规则也凑不齐） */
+  poolStarved?: boolean;
+  /** 哪些 skill 严重缺新题（attempts ≥ 3 但题库见底） */
+  starvedSkillIds?: string[];
+}
+
+/** 单题级 mastered：连续 3 次答对 → 暂时退出主调度池（30 天后回炉抽查） */
+const MASTERED_CONSECUTIVE_THRESHOLD = 3;
+const MASTERED_RECHECK_DAYS = 30;
+
+const SKILL_BY_ID = new Map(SKILLS.map((s) => [s.id, s]));
+
+const EXAM_PRIORITY_WEIGHT: Record<string, number> = {
+  MUST_BIG: 1.0,
+  HIGH_BIG: 0.85,
+  MUST_SMALL: 0.75,
+  VERY_HIGH_SMALL: 0.7,
+  HIGH_SMALL: 0.6,
+  NORMAL: 0.4,
+  LOW_SMALL: 0.25,
+  LOW: 0.2,
+  EXTENSION: 0.1,
+};
+
+const DAY = 24 * 60 * 60 * 1000;
+
+export function hashSeed(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+export function seededRng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 2 ** 32;
+  };
+}
+
+export function buildDailySession(input: BuildSessionInput): DailySessionPlan {
+  const now = input.now ?? Date.now();
+  const rngSeed = input.rngSeed ?? `${input.studentId}:${input.dateKey}:${input.mode}`;
+  const rng = input.rng ?? seededRng(hashSeed(rngSeed));
+  const targetCount = Math.max(
+    6,
+    Math.round(input.targetMinutes * (input.mode === "final_sprint" ? 1.3 : 1.0)),
+  );
+
+  const masteryMap = new Map(input.mastery.map((m) => [m.skillId, m]));
+  const dueMistakes = input.mistakes.filter((m) => !m.resolved && m.nextReviewAt <= now);
+  const approvedPool = input.pool.filter((q) => q.status === "approved" || q.status === "active");
+
+  // 已做对的题（30 天内不重复使用，除非实在没题）
+  const thirtyDaysAgo = now - 30 * DAY;
+  const recentCorrectIds = new Set(
+    input.attempts
+      .filter((a) => a.isCorrect && a.createdAt >= thirtyDaysAgo)
+      .map((a) => a.questionId),
+  );
+  // 7 天内见到过的题目（重复疲劳）
+  const sevenDaysAgo = now - 7 * DAY;
+  const recentSeenCount = new Map<string, number>();
+  for (const a of input.attempts) {
+    if (a.createdAt >= sevenDaysAgo) {
+      recentSeenCount.set(a.questionId, (recentSeenCount.get(a.questionId) ?? 0) + 1);
+    }
+  }
+  const dueQuestionIds = new Set(dueMistakes.map((m) => m.questionId));
+  const recentWrongCooldownIds = new Set(
+    input.attempts
+      .filter((a) => !a.isCorrect && a.createdAt >= now - DAY && !dueQuestionIds.has(a.questionId))
+      .map((a) => a.questionId),
+  );
+
+  // 单题掌握度：最近 3 次都对 + 最新一次距今不足 30 天 → 暂退主池
+  const masteredQuestionIds = computeMasteredQuestionIds(input.attempts, now);
+
+  if (input.mode === "review") {
+    return buildReview(input, approvedPool, dueMistakes, targetCount, rng);
+  }
+
+  if (input.mode === "skill" || input.mode === "free") {
+    return buildBySkills({
+      ...input,
+      now,
+      rng,
+      targetCount,
+      pool: approvedPool,
+      recentCorrectIds,
+      recentSeenCount,
+      recentWrongCooldownIds,
+      masteredQuestionIds,
+      masteryMap,
+      dueMistakes,
+    });
+  }
+
+  if (input.mode === "final_sprint") {
+    return buildFinalSprint({
+      ...input,
+      now,
+      rng,
+      targetCount,
+      pool: approvedPool,
+      recentCorrectIds,
+      recentSeenCount,
+      recentWrongCooldownIds,
+      masteredQuestionIds,
+      masteryMap,
+      dueMistakes,
+    });
+  }
+
+  if (input.mode === "midterm") {
+    return buildMidterm({
+      ...input,
+      now,
+      rng,
+      targetCount,
+      pool: approvedPool,
+      recentCorrectIds,
+      recentSeenCount,
+      recentWrongCooldownIds,
+      masteredQuestionIds,
+      masteryMap,
+      dueMistakes,
+    });
+  }
+
+  return buildNormal({
+    ...input,
+    now,
+    rng,
+    targetCount,
+    pool: approvedPool,
+    recentCorrectIds,
+    recentSeenCount,
+    recentWrongCooldownIds,
+    masteredQuestionIds,
+    masteryMap,
+    dueMistakes,
+  });
+}
+
+/**
+ * 一道题在最近 N 次（>= 3）答题里全部答对 + 最新一次距今 < 30 天 → 视为 mastered。
+ * 真的隔了 30 天再做错也会自动从这个集合移除（因为 last attempt 太早）。
+ */
+function computeMasteredQuestionIds(attempts: Attempt[], now: number): Set<string> {
+  const byQ = new Map<string, Attempt[]>();
+  for (const a of attempts) {
+    const arr = byQ.get(a.questionId) ?? [];
+    arr.push(a);
+    byQ.set(a.questionId, arr);
+  }
+  const out = new Set<string>();
+  const recheckCutoff = now - MASTERED_RECHECK_DAYS * DAY;
+  for (const [qId, list] of byQ) {
+    list.sort((a, b) => a.createdAt - b.createdAt);
+    if (list.length < MASTERED_CONSECUTIVE_THRESHOLD) continue;
+    const tail = list.slice(-MASTERED_CONSECUTIVE_THRESHOLD);
+    if (!tail.every((a) => a.isCorrect)) continue;
+    const last = tail[tail.length - 1]!;
+    if (last.createdAt < recheckCutoff) continue; // 太久没碰，重新回炉
+    out.add(qId);
+  }
+  return out;
+}
+
+interface InternalInput extends BuildSessionInput {
+  now: number;
+  rng: () => number;
+  targetCount: number;
+  pool: Question[];
+  recentCorrectIds: Set<string>;
+  recentSeenCount: Map<string, number>;
+  recentWrongCooldownIds: Set<string>;
+  masteredQuestionIds: Set<string>;
+  masteryMap: Map<string, MasteryScore>;
+  dueMistakes: MistakeReview[];
+}
+
+/** 每个 skill 算一个"优先度分数"；越高越应在今天出现 */
+function scoreSkill(
+  skill: Skill,
+  mastery: MasteryScore | undefined,
+  dueMistakes: MistakeReview[],
+  now: number,
+): number {
+  const m = mastery?.score ?? 50;
+  const weakness = Math.max(0, (65 - m) / 65);
+  const daysSince = mastery?.lastPracticedAt
+    ? (now - mastery.lastPracticedAt) / DAY
+    : 14;
+  const forgetting = daysSince / (1 + m / 25);
+  const overdue = dueMistakes.some((d) => d.skillId === skill.id) ? 1.5 : 0;
+  const priority = EXAM_PRIORITY_WEIGHT[skill.examPriority] ?? 0.4;
+  return weakness + forgetting * 0.4 + overdue + priority * 0.6;
+}
+
+function selectTopSkills(input: InternalInput, n: number): Skill[] {
+  const arr = SKILLS.map((s) => ({
+    s,
+    score: scoreSkill(s, input.masteryMap.get(s.id), input.dueMistakes, input.now),
+  }));
+  arr.sort((a, b) => b.score - a.score);
+  // 同分时按 rng 打乱保证每天不同
+  return arr.slice(0, n * 2).sort(() => input.rng() - 0.5).slice(0, n).map((x) => x.s);
+}
+
+function pickQuestionsForSkill(
+  skill: Skill,
+  input: InternalInput,
+  count: number,
+  forbidIds: Set<string>,
+): Question[] {
+  const mastery = input.masteryMap.get(skill.id);
+  const allowDiff = difficultyCap(mastery?.score ?? 50);
+  const candidates = input.pool.filter(
+    (q) =>
+      q.skill_id === skill.id &&
+      q.difficulty <= allowDiff &&
+      !forbidIds.has(q.question_id),
+  );
+  // 一级筛：不在最近做对池 + 不在错题冷却池 + 不在 mastered 池 → 主池
+  const available = candidates.filter(
+    (q) =>
+      !input.recentCorrectIds.has(q.question_id) &&
+      !input.recentWrongCooldownIds.has(q.question_id) &&
+      !input.masteredQuestionIds.has(q.question_id),
+  );
+  // 优先未做过的；错题来源 / 真题来源加权前置
+  const tagged = available.map((q) => {
+    const tags = q.tags ?? [];
+    const fromTest = tags.includes("from_test");
+    const wrongOrigin = tags.includes("wrong_origin");
+    const examPriorityBoost = q.exam_priority === "MUST_BIG" ? -0.3 : q.exam_priority === "MUST_SMALL" ? -0.2 : 0;
+    return {
+      q,
+      priority:
+        (input.recentCorrectIds.has(q.question_id) ? 2 : 0) +
+        (input.recentSeenCount.get(q.question_id) ?? 0) * 0.6 +
+        (wrongOrigin ? -0.6 : 0) +     // 卷面错题强加权
+        (fromTest ? -0.3 : 0) +        // 卷面真题加权
+        examPriorityBoost,
+      jitter: hashSeed(input.dateKey + ":" + q.question_id) / 2 ** 32,
+    };
+  });
+  tagged.sort((a, b) => (a.priority - b.priority) || (a.jitter - b.jitter));
+  const picked = tagged.slice(0, count).map((t) => t.q);
+
+  // 若没拿够，放宽（允许 mastered 但仍未做过的更难题）
+  if (picked.length < count) {
+    const fallback = input.pool.filter(
+      (q) =>
+        q.skill_id === skill.id &&
+        !picked.includes(q) &&
+        !forbidIds.has(q.question_id) &&
+        !input.recentCorrectIds.has(q.question_id) &&
+        !input.recentWrongCooldownIds.has(q.question_id),
+    );
+    fallback.sort(() => input.rng() - 0.5);
+    for (const q of fallback) {
+      if (picked.length >= count) break;
+      picked.push(q);
+    }
+  }
+  // 这个 skill 完全没有替代题时才放回冷却题，避免训练卡成空题。
+  if (picked.length === 0) {
+    const lastResort = input.pool.filter(
+      (q) => q.skill_id === skill.id && !picked.includes(q) && !forbidIds.has(q.question_id),
+    );
+    lastResort.sort(() => input.rng() - 0.5);
+    for (const q of lastResort) {
+      if (picked.length >= count) break;
+      picked.push(q);
+    }
+  }
+  return picked;
+}
+
+/** 这个 skill 在所有约束下还能不能找到至少一道"新题"——用于检测题库枯竭 */
+function skillHasFreshQuestion(skill: Skill, input: InternalInput): boolean {
+  return input.pool.some(
+    (q) =>
+      q.skill_id === skill.id &&
+      !input.recentCorrectIds.has(q.question_id) &&
+      !input.recentWrongCooldownIds.has(q.question_id) &&
+      !input.masteredQuestionIds.has(q.question_id),
+  );
+}
+
+function difficultyCap(mastery: number): number {
+  if (mastery < 40) return 2;
+  if (mastery < 60) return 3;
+  if (mastery < 80) return 4;
+  return 5;
+}
+
+function buildNormal(input: InternalInput): DailySessionPlan {
+  const focusSkills = selectTopSkills(input, 5);
+  const forbid = new Set<string>();
+  const questions: Question[] = [];
+  // 每个重点 skill 各取 2-3 道
+  const perSkill = Math.max(2, Math.ceil(input.targetCount / focusSkills.length));
+  for (const skill of focusSkills) {
+    const pick = pickQuestionsForSkill(skill, input, perSkill, forbid);
+    for (const q of pick) {
+      questions.push(q);
+      forbid.add(q.question_id);
+    }
+  }
+  // 到期错题的题目（若它的 skill 不在 focus 里，也追加）
+  for (const mk of input.dueMistakes) {
+    if (forbid.has(mk.questionId)) continue;
+    const q = input.pool.find((p) => p.question_id === mk.questionId);
+    if (q) {
+      questions.push(q);
+      forbid.add(q.question_id);
+    }
+  }
+
+  const trimmed = questions.slice(0, input.targetCount + 2);
+  const finalList = diversifyOrder(trimmed, input.rng);
+
+  const starvedSkillIds = focusSkills.filter((s) => !skillHasFreshQuestion(s, input)).map((s) => s.id);
+  const poolStarved = finalList.length < input.targetCount || starvedSkillIds.length >= 3;
+
+  return {
+    mode: input.mode,
+    dateKey: input.dateKey,
+    plannedMinutes: input.targetMinutes,
+    questionIds: finalList.map((q) => q.question_id),
+    focusSkills: focusSkills.map((s) => s.id),
+    breakdown: focusSkills.map((s) => ({
+      bucket: s.name,
+      count: finalList.filter((q) => q.skill_id === s.id).length,
+    })),
+    poolStarved,
+    starvedSkillIds,
+  };
+}
+
+/**
+ * 期中冲刺：锁定下册 1-4 单元，错题 × 2 加权 → priority high → 没做过 → 复习。
+ * 比 final_sprint 范围窄，但更深，每个 skill 至少 1 道。
+ */
+function buildMidterm(input: InternalInput): DailySessionPlan {
+  const MIDTERM_UNIT_IDS = [
+    "G4B_U1_DECIMAL_ADD_SUB",
+    "G4B_U2_TRI_QUAD",
+    "G4B_U3_DECIMAL_MULTIPLY",
+    "G4B_U4_OBSERVE_OBJECTS",
+  ];
+  const unitSkills = SKILLS.filter((s) => MIDTERM_UNIT_IDS.includes(s.unitId));
+  const forbid = new Set<string>();
+  const questions: Question[] = [];
+
+  // 1. 优先错题
+  const wantMistakes = Math.max(2, Math.round(input.targetCount * 0.25));
+  let addedM = 0;
+  for (const mk of input.dueMistakes) {
+    if (addedM >= wantMistakes) break;
+    if (forbid.has(mk.questionId)) continue;
+    const q = input.pool.find((p) => p.question_id === mk.questionId);
+    if (q && MIDTERM_UNIT_IDS.includes(q.unit_id)) {
+      questions.push(q);
+      forbid.add(q.question_id);
+      addedM += 1;
+    }
+  }
+
+  // 2. 每单元至少 3 道，按 skill 评分轮流抽
+  const perUnit = Math.max(3, Math.floor((input.targetCount - addedM) / 4));
+  for (const unitId of MIDTERM_UNIT_IDS) {
+    const skillsHere = unitSkills.filter((s) => s.unitId === unitId);
+    let addedHere = 0;
+    skillsHere.sort((a, b) =>
+      scoreSkill(b, input.masteryMap.get(b.id), input.dueMistakes, input.now) -
+      scoreSkill(a, input.masteryMap.get(a.id), input.dueMistakes, input.now),
+    );
+    for (const s of skillsHere) {
+      if (addedHere >= perUnit) break;
+      const pick = pickQuestionsForSkill(s, input, Math.min(2, perUnit - addedHere), forbid);
+      for (const q of pick) {
+        if (addedHere >= perUnit) break;
+        questions.push(q);
+        forbid.add(q.question_id);
+        addedHere += 1;
+      }
+    }
+  }
+
+  const finalList = diversifyOrder(questions.slice(0, input.targetCount + 3), input.rng);
+  const starvedSkillIds = unitSkills.filter((s) => !skillHasFreshQuestion(s, input)).map((s) => s.id);
+  const poolStarved = finalList.length < input.targetCount || starvedSkillIds.length >= unitSkills.length / 2;
+
+  // 按单元统计 breakdown
+  const breakdown: { bucket: string; count: number }[] = [];
+  const unitNames: Record<string, string> = {
+    G4B_U1_DECIMAL_ADD_SUB: "U1 小数加减",
+    G4B_U2_TRI_QUAD: "U2 三角形",
+    G4B_U3_DECIMAL_MULTIPLY: "U3 小数乘法",
+    G4B_U4_OBSERVE_OBJECTS: "U4 观察物体",
+  };
+  for (const unitId of MIDTERM_UNIT_IDS) {
+    breakdown.push({
+      bucket: unitNames[unitId] ?? unitId,
+      count: finalList.filter((q) => q.unit_id === unitId).length,
+    });
+  }
+  breakdown.push({ bucket: "错题复活", count: addedM });
+
+  return {
+    mode: "midterm",
+    dateKey: input.dateKey,
+    plannedMinutes: input.targetMinutes,
+    questionIds: finalList.map((q) => q.question_id),
+    focusSkills: Array.from(new Set(finalList.map((q) => q.skill_id))),
+    breakdown,
+    poolStarved,
+    starvedSkillIds,
+  };
+}
+
+function buildFinalSprint(input: InternalInput): DailySessionPlan {
+  const forbid = new Set<string>();
+  const questions: Question[] = [];
+  const breakdown: { bucket: string; count: number }[] = [];
+
+  for (const item of FINAL_SPRINT_G4B) {
+    const target = Math.max(
+      item.minQuestionsPerSession,
+      Math.round(item.weight * input.targetCount),
+    );
+    let added = 0;
+    for (const skillId of item.skillIds) {
+      if (added >= target) break;
+      const skill = SKILL_BY_ID.get(skillId);
+      if (!skill) continue;
+      const pick = pickQuestionsForSkill(skill, input, target - added, forbid);
+      for (const q of pick) {
+        if (added >= target) break;
+        questions.push(q);
+        forbid.add(q.question_id);
+        added += 1;
+      }
+    }
+    breakdown.push({ bucket: item.name, count: added });
+  }
+
+  // 错题变式 10-15%
+  const wantMistakes = Math.max(1, Math.round(input.targetCount * 0.12));
+  let addedM = 0;
+  for (const mk of input.dueMistakes) {
+    if (addedM >= wantMistakes) break;
+    if (forbid.has(mk.questionId)) continue;
+    const q = input.pool.find((p) => p.question_id === mk.questionId);
+    if (q) {
+      questions.push(q);
+      forbid.add(q.question_id);
+      addedM += 1;
+    }
+  }
+  breakdown.push({ bucket: "错题复活", count: addedM });
+
+  const finalList = diversifyOrder(questions, input.rng);
+  return {
+    mode: "final_sprint",
+    dateKey: input.dateKey,
+    plannedMinutes: input.targetMinutes,
+    questionIds: finalList.map((q) => q.question_id),
+    focusSkills: Array.from(new Set(questions.map((q) => q.skill_id))),
+    breakdown,
+  };
+}
+
+function buildBySkills(input: InternalInput): DailySessionPlan {
+  const wantIds = input.selectedSkillIds && input.selectedSkillIds.length > 0
+    ? input.selectedSkillIds
+    : SKILLS.filter((s) => s.unitId === input.currentUnitId).slice(0, 3).map((s) => s.id);
+  const skills = wantIds.map((id) => SKILL_BY_ID.get(id)).filter(Boolean) as Skill[];
+  const forbid = new Set<string>();
+  const perSkill = Math.max(3, Math.ceil(input.targetCount / Math.max(1, skills.length)));
+  const questions: Question[] = [];
+  for (const s of skills) {
+    const pick = pickQuestionsForSkill(s, input, perSkill, forbid);
+    for (const q of pick) {
+      questions.push(q);
+      forbid.add(q.question_id);
+    }
+  }
+  const trimmed = questions.slice(0, input.targetCount);
+  const finalList = diversifyOrder(trimmed, input.rng);
+  const starvedSkillIds = skills.filter((s) => !skillHasFreshQuestion(s, input)).map((s) => s.id);
+  const poolStarved = finalList.length < input.targetCount;
+  return {
+    mode: input.mode,
+    dateKey: input.dateKey,
+    plannedMinutes: input.targetMinutes,
+    questionIds: finalList.map((q) => q.question_id),
+    focusSkills: skills.map((s) => s.id),
+    breakdown: skills.map((s) => ({
+      bucket: s.name,
+      count: finalList.filter((q) => q.skill_id === s.id).length,
+    })),
+    poolStarved,
+    starvedSkillIds,
+  };
+}
+
+function buildReview(
+  input: BuildSessionInput,
+  pool: Question[],
+  dueMistakes: MistakeReview[],
+  targetCount: number,
+  rng: () => number,
+): DailySessionPlan {
+  const used = new Set<string>();
+  const picked: Question[] = [];
+  const bySkill = new Map<string, Question[]>();
+  for (const q of pool) {
+    const arr = bySkill.get(q.skill_id) ?? [];
+    arr.push(q);
+    bySkill.set(q.skill_id, arr);
+  }
+  for (const mistake of dueMistakes) {
+    if (picked.length >= targetCount) break;
+    const candidates = bySkill.get(mistake.skillId) ?? [];
+    const variants = candidates
+      .filter((q) => !used.has(q.question_id))
+      .sort(() => rng() - 0.5);
+    const first = variants[0];
+    if (first) {
+      picked.push(first);
+      used.add(first.question_id);
+    }
+  }
+  return {
+    mode: "review",
+    dateKey: input.dateKey,
+    plannedMinutes: input.targetMinutes,
+    questionIds: picked.map((q) => q.question_id),
+    focusSkills: Array.from(new Set(picked.map((q) => q.skill_id))),
+    breakdown: [{ bucket: "到期错题", count: picked.length }],
+  };
+}
+
+/**
+ * 确保相同 skill 不连续出现超过 2 题，并保持一定打乱。
+ */
+function diversifyOrder(questions: Question[], rng: () => number): Question[] {
+  const pool = questions.slice();
+  // 先按 rng 初步打乱
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+  }
+  const out: Question[] = [];
+  const MAX_RUN = 2;
+  while (pool.length > 0) {
+    let pickedIdx = -1;
+    for (let i = 0; i < pool.length; i++) {
+      const q = pool[i]!;
+      const tail = out.slice(-MAX_RUN);
+      if (tail.length === MAX_RUN && tail.every((t) => t.skill_id === q.skill_id)) continue;
+      pickedIdx = i;
+      break;
+    }
+    if (pickedIdx < 0) pickedIdx = 0;
+    out.push(pool.splice(pickedIdx, 1)[0]!);
+  }
+  return out;
+}
+
+export function skillOf(skillId: string) {
+  return SKILL_BY_ID.get(skillId);
+}

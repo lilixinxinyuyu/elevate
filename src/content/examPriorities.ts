@@ -1,0 +1,60 @@
+import type { ExamPriorityItem } from "../core/types";
+
+export const FINAL_SPRINT_G4B: ExamPriorityItem[] = [
+  {
+    rank: 1,
+    name: "小数乘法综合应用题",
+    unitIds: ["G4B_U3_DECIMAL_MULTIPLY"],
+    skillIds: ["decimal_price_quantity", "decimal_speed_distance", "decimal_work_total", "decimal_segment_pricing"],
+    weight: 0.22,
+    minQuestionsPerSession: 4,
+  },
+  {
+    rank: 2,
+    name: "列方程解决实际问题",
+    unitIds: ["G4B_U5_EQUATIONS"],
+    skillIds: ["equation_one_step_word", "equation_two_step_word", "equation_meeting_problem", "equation_sum_difference"],
+    weight: 0.22,
+    minQuestionsPerSession: 3,
+  },
+  {
+    rank: 3,
+    name: "小数加减法生活应用题",
+    unitIds: ["G4B_U1_DECIMAL_ADD_SUB"],
+    skillIds: ["decimal_add_sub_vertical", "decimal_inverse_problem"],
+    weight: 0.16,
+    minQuestionsPerSession: 3,
+  },
+  {
+    rank: 4,
+    name: "小数乘加/乘减/简便计算",
+    unitIds: ["G4B_U3_DECIMAL_MULTIPLY", "G4B_U1_DECIMAL_ADD_SUB"],
+    skillIds: ["decimal_mul_mix", "decimal_mul_simplify", "decimal_add_sub_simplify"],
+    weight: 0.14,
+    minQuestionsPerSession: 3,
+  },
+  {
+    rank: 5,
+    name: "平均数综合应用",
+    unitIds: ["G4B_U6_DATA"],
+    skillIds: ["average_compute", "average_inverse_total", "average_inverse_missing"],
+    weight: 0.12,
+    minQuestionsPerSession: 2,
+  },
+  {
+    rank: 6,
+    name: "三角形边角小题",
+    unitIds: ["G4B_U2_TRI_QUAD"],
+    skillIds: ["triangle_inequality", "triangle_angle_sum"],
+    weight: 0.08,
+    minQuestionsPerSession: 1,
+  },
+  {
+    rank: 7,
+    name: "统计图读图",
+    unitIds: ["G4B_U6_DATA"],
+    skillIds: ["data_bar_chart"],
+    weight: 0.04,
+    minQuestionsPerSession: 1,
+  },
+];

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+.wrangler/
+.cf-temp/
+.vercel/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env / secrets
+.env
+.env.local
+.dev.vars
+
+# 本地 D1 / 数据
+db/import-dump.sql       # 由 db/import-dump.mjs 生成，含 Selena 个人答题数据，不上仓库
+db/local.db
+
+# Claude 本地配置（含本机路径）
+.claude/
