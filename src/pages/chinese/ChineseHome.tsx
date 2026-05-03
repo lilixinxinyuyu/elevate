@@ -18,6 +18,8 @@ import { useSubject } from "../../subjects/context";
 import { MIDTERM, daysUntil } from "../../core/examDates";
 import {
   chineseLevelInfo,
+  countChineseUnresolvedMistakes,
+  getChineseMockExamCooldown,
   getChineseTotalXp,
   getChineseTrophies,
   getChineseSkillMastery,
@@ -39,41 +41,32 @@ export function ChineseHomePage() {
   } | null>(null);
   const [mastery, setMastery] = useState<MasteryScore[]>([]);
   const [openMistakes, setOpenMistakes] = useState<number>(0);
+  const [mockCooldown, setMockCooldown] = useState<{
+    available: boolean;
+    daysUntilNext: number;
+  }>({ available: true, daysUntilNext: 0 });
 
   useEffect(() => {
     if (!student?.id) return;
     let cancelled = false;
     (async () => {
-      const [xp, trophies, m, attempts] = await Promise.all([
+      const [xp, trophies, m, mistakeCount, mock] = await Promise.all([
         getChineseTotalXp(student.id),
         getChineseTrophies(student.id),
         getChineseSkillMastery(student.id),
-        db.attempts
-          .where("studentId")
-          .equals(student.id)
-          .filter((a) => a.subjectId === "chinese")
-          .toArray(),
+        countChineseUnresolvedMistakes(student.id),
+        getChineseMockExamCooldown(student.id),
       ]);
       if (cancelled) return;
       setTotalXp(xp);
       setTrophyState({ defsById: trophies.defsById, ownedCounts: trophies.ownedCounts });
       setMastery(m);
-      // 错题计数：按 questionId 去重，最近一次该题答错且后续没再答对的算未消化错题
-      const lastByQ = new Map<string, boolean>();
-      for (const a of attempts) {
-        lastByQ.set(a.questionId, a.isCorrect);
-      }
-      let mistakes = 0;
-      for (const correct of lastByQ.values()) {
-        if (!correct) mistakes++;
-      }
-      setOpenMistakes(mistakes);
+      setOpenMistakes(mistakeCount);
+      setMockCooldown({ available: mock.available, daysUntilNext: mock.daysUntilNext });
     })();
     return () => {
       cancelled = true;
     };
-    // 用 attempts/mastery/trophies 表的 hash 还会更精细，但 LiveQuery 这里太重；
-    // 每次进 home 重读一次足够（user 也不会一直停在 home）
   }, [student?.id]);
 
   const level = chineseLevelInfo(totalXp);
@@ -156,22 +149,64 @@ export function ChineseHomePage() {
         </div>
       </div>
 
-      {/* 错题入口（暂时只显示数量；点击进 train review 模式 — Phase 3 做完整错题复活页） */}
-      {openMistakes > 0 && (
-        <div className="card bg-rose-500/10 border border-rose-400/30">
-          <div className="flex items-center gap-3">
-            <div className="text-2xl">📝</div>
-            <div className="flex-1">
-              <div className="font-semibold text-rose-100">
-                有 {openMistakes} 道题最近答错了
+      {/* 错题复活 + 模拟测试（与数学功能对齐） */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* 错题复活 */}
+        {openMistakes > 0 ? (
+          <Link
+            to={`/chinese/train?mode=review&fresh=${Date.now()}`}
+            className="card-glow bg-rose-500/10 border-rose-400/30 hover:scale-[1.01] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="text-3xl">🪄</div>
+              <div className="flex-1">
+                <div className="font-display font-bold text-rose-100">错题复活</div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  {openMistakes} 道错题等你来攻克 · 答对 3 次彻底掌握
+                </div>
               </div>
-              <div className="text-xs text-slate-400 mt-0.5">
-                期中后会做"错题复活"专项训练。现在重练一组练熟即可。
+              <div className="text-rose-300 text-2xl">→</div>
+            </div>
+          </Link>
+        ) : (
+          <div className="card text-center text-slate-400">
+            <div className="text-2xl mb-1">✨</div>
+            <div className="text-sm">暂无未消化错题</div>
+            <div className="text-[11px] text-slate-500 mt-1">答错的题会自动出现在这里</div>
+          </div>
+        )}
+
+        {/* 模拟测试（mock exam） */}
+        {mockCooldown.available ? (
+          <Link
+            to={`/chinese/train?mode=mock_exam&fresh=${Date.now()}`}
+            className="card-glow bg-gradient-to-br from-violet-500/15 to-fuchsia-500/15 border-violet-400/40 hover:scale-[1.01] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="text-3xl">📝</div>
+              <div className="flex-1">
+                <div className="font-display font-bold text-violet-100">期中模拟测试</div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  跨 4 单元 20 题 · 难度梯度 D1-D4 · 一周一次
+                </div>
+              </div>
+              <div className="text-violet-300 text-2xl">→</div>
+            </div>
+          </Link>
+        ) : (
+          <div className="card text-slate-400 opacity-60">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl grayscale">📝</div>
+              <div className="flex-1">
+                <div className="font-semibold">期中模拟测试</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  下次开放还要 {mockCooldown.daysUntilNext} 天（每周一次）
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 单元卡 */}
       <div>

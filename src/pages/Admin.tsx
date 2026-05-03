@@ -15,6 +15,7 @@ import {
 } from "../db/cloudSync";
 import { normalizeJsonText } from "../lib/normalizeJsonText";
 import { isTtsAvailable, speakText } from "../lib/tts";
+import { resetChineseTestData } from "../subjects/chinese/service";
 
 export function AdminPage() {
   const students = useLiveQuery(async () => db.students.toArray(), []);
@@ -198,9 +199,69 @@ export function AdminPage() {
       </div>
 
       <div className="card">
+        <div className="font-semibold mb-2">语文测试数据清理</div>
+        <ChineseResetPanel />
+      </div>
+
+      <div className="card">
         <div className="font-semibold mb-2">AI 出题 Prompt 生成器</div>
         <PromptBuilder />
       </div>
+    </div>
+  );
+}
+
+function ChineseResetPanel() {
+  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<null | {
+    attempts: number;
+    mastery: number;
+    mistakes: number;
+    trophies: number;
+    metaKeys: number;
+  }>(null);
+
+  const onReset = async () => {
+    if (!student?.id) return;
+    if (
+      !window.confirm(
+        "确定清空语文学科的所有测试数据？\n\n会删：attempts / mastery / mistakes / trophies / 语文 totalXp。\n\n数学数据完全不动。",
+      )
+    )
+      return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await resetChineseTestData(student.id);
+      setResult(r);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="text-sm text-slate-300 space-y-2">
+      <div className="text-xs text-slate-400">
+        清空 chinese 维度的所有学生数据：attempts / mastery / mistakes / trophies + meta::chinese::* key。
+        <br />
+        数学数据 100% 不受影响（按 subjectId 隔离）。
+      </div>
+      <button
+        type="button"
+        onClick={onReset}
+        disabled={busy || !student?.id}
+        className="btn-secondary text-sm border border-rose-400/30 text-rose-200 hover:bg-rose-500/10"
+      >
+        {busy ? "清理中…" : "🧹 清空语文测试数据"}
+      </button>
+      {result && (
+        <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-400/30 rounded p-2">
+          ✓ 已清空：{result.attempts} 个 attempt · {result.mastery} 个 mastery ·{" "}
+          {result.mistakes} 个 mistake · {result.trophies} 枚 trophy ·{" "}
+          {result.metaKeys} 个 meta key
+        </div>
+      )}
     </div>
   );
 }

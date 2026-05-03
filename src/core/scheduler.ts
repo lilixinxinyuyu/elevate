@@ -281,10 +281,11 @@ function pickQuestionsForSkill(
     buckets[d].push(q);
   }
 
-  // 每桶内按"卷面错题 / 真题 / MUST_BIG"优先排序
-  // jitter 用 input.rng()（来自 rngSeed=Date.now()+Math.random()），保证每次进 train
-  // 拿到不同顺序——之前用 dateKey+question_id 同一天永远同一序，user 看到的"每次同一题"
-  // 就是这里。
+  // 每桶内按"卷面错题 / 真题 / MUST_BIG"优先排序。
+  // 关键点：priority 本身加 ±0.2 抖动，否则同一桶所有 MUST_BIG 题 priority 都是
+  // -0.3，"1.5 米"那道又恰好排在前面 → user 每次进训练第一题永远一样。加抖动后
+  // 同 priority 段内顺序会洗牌，但跨段的偏好（MUST_BIG / wrong_origin / 真题）
+  // 仍然成立——它们的 -0.3/-0.6 偏置 > ±0.2 抖动幅度。
   const sortBucket = (qs: Question[]) => {
     const tagged = qs.map((q) => ({
       q,
@@ -292,7 +293,8 @@ function pickQuestionsForSkill(
         (input.recentSeenCount.get(q.question_id) ?? 0) * 0.6 +
         ((q.tags ?? []).includes("wrong_origin") ? -0.6 : 0) +
         ((q.tags ?? []).includes("from_test") ? -0.3 : 0) +
-        (q.exam_priority === "MUST_BIG" ? -0.3 : q.exam_priority === "MUST_SMALL" ? -0.2 : 0),
+        (q.exam_priority === "MUST_BIG" ? -0.3 : q.exam_priority === "MUST_SMALL" ? -0.2 : 0)
+        + (input.rng() - 0.5) * 0.4,
       jitter: input.rng(),
     }));
     tagged.sort((a, b) => a.priority - b.priority || a.jitter - b.jitter);

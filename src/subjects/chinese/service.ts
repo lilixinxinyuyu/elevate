@@ -20,6 +20,7 @@ import { db } from "../../db/dexie";
 import type {
   Attempt,
   MasteryScore,
+  MistakeReview,
   Question,
   StudentProfile,
   UserTrophy,
@@ -182,8 +183,15 @@ export async function submitChineseAttempt(args: {
     createdAt: Date.now(),
   };
 
+  // 错题处理：找到/创建该 question 在 chinese 域下的 mistake row
+  const existingMistake = (
+    await db.mistakes
+      .where({ studentId: args.studentId, questionId: args.question.question_id })
+      .toArray()
+  ).find((mr) => mr.subjectId === SUBJECT);
+
   let totalXpAfter = 0;
-  await db.transaction("rw", [db.attempts, db.mastery, db.meta], async () => {
+  await db.transaction("rw", [db.attempts, db.mastery, db.mistakes, db.meta], async () => {
     await db.attempts.put(attempt);
 
     const next: MasteryScore = {
@@ -198,6 +206,44 @@ export async function submitChineseAttempt(args: {
       updatedAt: Date.now(),
     };
     await db.mastery.put(next);
+
+    // 错题表更新（chinese 错题复活用）
+    if (!args.isCorrect) {
+      // 错答：新建 / 重置 mistake，stage 0，1 天后再练
+      const mistakeRow: MistakeReview = existingMistake
+        ? {
+            ...existingMistake,
+            stage: 0,
+            nextReviewAt: Date.now() + 24 * 60 * 60 * 1000,
+            errorTags: attempt.errorTags,
+            lastAttemptAt: Date.now(),
+            resolved: false,
+          }
+        : {
+            id: uid("m-"),
+            studentId: args.studentId,
+            subjectId: SUBJECT,
+            questionId: args.question.question_id,
+            skillId: args.question.skill_id,
+            stage: 0,
+            nextReviewAt: Date.now() + 24 * 60 * 60 * 1000,
+            lastAttemptAt: Date.now(),
+            errorTags: attempt.errorTags,
+            resolved: false,
+          };
+      await db.mistakes.put(mistakeRow);
+    } else if (existingMistake && !existingMistake.resolved) {
+      // 错题再答对：推进 stage；超过 3 阶段标 resolved
+      const newStage = existingMistake.stage + 1;
+      const updated: MistakeReview = {
+        ...existingMistake,
+        stage: newStage,
+        nextReviewAt: Date.now() + (newStage === 1 ? 3 : newStage === 2 ? 7 : 14) * 24 * 60 * 60 * 1000,
+        lastAttemptAt: Date.now(),
+        resolved: newStage >= 3,
+      };
+      await db.mistakes.put(updated);
+    }
 
     // 累加 totalXp
     const xpKey = metaKey("totalXp", args.studentId);
@@ -391,4 +437,125 @@ export async function recordChineseSessionFinish(args: {
       finishedAt: Date.now(),
     },
   });
+}
+
+// ============================================================
+//  错题复活 & 模拟测试
+// ============================================================
+
+/**
+ * 拉到期 / 未消化的错题题 id 集合（按 subjectId="chinese" 过滤）。
+ * stage 0 = 答错过还没再答对；nextReviewAt <= 现在 = 到期可以再练。
+ * 返回最多 limit 个。
+ */
+export async function getChineseMistakeQuestionIds(
+  studentId: string,
+  limit = 30,
+  options: { onlyDue?: boolean } = {},
+): Promise<string[]> {
+  const all = await db.mistakes
+    .where("studentId")
+    .equals(studentId)
+    .filter((m) => m.subjectId === SUBJECT && !m.resolved)
+    .toArray();
+  const filtered = options.onlyDue
+    ? all.filter((m) => m.nextReviewAt <= Date.now())
+    : all;
+  filtered.sort((a, b) => a.nextReviewAt - b.nextReviewAt);
+  return filtered.slice(0, limit).map((m) => m.questionId);
+}
+
+/** 错题数（未消化的）— ChineseHome 顶部小红点用 */
+export async function countChineseUnresolvedMistakes(studentId: string): Promise<number> {
+  return await db.mistakes
+    .where("studentId")
+    .equals(studentId)
+    .filter((m) => m.subjectId === SUBJECT && !m.resolved)
+    .count();
+}
+
+/** 模拟测试节流：6 天一次（与 math 一致） */
+const MOCK_EXAM_LAST_KEY = "chineseMockExamLastAt";
+
+export async function getChineseMockExamCooldown(studentId: string): Promise<{
+  available: boolean;
+  daysUntilNext: number;
+  lastAt: number | null;
+}> {
+  const row = await db.meta.get(metaKey(MOCK_EXAM_LAST_KEY, studentId));
+  const lastAt = typeof row?.value === "number" ? row.value : null;
+  if (lastAt === null) return { available: true, daysUntilNext: 0, lastAt: null };
+  const days = (Date.now() - lastAt) / (24 * 60 * 60 * 1000);
+  if (days >= 6) return { available: true, daysUntilNext: 0, lastAt };
+  return { available: false, daysUntilNext: Math.ceil(6 - days), lastAt };
+}
+
+export async function recordChineseMockExamCompleted(studentId: string): Promise<void> {
+  await db.meta.put({
+    key: metaKey(MOCK_EXAM_LAST_KEY, studentId),
+    value: Date.now(),
+  });
+}
+
+// ============================================================
+//  Reset / 测试数据清理
+// ============================================================
+
+/**
+ * 清空所有 chinese 维度的学生数据：attempts / mastery / mistakes / trophies +
+ * 6 类 meta key（totalXp / lastSessionSummary / chineseMockExamLastAt etc）。
+ *
+ * math 数据 100% 不动（subjectId 隔离）。
+ */
+export async function resetChineseTestData(studentId: string): Promise<{
+  attempts: number;
+  mastery: number;
+  mistakes: number;
+  trophies: number;
+  metaKeys: number;
+}> {
+  const [attemptKeys, masteryKeys, mistakeKeys, trophyKeys] = await Promise.all([
+    db.attempts
+      .where("studentId").equals(studentId)
+      .filter((a) => a.subjectId === SUBJECT)
+      .primaryKeys(),
+    db.mastery
+      .where("studentId").equals(studentId)
+      .filter((m) => m.subjectId === SUBJECT)
+      .primaryKeys(),
+    db.mistakes
+      .where("studentId").equals(studentId)
+      .filter((m) => m.subjectId === SUBJECT)
+      .primaryKeys(),
+    db.trophies
+      .where("studentId").equals(studentId)
+      .filter((t) => t.subjectId === SUBJECT)
+      .primaryKeys(),
+  ]);
+
+  // chinese 命名空间的 meta key（::chinese:: 段）
+  const allMeta = await db.meta.toArray();
+  const chineseMetaKeys = allMeta
+    .filter((row) => row.key.includes(`::${SUBJECT}::`))
+    .map((row) => row.key);
+
+  await db.transaction(
+    "rw",
+    [db.attempts, db.mastery, db.mistakes, db.trophies, db.meta],
+    async () => {
+      if (attemptKeys.length) await db.attempts.bulkDelete(attemptKeys);
+      if (masteryKeys.length) await db.mastery.bulkDelete(masteryKeys);
+      if (mistakeKeys.length) await db.mistakes.bulkDelete(mistakeKeys);
+      if (trophyKeys.length) await db.trophies.bulkDelete(trophyKeys);
+      if (chineseMetaKeys.length) await db.meta.bulkDelete(chineseMetaKeys);
+    },
+  );
+
+  return {
+    attempts: attemptKeys.length,
+    mastery: masteryKeys.length,
+    mistakes: mistakeKeys.length,
+    trophies: trophyKeys.length,
+    metaKeys: chineseMetaKeys.length,
+  };
 }

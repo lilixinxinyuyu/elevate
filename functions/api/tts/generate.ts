@@ -51,12 +51,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ? Math.min(2.0, Math.max(0.5, body.speed))
     : 1.0;
 
-  // Alibaba Cloud Model Studio (International, ap-southeast-1) 端点：
-  //   dashscope-intl.aliyuncs.com  (用户账号在 Singapore 区)
-  // 国内 DashScope (dashscope.aliyuncs.com) 是另一套服务，key 不互通。
-  // 模型名 cosyvoice-v1，voice longxiaochun（童声）。
+  // Alibaba Cloud Model Studio (International, ap-southeast-1) 的 qwen-tts 模型：
+  //  - endpoint: /api/v1/services/aigc/multimodal-generation/generation
+  //  - model: qwen-tts-latest（Cherry/Serena/Ethan/Chelsie 四个 voice）
+  //  - 响应是 JSON，audio.url 拿到 mp3 链接，要再 fetch 一次拿 bytes
+  // 之前用的 cosyvoice-v1 是国内 endpoint 的 model，国际 endpoint 没有。
+  // 文档：https://www.alibabacloud.com/help/en/model-studio/qwen-tts
+  const dashscopeVoice = voice && voice !== "longxiaochun" ? voice : "Cherry";
   const upstream = await fetch(
-    "https://dashscope-intl.aliyuncs.com/api/v1/services/audio/tts/generation",
+    "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
     {
       method: "POST",
       headers: {
@@ -64,14 +67,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "cosyvoice-v1",
-        input: { text },
-        parameters: {
-          voice,            // 默认 longxiaochun（童声）
-          format,
-          sample_rate: 22050,
-          // CosyVoice v1 不支持 speed 参数，传 speed_ratio
-          speed_ratio: speed,
+        model: "qwen-tts-latest",
+        input: {
+          text,
+          voice: dashscopeVoice,
         },
       }),
     },
@@ -79,11 +78,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (!upstream.ok) {
     const errText = await upstream.text();
-    // 把完整错误打到 CF Pages function 日志（dashboard 可看），同时 detail 透传到客户端
-    console.error("[tts] DashScope upstream failed", {
+    console.error("[tts] qwen-tts upstream failed", {
       status: upstream.status,
       body: errText,
-      voice,
+      voice: dashscopeVoice,
       textLength: text.length,
     });
     return jsonResponse(
@@ -97,30 +95,79 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
-  // 防呆：DashScope 有时 200 返回的是 JSON（task pending / async）而不是音频字节
-  const ctype = upstream.headers.get("content-type") ?? "";
-  if (ctype.includes("application/json")) {
-    const body = await upstream.text();
-    console.warn("[tts] DashScope returned JSON instead of audio", { body, voice });
+  // qwen-tts 返回 JSON: { output: { audio: { url: "https://..." } } }
+  type QwenTtsResp = {
+    output?: {
+      audio?: {
+        url?: string;
+        data?: string; // base64 (alternative)
+      };
+      finish_reason?: string;
+    };
+    code?: string;
+    message?: string;
+    request_id?: string;
+  };
+  let respJson: QwenTtsResp;
+  try {
+    respJson = (await upstream.json()) as QwenTtsResp;
+  } catch (e) {
+    return jsonResponse(
+      { ok: false, error: "upstream_invalid_json", detail: String(e).slice(0, 200) },
+      502,
+    );
+  }
+
+  if (respJson.code) {
+    console.error("[tts] qwen-tts returned error", respJson);
     return jsonResponse(
       {
         ok: false,
-        error: "upstream_returned_json",
-        detail: body.slice(0, 1000),
+        error: respJson.code,
+        detail: `${respJson.message ?? ""} (${respJson.request_id ?? ""})`.slice(0, 1000),
       },
       502,
     );
   }
 
-  // 流式转发音频。浏览器端缓存由 src/lib/tts.ts 管。
-  return new Response(upstream.body, {
-    status: 200,
-    headers: {
-      "Content-Type": format === "wav" ? "audio/wav" : "audio/mpeg",
-      "Cache-Control": "no-store",
-      ...corsHeaders,
-    },
-  });
+  const audioUrl = respJson.output?.audio?.url;
+  if (audioUrl) {
+    // 再 fetch 一次拿 mp3 字节流转发回去
+    const audioResp = await fetch(audioUrl);
+    if (!audioResp.ok) {
+      return jsonResponse(
+        { ok: false, error: "audio_fetch_failed", detail: `status ${audioResp.status}` },
+        502,
+      );
+    }
+    return new Response(audioResp.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Cache-Control": "no-store",
+        ...corsHeaders,
+      },
+    });
+  }
+
+  // base64 备用路径
+  const b64 = respJson.output?.audio?.data;
+  if (b64) {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Cache-Control": "no-store",
+        ...corsHeaders,
+      },
+    });
+  }
+
+  return jsonResponse(
+    { ok: false, error: "no_audio_in_response", detail: JSON.stringify(respJson).slice(0, 600) },
+    502,
+  );
 };
 
 /**
