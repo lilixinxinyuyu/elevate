@@ -236,6 +236,7 @@ function TtsSmokePanel() {
     try {
       await speakText(text);
     } catch (e) {
+      // TtsError.message 已经包含 status + detail；显示完整方便 debug
       setReason(e instanceof Error ? e.message : String(e));
     } finally {
       setPlaying(false);

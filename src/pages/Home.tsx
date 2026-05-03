@@ -235,7 +235,8 @@ export function HomePage() {
             </span>
           );
         })()}
-        <Link to="/math/train" className="btn-primary ml-auto text-base px-5 py-2.5">
+        {/* fresh=Date.now() 让每次点击都按最新 mastery 重新组合一套题（不复用旧 session） */}
+        <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary ml-auto text-base px-5 py-2.5">
           ▶ 开始今日挑战
         </Link>
       </div>
@@ -253,7 +254,7 @@ export function HomePage() {
                 {struggleSkills.slice(0, 3).map((s) => (
                   <li key={s.skillId} className="flex items-center justify-between gap-2">
                     <Link
-                      to={`/math/train?skillId=${encodeURIComponent(s.skillId)}`}
+                      to={`/math/train?skillId=${encodeURIComponent(s.skillId)}&fresh=${Date.now()}`}
                       className="underline decoration-rose-400/50 underline-offset-2 hover:text-white"
                     >
                       {s.skillName}
@@ -290,7 +291,7 @@ export function HomePage() {
               : `${exam.dateKey} · ${exam.hint}`;
           return (
             <Link
-              to={`/math/train?mode=${exam.mode}`}
+              to={`/math/train?mode=${exam.mode}&fresh=${Date.now()}`}
               className={`card-glow hover:scale-[1.02] transition-transform col-span-2 sm:col-span-1 ${themeCls}`}
             >
               <div className="text-xl">{icon}</div>
@@ -314,7 +315,7 @@ export function HomePage() {
         </Link>
         {/* 期中考之前也能进期末模式（家长想提前练就练）；期中考之后这张卡换成期中复习 */}
         {currentExam().id === "midterm" ? (
-          <Link to="/math/train?mode=final_sprint" className="card hover:bg-ink-700/60 transition-colors">
+          <Link to={`/math/train?mode=final_sprint&fresh=${Date.now()}`} className="card hover:bg-ink-700/60 transition-colors">
             <div className="text-xl">🚀</div>
             <div className="font-display font-bold mt-2">期末冲刺</div>
             <div className="text-xs text-slate-400 mt-1">
@@ -322,7 +323,7 @@ export function HomePage() {
             </div>
           </Link>
         ) : (
-          <Link to="/math/train?mode=midterm" className="card hover:bg-ink-700/60 transition-colors">
+          <Link to={`/math/train?mode=midterm&fresh=${Date.now()}`} className="card hover:bg-ink-700/60 transition-colors">
             <div className="text-xl">📘</div>
             <div className="font-display font-bold mt-2">期中复习</div>
             <div className="text-xs text-slate-400 mt-1">
@@ -336,7 +337,7 @@ export function HomePage() {
       {mockExam && (
         mockExam.available ? (
           <Link
-            to="/math/train?mode=mock_exam"
+            to={`/math/train?mode=mock_exam&fresh=${Date.now()}`}
             className="card-glow block border-purple-400/40 bg-gradient-to-br from-purple-600/20 via-fuchsia-500/10 to-pink-500/10 hover:scale-[1.01] transition-transform"
           >
             <div className="flex items-center justify-between gap-3">

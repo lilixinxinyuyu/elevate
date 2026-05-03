@@ -34,12 +34,17 @@ function authHeader(): Record<string, string> {
 
 export class TtsError extends Error {
   constructor(public code: string, public status: number, public detail?: string) {
-    super(`tts_${code}_${status}`);
+    // Error.message 包含 detail，admin UI 直接显示 e.message 就有完整上下文
+    const suffix = detail ? `: ${detail.slice(0, 200)}` : "";
+    super(`tts_${code}_${status}${suffix}`);
   }
 }
 
 /**
  * 拿到一段文本对应的 audio blob。失败抛 TtsError。
+ *
+ * 服务端如果 502 返回 JSON {error,detail}，detail 会进 TtsError.detail 给 admin
+ * 看真实的 DashScope upstream 错误。
  */
 export async function generateTtsBlob(
   text: string,
@@ -54,15 +59,22 @@ export async function generateTtsBlob(
     body: JSON.stringify({ text, ...opts }),
   });
   if (!r.ok) {
-    let detail: string | undefined;
+    type ErrShape = { error?: string; detail?: string };
+    let parsed: ErrShape | null = null;
     try {
-      const j = (await r.json()) as { error?: string; detail?: string };
-      detail = j.detail ?? j.error;
-      throw new TtsError(j.error ?? "request_failed", r.status, detail);
-    } catch (e) {
-      if (e instanceof TtsError) throw e;
-      throw new TtsError("request_failed", r.status);
-    }
+      parsed = (await r.json()) as ErrShape;
+    } catch { /* 上游可能不是 JSON */ }
+    throw new TtsError(
+      parsed?.error ?? "request_failed",
+      r.status,
+      parsed?.detail,
+    );
+  }
+  // 兜底：如果 200 返回 JSON 而不是音频，也当错处理（理论上服务端已经拦了，这里二次防御）
+  const ctype = r.headers.get("content-type") ?? "";
+  if (ctype.includes("application/json")) {
+    const body = await r.text();
+    throw new TtsError("got_json_not_audio", 200, body.slice(0, 300));
   }
   return await r.blob();
 }

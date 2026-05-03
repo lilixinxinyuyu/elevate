@@ -51,6 +51,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ? Math.min(2.0, Math.max(0.5, body.speed))
     : 1.0;
 
+  // DashScope 同步 HTTP TTS：CosyVoice v1 走 /audio/tts/generation；
+  // 模型名 cosyvoice-v1（之前误写成不存在的 "qwen-tts-v1" 导致 502）。
+  // 文档：https://help.aliyun.com/zh/model-studio/cosyvoice-quick-start
   const upstream = await fetch(
     "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/generation",
     {
@@ -60,13 +63,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "qwen-tts-v1",
+        model: "cosyvoice-v1",
         input: { text },
         parameters: {
-          voice,
+          voice,            // 默认 longxiaochun（童声）
           format,
           sample_rate: 22050,
-          speed,
+          // CosyVoice v1 不支持 speed 参数，传 speed_ratio
+          speed_ratio: speed,
         },
       }),
     },
@@ -74,8 +78,35 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (!upstream.ok) {
     const errText = await upstream.text();
+    // 把完整错误打到 CF Pages function 日志（dashboard 可看），同时 detail 透传到客户端
+    console.error("[tts] DashScope upstream failed", {
+      status: upstream.status,
+      body: errText,
+      voice,
+      textLength: text.length,
+    });
     return jsonResponse(
-      { ok: false, error: "upstream_error", status: upstream.status, detail: errText.slice(0, 300) },
+      {
+        ok: false,
+        error: "upstream_error",
+        status: upstream.status,
+        detail: errText.slice(0, 1000),
+      },
+      502,
+    );
+  }
+
+  // 防呆：DashScope 有时 200 返回的是 JSON（task pending / async）而不是音频字节
+  const ctype = upstream.headers.get("content-type") ?? "";
+  if (ctype.includes("application/json")) {
+    const body = await upstream.text();
+    console.warn("[tts] DashScope returned JSON instead of audio", { body, voice });
+    return jsonResponse(
+      {
+        ok: false,
+        error: "upstream_returned_json",
+        detail: body.slice(0, 1000),
+      },
       502,
     );
   }

@@ -87,7 +87,7 @@ export function SkillsPage() {
                           </span>
                           {!disabled && (
                             <Link
-                              to={`/math/train?skillId=${encodeURIComponent(s.id)}`}
+                              to={`/math/train?skillId=${encodeURIComponent(s.id)}&fresh=${Date.now()}`}
                               className="btn-primary px-3 py-1 text-xs"
                               title={`单独训练「${s.name}」`}
                             >
