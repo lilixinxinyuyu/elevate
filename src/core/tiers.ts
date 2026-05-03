@@ -179,3 +179,46 @@ export function deltaToNextTier(score: number, tier: Tier): number {
 export function tierIndex(id: string): number {
   return TIERS.findIndex((t) => t.id === id);
 }
+
+/**
+ * 段内小段（★ I/II/III/IV，共 4 档）。
+ * 进度 0-25% → I；25-50% → II；50-75% → III；75-100% → IV。
+ * 返回 1-4 数字。
+ */
+export function subRank(score: number, tier: Tier): number {
+  const p = progressInTier(score, tier);
+  if (p < 0.25) return 1;
+  if (p < 0.5) return 2;
+  if (p < 0.75) return 3;
+  return 4;
+}
+
+/** 罗马数字表示 */
+export function subRankRoman(n: number): string {
+  return ["", "I", "II", "III", "IV"][n] ?? `${n}`;
+}
+
+/** 星级字符串：实星 + 空星，例如 ★★★☆ */
+export function subRankStars(n: number, total = 4): string {
+  return "★".repeat(Math.max(0, Math.min(total, n))) + "☆".repeat(Math.max(0, total - n));
+}
+
+/** 段内全局唯一 ID（"district-3"），便于跨段升档判定时区分小段 */
+export function tierStageId(tier: Tier, sub: number): string {
+  return `${tier.id}-${sub}`;
+}
+
+/** 解析 "district-3" → { tier, sub } */
+export function parseTierStage(id: string): { tierId: string; sub: number } | null {
+  const m = /^(\w+)-(\d)$/.exec(id);
+  if (!m) return null;
+  return { tierId: m[1]!, sub: parseInt(m[2]!, 10) };
+}
+
+/** 给定 stage A 与 stage B，B 是否是 A 的"前进"（更高小段或更高大段） */
+export function stageGreaterThan(a: { tierId: string; sub: number }, b: { tierId: string; sub: number }): boolean {
+  const ai = tierIndex(a.tierId);
+  const bi = tierIndex(b.tierId);
+  if (ai !== bi) return ai > bi;
+  return a.sub > b.sub;
+}

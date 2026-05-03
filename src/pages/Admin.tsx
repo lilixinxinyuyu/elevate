@@ -117,6 +117,11 @@ export function AdminPage() {
       </div>
 
       <div className="card">
+        <div className="font-semibold mb-2">综合分 / 段位 真实指标</div>
+        <RatingDiagnostics />
+      </div>
+
+      <div className="card">
         <div className="font-semibold mb-2">导入题目 JSON</div>
         <div className="text-xs text-slate-500 mb-2">
           粘贴 Question 对象数组或单个对象。每道题会走 validateQuestion 校验。
@@ -556,6 +561,62 @@ ${exampleQuestion}
       >
         复制 Prompt
       </button>
+    </div>
+  );
+}
+
+function RatingDiagnostics() {
+  const [rating, setRating] = useState<null | {
+    score: number;
+    tier: string;
+    subRank: string;
+    components: { accuracy: number; mastery: number; continuity: number; volume: number };
+    raw: { accuracy7d: number; weightedMastery: number; skillsPracticed: number; breadthFactor: number; streak: number; cumulativeDays: number; totalAttempts: number };
+  }>(null);
+  useEffect(() => {
+    (async () => {
+      const { computeCurrentRating } = await import("../db/service");
+      const students = await db.students.toArray();
+      if (!students[0]) return;
+      const r = await computeCurrentRating(students[0].id);
+      setRating({
+        score: r.score,
+        tier: r.tier.name + " " + r.subRankRoman,
+        subRank: r.subRankStars,
+        components: {
+          accuracy: Math.round(r.components.accuracy),
+          mastery: Math.round(r.components.mastery),
+          continuity: Math.round(r.components.continuity),
+          volume: Math.round(r.components.volume),
+        },
+        raw: r.raw,
+      });
+    })();
+  }, []);
+
+  if (!rating) return <div className="text-sm text-slate-400">载入中…</div>;
+  return (
+    <div className="text-sm space-y-3">
+      <div className="rounded-lg bg-amber-500/10 border border-amber-400/30 p-3 text-amber-200/90 text-xs">
+        ⚠️ <strong>家长须知</strong>：综合分反映的是孩子在 app 上的<strong>练习广度 + 熟练度 + 准确率 + 持续性</strong>，
+        <strong>不是</strong>她和班里同学在试卷上的客观排名。
+        Selena 因为坚持练（429 题、32 个 skill 都摸过、平均 mastery 76），段位会比"完全不练"的孩子高。
+        段位是激励性的、地图式的，不是教育局排名。
+      </div>
+      <div className="font-display font-bold text-lg">
+        {rating.score} 分 · {rating.tier} {rating.subRank}
+      </div>
+      <table className="w-full text-xs">
+        <thead className="text-slate-400"><tr>
+          <th className="text-left">分量</th><th className="text-right">得分</th><th className="text-right">最大</th><th className="text-right">原始指标</th>
+        </tr></thead>
+        <tbody>
+          <tr><td>准确率（最近 7 天）</td><td className="text-right">{rating.components.accuracy}</td><td className="text-right text-slate-400">/ 230</td><td className="text-right">{Math.round(rating.raw.accuracy7d * 100)}%</td></tr>
+          <tr><td>熟练度（加权 × 广度）</td><td className="text-right">{rating.components.mastery}</td><td className="text-right text-slate-400">/ 500</td><td className="text-right">{Math.round(rating.raw.weightedMastery)} × {rating.raw.skillsPracticed}/30 skill</td></tr>
+          <tr><td>持续性</td><td className="text-right">{rating.components.continuity}</td><td className="text-right text-slate-400">/ 130</td><td className="text-right">连 {rating.raw.streak} 天 · 共 {rating.raw.cumulativeDays} 天</td></tr>
+          <tr><td>题量</td><td className="text-right">{rating.components.volume}</td><td className="text-right text-slate-400">/ 140</td><td className="text-right">{rating.raw.totalAttempts} 题</td></tr>
+        </tbody>
+      </table>
     </div>
   );
 }

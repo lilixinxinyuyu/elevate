@@ -58,12 +58,18 @@ export function TierCard({
           <div className={`text-sm ${t.theme.subTextColor}`}>分</div>
         </div>
 
-        {/* 段位 + 百分位 */}
-        <div className={`mt-1 text-base font-display ${t.theme.textColor}`}>
-          <span className="text-lg">{t.badgeIcon}</span> {t.name}四年级 · 超过 {rating.percentSurpassed}%
+        {/* 段位 + 小段星级 */}
+        <div className={`mt-1 flex items-center gap-2 flex-wrap text-base font-display ${t.theme.textColor}`}>
+          <span className="text-lg">{t.badgeIcon}</span>
+          <span>{t.name}</span>
+          <span className="font-bold">{rating.subRankRoman}</span>
+          <span className="text-amber-300 text-sm tracking-tighter">{rating.subRankStars}</span>
+        </div>
+        <div className={`text-xs ${t.theme.subTextColor} mt-0.5`}>
+          {t.name}四年级 · 超过 {rating.percentSurpassed}%
         </div>
 
-        {/* 进度条 */}
+        {/* 进度条（段位内总进度） */}
         <div className="mt-3">
           <div className="h-2.5 rounded-full bg-black/25 overflow-hidden">
             <div
@@ -72,9 +78,13 @@ export function TierCard({
             />
           </div>
           <div className={`mt-1.5 text-xs ${t.theme.subTextColor}`}>
-            {rating.nextTier ? (
+            {rating.subRank < 4 ? (
               <>
-                再涨 <span className="font-bold">{rating.deltaToNext}</span> 分进入
+                再涨 <span className="font-bold">{rating.deltaToNextSubRank}</span> 分升 ★{["I","II","III","IV"][rating.subRank]}
+              </>
+            ) : rating.nextTier ? (
+              <>
+                再涨 <span className="font-bold">{rating.deltaToNext}</span> 分跨入
                 <span className={`ml-1 ${t.theme.textColor} font-display`}>
                   {rating.nextTier.badgeIcon} {rating.nextTier.name}
                 </span>

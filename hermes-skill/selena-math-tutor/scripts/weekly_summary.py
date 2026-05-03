@@ -78,14 +78,17 @@ def compute_rating(attempts, mastery, skills_index_by_id):
 
     # 加权 mastery
     total_w, weighted_sum = 0.0, 0.0
+    skills_practiced = 0
     for m in mastery:
         skill = skills_index_by_id.get(m.get("skillId"))
         if not skill:
             continue
+        skills_practiced += 1
         w = EXAM_PRIORITY_WEIGHT.get(skill.get("examPriority"), 0.4)
         total_w += w
         weighted_sum += m.get("score", 0) * w
     weighted_mastery = (weighted_sum / total_w) if total_w > 0 else 0.0
+    breadth = min(1.0, skills_practiced / 30.0)
 
     # streak / cum days
     days = set()
@@ -102,10 +105,11 @@ def compute_rating(attempts, mastery, skills_index_by_id):
         streak += 1
         cur -= timedelta(days=1)
 
-    accuracy_comp = clamp((acc7d - 0.5) / 0.5 * 300, 0, 300)
-    mastery_comp = clamp(weighted_mastery * 3, 0, 300)
-    continuity_comp = clamp(streak * 5 + cum_days * 2, 0, 200)
-    volume_comp = clamp(math.log10(len(attempts) + 1) * 80 - 50, 0, 200)
+    # v2 校准（与 src/core/rating.ts 同步）
+    accuracy_comp = clamp((acc7d - 0.5) / 0.5 * 230, 0, 230)
+    mastery_comp = clamp(weighted_mastery * breadth * 5, 0, 500)
+    continuity_comp = clamp(streak * 4 + cum_days * 1.5, 0, 130)
+    volume_comp = clamp(math.log10(len(attempts) + 1) * 60 - 50, 0, 140)
 
     score = round(clamp(accuracy_comp + mastery_comp + continuity_comp + volume_comp, 0, 1000))
     tier = tier_for_score(score)
@@ -147,13 +151,33 @@ def macos_notify(title: str, message: str, sound: str = "Glass"):
         print(f"通知失败：{e}", file=sys.stderr)
 
 
-def macos_speak(text: str, voice: str = "Tingting"):
-    if not shutil.which("say"):
-        return
-    try:
-        subprocess.run(["say", "-v", voice, text], check=False, timeout=20)
-    except Exception:
-        pass
+def macos_speak(text: str, voice: str = "Cherry"):
+    """优先用小进 Cherry 嗓子；失败回退 macOS Tingting。"""
+    qwen_script = os.path.expanduser("~/.hermes/scripts/qwen_tts.py")
+    if os.path.exists(qwen_script) and shutil.which("afplay"):
+        try:
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as t:
+                t.write(text)
+                txt = t.name
+            wav = txt.replace(".txt", ".wav")
+            env = os.environ.copy()
+            env["QWEN_TTS_VOICE"] = voice
+            r = subprocess.run(["python3", qwen_script, txt, wav], env=env, capture_output=True, timeout=20)
+            if r.returncode == 0 and os.path.exists(wav):
+                subprocess.run(["afplay", wav], check=False, timeout=30)
+                try:
+                    os.unlink(txt); os.unlink(wav)
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
+    if shutil.which("say"):
+        try:
+            subprocess.run(["say", "-v", "Tingting", text], check=False, timeout=20)
+        except Exception:
+            pass
 
 
 def main():

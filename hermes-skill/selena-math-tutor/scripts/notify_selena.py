@@ -33,14 +33,38 @@ def macos_notify(title: str, message: str, sound: str = "Glass") -> None:
         print(f"通知失败：{e}", file=sys.stderr)
 
 
-def macos_speak(text: str, voice: str = "Tingting") -> None:
-    """macOS say 播报。Tingting 是中文女声。"""
-    if not shutil.which("say"):
-        return
-    try:
-        subprocess.run(["say", "-v", voice, text], check=False, timeout=20)
-    except Exception:
-        pass
+def macos_speak(text: str, voice: str = "Cherry") -> None:
+    """优先用小进的 Cherry 嗓子（Qwen3-TTS）；失败回退到 macOS Tingting。"""
+    qwen_script = os.path.expanduser("~/.hermes/scripts/qwen_tts.py")
+    if os.path.exists(qwen_script) and shutil.which("afplay"):
+        try:
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as t:
+                t.write(text)
+                txt_path = t.name
+            # Qwen3-TTS 返回 WAV（即使 URL 看起来像，写到 .wav 就行）
+            wav_path = txt_path.replace(".txt", ".wav")
+            env = os.environ.copy()
+            env["QWEN_TTS_VOICE"] = voice
+            r = subprocess.run(
+                ["python3", qwen_script, txt_path, wav_path],
+                env=env, capture_output=True, timeout=20,
+            )
+            if r.returncode == 0 and os.path.exists(wav_path):
+                subprocess.run(["afplay", wav_path], check=False, timeout=30)
+                try:
+                    os.unlink(txt_path); os.unlink(wav_path)
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass  # 静默回退
+    # Fallback：macOS 内置中文女声
+    if shutil.which("say"):
+        try:
+            subprocess.run(["say", "-v", "Tingting", text], check=False, timeout=20)
+        except Exception:
+            pass
 
 
 def main():
