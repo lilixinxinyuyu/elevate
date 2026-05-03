@@ -5,7 +5,7 @@ import { SEED_QUESTIONS } from "../content/questions";
 import { validateQuestion } from "../core/validateQuestion";
 import type { StudentProfile } from "../core/types";
 
-const SEED_VERSION = 14;
+const SEED_VERSION = 15;
 const SEED_KEY = "seedVersion";
 
 export async function ensureSeeded(): Promise<void> {

@@ -112,6 +112,11 @@ export function AdminPage() {
       </div>
 
       <div className="card">
+        <div className="font-semibold mb-2">Selena 各 skill 诊断</div>
+        <SkillDiagnosticsPanel />
+      </div>
+
+      <div className="card">
         <div className="font-semibold mb-2">导入题目 JSON</div>
         <div className="text-xs text-slate-500 mb-2">
           粘贴 Question 对象数组或单个对象。每道题会走 validateQuestion 校验。
@@ -180,6 +185,108 @@ export function AdminPage() {
       <div className="card">
         <div className="font-semibold mb-2">AI 出题 Prompt 生成器</div>
         <PromptBuilder />
+      </div>
+    </div>
+  );
+}
+
+function SkillDiagnosticsPanel() {
+  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const attempts = useLiveQuery(
+    async () => (student ? db.attempts.where({ studentId: student.id }).toArray() : []),
+    [student?.id],
+  );
+  const mastery = useLiveQuery(
+    async () => (student ? db.mastery.where({ studentId: student.id }).toArray() : []),
+    [student?.id],
+  );
+  const questions = useLiveQuery(async () => db.questions.toArray());
+
+  const [filter, setFilter] = useState<"weak" | "mustbig" | "all">("weak");
+
+  if (!student || !attempts || !mastery || !questions) return <div className="text-sm text-slate-500">加载中…</div>;
+
+  // 计算每个 skill 的诊断
+  const masteryById = new Map(mastery.map((m) => [m.skillId, m]));
+  const skillDiag = SKILLS.map((s) => {
+    const m = masteryById.get(s.id);
+    const skillAttempts = attempts.filter((a) => a.skillId === s.id);
+    const correct = skillAttempts.filter((a) => a.isCorrect).length;
+    const recent = skillAttempts.filter((a) => a.createdAt >= Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentCorrect = recent.filter((a) => a.isCorrect).length;
+    const totalQuestionsForSkill = questions.filter((q) => q.skill_id === s.id).length;
+    return {
+      skill: s,
+      mastery: m?.score ?? 0,
+      attempts: skillAttempts.length,
+      correct,
+      accuracy: skillAttempts.length > 0 ? correct / skillAttempts.length : 0,
+      recentAttempts: recent.length,
+      recentAccuracy: recent.length > 0 ? recentCorrect / recent.length : 0,
+      lastAt: m?.lastPracticedAt ?? 0,
+      questionTotal: totalQuestionsForSkill,
+    };
+  });
+
+  let view = skillDiag.filter((d) => d.attempts > 0);
+  if (filter === "weak") {
+    view = view.filter((d) => d.mastery < 75 || d.recentAccuracy < 0.7).sort((a, b) => a.mastery - b.mastery);
+  } else if (filter === "mustbig") {
+    view = view.filter((d) => d.skill.examPriority === "MUST_BIG").sort((a, b) => a.mastery - b.mastery);
+  } else {
+    view = view.sort((a, b) => a.mastery - b.mastery);
+  }
+
+  return (
+    <div className="text-sm space-y-3">
+      <div className="flex gap-2 text-xs">
+        <button type="button" className={`chip ${filter === "weak" ? "bg-rose-500/30 text-rose-100" : "bg-white/5 text-slate-400"}`} onClick={() => setFilter("weak")}>
+          薄弱（{skillDiag.filter((d) => d.attempts > 0 && (d.mastery < 75 || d.recentAccuracy < 0.7)).length}）
+        </button>
+        <button type="button" className={`chip ${filter === "mustbig" ? "bg-rose-500/30 text-rose-100" : "bg-white/5 text-slate-400"}`} onClick={() => setFilter("mustbig")}>
+          期末重点
+        </button>
+        <button type="button" className={`chip ${filter === "all" ? "bg-rose-500/30 text-rose-100" : "bg-white/5 text-slate-400"}`} onClick={() => setFilter("all")}>
+          全部练过
+        </button>
+      </div>
+      {view.length === 0 ? (
+        <div className="text-slate-500">没有数据</div>
+      ) : (
+        <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+          {view.map((d) => {
+            const acc = Math.round(d.accuracy * 100);
+            const recentAcc = Math.round(d.recentAccuracy * 100);
+            const masteryColor =
+              d.mastery >= 85 ? "text-emerald-300" : d.mastery >= 70 ? "text-amber-300" : "text-rose-300";
+            const lastAgo = d.lastAt > 0 ? Math.floor((Date.now() - d.lastAt) / (24 * 60 * 60 * 1000)) : null;
+            return (
+              <div key={d.skill.id} className="rounded-lg border border-white/10 bg-white/5 p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-medium text-slate-100 truncate">{d.skill.name}</div>
+                  <span className={`chip ${masteryColor} bg-white/5 border border-current/30 shrink-0`}>
+                    熟练 {Math.round(d.mastery)}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span>共做 {d.attempts} 次（正确率 {acc}%）</span>
+                  <span>近 7 天 {d.recentAttempts} 次（{recentAcc}%）</span>
+                  <span>题库 {d.questionTotal} 道</span>
+                  {lastAgo != null && <span className="text-slate-500">{lastAgo > 0 ? `${lastAgo} 天前` : "今天"}</span>}
+                  {d.skill.examPriority === "MUST_BIG" && (
+                    <span className="text-rose-300">· 期末重点</span>
+                  )}
+                  {d.questionTotal < 5 && d.skill.examPriority === "MUST_BIG" && (
+                    <span className="text-amber-300">⚠ 题量不足</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="text-xs text-slate-500">
+        🔍 Hermes Agent 也是从这些数据看 Selena 的弱点。
       </div>
     </div>
   );

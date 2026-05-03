@@ -1,5 +1,6 @@
 import type { AbilityId, ExamPriority, Hint, Question, SubQuestion, GameTemplate } from "../core/types";
 import { EXAM_PAPER_PACK } from "./examPaperPack";
+import { MUST_BIG_PACK } from "./mustBigPack";
 
 const base = {
   version: 1 as const,
@@ -2618,4 +2619,5 @@ export const SEED_QUESTIONS: Question[] = [
   ...expansionV03,
   ...expansionV04,
   ...EXAM_PAPER_PACK,
+  ...MUST_BIG_PACK,
 ];
