@@ -110,17 +110,20 @@ function syncAudioStrategy(model: string, voice?: string): TtsStrategy {
   };
 }
 
+// 用户账号实际可用的 model（来自 Singapore Model Studio "Model Square" 列表 2026-04）：
+//   - qwen3-tts-instruct-flash   ← Qwen 最新 TTS instruct flash（Cherry/Serena/Ethan 等）
+//   - cosyvoice-v3-plus          ← CosyVoice 最新（longxiaochun 等）
+//   - qwen3.5-omni-flash         ← 多模态，可输出音频
+// 旧的 qwen-tts / cosyvoice-v1 / sambert-* 在这个账号都返回 "Model not exist"。
 const STRATEGIES_DEFAULT: TtsStrategy[] = [
-  // 1. Qwen-TTS（首选；如果账号 plan 包含的话）
-  qwenTtsStrategy("qwen-tts-2025-05-22", "Cherry"),
-  qwenTtsStrategy("qwen-tts-2024-12-04", "Cherry"),
-  qwenTtsStrategy("qwen-tts", "Cherry"),
-  // 2. CosyVoice（DashScope 通用 TTS，国际账号常见）
-  syncAudioStrategy("cosyvoice-v2", "longxiaochun"),
-  syncAudioStrategy("cosyvoice-v1", "longxiaochun"),
-  // 3. Sambert（最老最稳，几乎所有账号都能用）
-  syncAudioStrategy("sambert-zhinan-v1"), // 童女声
-  syncAudioStrategy("sambert-zhiying-v1"), // 普通女声
+  // 1. Qwen3-TTS-Instruct-Flash（首选；Cherry 轻甜女声大概率在这里）
+  qwenTtsStrategy("qwen3-tts-instruct-flash", "Cherry"),
+  // 2. CosyVoice v3-plus（备选；中文童声 longxiaochun）
+  syncAudioStrategy("cosyvoice-v3-plus", "longxiaochun"),
+  qwenTtsStrategy("cosyvoice-v3-plus", "longxiaochun"),
+  // 3. Qwen3.5-Omni-Flash（多模态兜底）
+  qwenTtsStrategy("qwen3.5-omni-flash-2026-03-15", "Cherry"),
+  qwenTtsStrategy("qwen3.5-omni-flash", "Cherry"),
 ];
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
