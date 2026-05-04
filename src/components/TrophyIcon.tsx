@@ -55,8 +55,10 @@ const GLOW_PX: Record<NonNullable<TrophyIconProps["size"]>, number> = {
 const SHAPE_CLIP: Record<TrophyCategory, string> = {
   daily: "",
   milestone: "",
+  // 六边形（横纤竖宽）—— ability 用
   ability: "polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)",
-  skill: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+  // 真盾形（flat top + 底部尖角）—— skill 用，跟 ability 六边形明显区分
+  skill: "polygon(0% 5%, 100% 5%, 100% 55%, 50% 100%, 0% 55%)",
   commemorative:
     "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
 };
@@ -72,6 +74,11 @@ interface TierStyle {
   cornerLabel: string;
   /** 钻档：是否叠加旋转全息光晕动画 */
   animated?: boolean;
+  /**
+   * v0.29.3: emoji 兜底时的内层渐变背景（让没 AI 图的勋章也有 tier 色感）。
+   * 有 AI 图时不用（图本身有色）。
+   */
+  innerGradient: string;
 }
 
 const TIER_STYLE: Record<TrophyTier, TierStyle> = {
@@ -81,6 +88,8 @@ const TIER_STYLE: Record<TrophyTier, TierStyle> = {
     cornerBg: "linear-gradient(135deg, #d8954a, #a0522d)",
     cornerFg: "#fff7ed",
     cornerLabel: "★",
+    innerGradient:
+      "linear-gradient(135deg, rgba(205,127,50,0.30), rgba(160,82,45,0.18), rgba(0,0,0,0.55))",
   },
   silver: {
     ring: "#cbd5e1",
@@ -88,13 +97,17 @@ const TIER_STYLE: Record<TrophyTier, TierStyle> = {
     cornerBg: "linear-gradient(135deg, #f1f5f9, #94a3b8)",
     cornerFg: "#0f172a",
     cornerLabel: "★★",
+    innerGradient:
+      "linear-gradient(135deg, rgba(226,232,240,0.28), rgba(148,163,184,0.15), rgba(15,23,42,0.6))",
   },
   gold: {
     ring: "#fbbf24",
     glowColor: "rgba(251,191,36,0.7)",
     cornerBg: "linear-gradient(135deg, #fde68a, #d97706)",
     cornerFg: "#451a03",
-    cornerLabel: "★★★",
+    cornerLabel: "♛", // v0.29.3: ★★★ → ♛ 单字符王冠，不再拥挤
+    innerGradient:
+      "linear-gradient(135deg, rgba(251,191,36,0.34), rgba(217,119,6,0.20), rgba(0,0,0,0.55))",
   },
   platinum: {
     ring: "transparent",
@@ -105,6 +118,8 @@ const TIER_STYLE: Record<TrophyTier, TierStyle> = {
     cornerFg: "#1e1b4b",
     cornerLabel: "💎",
     animated: true,
+    innerGradient:
+      "linear-gradient(135deg, rgba(186,230,253,0.28), rgba(244,114,182,0.18), rgba(196,181,253,0.22), rgba(0,0,0,0.55))",
   },
 };
 
@@ -142,18 +157,20 @@ export function TrophyIcon({
   };
 
   // 内层 art：缩进 ringPx 让外环显示出 tier 颜色
+  // v0.29.3: emoji 兜底时给 tier 色内层渐变（铜底/银底/金底/钻底有视觉差）
+  const useEmojiTierBg = !row?.imageDataUrl && !!tierStyle;
   const innerStyle: React.CSSProperties = {
     ...shapeStyle,
     inset: tierStyle ? `${ringPx}px` : 0,
+    ...(useEmojiTierBg ? { background: tierStyle!.innerGradient } : {}),
   };
 
-  // 内层背景：有 AI 图就深色不挡；没图就 emoji 兜底底色
-  const innerBgClass =
-    !row?.imageDataUrl && !tierStyle
+  // 内层 bg class：tierStyle 模式下用 inline gradient（上面），其他用 fallback
+  const innerBgClass = useEmojiTierBg
+    ? ""
+    : !row?.imageDataUrl
       ? "bg-gradient-to-br from-violet-500/25 to-rose-500/15"
-      : !row?.imageDataUrl
-        ? "bg-black/40"
-        : "bg-black/60";
+      : "bg-black/60";
 
   return (
     <div

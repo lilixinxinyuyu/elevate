@@ -147,6 +147,15 @@ function correctCountByPrefix(attempts: Attempt[], prefix: string): number {
   return attempts.filter((a) => a.isCorrect && a.skillId.startsWith(prefix)).length;
 }
 
+/** 累计练习的不重复天数（用于"坚持之心"勋章 — 习惯靠天数衡量，不靠题数） */
+function cumulativePracticeDays(attempts: Attempt[]): number {
+  const days = new Set<string>();
+  for (const a of attempts) {
+    days.add(new Date(a.createdAt).toISOString().slice(0, 10));
+  }
+  return days.size;
+}
+
 // ============================================================
 //  Tier 阈值常量
 // ============================================================
@@ -182,6 +191,34 @@ export const TROPHIES: TrophyDef[] = [
     icon: "🌟",
     category: "commemorative",
     check: (ctx) => ctx.attempts.length >= 1,
+  },
+  // === Phase 2 占位：触发条件待实施（见 docs/phase2-special-trophies.md）===
+  // 这些 def 现在永远 check=false → 在勋章柜里显示为灰色未解锁，
+  // 让纪念区不那么孤单 + 提示 Selena 还有更多专属勋章在等她。
+  // Phase 2 实施时只改 check 函数即可，trophy id 不变。
+  {
+    id: "midterm_done",
+    name: "期中加冕",
+    description: "完成期中考试的勋章。Phase 2 待实施触发器。",
+    icon: "📜",
+    category: "commemorative",
+    check: () => false,
+  },
+  {
+    id: "final_done",
+    name: "期末凯旋",
+    description: "完成期末考试的勋章。Phase 2 待实施触发器。",
+    icon: "👑",
+    category: "commemorative",
+    check: () => false,
+  },
+  {
+    id: "new_semester",
+    name: "新学年起航",
+    description: "开启新学期的勋章。Phase 2 待实施触发器。",
+    icon: "⛵",
+    category: "commemorative",
+    check: () => false,
   },
 
   // ============================================
@@ -330,13 +367,16 @@ export const TROPHIES: TrophyDef[] = [
     tieredThresholds: tiers(30, 100, 300, 800, " 题"),
   },
   {
+    // ⚠️ "坚持力"语义上是"持续练习的习惯"，不是"做对了多少题"。所以这枚勋章
+    // 的判定改用累计练习天数（unique day count），而不是 correctCountByAbility。
+    // 否则它依赖 SKILLS 里有 ability=["habit"] 的 skill — 实际上几乎没有 → 死勋章。
     id: "ability_habit",
     name: "坚持之心",
-    description: "在「坚持力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    description: "学习的坚持，体现在累计练习的天数。铜 7 / 银 30 / 金 90 / 钻 180 天。",
     icon: "💪",
     category: "ability",
-    tier: (ctx) => correctCountByAbility(ctx.attempts, "habit"),
-    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+    tier: (ctx) => cumulativePracticeDays(ctx.attempts),
+    tieredThresholds: tiers(7, 30, 90, 180, " 天"),
   },
 
   // ============================================
