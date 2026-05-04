@@ -79,6 +79,19 @@ export async function ensureSeeded(): Promise<void> {
   // v0.29.4: 先把 deletedQuestionIds 里仍存在的题再删一遍（B 设备同步后立刻生效）
   await applyPendingDeletions().catch((e) => console.warn("[applyPendingDeletions]", e));
 
+  // v0.29.5: 一次性把过大的勋章图压缩（之前 ~7MB/张 → ~50KB/张，让 sync 不爆）
+  void (async () => {
+    try {
+      const { migrateCompressOversizedTrophyImages } = await import("../lib/trophyImages");
+      const r = await migrateCompressOversizedTrophyImages();
+      if (r && r.processed > 0) {
+        console.log(`[trophyImages] compressed ${r.processed} oversized image(s), freed ~${r.freedMb.toFixed(1)} MB`);
+      }
+    } catch (e) {
+      console.warn("[trophyImages compress migration] failed:", e);
+    }
+  })();
+
   // 即使 seed 已最新，也要跑 v7 迁移（一次性，幂等）
   if (existing?.value === SEED_VERSION && hasQuestions > 0) {
     pullAgentQuestionsIfStale().catch(() => {});

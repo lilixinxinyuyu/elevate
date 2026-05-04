@@ -182,20 +182,104 @@ function buildTierBadgePrompt(t: TrophyMeta): string {
   ].join(" ");
 }
 
-/** 把任意 URL 下载成 base64 data URL（持久化到 IndexedDB） */
+/**
+ * v0.29.5: 把任意 URL 下载并 **压缩** 成 base64 data URL。
+ *
+ * 之前直接 readAsDataURL(blob) 把 AI 返回的原始 PNG 整张存进 IDB —— 实测每张
+ * ~7 MB，2 张就 14 MB，导致 cloudSync 上传 14 MB JSON 给 Cloudflare 直接 500。
+ *
+ * 现在通过 canvas 重绘 + JPEG 压缩：
+ *   - 目标尺寸 256×256（UI 最大显示尺寸 lg=80px / xl=128px，256 足够清晰）
+ *   - 输出 JPEG quality=0.85（PNG 没必要——勋章图没有透明）
+ *   - 实测每张 ~30-60 KB，30 张总 ~1-2 MB，sync push 轻松通过
+ */
+const COMPRESS_TARGET_PX = 256;
+const COMPRESS_JPEG_QUALITY = 0.85;
+
+async function blobToImage(blob: Blob): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(blob);
+  try {
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("image decode failed"));
+      img.src = url;
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Canvas 重绘 + JPEG 压缩。返回 data URL。 */
+async function compressBlobToDataUrl(blob: Blob): Promise<string> {
+  const img = await blobToImage(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = COMPRESS_TARGET_PX;
+  canvas.height = COMPRESS_TARGET_PX;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas 2d context unavailable");
+  // 黑底（与 prompt 要求"深色背景"一致；JPEG 不支持透明）
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, COMPRESS_TARGET_PX, COMPRESS_TARGET_PX);
+  // 等比缩放居中绘制
+  const scale = Math.min(
+    COMPRESS_TARGET_PX / img.width,
+    COMPRESS_TARGET_PX / img.height,
+  );
+  const w = img.width * scale;
+  const h = img.height * scale;
+  const dx = (COMPRESS_TARGET_PX - w) / 2;
+  const dy = (COMPRESS_TARGET_PX - h) / 2;
+  ctx.drawImage(img, dx, dy, w, h);
+  return canvas.toDataURL("image/jpeg", COMPRESS_JPEG_QUALITY);
+}
+
+/** 把任意 URL 下载、压缩成 base64 data URL（持久化到 IndexedDB） */
 async function fetchAsDataUrl(url: string): Promise<string> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`fetch image failed: ${r.status}`);
   const blob = await r.blob();
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("FileReader result not string"));
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+  return await compressBlobToDataUrl(blob);
+}
+
+/**
+ * v0.29.5: 一次性迁移 — 把已存的过大勋章图重新压缩。
+ *
+ * 在 trophyImages 表里扫所有 imageDataUrl 长度 > 1MB 的 row，按现在的压缩管道
+ * 重处理。每张耗时 < 100 ms（纯 canvas 操作，无 AI 调用）。
+ *
+ * 通过 meta:trophyImagesCompressedAt 标记防止重复执行。
+ */
+const COMPRESSION_MIGRATION_KEY = "trophyImagesCompressedAt";
+const COMPRESSION_THRESHOLD = 1024 * 1024; // 1 MB
+
+export async function migrateCompressOversizedTrophyImages(): Promise<{ processed: number; freedMb: number } | null> {
+  const meta = await db.meta.get(COMPRESSION_MIGRATION_KEY);
+  if (meta?.value) return null;
+  const all = await db.trophyImages.toArray();
+  let processed = 0;
+  let freedBytes = 0;
+  for (const row of all) {
+    if (!row.imageDataUrl || row.imageDataUrl.length < COMPRESSION_THRESHOLD) continue;
+    try {
+      // data URL → blob → recompress
+      const m = row.imageDataUrl.match(/^data:[^;]+;base64,(.+)$/);
+      if (!m) continue;
+      const bin = atob(m[1]!);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes]);
+      const beforeLen = row.imageDataUrl.length;
+      const compressed = await compressBlobToDataUrl(blob);
+      freedBytes += beforeLen - compressed.length;
+      await db.trophyImages.put({ ...row, imageDataUrl: compressed });
+      processed += 1;
+    } catch (e) {
+      console.warn(`[trophyImages] compress migration failed for ${row.trophyId}`, e);
+    }
+  }
+  await db.meta.put({ key: COMPRESSION_MIGRATION_KEY, value: Date.now() });
+  return { processed, freedMb: freedBytes / 1024 / 1024 };
 }
 
 /** 直接读取已缓存的图（不会触发生成） */
