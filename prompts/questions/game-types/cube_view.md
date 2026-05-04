@@ -17,20 +17,28 @@
 - "从上面看是什么形状？"
 - "这个图形里有几个面是露出来的？"
 
-### 必须包含的字段（覆盖 plain_choice 的）
+### 必须字段（**继承 plain_choice 的全部字段**，下面只列差异）
+
+⚠️ **完整 JSON 必须包含所有 plain_choice 必备字段**（question_id / subjectId / version / status / grade / term / unit_id / unit_name / skill_id / skill_name / cognitive_level / difficulty / estimated_time_seconds / stem / common_errors / feedback_correct / feedback_wrong / hints / tags / exam_priority）。**枚举值严格按 quality-rubric.md 第 1.5 节**。
+
+差异化字段：
 
 ```json
 {
   "game_type": "cube_view",
   "play_as": "cube_view",
+  "question_format": "single_choice",
+  "cognitive_level": "reasoning",
   "ability_dimension": ["spatial"],
+  "estimated_time_seconds": 35,
   "tags": ["ai_generated", "solid:0,0,0|1,0,0|1,1,0"],
   "options": [
     {"id": "A", "text": "3"},
     {"id": "B", "text": "4"},
     {"id": "C", "text": "5"},
     {"id": "D", "text": "6"}
-  ]
+  ],
+  "answer": {"type": "choice", "value": "A"}
 }
 ```
 

@@ -9,8 +9,8 @@
 
 ### 数学（北师大版四年级）
 
-- **下册（G4B）**：小数的意义和加减、认识方程、观察物体、三角形、小数乘法、平均数、复式条形图。
-- **上册（G4A）**：大数认识、线与角、三位数乘两位数、运算律、方向与位置、除法、生活中的负数、可能性。
+- **下册** 涵盖：小数的意义和加减、认识方程、观察物体、三角形、小数乘法、平均数、复式条形图。（unit_id 以 `G4B_` 开头，但 term 字段值是 `"下册"`）
+- **上册** 涵盖：大数认识、线与角、三位数乘两位数、运算律、方向与位置、除法、生活中的负数、可能性。（unit_id 以 `G4A_` 开头，但 term 字段值是 `"上册"`）
 - ⛔ **不许超纲**：比例、百分数、函数、图形旋转坐标、立体体积公式（5 年级及以上内容禁止）。
 - ⛔ **不许跑题**：题干必须紧扣传入的 `skill_id` 主题。让出 "积的小数位数" 却写 "求平均数" 是严重错误。
 
@@ -20,7 +20,34 @@
 - **上册**：5-8 单元同上。
 - ⛔ 不出 5 年级及以上内容（说明文复杂题、文言文长篇）。
 
+### ⛔ term 字段写法（极重要）
+
+- ✅ `"term": "下册"` 或 `"term": "上册"` — 这是允许的两个值（外加 `"综合复习"`）。
+- ❌ `"term": "G4B"` / `"term": "G4A"` — 不允许，G4A/G4B 只是 unit_id 的前缀。
+- ❌ `"term": "下册（G4B）"` — 不允许，term 必须是干净的两字 / 三字字符串。
+
 ---
+
+## 1.5 必填枚举字段字典（Schema Enum — 严格选值）
+
+任何不在下方清单的字符串都会让题被 zod 校验拒收。**不要翻译、不要意译、不要新造词**。
+
+| 字段 | 合法值 | 常见错误 |
+|---|---|---|
+| `term` | `"上册"` / `"下册"` / `"综合复习"` | ❌ `"G4A"` / `"G4B"`（这是 unit_id 前缀，不是 term）|
+| `cognitive_level` | `"recall"` / `"procedural"` / `"application"` / `"reasoning"` | ❌ `"conceptual"` / `"understanding"` / `"analysis"` |
+| `ability_dimension[]` | 数组元素从 `["calculation","concept","reasoning","modeling","spatial","data","strategy","habit"]` 选 | ❌ `"conceptual"`（应该是 `"concept"`）|
+| `question_format` | `"numeric"` / `"numeric_choice"` / `"single_choice"` / `"multi_choice"` / `"multi_step"` / `"fill_blank"` / `"drag_drop"` / `"sort_ladder"` / `"geometry_operation"` | ❌ `"choice"` / `"text"` |
+| `exam_priority` | `"MUST_BIG"` / `"HIGH_BIG"` / `"MUST_SMALL"` / `"VERY_HIGH_SMALL"` / `"HIGH_SMALL"` / `"NORMAL"` / `"LOW"` / `"LOW_SMALL"` / `"EXTENSION"` | ❌ `"HIGH"` / `"VERY_HIGH"` |
+| `status` | `"draft"` / `"validated"` / `"approved"` / `"active"` / `"retired"` / `"needs_review"` / `"rejected"` | 默认填 `"approved"` |
+| `game_type` / `play_as` | 见对应 schema 文件，与文件名同名（如 `"plain_choice"`） | 不要乱起 |
+| `difficulty` | 整数 1 / 2 / 3 / 4 / 5 | ❌ `"3"` / `3.5` |
+| `grade` | 数字 4 | ❌ `"4"` / `"四年级"` |
+| `answer.type` | `"choice"` / `"numeric"` / `"text"` / `"multi_step"` | 与 game_type 配对 |
+
+⚠️ **`concept` vs `conceptual` 容易写错**：
+- `ability_dimension` 用 `"concept"`（概念力）
+- `cognitive_level` 用 `"recall"`/`"procedural"`/`"application"`/`"reasoning"` —— **没有 `"conceptual"` 选项**
 
 ## 2. 题型与必备字段
 

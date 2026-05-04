@@ -5,6 +5,13 @@
 - difficulty 3   → `estimated_time_seconds: 30`
 - difficulty 4-5 → `estimated_time_seconds: 40`
 
+⚠️ **必填枚举字段（合法值，不要改写、不要翻译）**：
+- `term`: 必须是 `"上册"` 或 `"下册"`（用户传入的 `{{term}}`）。**不要写 `"G4A"` / `"G4B"`** — 那是 unit_id 的前缀，不是 term 的值。
+- `cognitive_level`: 必须是 `"recall"` / `"procedural"` / `"application"` / `"reasoning"` 中的一个。**不要写 `"conceptual"`**。
+- `ability_dimension[]`: 数组元素必须从 `["calculation","concept","reasoning","modeling","spatial","data","strategy","habit"]` 选。**不要写 `"conceptual"`**。
+- `question_format`: `"single_choice"`（plain_choice 题型固定这个）。
+- `exam_priority`: 见 prompts/quality-rubric.md，常用 `"HIGH_BIG"`。
+
 输出每题的 JSON 形如：
 
 ```json
@@ -23,7 +30,7 @@
   "exam_priority": "HIGH_BIG",
   "game_type": "plain_choice",
   "play_as": "plain_choice",
-  "cognitive_level": "conceptual",
+  "cognitive_level": "procedural",
   "difficulty": 3,
   "estimated_time_seconds": 30,
   "stem": "题面文字",

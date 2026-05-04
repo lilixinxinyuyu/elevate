@@ -15,13 +15,20 @@
 - "天平两边平衡，左边是 ___，右边是 ___，请问 x 等于多少？"
 - "下图天平刚好平衡，求 x 的值。"
 
-### 必须字段
+### 必须字段（**继承 plain_choice 的全部字段**，下面只列差异）
+
+⚠️ **完整 JSON 必须包含所有 plain_choice 必备字段**（question_id / subjectId / version / status / grade / term / unit_id / unit_name / skill_id / skill_name / cognitive_level / difficulty / estimated_time_seconds / stem / common_errors / feedback_correct / feedback_wrong / hints / tags / exam_priority）。**枚举值严格按 quality-rubric.md 第 1.5 节**。
+
+差异化字段：
 
 ```json
 {
   "game_type": "balance_lab",
   "play_as": "balance_lab",
+  "question_format": "numeric",
+  "cognitive_level": "application",
   "ability_dimension": ["modeling", "calculation"],
+  "estimated_time_seconds": 50,
   "tags": ["ai_generated", "eq:2x+3|x+5"],
   "answer": {"type": "numeric", "value": 2}
 }

@@ -90,7 +90,9 @@ function buildTierBadgePrompt(t: TrophyMeta): string {
       color: "金色 + 橘红，辉煌感",
     },
     country: {
-      motif: "中国地图轮廓 + 凤凰展翅 + 五星",
+      // ⚠️ 不写 "中国地图" / "五星" —— 阿里云图像模型对国家地图和国旗符号有内容
+      // 过滤，会返回 InvalidParameter。改用通用的"凤凰 + 山河 + 星辰"传奇意象。
+      motif: "金色凤凰展翅 + 远山云海 + 璀璨星辰光环",
       color: "深红 + 真金，传奇质感",
     },
   };

@@ -10,13 +10,20 @@
 - "5.678 缩小到原来的 1/100 后是 ___"
 - "0.07 的小数点向左移动一位，结果是 ___"
 
-### 必须字段
+### 必须字段（**继承 plain_choice 的全部字段**，下面只列差异）
+
+⚠️ **完整 JSON 必须包含所有 plain_choice 必备字段**（question_id / subjectId / version / status / grade / term / unit_id / unit_name / skill_id / skill_name / cognitive_level / difficulty / estimated_time_seconds / stem / question_format / options / answer / solution_steps / common_errors / feedback_correct / feedback_wrong / hints / tags / exam_priority）。**枚举值严格按 quality-rubric.md 第 1.5 节**。
+
+差异化字段：
 
 ```json
 {
   "game_type": "decimal_shifter",
   "play_as": "decimal_shifter",
+  "question_format": "single_choice",
+  "cognitive_level": "procedural",
   "ability_dimension": ["concept", "strategy"],
+  "estimated_time_seconds": 25,
   "tags": ["ai_generated", "shift:right:1", "start:3.45"]
 }
 ```

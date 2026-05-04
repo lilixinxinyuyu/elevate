@@ -18,13 +18,20 @@
 - 1 个"小数点放错位"
 - 1 个"加减号搞反"
 
-### 必须字段
+### 必须字段（**继承 plain_choice 的全部字段**，下面只列差异）
+
+⚠️ **完整 JSON 必须包含所有 plain_choice 必备字段**（question_id / subjectId / version / status / grade / term / unit_id / unit_name / skill_id / skill_name / cognitive_level / difficulty / estimated_time_seconds / stem / question_format / options / answer / solution_steps / common_errors / feedback_correct / feedback_wrong / hints / tags / exam_priority）。**枚举值严格按 quality-rubric.md 第 1.5 节**。
+
+差异化字段：
 
 ```json
 {
   "game_type": "shop_counter",
   "play_as": "shop_counter",
+  "question_format": "single_choice",
+  "cognitive_level": "application",
   "ability_dimension": ["modeling", "calculation"],
+  "estimated_time_seconds": 50,
   "tags": ["ai_generated", "items:apple-3.5-2|book-12.8-1"]
 }
 ```
