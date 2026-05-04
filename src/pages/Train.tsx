@@ -450,7 +450,11 @@ function MathAutoGen({
           ? "今天的题都被你做光啦！"
           : "题库还没准备好，让 AI 帮你出几道～"
       }
-      count={5}
+      // v0.27.1：自由练（preferredSkillId 已传）→ 单 skill 8 道；
+      //          每日挑战（无 preferredSkillId）→ 跨 3 个最弱 skill 出 15 道综合题，
+      //          这样首次进首页就拿到丰富多样的练习包，不再"今天只刷工程量/产量合计"。
+      count={preferredSkillId ? 8 : 15}
+      multiSkillCount={preferredSkillId ? 1 : 3}
       preferredSkillId={preferredSkillId}
     />
   );

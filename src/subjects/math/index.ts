@@ -39,6 +39,7 @@ const MATH_NAV_ITEMS: SubjectNavItem[] = [
   { to: "free-practice", label: "自由练" },
   { to: "skills", label: "技能地图" },
   { to: "mistakes", label: "错题复活" },
+  { to: "report", label: "周报", subtle: true },
   { to: "admin", label: "管理", subtle: true },
 ];
 

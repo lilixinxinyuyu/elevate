@@ -1,4 +1,4 @@
-import { createBrowserRouter, Link, Navigate } from "react-router-dom";
+import { createBrowserRouter, Link, Navigate, useLocation } from "react-router-dom";
 import { SubjectShell } from "./components/SubjectShell";
 import { SubjectPickerPage } from "./pages/SubjectPicker";
 import { ComingSoonPage } from "./pages/ComingSoon";
@@ -92,14 +92,23 @@ export const router = createBrowserRouter([
       { path: "*", element: <ComingSoonPage /> },
     ],
   },
-  // 老路径重定向：保护 PWA 已装的 Selena 设备
-  { path: "/train", element: <Navigate to="/math/train" replace /> },
-  { path: "/skills", element: <Navigate to="/math/skills" replace /> },
-  { path: "/picker", element: <Navigate to="/math/free-practice" replace /> },
-  { path: "/mistakes", element: <Navigate to="/math/mistakes" replace /> },
-  { path: "/report", element: <Navigate to="/math/report" replace /> },
-  { path: "/admin", element: <Navigate to="/math/admin" replace /> },
+  // 老路径重定向：保护 PWA 已装的 Selena 设备。
+  // 关键：必须保留 query string + hash —— 老代码里有 `/train?skillIds=...` 类似
+  // 调用，普通 <Navigate to="/math/train" replace /> 会**直接丢掉 query**，
+  // 自由练选了 skill 但跳转后页面以为是每日挑战。用 LegacyRedirect 透传。
+  { path: "/train", element: <LegacyRedirect to="/math/train" /> },
+  { path: "/skills", element: <LegacyRedirect to="/math/skills" /> },
+  { path: "/picker", element: <LegacyRedirect to="/math/free-practice" /> },
+  { path: "/mistakes", element: <LegacyRedirect to="/math/mistakes" /> },
+  { path: "/report", element: <LegacyRedirect to="/math/report" /> },
+  { path: "/admin", element: <LegacyRedirect to="/math/admin" /> },
 ]);
+
+/** 老路径 → 新路径重定向，保留 query string + hash。 */
+function LegacyRedirect({ to }: { to: string }) {
+  const loc = useLocation();
+  return <Navigate to={`${to}${loc.search}${loc.hash}`} replace />;
+}
 
 function RouteError() {
   return (

@@ -47,8 +47,18 @@ interface Props {
    * Selena 在下册期中冲刺，只能出下册的题。
    */
   currentTerm?: "上册" | "下册";
-  /** 这次想出几道（默认 5） */
+  /** 这次想出几道（默认 8） */
   count?: number;
+  /**
+   * 同时跨几个 skill 出题（默认 1）。
+   *
+   * - 1：单 skill（自由练 / 错题挑战，传了 preferredSkillId 时用这个）
+   * - 3：跨 3 个最弱 skill 各出 count/3 题（每日挑战 empty 时用这个，
+   *   一次喂出综合度高的题包，不会"今天只刷工程量/产量合计"）
+   *
+   * 当 preferredSkillId 被显式传入时，**强制走 1 个 skill**（用户的明确选择）。
+   */
+  multiSkillCount?: number;
   /** chinese 校验需要的 unit/skill 集合（math 用 core validateQuestion） */
   validateAsSubject?: "math" | "chinese";
 }
@@ -77,20 +87,20 @@ export function AutoGenerateOnEmpty(props: Props) {
   };
 
   /**
-   * 选 skill 顺序（Round 5 修复"永远选小数意义"bug）：
-   *   1. preferredSkillId（自由练 / 错题挑战明确指定）→ 一定优先
-   *   2. preferredUnitId + mastery 排序 → 在指定 unit 里挑最弱
-   *   3. currentTerm 范围内 mastery 最弱（有数据的，剔除"没碰过"的）
-   *   4. 没有 mastery 数据：随机从 currentTerm + currentUnit 范围里挑
-   *      （而不是按难度降序总挑同一个）
+   * 选 N 个 skill。
+   *
+   * 优先级（v0.27.1 加 multiSkill 支持）：
+   *   1. preferredSkillId 显式指定 → 只返回该 skill（无视 N，强制单 skill）
+   *   2. 否则取 mastery 最弱的 N 个（少于 N 个就用全部）；mastery 都为空时
+   *      从 currentTerm + currentUnit 随机选 N 个
    *
    * 关键：当 Selena 还没有任何 mastery 数据时，**随机化**避免每次都"小数意义"。
    */
-  const pickSkillToTrain = async (): Promise<Skill | null> => {
+  const pickSkillsToTrain = async (n: number): Promise<Skill[]> => {
     // 1. preferredSkillId 100% 优先（自由练时就该拿这个 skill 出题）
     if (props.preferredSkillId) {
       const s = props.skills.find((x) => x.id === props.preferredSkillId);
-      if (s) return s;
+      if (s) return [s];
       console.warn(
         `[AutoGen] preferredSkillId="${props.preferredSkillId}" 不在 skills 列表里，落入兜底`,
       );
@@ -122,71 +132,38 @@ export function AutoGenerateOnEmpty(props: Props) {
       masteryById = new Map(masteryRows.map((m) => [m.skillId, m.score]));
     }
 
-    // 4. 真有 mastery 数据的 skill 优先：mastery 越低越优先（薄弱的先练）
-    const skillsWithMastery = unitFiltered.filter((s) => masteryById.has(s.id));
-    if (skillsWithMastery.length > 0) {
-      // 排序后取最弱的，但加点抖动避免永远同一个
-      const weakest = skillsWithMastery
-        .map((s) => ({ s, m: masteryById.get(s.id)! }))
-        .sort((a, b) => a.m - b.m);
-      // 取最弱 3 个里随机一个，避免反复刷同一题
-      const top3 = weakest.slice(0, Math.min(3, weakest.length));
-      return top3[Math.floor(Math.random() * top3.length)]!.s;
+    // 4. 有 mastery 数据：按 mastery 升序 + 加抖动（避免每次同一组）
+    const withMastery = unitFiltered
+      .map((s) => ({ s, m: masteryById.get(s.id) ?? 999 }))
+      .sort((a, b) => a.m - b.m);
+    if (withMastery.length > 0) {
+      // 取最弱 N*2 里随机选 N 个，多样性更强
+      const pool = withMastery.slice(0, Math.min(n * 2, withMastery.length));
+      const shuffled = [...pool].sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, n).map((x) => x.s);
     }
 
-    // 5. 没有任何 mastery 数据 → 完全随机（按难度低优先 + 随机）
-    if (unitFiltered.length === 0) return candidates[0] ?? null;
-    // 难度低的（base ≤ 3）先随机，没合适再扩
+    // 5. 没 mastery：随机 N 个
+    if (unitFiltered.length === 0) return candidates.slice(0, n);
     const easyish = unitFiltered.filter((s) => (s.difficultyBase ?? 3) <= 3);
     const pool = easyish.length > 0 ? easyish : unitFiltered;
-    return pool[Math.floor(Math.random() * pool.length)] ?? null;
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, n);
   };
 
   const runGeneration = async () => {
     if (phase.status === "running") return;
     safeSetPhase({ status: "running", message: "正在挑选最适合 Selena 的 skill…" });
     try {
-      const skill = await pickSkillToTrain();
-      if (!skill) {
+      // multiSkillCount 强制为 1（自由练）当显式给了 preferredSkillId
+      const desiredSkillN = props.preferredSkillId ? 1 : Math.max(1, props.multiSkillCount ?? 1);
+      const skills = await pickSkillsToTrain(desiredSkillN);
+      if (skills.length === 0) {
         safeSetPhase({ status: "failed", message: "找不到合适的 skill" });
         return;
       }
-      const unit = props.units.find((u) => u.id === skill.unitId);
-      safeSetPhase({
-        status: "running",
-        message: `小进正在为「${skill.name}」出题，并发出 ${props.count ?? 8} 道，约 15-30 秒…`,
-      });
-      const existingStems = props.seedQuestions
-        .filter((q) => q.skill_id === skill.id)
-        .map((q) => q.stem)
-        .slice(0, 30);
-
-      // Round 6: 服务端改成并发 4 题/批，30 题 ~25s；客户端 90s 兜底
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("AI 出题超时（90 秒）")), 90_000),
-      );
-      const r = await Promise.race([
-        generateAiQuestions({
-          subjectId: props.subjectId,
-          unitId: skill.unitId,
-          unitName: unit?.name,
-          skillId: skill.id,
-          skillName: skill.name,
-          // 默认改 8 道，内部分 2 个并发批次跑
-          count: props.count ?? 8,
-          difficulty: "2-4",
-          term: props.currentTerm ?? "下册",
-          existingStems,
-        }),
-        timeout,
-      ]);
-
-      if (!mountedRef.current) return; // 组件已卸载（用户离开页面）
-
-      if (r.questions.length === 0) {
-        safeSetPhase({ status: "failed", message: "AI 出的题都没通过校验，再试一次。" });
-        return;
-      }
+      const totalCount = props.count ?? 8;
+      const perSkill = Math.max(2, Math.ceil(totalCount / skills.length));
 
       // **客户端校验**：拦截垃圾题（缺字段 / answer 指向不存在选项 / stem 空白）
       const isValid = (q: unknown): boolean => {
@@ -206,28 +183,94 @@ export function AutoGenerateOnEmpty(props: Props) {
         return true;
       };
 
-      const stamped = r.questions
-        .map((q) => ({ ...q, subjectId: props.subjectId }))
+      // 多 skill 并发出题（每个 skill 一次 LLM 请求，Promise.allSettled 等所有完成）
+      const skillNames = skills.map((s) => `「${s.name}」`).join(skills.length > 1 ? "、" : "");
+      safeSetPhase({
+        status: "running",
+        message:
+          skills.length === 1
+            ? `小进正在为${skillNames}出题，并发出 ${totalCount} 道，约 15-30 秒…`
+            : `小进正在跨 ${skills.length} 个知识点 ${skillNames} 出 ${totalCount} 道综合题，约 20-40 秒…`,
+      });
+
+      const timeoutMs = skills.length > 1 ? 120_000 : 90_000;
+      const tasks = skills.map(async (skill) => {
+        const unit = props.units.find((u) => u.id === skill.unitId);
+        const existingStems = props.seedQuestions
+          .filter((q) => q.skill_id === skill.id)
+          .map((q) => q.stem)
+          .slice(0, 30);
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`AI 出题超时（${timeoutMs / 1000} 秒）`)), timeoutMs),
+        );
+        const r = await Promise.race([
+          generateAiQuestions({
+            subjectId: props.subjectId,
+            unitId: skill.unitId,
+            unitName: unit?.name,
+            skillId: skill.id,
+            skillName: skill.name,
+            count: perSkill,
+            difficulty: "2-4",
+            term: props.currentTerm ?? "下册",
+            existingStems,
+          }),
+          timeout,
+        ]);
+        return r.questions;
+      });
+
+      const settled = await Promise.allSettled(tasks);
+      if (!mountedRef.current) return;
+
+      const allQuestions: unknown[] = [];
+      let failedSkills = 0;
+      for (const s of settled) {
+        if (s.status === "fulfilled") {
+          allQuestions.push(...s.value);
+        } else {
+          failedSkills++;
+          console.warn("[AutoGen] one skill batch failed:", s.reason);
+        }
+      }
+
+      if (allQuestions.length === 0) {
+        safeSetPhase({
+          status: "failed",
+          message:
+            failedSkills === skills.length
+              ? "AI 出题失败（全部跑题或超时），再试一次。"
+              : "AI 出的题都没通过校验，再试一次。",
+        });
+        return;
+      }
+
+      const stamped = allQuestions
+        .map((q) => ({ ...(q as object), subjectId: props.subjectId }))
         .filter(isValid);
 
-      const rejected = r.questions.length - stamped.length;
+      const rejected = allQuestions.length - stamped.length;
       if (stamped.length === 0) {
         safeSetPhase({
           status: "failed",
-          message: `AI 出了 ${r.questions.length} 道但全部校验失败（缺字段或答案不对应）`,
+          message: `AI 出了 ${allQuestions.length} 道但全部校验失败（缺字段或答案不对应）`,
         });
         return;
       }
       if (rejected > 0) {
-        console.warn(`[AutoGen] rejected ${rejected}/${r.questions.length} bad questions`);
+        console.warn(`[AutoGen] rejected ${rejected}/${allQuestions.length} bad questions`);
       }
       await db.questions.bulkPut(stamped as never);
 
       if (!mountedRef.current) return;
       sfx.chest();
+      const skillSummary =
+        skills.length === 1
+          ? `小进帮你出了 ${stamped.length} 道新题！`
+          : `小进跨 ${skills.length} 个知识点出了 ${stamped.length} 道综合题！`;
       safeSetPhase({
         status: "success",
-        message: `小进帮你出了 ${stamped.length} 道新题！`,
+        message: skillSummary,
         generatedCount: stamped.length,
       });
       // 通知父刷新 session（也只在还挂载时触发，避免后台导航）

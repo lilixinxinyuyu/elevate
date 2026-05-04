@@ -69,7 +69,12 @@ export function SkillPickerPage() {
 
   const go = () => {
     if (selected.size === 0) return;
-    nav(`/train?skillIds=${Array.from(selected).join(",")}`);
+    // 必须用 /math/train 绝对路径！
+    // 老路径 /train 会被 router 的 <Navigate to="/math/train"> 兜底重定向，
+    // 但 Navigate 会**丢掉 query string** —— 结果 selectedSkillIds 全没了，
+    // Train.tsx fallback 到 mode="normal" → AutoGen 选最弱 skill 出题
+    // → 用户选 A skill 但出 B skill 的题。这是 v0.27.0 之前留下的脏路径。
+    nav(`/math/train?skillIds=${Array.from(selected).join(",")}`);
   };
 
   return (

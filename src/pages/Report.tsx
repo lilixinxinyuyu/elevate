@@ -3,7 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { SKILLS } from "../content/skills";
 import { weekStartKey } from "../lib/date";
-import type { Attempt, MasteryScore } from "../core/types";
+import type { Attempt, DailySession, MasteryScore } from "../core/types";
 
 const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]));
 
@@ -17,7 +17,20 @@ export function ReportPage() {
     async () => (student ? db.mastery.where({ studentId: student.id }).toArray() : []),
     [student?.id],
   );
+  // 模拟考试历史：按 finishedAt 倒序，最多 20 条
+  const mockExamSessions = useLiveQuery(
+    async () => {
+      if (!student) return [] as DailySession[];
+      const rows = await db.sessions.where({ studentId: student.id }).toArray();
+      return rows
+        .filter((s) => s.mode === "mock_exam" && s.summary)
+        .sort((a, b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0))
+        .slice(0, 20);
+    },
+    [student?.id],
+  );
   const [copied, setCopied] = useState(false);
+  const [showAllMock, setShowAllMock] = useState(false);
 
   const report = useMemo(() => {
     if (!student || !attempts) return null;
@@ -104,6 +117,75 @@ export function ReportPage() {
           </ul>
         </div>
       )}
+
+      {/* v0.27.1：模拟考试历史 */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-medium">📝 模拟考试历史</div>
+          <div className="text-xs text-slate-400">
+            {mockExamSessions?.length ?? 0} 次记录
+          </div>
+        </div>
+        {!mockExamSessions || mockExamSessions.length === 0 ? (
+          <div className="text-sm text-slate-500 text-center py-4">
+            还没考过模拟考——首页"模拟考试"按钮试一次！
+          </div>
+        ) : (
+          <ul className="text-sm space-y-1.5">
+            {(showAllMock ? mockExamSessions : mockExamSessions.slice(0, 5)).map((s) => {
+              const summary = s.summary!;
+              const date = s.finishedAt
+                ? new Date(s.finishedAt).toLocaleDateString("zh-CN", {
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : s.dateKey;
+              const accColor =
+                summary.accuracy >= 0.85
+                  ? "text-emerald-400"
+                  : summary.accuracy >= 0.7
+                    ? "text-amber-300"
+                    : "text-rose-300";
+              return (
+                <li
+                  key={s.id}
+                  className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-slate-400 tabular-nums w-24 shrink-0">
+                      {date}
+                    </div>
+                    <div className="text-sm">
+                      {summary.correct} / {summary.total} 题
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`font-semibold tabular-nums ${accColor}`}>
+                      {Math.round(summary.accuracy * 100)}%
+                    </span>
+                    <span className="text-xs text-slate-400 tabular-nums">
+                      +{summary.xpGained} XP
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+            {mockExamSessions.length > 5 && (
+              <li className="text-center pt-1">
+                <button
+                  type="button"
+                  className="text-xs text-violet-300 hover:text-violet-200"
+                  onClick={() => setShowAllMock((v) => !v)}
+                >
+                  {showAllMock ? "收起" : `展开全部 ${mockExamSessions.length} 次 →`}
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
