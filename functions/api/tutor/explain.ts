@@ -1,4 +1,12 @@
-import { checkAuth, corsHeaders, jsonResponse, type Env } from "../../_shared";
+import {
+  checkAuth,
+  corsHeaders,
+  getChatModelsFor,
+  getChatProviders,
+  jsonResponse,
+  type AiProviderContext,
+  type Env,
+} from "../../_shared";
 
 /**
  * POST /api/tutor/explain
@@ -107,16 +115,16 @@ interface ChatCompletionsResponse {
 }
 
 async function callQwenChat(
-  apiKey: string,
+  ctx: AiProviderContext,
   model: string,
   messages: { role: string; content: string }[],
 ): Promise<{ ok: true; text: string } | { ok: false; status: number; code: string; message: string }> {
   const upstream = await fetch(
-    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+    `${ctx.baseUrl}/compatible-mode/v1/chat/completions`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${ctx.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -156,7 +164,8 @@ async function callQwenChat(
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const fail = checkAuth(request, env);
   if (fail) return fail;
-  if (!env.DASHSCOPE_API_KEY) {
+  const providers = getChatProviders(env);
+  if (providers.length === 0) {
     return jsonResponse({ ok: false, error: "tutor_not_configured" }, 503);
   }
 
@@ -174,7 +183,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const messages: { role: string; content: string }[] = [
     { role: "system", content: systemPrompt },
   ];
-  // 历史对话（多轮 follow-up）
   if (Array.isArray(body.conversation) && body.conversation.length > 0) {
     for (const m of body.conversation) {
       if (m.role === "assistant" || m.role === "user") {
@@ -185,24 +193,40 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     messages.push({ role: "user", content: buildUserMessage(body) });
   }
 
-  // 模型 fallback 链：plus → flash → turbo
-  const models = ["qwen-plus", "qwen-flash", "qwen-turbo"];
-  const tried: { model: string; status: number; code: string; message: string }[] = [];
-  for (const m of models) {
-    const r = await callQwenChat(env.DASHSCOPE_API_KEY, m, messages);
-    if (r.ok) {
-      return jsonResponse({ ok: true, explanation: r.text, model: m });
+  const tried: {
+    provider: string;
+    model: string;
+    status: number;
+    code: string;
+    message: string;
+  }[] = [];
+
+  for (const ctx of providers) {
+    const models = getChatModelsFor(ctx);
+    for (const m of models) {
+      const r = await callQwenChat(ctx, m, messages);
+      if (r.ok) {
+        return jsonResponse({ ok: true, explanation: r.text, model: m, provider: ctx.label });
+      }
+      tried.push({
+        provider: ctx.label,
+        model: m,
+        status: r.status,
+        code: r.code,
+        message: r.message,
+      });
+      if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
     }
-    tried.push({ model: m, status: r.status, code: r.code, message: r.message });
-    // 鉴权类错误直接停
-    if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
   }
-  console.error("[tutor.explain] all models failed", tried);
+  console.error("[tutor.explain] all providers/models failed", tried);
   return jsonResponse(
     {
       ok: false,
       error: "no_model_worked",
-      detail: tried.map((t) => `${t.model}:${t.code}`).join(", "),
+      detail: tried
+        .slice(0, 6)
+        .map((t) => `${t.provider}/${t.model}:${t.code}`)
+        .join(", "),
       tried,
     },
     502,

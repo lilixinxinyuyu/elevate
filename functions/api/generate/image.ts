@@ -1,4 +1,12 @@
-import { checkAuth, corsHeaders, jsonResponse, type Env } from "../../_shared";
+import {
+  checkAuth,
+  corsHeaders,
+  getChatProviders,
+  getImageModelsFor,
+  jsonResponse,
+  type AiProviderContext,
+  type Env,
+} from "../../_shared";
 
 /**
  * POST /api/generate/image
@@ -55,43 +63,24 @@ interface TaskStatusResponse {
   message?: string;
 }
 
-const ENDPOINT_CREATE =
-  "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis";
-const ENDPOINT_TASK = (id: string) =>
-  `https://dashscope-intl.aliyuncs.com/api/v1/tasks/${id}`;
+// 异步任务 endpoint 路径模板（baseUrl 由 ctx 决定）
+const PATH_CREATE_ASYNC = "/api/v1/services/aigc/text2image/image-synthesis";
+const PATH_TASK_STATUS = (id: string) => `/api/v1/tasks/${id}`;
 
-/**
- * 候选模型链 — 按"在 DashScope intl free tier 实际可用"排序。
- *
- * Round 4 调整：用户上轮所有 qwen-image-* 都返回 InvalidParameter（要么模型不
- * 存在要么 endpoint 不对）。改成万相 wanx2.1 优先（DashScope 老牌文生图，free
- * tier 一般有），qwen-image 留作 best-effort。
- */
-const MODELS = [
-  // 万相 2.1 — 多数账号可用
-  "wanx2.1-t2i-turbo",
-  "wanx2.1-t2i-plus",
-  "wanx-v1",
-  // Qwen-Image 系列（用户截图里的，但调用格式可能不一样）
-  "qwen-image-plus",
-  "qwen-image",
-  "qwen-image-2.0-pro-2026-04-22",
-  "qwen-image-2.0-2026-03-03",
-];
+// （MODELS 列表已经移到 _shared.ts: getImageModelsFor(ctx)）
 
 async function createTask(
-  apiKey: string,
+  ctx: AiProviderContext,
   model: string,
   prompt: string,
   size: string,
   n: number,
 ): Promise<{ ok: true; taskId: string } | { ok: false; status: number; code: string; message: string }> {
-  const r = await fetch(ENDPOINT_CREATE, {
+  const r = await fetch(`${ctx.baseUrl}${PATH_CREATE_ASYNC}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${ctx.apiKey}`,
       "Content-Type": "application/json",
-      // 异步任务必须带这个 header
       "X-DashScope-Async": "enable",
     },
     body: JSON.stringify({
@@ -128,20 +117,19 @@ async function createTask(
  * 直接返回 { data: [{url}] } 或 { data: [{b64_json}] }
  */
 async function callSyncImageGen(
-  apiKey: string,
+  ctx: AiProviderContext,
   model: string,
   prompt: string,
   size: string,
   n: number,
 ): Promise<{ ok: true; urls: string[] } | { ok: false; status: number; code: string; message: string }> {
-  // OpenAI image gen 用 1024x1024 这种格式，不是 1024*1024
   const sizeOpenAi = size.replace("*", "x");
   const r = await fetch(
-    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/images/generations",
+    `${ctx.baseUrl}/compatible-mode/v1/images/generations`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${ctx.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -180,13 +168,13 @@ async function callSyncImageGen(
 }
 
 async function pollTask(
-  apiKey: string,
+  ctx: AiProviderContext,
   taskId: string,
   maxAttempts = 60,
 ): Promise<{ ok: true; urls: string[] } | { ok: false; status: number; code: string; message: string }> {
   for (let i = 0; i < maxAttempts; i++) {
-    const r = await fetch(ENDPOINT_TASK(taskId), {
-      headers: { Authorization: `Bearer ${apiKey}` },
+    const r = await fetch(`${ctx.baseUrl}${PATH_TASK_STATUS(taskId)}`, {
+      headers: { Authorization: `Bearer ${ctx.apiKey}` },
     });
     let json: TaskStatusResponse | null = null;
     try {
@@ -223,7 +211,8 @@ async function pollTask(
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const fail = checkAuth(request, env);
   if (fail) return fail;
-  if (!env.DASHSCOPE_API_KEY) {
+  const providers = getChatProviders(env);
+  if (providers.length === 0) {
     return jsonResponse({ ok: false, error: "image_gen_not_configured" }, 503);
   }
 
@@ -238,67 +227,84 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const fullPrompt = body.style ? `${body.prompt}, ${body.style}` : body.prompt;
-  const size = body.size ?? "512*512";
+  const size = body.size ?? "1024*1024";
   const n = body.n ?? 1;
 
-  // 用户传 model = 只跑那一个；否则跑全链
-  const modelChain = body.model ? [body.model] : MODELS;
-  const tried: { model: string; endpoint: string; status: number; code: string; message: string }[] = [];
+  const tried: {
+    provider: string;
+    model: string;
+    endpoint: string;
+    status: number;
+    code: string;
+    message: string;
+  }[] = [];
 
-  for (const m of modelChain) {
-    const isQwenImage = m.startsWith("qwen-image");
-    // qwen-image 系列：先试 sync OpenAI-compat（稳定）；wanx 系列：用 async task
-    if (isQwenImage) {
-      const sync = await callSyncImageGen(env.DASHSCOPE_API_KEY, m, fullPrompt, size, n);
-      if (sync.ok) {
-        return jsonResponse({ ok: true, urls: sync.urls, model: m, endpoint: "sync" });
+  for (const ctx of providers) {
+    // 用户指定 model 就只跑那一个，否则用 provider 对应的链
+    const models = body.model ? [body.model] : getImageModelsFor(ctx);
+    for (const m of models) {
+      const isLikelySync = m.startsWith("qwen-image") || m.startsWith("wan2.7");
+      // qwen-image / wan2.7 优先 sync OpenAI-compat；wanx2.1 系列用 async task
+      if (isLikelySync) {
+        const sync = await callSyncImageGen(ctx, m, fullPrompt, size, n);
+        if (sync.ok) {
+          return jsonResponse({
+            ok: true,
+            urls: sync.urls,
+            model: m,
+            provider: ctx.label,
+            endpoint: "sync",
+          });
+        }
+        tried.push({
+          provider: ctx.label,
+          model: m,
+          endpoint: "sync",
+          status: sync.status,
+          code: sync.code,
+          message: sync.message,
+        });
+        if (sync.code === "InvalidApiKey" || sync.code === "AccessDenied") break;
+      }
+      const created = await createTask(ctx, m, fullPrompt, size, n);
+      if (!created.ok) {
+        tried.push({
+          provider: ctx.label,
+          model: m,
+          endpoint: "async",
+          status: created.status,
+          code: created.code,
+          message: created.message,
+        });
+        if (created.code === "InvalidApiKey" || created.code === "AccessDenied") break;
+        continue;
+      }
+      const polled = await pollTask(ctx, created.taskId);
+      if (polled.ok) {
+        return jsonResponse({
+          ok: true,
+          urls: polled.urls,
+          model: m,
+          provider: ctx.label,
+          endpoint: "async",
+          taskId: created.taskId,
+        });
       }
       tried.push({
-        model: m,
-        endpoint: "sync",
-        status: sync.status,
-        code: sync.code,
-        message: sync.message,
-      });
-      if (sync.code === "InvalidApiKey" || sync.code === "AccessDenied") break;
-      // sync 失败也试一次 async（有些模型走 async 才行）
-    }
-    const created = await createTask(env.DASHSCOPE_API_KEY, m, fullPrompt, size, n);
-    if (!created.ok) {
-      tried.push({
+        provider: ctx.label,
         model: m,
         endpoint: "async",
-        status: created.status,
-        code: created.code,
-        message: created.message,
-      });
-      if (created.code === "InvalidApiKey" || created.code === "AccessDenied") break;
-      continue;
-    }
-    const polled = await pollTask(env.DASHSCOPE_API_KEY, created.taskId);
-    if (polled.ok) {
-      return jsonResponse({
-        ok: true,
-        urls: polled.urls,
-        model: m,
-        endpoint: "async",
-        taskId: created.taskId,
+        status: polled.status,
+        code: polled.code,
+        message: polled.message,
       });
     }
-    tried.push({
-      model: m,
-      endpoint: "async",
-      status: polled.status,
-      code: polled.code,
-      message: polled.message,
-    });
   }
 
-  console.error("[generate.image] all models failed", tried);
-  // 给前端一个可读的 detail（前几个失败的 model + reason）
+  console.error("[generate.image] all providers/models failed", tried);
   const briefDetail = tried
-    .slice(0, 4)
-    .map((t) => `${t.model}(${t.endpoint}):${t.code}`)
+    .slice(0, 6)
+    .map((t) => `${t.provider}/${t.model}(${t.endpoint}):${t.code}`)
     .join(", ");
   return jsonResponse(
     {

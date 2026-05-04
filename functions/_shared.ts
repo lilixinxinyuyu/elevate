@@ -10,8 +10,76 @@
 export interface Env {
   APP_PASSWORD: string;
   DB: D1Database;
-  /** 可选：Qwen TTS。多学科 Phase 1 给语文听写功能用 */
+  /** 可选：Qwen TTS / DashScope intl OpenAI-compat。多学科 Phase 1 给语文听写用 */
   DASHSCOPE_API_KEY?: string;
+  /**
+   * 可选：阿里云 Token Plan 订阅 API key (sk-sp-...)。
+   * 如果设了，AI 出题 / 讲题 / 图像生成会优先走 token-plan endpoint，
+   * 它有 qwen3.6-plus / wan2.7-image-pro 等更新模型。
+   * 没设就 fallback 到 DashScope intl。
+   */
+  TOKEN_PLAN_API_KEY?: string;
+}
+
+/**
+ * AI provider context — 描述当前 endpoint 应该用什么 base URL / API key /
+ * 候选 model 链。Round 5 加上 token-plan 优先。
+ *
+ * 调用方拿到 ctx 后调 ctx.chatModels[] / ctx.imageModels[] 依次试。
+ */
+export interface AiProviderContext {
+  baseUrl: string;
+  apiKey: string;
+  /** 标识用，error log 里能看到走的是哪个 endpoint */
+  label: "token-plan" | "dashscope-intl";
+}
+
+/** 选 chat 模型用的 provider 列表（按优先级）。*/
+export function getChatProviders(env: Env): AiProviderContext[] {
+  const providers: AiProviderContext[] = [];
+  if (env.TOKEN_PLAN_API_KEY) {
+    providers.push({
+      baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com",
+      apiKey: env.TOKEN_PLAN_API_KEY,
+      label: "token-plan",
+    });
+  }
+  if (env.DASHSCOPE_API_KEY) {
+    providers.push({
+      baseUrl: "https://dashscope-intl.aliyuncs.com",
+      apiKey: env.DASHSCOPE_API_KEY,
+      label: "dashscope-intl",
+    });
+  }
+  return providers;
+}
+
+/** 给定 provider，返回它对应的可用 chat 模型链（按降序质量）。 */
+export function getChatModelsFor(ctx: AiProviderContext): string[] {
+  if (ctx.label === "token-plan") {
+    return ["qwen3.6-plus", "deepseek-v3.2", "glm-5", "MiniMax-M2.5"];
+  }
+  return [
+    "qwen-plus",
+    "qwen3.5-omni-plus",
+    "qwen3.5-omni-flash",
+    "qwen-max",
+    "qwen-flash",
+    "qwen-turbo",
+  ];
+}
+
+/** 给定 provider，返回它对应的图像生成模型链。 */
+export function getImageModelsFor(ctx: AiProviderContext): string[] {
+  if (ctx.label === "token-plan") {
+    return [
+      "wan2.7-image-pro",
+      "wan2.7-image",
+      "qwen-image-2.0-pro",
+      "qwen-image-2.0",
+    ];
+  }
+  return ["wanx2.1-t2i-turbo", "wanx2.1-t2i-plus", "wanx-v1"];
 }
 
 export const corsHeaders = {

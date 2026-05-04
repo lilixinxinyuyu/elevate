@@ -1,4 +1,12 @@
-import { checkAuth, corsHeaders, jsonResponse, type Env } from "../../_shared";
+import {
+  checkAuth,
+  corsHeaders,
+  getChatModelsFor,
+  getChatProviders,
+  jsonResponse,
+  type AiProviderContext,
+  type Env,
+} from "../../_shared";
 
 /**
  * POST /api/generate/questions
@@ -71,7 +79,7 @@ interface QwenChatResponse {
 }
 
 async function callQwenChat(
-  apiKey: string,
+  ctx: AiProviderContext,
   model: string,
   systemPrompt: string,
   userPrompt: string,
@@ -90,11 +98,11 @@ async function callQwenChat(
     requestBody.response_format = { type: "json_object" };
   }
   const upstream = await fetch(
-    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+    `${ctx.baseUrl}/compatible-mode/v1/chat/completions`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${ctx.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestBody),
@@ -115,7 +123,7 @@ async function callQwenChat(
         errMsg,
       )
     ) {
-      return await callQwenChat(apiKey, model, systemPrompt, userPrompt, false);
+      return await callQwenChat(ctx, model, systemPrompt, userPrompt, false);
     }
     return {
       ok: false,
@@ -324,7 +332,8 @@ function isValidQuestionShape(q: unknown): boolean {
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const fail = checkAuth(request, env);
   if (fail) return fail;
-  if (!env.DASHSCOPE_API_KEY) {
+  const providers = getChatProviders(env);
+  if (providers.length === 0) {
     return jsonResponse({ ok: false, error: "generator_not_configured" }, 503);
   }
 
@@ -342,88 +351,101 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const systemPrompt = buildSystemPrompt(subjectId);
   const userPrompt = buildUserPrompt({ ...body, subjectId });
 
-  // 模型链：qwen-plus（高质量）→ omni-plus（用户截图里 authorized）→
-  //          omni-flash（authorized）→ free-tier 兜底（多半 quota 拒绝）
-  const models = [
-    "qwen-plus",
-    "qwen3.5-omni-plus",
-    "qwen3.5-omni-flash",
-    "qwen-max",
-    "qwen-flash",
-    "qwen-turbo",
-  ];
-  const tried: { model: string; status: number; code: string; message: string }[] = [];
-  for (const m of models) {
-    let r = await callQwenChat(env.DASHSCOPE_API_KEY, m, systemPrompt, userPrompt);
-    if (!r.ok) {
-      tried.push({ model: m, status: r.status, code: r.code, message: r.message });
-      if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
-      continue;
-    }
-    let arr = extractJsonArray(r.text);
-    // 第一次没解析出 JSON → 试一次不带 response_format（有时模型把 JSON 嵌在解释里更干净）
-    if (!arr) {
-      const r2 = await callQwenChat(
-        env.DASHSCOPE_API_KEY,
-        m,
-        systemPrompt,
-        `${userPrompt}\n\n（重要：只输出顶层为 { "questions": [...] } 的纯 JSON，不要任何解释、不要 markdown。）`,
-        false,
-      );
-      if (r2.ok) arr = extractJsonArray(r2.text);
-      if (!arr) {
+  const tried: {
+    provider: string;
+    model: string;
+    status: number;
+    code: string;
+    message: string;
+  }[] = [];
+
+  // 双层迭代：每个 provider × 该 provider 的所有 model 链
+  for (const ctx of providers) {
+    const models = getChatModelsFor(ctx);
+    for (const m of models) {
+      let r = await callQwenChat(ctx, m, systemPrompt, userPrompt);
+      if (!r.ok) {
         tried.push({
+          provider: ctx.label,
+          model: m,
+          status: r.status,
+          code: r.code,
+          message: r.message,
+        });
+        if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
+        continue;
+      }
+      let arr = extractJsonArray(r.text);
+      // 第一次没解析出 JSON → 同 model 不带 response_format 再试
+      if (!arr) {
+        const r2 = await callQwenChat(
+          ctx,
+          m,
+          systemPrompt,
+          `${userPrompt}\n\n（重要：只输出顶层为 { "questions": [...] } 的纯 JSON，不要任何解释、不要 markdown。）`,
+          false,
+        );
+        if (r2.ok) arr = extractJsonArray(r2.text);
+        if (!arr) {
+          tried.push({
+            provider: ctx.label,
+            model: m,
+            status: 200,
+            code: "json_parse_failed",
+            message: r.text.slice(0, 200),
+          });
+          continue;
+        }
+        r = r2.ok ? r2 : r;
+      }
+      const valid = arr.filter(isValidQuestionShape);
+      if (valid.length === 0) {
+        tried.push({
+          provider: ctx.label,
           model: m,
           status: 200,
-          code: "json_parse_failed",
-          message: r.text.slice(0, 200),
+          code: "no_valid_questions",
+          message: `got ${arr.length} items but none valid`,
         });
         continue;
       }
-      r = r2.ok ? r2 : r;
-    }
-    const valid = arr.filter(isValidQuestionShape);
-    if (valid.length === 0) {
-      tried.push({
-        model: m,
-        status: 200,
-        code: "no_valid_questions",
-        message: `got ${arr.length} items but none valid`,
+      // 给每道题加唯一时间戳后缀
+      const stamp = Date.now().toString(36);
+      const stamped = valid.map((q, i) => {
+        const obj = q as Record<string, unknown>;
+        const baseId =
+          typeof obj.question_id === "string"
+            ? obj.question_id
+            : `AI_${body.skillId}_${i}`;
+        return {
+          ...obj,
+          question_id: `${baseId}__${stamp}_${i}`,
+          subjectId,
+          tags: Array.isArray(obj.tags)
+            ? Array.from(new Set([...(obj.tags as string[]), "ai_generated"]))
+            : ["ai_generated"],
+        };
       });
-      continue;
+      return jsonResponse({
+        ok: true,
+        questions: stamped,
+        model: m,
+        provider: ctx.label,
+        generatedCount: stamped.length,
+        requestedCount: body.count ?? 5,
+      });
     }
-    // 给每道题加唯一时间戳后缀，避免和已有 question_id 撞
-    const stamp = Date.now().toString(36);
-    const stamped = valid.map((q, i) => {
-      const obj = q as Record<string, unknown>;
-      const baseId =
-        typeof obj.question_id === "string"
-          ? obj.question_id
-          : `AI_${body.skillId}_${i}`;
-      return {
-        ...obj,
-        question_id: `${baseId}__${stamp}_${i}`,
-        subjectId,
-        tags: Array.isArray(obj.tags)
-          ? Array.from(new Set([...(obj.tags as string[]), "ai_generated"]))
-          : ["ai_generated"],
-      };
-    });
-    return jsonResponse({
-      ok: true,
-      questions: stamped,
-      model: m,
-      generatedCount: stamped.length,
-      requestedCount: body.count ?? 5,
-    });
   }
 
-  console.error("[generate.questions] all models failed", tried);
+  console.error("[generate.questions] all providers/models failed", tried);
   return jsonResponse(
     {
       ok: false,
       error: "no_model_worked",
-      detail: tried.map((t) => `${t.model}:${t.code}`).join(", "),
+      detail: tried
+        .slice(0, 6)
+        .map((t) => `${t.provider}/${t.model}:${t.code}`)
+        .join(", "),
       tried,
     },
     502,

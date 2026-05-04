@@ -61,77 +61,97 @@ interface Phase {
 export function AutoGenerateOnEmpty(props: Props) {
   const [phase, setPhase] = useState<Phase>({ status: "idle" });
   const startedRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  /** 安全 setState — 组件卸载后不再触发渲染（避免离开页面后还更新） */
+  const safeSetPhase = (p: Phase) => {
+    if (mountedRef.current) setPhase(p);
+  };
 
   /**
-   * 选 skill 顺序：
-   *   1. preferredSkillId（自由练 / 错题挑战明确指定）
-   *   2. preferredUnitId 范围内 mastery 最弱
-   *   3. currentTerm 范围内 mastery 最弱
-   *   4. 任意 currentTerm 范围内难度最低的 skill（无 mastery 数据时）
-   *   5. 任意 currentTerm skill
+   * 选 skill 顺序（Round 5 修复"永远选小数意义"bug）：
+   *   1. preferredSkillId（自由练 / 错题挑战明确指定）→ 一定优先
+   *   2. preferredUnitId + mastery 排序 → 在指定 unit 里挑最弱
+   *   3. currentTerm 范围内 mastery 最弱（有数据的，剔除"没碰过"的）
+   *   4. 没有 mastery 数据：随机从 currentTerm + currentUnit 范围里挑
+   *      （而不是按难度降序总挑同一个）
    *
-   * 关键：永远先按 currentTerm 过滤 → 不会错出上册题给下册的 Selena。
+   * 关键：当 Selena 还没有任何 mastery 数据时，**随机化**避免每次都"小数意义"。
    */
   const pickSkillToTrain = async (): Promise<Skill | null> => {
+    // 1. preferredSkillId 100% 优先（自由练时就该拿这个 skill 出题）
     if (props.preferredSkillId) {
       const s = props.skills.find((x) => x.id === props.preferredSkillId);
       if (s) return s;
+      console.warn(
+        `[AutoGen] preferredSkillId="${props.preferredSkillId}" 不在 skills 列表里，落入兜底`,
+      );
     }
 
-    // 按当前学期过滤 unit 和 skill
+    // 按当前学期过滤
     const termUnits = props.currentTerm
       ? props.units.filter((u) => u.term === props.currentTerm)
       : props.units;
     const termUnitIds = new Set(termUnits.map((u) => u.id));
     const termSkills = props.skills.filter((s) => termUnitIds.has(s.unitId));
-    // 极端 fallback：term 过滤后没 skill 就回到全集（chinese 没 term 概念）
     const candidates = termSkills.length > 0 ? termSkills : props.skills;
 
-    // preferred unit 优先（如果在 term 范围内）
+    // 2. preferred unit 优先（如果在 term 范围内）
     let unitFiltered = candidates;
     if (props.preferredUnitId) {
       const unitSkills = candidates.filter((s) => s.unitId === props.preferredUnitId);
       if (unitSkills.length > 0) unitFiltered = unitSkills;
     }
 
-    if (!props.studentId) {
-      return (
-        unitFiltered
-          .slice()
-          .sort((a, b) => (a.difficultyBase ?? 3) - (b.difficultyBase ?? 3))[0] ??
-        candidates[0] ??
-        null
-      );
+    // 3. 拿 mastery 数据
+    let masteryById = new Map<string, number>();
+    if (props.studentId) {
+      const masteryRows = await db.mastery
+        .where("studentId")
+        .equals(props.studentId)
+        .filter((m) => m.subjectId === props.subjectId)
+        .toArray();
+      masteryById = new Map(masteryRows.map((m) => [m.skillId, m.score]));
     }
 
-    // 看 mastery：在筛选后的池子里选最弱
-    const masteryRows = await db.mastery
-      .where("studentId")
-      .equals(props.studentId)
-      .filter((m) => m.subjectId === props.subjectId)
-      .toArray();
-    const masteryById = new Map(masteryRows.map((m) => [m.skillId, m.score]));
-    const sorted = unitFiltered
-      .map((s) => ({ s, m: masteryById.get(s.id) ?? 50 }))
-      // mastery 50 = 没数据；优先返回真有数据且分低的，没数据的次之（按难度低排）
-      .sort((a, b) => {
-        if (a.m !== b.m) return a.m - b.m;
-        return (a.s.difficultyBase ?? 3) - (b.s.difficultyBase ?? 3);
-      });
-    return sorted[0]?.s ?? candidates[0] ?? null;
+    // 4. 真有 mastery 数据的 skill 优先：mastery 越低越优先（薄弱的先练）
+    const skillsWithMastery = unitFiltered.filter((s) => masteryById.has(s.id));
+    if (skillsWithMastery.length > 0) {
+      // 排序后取最弱的，但加点抖动避免永远同一个
+      const weakest = skillsWithMastery
+        .map((s) => ({ s, m: masteryById.get(s.id)! }))
+        .sort((a, b) => a.m - b.m);
+      // 取最弱 3 个里随机一个，避免反复刷同一题
+      const top3 = weakest.slice(0, Math.min(3, weakest.length));
+      return top3[Math.floor(Math.random() * top3.length)]!.s;
+    }
+
+    // 5. 没有任何 mastery 数据 → 完全随机（按难度低优先 + 随机）
+    if (unitFiltered.length === 0) return candidates[0] ?? null;
+    // 难度低的（base ≤ 3）先随机，没合适再扩
+    const easyish = unitFiltered.filter((s) => (s.difficultyBase ?? 3) <= 3);
+    const pool = easyish.length > 0 ? easyish : unitFiltered;
+    return pool[Math.floor(Math.random() * pool.length)] ?? null;
   };
 
   const runGeneration = async () => {
     if (phase.status === "running") return;
-    setPhase({ status: "running", message: "正在挑选最适合 Selena 的 skill…" });
+    safeSetPhase({ status: "running", message: "正在挑选最适合 Selena 的 skill…" });
     try {
       const skill = await pickSkillToTrain();
       if (!skill) {
-        setPhase({ status: "failed", message: "找不到合适的 skill" });
+        safeSetPhase({ status: "failed", message: "找不到合适的 skill" });
         return;
       }
       const unit = props.units.find((u) => u.id === skill.unitId);
-      setPhase({
+      safeSetPhase({
         status: "running",
         message: `小进正在为「${skill.name}」出题，10-25 秒…`,
       });
@@ -140,41 +160,53 @@ export function AutoGenerateOnEmpty(props: Props) {
         .map((q) => q.stem)
         .slice(0, 30);
 
-      const r = await generateAiQuestions({
-        subjectId: props.subjectId,
-        unitId: skill.unitId,
-        unitName: unit?.name,
-        skillId: skill.id,
-        skillName: skill.name,
-        count: props.count ?? 5,
-        difficulty: "2-4",
-        term: props.currentTerm ?? "下册",
-        existingStems,
-      });
+      // 60 秒硬超时 — 避免后端卡死时 UI 永远停在"出题中"
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("AI 出题超时（60 秒）")), 60_000),
+      );
+      const r = await Promise.race([
+        generateAiQuestions({
+          subjectId: props.subjectId,
+          unitId: skill.unitId,
+          unitName: unit?.name,
+          skillId: skill.id,
+          skillName: skill.name,
+          count: props.count ?? 5,
+          difficulty: "2-4",
+          term: props.currentTerm ?? "下册",
+          existingStems,
+        }),
+        timeout,
+      ]);
+
+      if (!mountedRef.current) return; // 组件已卸载（用户离开页面）
 
       if (r.questions.length === 0) {
-        setPhase({ status: "failed", message: "AI 出的题都没通过校验，再试一次。" });
+        safeSetPhase({ status: "failed", message: "AI 出的题都没通过校验，再试一次。" });
         return;
       }
 
-      // 写 db.questions（带 subjectId 标记）
       const stamped = r.questions.map((q) => ({
         ...q,
         subjectId: props.subjectId,
       }));
       await db.questions.bulkPut(stamped as never);
 
+      if (!mountedRef.current) return;
       sfx.chest();
-      setPhase({
+      safeSetPhase({
         status: "success",
         message: `小进帮你出了 ${stamped.length} 道新题！`,
         generatedCount: stamped.length,
       });
-      // 通知父刷新 session
-      setTimeout(() => props.onGenerated(), 800);
+      // 通知父刷新 session（也只在还挂载时触发，避免后台导航）
+      setTimeout(() => {
+        if (mountedRef.current) props.onGenerated();
+      }, 800);
     } catch (e) {
+      if (!mountedRef.current) return;
       const msg = e instanceof Error ? e.message : String(e);
-      setPhase({ status: "failed", message: msg });
+      safeSetPhase({ status: "failed", message: msg });
     }
   };
 

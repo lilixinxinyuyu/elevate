@@ -281,8 +281,9 @@ export function GameShell(props: GameShellProps) {
         {/* 行内重做提示（错 1 次后显示）。考试模式不会进这里。 */}
         {retryStage === "showing_hint" && !feedback && (
           <RetryHintPanel
-            stem={question.solution_steps[0] ?? "再仔细读一遍题目，注意小数点和单位。"}
+            question={question}
             onRetry={handleRetry}
+            onSkip={onNext}
           />
         )}
 
@@ -539,22 +540,72 @@ function FeedbackPanel({
  * 不入库、不算分，只给一次"读完提示再来"的机会。
  * 第 2 次提交（不管对错）才真的走 onSubmit 入库。
  */
-function RetryHintPanel({ stem, onRetry }: { stem: string; onRetry: () => void }) {
+/**
+ * 错答 1 次后的引导卡片。Round 5 重写：
+ *  - 不再直接显示 solution_steps[0]（之前会泄答案 "答案是 9"）
+ *  - 主操作改成 "👩‍🏫 让小进讲一讲" 开 TutorPanel 苏格拉底引导
+ *  - 次操作 "再做一次" 给已经知道怎么做的孩子用
+ *  - 第三按钮 "跳过这题" 给真的卡住的孩子兜底
+ */
+function RetryHintPanel({
+  question,
+  onRetry,
+  onSkip,
+}: {
+  question: Question;
+  onRetry: () => void;
+  onSkip: () => void;
+}) {
+  const [showTutor, setShowTutor] = useState(false);
+  const stemHint = "再仔细读一遍题目——题里的关键词、单位、问什么都看清楚。";
+
   return (
     <div className="mt-4 rounded-xl border border-amber-400/40 bg-gradient-to-br from-amber-500/15 to-rose-500/10 p-4 animate-slide-up">
       <div className="flex items-start gap-3">
         <div className="text-3xl">💡</div>
         <div className="flex-1">
-          <div className="font-display font-bold text-amber-100 mb-1">先别急——给你一个提示</div>
-          <div className="text-sm text-amber-200/90 mb-3 leading-relaxed">{stem}</div>
-          <button type="button" className="btn-primary text-sm py-2 px-4" onClick={onRetry}>
-            再做一次 →
-          </button>
+          <div className="font-display font-bold text-amber-100 mb-1">
+            先别急——想想是哪里不对
+          </div>
+          <div className="text-sm text-amber-200/90 mb-3 leading-relaxed">{stemHint}</div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              type="button"
+              className="btn-primary text-sm py-2 px-4"
+              onClick={() => setShowTutor(true)}
+            >
+              👩‍🏫 让小进讲一讲
+            </button>
+            <button
+              type="button"
+              className="text-sm py-2 px-4 rounded-xl border border-amber-400/40 text-amber-100 hover:bg-amber-500/20"
+              onClick={onRetry}
+            >
+              ↻ 再做一次
+            </button>
+            <button
+              type="button"
+              className="text-sm py-2 px-3 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-white/5"
+              onClick={onSkip}
+            >
+              跳过这题 →
+            </button>
+          </div>
           <div className="text-[11px] text-amber-200/60 mt-2">
-            重做一次只扣 1 分提示费。第二次还错才会算错题。
+            点"让小进讲一讲"会引导你想答案而不是直接告诉你。第二次还错才算错题。
           </div>
         </div>
       </div>
+      {showTutor && (
+        <TutorPanel
+          subjectId={question.subjectId === "chinese" ? "chinese" : "math"}
+          stem={question.stem}
+          correctAnswer={describeAnswer(question)}
+          studentAnswer="（第一次答错，还没看到正确答案）"
+          skillName={question.skill_name ?? question.skill_id}
+          onClose={() => setShowTutor(false)}
+        />
+      )}
     </div>
   );
 }

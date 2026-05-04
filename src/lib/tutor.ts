@@ -152,7 +152,26 @@ export interface GenerateQuestionsResult {
 /** 通用：math / chinese 都用这个。函数名保留 "Chinese" 兼容老代码。 */
 export const generateChineseQuestions = generateAiQuestions;
 
+/**
+ * 模块级单例：用 (subjectId, skillId) 做 key 缓存进行中的 promise，
+ * 避免用户多次点击或多次 AutoGenerateOnEmpty 实例同时触发同一请求。
+ */
+const inflightGens = new Map<string, Promise<GenerateQuestionsResult>>();
+
 export async function generateAiQuestions(
+  args: GenerateQuestionsArgs,
+): Promise<GenerateQuestionsResult> {
+  const dedupKey = `${args.subjectId}::${args.skillId}::${args.count}`;
+  const existing = inflightGens.get(dedupKey);
+  if (existing) return existing;
+  const promise = doGenerateAiQuestions(args).finally(() => {
+    inflightGens.delete(dedupKey);
+  });
+  inflightGens.set(dedupKey, promise);
+  return promise;
+}
+
+async function doGenerateAiQuestions(
   args: GenerateQuestionsArgs,
 ): Promise<GenerateQuestionsResult> {
   const r = await fetch("/api/generate/questions", {
