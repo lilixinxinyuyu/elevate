@@ -375,11 +375,32 @@ export async function pushToCloud(): Promise<SyncResult> {
     console.warn("[pushToCloud] pre-push pull failed (continuing anyway):", e);
   }
 
+  // v0.29.7: 上传前检查图片总大小，若超 5 MB 强制重新压缩
+  // 防止 v0.29.5 migration bug 残留的大图导致 cloud 上传 500
+  try {
+    const { ensureTrophyImagesUnderSizeLimit } = await import("../lib/trophyImages");
+    const r = await ensureTrophyImagesUnderSizeLimit(5);
+    if (r && r.recompressed > 0) {
+      console.log(`[pushToCloud] pre-push recompressed ${r.recompressed} oversized image(s)`);
+    }
+  } catch (e) {
+    console.warn("[pushToCloud] pre-push size guard failed (continuing):", e);
+  }
+
   let payload: SnapshotPayload;
   try {
     payload = await dumpLocal();
   } catch (e) {
     return { ok: false, error: "dump_failed: " + (e as Error).message };
+  }
+
+  // v0.29.7: 最后一道防线 — 总 payload > 8 MB 直接 fail，告诉用户去 admin 清
+  const estSizeMb = JSON.stringify(payload).length / 1024 / 1024;
+  if (estSizeMb > 8) {
+    return {
+      ok: false,
+      error: `payload_too_large_${estSizeMb.toFixed(1)}MB: 请去管理页清理勋章图缓存或 db.trophyImages.clear()`,
+    };
   }
   const meta = {
     attemptsCount: payload.attempts.length,

@@ -244,42 +244,89 @@ async function fetchAsDataUrl(url: string): Promise<string> {
 
 /**
  * v0.29.5: 一次性迁移 — 把已存的过大勋章图重新压缩。
+ * v0.29.7 修两个 bug：
+ *   - 老版本 `new Blob([bytes])` 没传 MIME type，<img> 加载偶尔失败 → 静默
+ *     跳过 → 老 7 MB 图不被压缩 → push 上传 14+ MB → cloud 500
+ *   - 老版本 marker 设了之后再也不重跑，即使本地仍有大图
  *
- * 在 trophyImages 表里扫所有 imageDataUrl 长度 > 1MB 的 row，按现在的压缩管道
- * 重处理。每张耗时 < 100 ms（纯 canvas 操作，无 AI 调用）。
+ * 修法：
+ *   - 解 base64 时保留 MIME type（"image/png"），blob 创建时传过去
+ *   - 迁移结束后扫一遍剩余大图：还有 → 不设 marker（下次开 app 再跑）
  *
- * 通过 meta:trophyImagesCompressedAt 标记防止重复执行。
+ * 阈值降到 200 KB（更激进）：实测合理 JPEG ~30-60 KB；> 200 KB 也是 PNG 没压缩
+ * 的痕迹。
+ *
+ * 在 trophyImages 表里扫所有 imageDataUrl 长度 > 200KB 的 row，按现在的压缩
+ * 管道重处理。每张耗时 < 100 ms（纯 canvas 操作，无 AI 调用）。
  */
 const COMPRESSION_MIGRATION_KEY = "trophyImagesCompressedAt";
-const COMPRESSION_THRESHOLD = 1024 * 1024; // 1 MB
+const COMPRESSION_THRESHOLD = 200 * 1024; // 200 KB
 
-export async function migrateCompressOversizedTrophyImages(): Promise<{ processed: number; freedMb: number } | null> {
+export async function migrateCompressOversizedTrophyImages(): Promise<{ processed: number; freedMb: number; remainingOversized: number } | null> {
   const meta = await db.meta.get(COMPRESSION_MIGRATION_KEY);
-  if (meta?.value) return null;
+  // v0.29.7: 即使 marker 已设，也再扫一次。如果本地确实没大图，这一遍 ~5 ms 直接退出。
+  // 这避免了"v0.29.5 bug 把 marker 设了但没真的压缩"的死局。
   const all = await db.trophyImages.toArray();
+  const oversized = all.filter((row) => (row.imageDataUrl?.length ?? 0) >= COMPRESSION_THRESHOLD);
+  if (oversized.length === 0) {
+    if (!meta?.value) await db.meta.put({ key: COMPRESSION_MIGRATION_KEY, value: Date.now() });
+    return null;
+  }
+
   let processed = 0;
   let freedBytes = 0;
-  for (const row of all) {
-    if (!row.imageDataUrl || row.imageDataUrl.length < COMPRESSION_THRESHOLD) continue;
+  let failed = 0;
+  for (const row of oversized) {
     try {
       // data URL → blob → recompress
-      const m = row.imageDataUrl.match(/^data:[^;]+;base64,(.+)$/);
-      if (!m) continue;
-      const bin = atob(m[1]!);
+      const m = row.imageDataUrl!.match(/^data:([^;]+);base64,(.+)$/);
+      if (!m) {
+        failed += 1;
+        continue;
+      }
+      const mime = m[1] ?? "image/png";
+      const bin = atob(m[2]!);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes]);
-      const beforeLen = row.imageDataUrl.length;
+      // v0.29.7 关键：blob 必须带 MIME type，否则 <img> 加载失败 → 整个迁移挂
+      const blob = new Blob([bytes], { type: mime });
+      const beforeLen = row.imageDataUrl!.length;
       const compressed = await compressBlobToDataUrl(blob);
       freedBytes += beforeLen - compressed.length;
       await db.trophyImages.put({ ...row, imageDataUrl: compressed });
       processed += 1;
     } catch (e) {
+      failed += 1;
       console.warn(`[trophyImages] compress migration failed for ${row.trophyId}`, e);
     }
   }
-  await db.meta.put({ key: COMPRESSION_MIGRATION_KEY, value: Date.now() });
-  return { processed, freedMb: freedBytes / 1024 / 1024 };
+
+  // 检查迁移后还剩多少大图（应该 = failed 数）
+  const stillOversized = (await db.trophyImages.toArray()).filter(
+    (row) => (row.imageDataUrl?.length ?? 0) >= COMPRESSION_THRESHOLD,
+  );
+
+  // 只有当真的全部清干净了才设 marker — 否则下次启动会再尝试
+  if (stillOversized.length === 0) {
+    await db.meta.put({ key: COMPRESSION_MIGRATION_KEY, value: Date.now() });
+  }
+
+  return { processed, freedMb: freedBytes / 1024 / 1024, remainingOversized: stillOversized.length };
+}
+
+/**
+ * v0.29.7: push 前的安全检查 — 总图大小超 5 MB 就强制再压一遍。
+ *
+ * 防止边界情况：用户在压缩 migration 完成前就触发 push。
+ */
+export async function ensureTrophyImagesUnderSizeLimit(maxTotalMb = 5): Promise<{ recompressed: number } | null> {
+  const all = await db.trophyImages.toArray();
+  const total = all.reduce((s, r) => s + (r.imageDataUrl?.length ?? 0), 0);
+  if (total <= maxTotalMb * 1024 * 1024) return null;
+  // 清 marker 让 migration 重跑
+  await db.meta.delete(COMPRESSION_MIGRATION_KEY);
+  const r = await migrateCompressOversizedTrophyImages();
+  return { recompressed: r?.processed ?? 0 };
 }
 
 /** 直接读取已缓存的图（不会触发生成） */
