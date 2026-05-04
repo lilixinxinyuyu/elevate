@@ -5,7 +5,10 @@ import { SEED_QUESTIONS } from "../content/questions";
 import { validateQuestion } from "../core/validateQuestion";
 import type { Question, StudentProfile } from "../core/types";
 
-const SEED_VERSION = 19;
+// v0.28.3 (SEED_VERSION 20)：重写 7 道用 "输 N" 指令式说法的题（"0.30 和 0.3，
+// 相等输 0" 这类令人困惑的句式）改成自然中文 "答 N" / 直接问数字。同时补 8 道
+// decimal_compare 高质量题。bump version 让现有设备重新导入更新过的 stem。
+const SEED_VERSION = 20;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

@@ -89,13 +89,13 @@ const sMng: SkillCtx = { unitId: "G4B_U1_DECIMAL_ADD_SUB", unitName: "小数的�
 const mngQs: Question[] = [
   speed(sMng, { id: "G4B_v3_mng_1", difficulty: 1, stem: "0.7 表示 7 个 0.1。0.4 表示几个 0.1？", value: 4, distractors: [40, 0.4, 7] }),
   speed(sMng, { id: "G4B_v3_mng_2", difficulty: 1, stem: "5 个 0.1 写成小数是？", value: 0.5, distractors: [5, 0.05, 51] }),
-  speed(sMng, { id: "G4B_v3_mng_3", difficulty: 2, stem: "0.83 中的 8 在哪一位？(1=十分位 2=百分位 3=千分位)", value: 1, distractors: [2, 3, 8] }),
+  speed(sMng, { id: "G4B_v3_mng_3", difficulty: 2, stem: "0.83 中的 8 在哪一位？十分位→答 1，百分位→答 2，千分位→答 3", value: 1, distractors: [2, 3, 8] }),
   speed(sMng, { id: "G4B_v3_mng_4", difficulty: 2, stem: "12 个 0.01 写成小数是？", value: 0.12, distractors: [12, 1.2, 0.012] }),
-  speed(sMng, { id: "G4B_v3_mng_5", difficulty: 2, stem: "3.05 中的 5 表示 5 个？(0.1 输 0.1, 0.01 输 0.01)", value: 0.01, distractors: [0.1, 1, 5] }),
+  speed(sMng, { id: "G4B_v3_mng_5", difficulty: 2, stem: "3.05 里面的 5 表示 5 个多少？", value: 0.01, distractors: [0.1, 0.5, 0.05] }),
   speed(sMng, { id: "G4B_v3_mng_6", difficulty: 2, stem: "把 0.6 改写成 100 等分，是几个 0.01？", value: 60, distractors: [6, 0.06, 600] }),
   choice(sMng, { id: "G4B_v3_mng_7", difficulty: 3, stem: "下面对 4.205 解释正确的是？", options: [{ id: "a", text: "4 个一、2 个十分之一、5 个百分之一", errorTag: "place_skip" }, { id: "b", text: "4 个一、2 个十分之一、0 个百分之一、5 个千分之一" }, { id: "c", text: "4 个十、205 个百分之一", errorTag: "place_wrong" }, { id: "d", text: "42 个十分之一、5 个千分之一", errorTag: "place_wrong" }], correctId: "b", solution_steps: ["4.205 = 4 + 0.2 + 0.005 → 4 个一、2 个 0.1、0 个 0.01、5 个 0.001"] }),
   speed(sMng, { id: "G4B_v3_mng_8", difficulty: 3, stem: "由 3 个十、4 个一、6 个 0.01 组成的数是？", value: 34.06, distractors: [340.06, 34.6, 30.46] }),
-  speed(sMng, { id: "G4B_v3_mng_9", difficulty: 3, stem: "0.025 是 25 个？(0.1/0.01/0.001 的哪个)", value: 0.001, distractors: [0.01, 0.1, 1] }),
+  speed(sMng, { id: "G4B_v3_mng_9", difficulty: 3, stem: "0.025 是 25 个多少？", value: 0.001, distractors: [0.01, 0.1, 1] }),
   speed(sMng, { id: "G4B_v3_mng_10", difficulty: 4, stem: "由 5 个一、3 个 0.1、7 个 0.001 组成的数是多少？", value: 5.307, distractors: [5.37, 5.037, 537] }),
 ];
 

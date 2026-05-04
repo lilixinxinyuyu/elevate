@@ -59,6 +59,17 @@ function isBadQuestion(q: unknown): { bad: true; reason: string } | { bad: false
     return { bad: true, reason: "缺 question_id" };
   if (typeof o.stem !== "string" || !o.stem.trim())
     return { bad: true, reason: "stem 空" };
+
+  // v0.28.3：题干语言质量检测（避免 "0.30 和 0.3，相等输 0" 这种语言不通顺）
+  const stem = o.stem.trim();
+  if (stem.length < 8) {
+    return { bad: true, reason: `stem 过短 (${stem.length} 字)` };
+  }
+  // 数学题禁用动词："输 N" / "输入 N" / "报 N" / "送 N" 这些指令式说法
+  if (/[输报送]\s*[0-9一二三四五六七八九十]+/.test(stem) || /输入[0-9]/.test(stem)) {
+    return { bad: true, reason: "stem 含'输/报 N'指令式说法（建议用'答 N'）" };
+  }
+
   // 只对"option-based"题型校验 options
   if (needsOptions(o)) {
     if (!Array.isArray(o.options) || o.options.length < 2)
@@ -72,6 +83,21 @@ function isBadQuestion(q: unknown): { bad: true; reason: string } | { bad: false
         .filter((x): x is string => typeof x === "string");
       if (typeof ans.value !== "string" || !optIds.includes(ans.value))
         return { bad: true, reason: `answer.value="${String(ans.value)}" 不在 options` };
+    }
+    // v0.28.3：stem 是数值题，options 不应混入纯中文短语
+    const opts = o.options as Array<{ text?: string }>;
+    const stemHasDigits = /\d/.test(stem);
+    const stemAsksNumber =
+      /(多少|几|是\s*\?|=\s*\?|多多少|大多少|小多少)/.test(stem) ||
+      stem.endsWith("？是？") ||
+      stem.endsWith("等于多少？");
+    const optTexts = opts.map((x) => x?.text ?? "").filter(Boolean);
+    if (stemAsksNumber && stemHasDigits && optTexts.length >= 2) {
+      const allNumeric = optTexts.every((t) => /^[\-+]?\d+(\.\d+)?(\s*[一-鿿]{0,3})?$/.test(t.trim()));
+      const someChinese = optTexts.some((t) => /^[一-鿿]{2,}$/.test(t.trim()));
+      if (!allNumeric && someChinese) {
+        return { bad: true, reason: "数值题但有纯中文选项（stem 问数字、options 是文字）" };
+      }
     }
   }
   return { bad: false };

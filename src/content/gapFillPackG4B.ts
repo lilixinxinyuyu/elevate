@@ -214,9 +214,9 @@ const sMeaning: SkillCtx = {
   ability: ["concept"], examPriority: "MUST_SMALL",
 };
 const meaningQs: Question[] = [
-  speed(sMeaning, { id: "G4B_FILL_meaning_1", difficulty: 2, stem: "0.45 中的 5 在哪一位？（输入位的序号：1=十分位，2=百分位，3=千分位）", value: 2, distractors: [1, 3, 5] }),
+  speed(sMeaning, { id: "G4B_FILL_meaning_1", difficulty: 2, stem: "0.45 中的 5 在哪一位？十分位→答 1，百分位→答 2，千分位→答 3", value: 2, distractors: [1, 3, 5] }),
   speed(sMeaning, { id: "G4B_FILL_meaning_2", difficulty: 2, stem: "把 7 个 0.01 写成小数是？", value: 0.07, distractors: [0.7, 7, 0.007] }),
-  speed(sMeaning, { id: "G4B_FILL_meaning_3", difficulty: 2, stem: "0.6 表示 6 个？（输入数值：0.1 输 0.1，0.01 输 0.01）", value: 0.1, distractors: [0.01, 1, 6] }),
+  speed(sMeaning, { id: "G4B_FILL_meaning_3", difficulty: 2, stem: "0.6 里面有几个 0.1？", value: 6, distractors: [0.06, 0.1, 60] }),
 ];
 
 const sUnit: SkillCtx = { ...sMeaning, skillId: "decimal_unit_conversion", skillName: "长度、质量、面积、人民币单位换算", ability: ["concept", "modeling"] };
@@ -239,7 +239,7 @@ const compareQs: Question[] = [
     correctId: "b",
     solution_steps: ["补 0 对齐：0.600 / 0.605 / 0.650", "再比"],
   }),
-  speed(sCompare, { id: "G4B_FILL_compare_2", difficulty: 2, stem: "在 5.30 和 5.3 中哪个大？（相等输 0，5.30 大输 1，5.3 大输 2）", value: 0, distractors: [1, 2, 5.3] }),
+  speed(sCompare, { id: "G4B_FILL_compare_2", difficulty: 2, stem: "5.30 比 5.3 大多少？", value: 0, distractors: [0.27, 0.03, 0.30] }),
   speed(sCompare, { id: "G4B_FILL_compare_3", difficulty: 3, stem: "比 0.4 大 0.05 的数是？", value: 0.45, distractors: [0.9, 0.405, 0.05] }),
   speed(sCompare, { id: "G4B_FILL_compare_4", difficulty: 2, stem: "0.8 和 0.79 哪个大？（0.8 大输 1，0.79 大输 2）", value: 1, distractors: [2, 0.79, 0.8] }),
   speed(sCompare, { id: "G4B_FILL_compare_5", difficulty: 3, stem: "在数轴上，2.7 比 2.07 大多少？", value: 0.63, distractors: [0.7, 0.07, 2.63] }),
@@ -475,7 +475,7 @@ const eqMeanQs: Question[] = [
     correctId: "a",
     solution_steps: ["a 和 b 都对（同一关系两种写法）；这里选 a"],
   }),
-  speed(sEqMean, { id: "G4B_FILL_em_5", difficulty: 3, stem: "判断 x = 5 是不是 3x - 2 = 13 的解？（是输 1，否输 0）", value: 1, distractors: [0, 5, 13] }),
+  speed(sEqMean, { id: "G4B_FILL_em_5", difficulty: 3, stem: "x = 5 是方程 3x - 2 = 13 的解吗？是→答 1，不是→答 0", value: 1, distractors: [0, 5, 13] }),
   speed(sEqMean, { id: "G4B_FILL_em_6", difficulty: 3, stem: "判断 x = 4 是不是 2x + 5 = 12 的解？（是 1，否 0）", value: 0, distractors: [1, 4, 12] }),
   choice(sEqMean, {
     id: "G4B_FILL_em_7", difficulty: 3,

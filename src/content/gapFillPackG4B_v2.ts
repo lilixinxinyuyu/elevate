@@ -535,7 +535,7 @@ const eqMnQs: Question[] = [
     correctId: "c",
     solution_steps: ["方程 = 含未知数的等式"],
   }),
-  speed(sEqMn, { id: "G4B_v2_em_2", difficulty: 2, stem: "x = 7 是不是方程 x + 5 = 12 的解？(是输 1, 否输 0)", value: 1, distractors: [0, 7, 12] }),
+  speed(sEqMn, { id: "G4B_v2_em_2", difficulty: 2, stem: "x = 7 是方程 x + 5 = 12 的解吗？是→答 1，不是→答 0", value: 1, distractors: [0, 7, 12] }),
   speed(sEqMn, { id: "G4B_v2_em_3", difficulty: 2, stem: "x = 6 是不是方程 3x = 24 的解？(是 1 否 0)", value: 0, distractors: [1, 6, 24] }),
   choice(sEqMn, {
     id: "G4B_v2_em_4", difficulty: 3,
@@ -595,10 +595,10 @@ const sCmp: SkillCtx = {
   ability: ["concept", "reasoning"], examPriority: "HIGH_SMALL",
 };
 const cmpQs: Question[] = [
-  speed(sCmp, { id: "G4B_v2_cmp_1", difficulty: 1, stem: "0.5 和 0.6，哪个大？大的输", value: 0.6, distractors: [0.5, 1.1, 0.1] }),
-  speed(sCmp, { id: "G4B_v2_cmp_2", difficulty: 1, stem: "0.4 和 0.4，相等输 0", value: 0, distractors: [0.4, 0.8, 1] }),
-  speed(sCmp, { id: "G4B_v2_cmp_3", difficulty: 2, stem: "0.30 和 0.3，相等输 0", value: 0, distractors: [0.3, 0.6, 0.03] }),
-  speed(sCmp, { id: "G4B_v2_cmp_4", difficulty: 2, stem: "1.05 和 1.5，大的输", value: 1.5, distractors: [1.05, 2.55, 0.45] }),
+  speed(sCmp, { id: "G4B_v2_cmp_1", difficulty: 1, stem: "0.5 和 0.6，写出大的那个数", value: 0.6, distractors: [0.5, 1.1, 0.1] }),
+  speed(sCmp, { id: "G4B_v2_cmp_2", difficulty: 1, stem: "0.4 和 0.4 相等吗？相等→答 0，不等→答 1", value: 0, distractors: [1, 0.4, 0.8] }),
+  speed(sCmp, { id: "G4B_v2_cmp_3", difficulty: 2, stem: "0.30 比 0.3 大多少？", value: 0, distractors: [0.27, 0.03, 0.3] }),
+  speed(sCmp, { id: "G4B_v2_cmp_4", difficulty: 2, stem: "1.05 和 1.5，写出大的那个数", value: 1.5, distractors: [1.05, 2.55, 0.45] }),
   speed(sCmp, { id: "G4B_v2_cmp_5", difficulty: 3, stem: "2.7 比 2.07 大多少？", value: 0.63, distractors: [0.7, 0.07, 4.77] }),
   choice(sCmp, {
     id: "G4B_v2_cmp_6", difficulty: 3,
@@ -612,10 +612,53 @@ const cmpQs: Question[] = [
     correctId: "b",
     solution_steps: ["补 0：0.405 / 0.450 / 0.500"],
   }),
-  speed(sCmp, { id: "G4B_v2_cmp_7", difficulty: 3, stem: "0.85 和 0.9，大的输", value: 0.9, distractors: [0.85, 1.75, 0.05] }),
+  speed(sCmp, { id: "G4B_v2_cmp_7", difficulty: 3, stem: "0.85 和 0.9，写出大的那个数", value: 0.9, distractors: [0.85, 1.75, 0.05] }),
   speed(sCmp, { id: "G4B_v2_cmp_8", difficulty: 3, stem: "比 0.6 大 0.05 的数？", value: 0.65, distractors: [0.55, 0.605, 1.1] }),
   speed(sCmp, { id: "G4B_v2_cmp_9", difficulty: 4, stem: "在 0.06、0.6、0.066、0.606 中找最大", value: 0.606, distractors: [0.6, 0.066, 0.06] }),
   speed(sCmp, { id: "G4B_v2_cmp_10", difficulty: 4, stem: "Selena 跳远 1.85 米，比同学多 0.07 米。同学跳几米？", value: 1.78, unit: "米", distractors: [1.92, 0.07, 1.78] }),
+
+  // === v0.28.3 手补 8 道高质量 decimal_compare 替代以前的"输 0"系 ===
+  speed(sCmp, { id: "G4B_v2_cmp_11", difficulty: 1, stem: "在 0.6、0.30、0.3、0.06 里面，跟 0.3 一样大的是？", value: 0.30, distractors: [0.6, 0.06, 0.03] }),
+  speed(sCmp, { id: "G4B_v2_cmp_12", difficulty: 2, stem: "在 0.40、0.4、0.04 里面，最大的是？", value: 0.40, distractors: [0.4, 0.04, 4] }),
+  choice(sCmp, {
+    id: "G4B_v2_cmp_13", difficulty: 2,
+    stem: "0.5 和 0.50，下面说法对的是？",
+    options: [
+      { id: "a", text: "相等", },
+      { id: "b", text: "0.5 大", errorTag: "tail_zero_misread" },
+      { id: "c", text: "0.50 大", errorTag: "tail_zero_misread" },
+      { id: "d", text: "无法比较", errorTag: "wrong" },
+    ],
+    correctId: "a",
+    solution_steps: ["小数末尾添 0 不改变数值大小：0.5 = 0.50"],
+  }),
+  choice(sCmp, {
+    id: "G4B_v2_cmp_14", difficulty: 2,
+    stem: "比较 1.23 和 1.32 的大小：",
+    options: [
+      { id: "a", text: "1.23 < 1.32", },
+      { id: "b", text: "1.23 > 1.32", errorTag: "decimal_compare_reverse" },
+      { id: "c", text: "1.23 = 1.32", errorTag: "wrong" },
+      { id: "d", text: "无法比较", errorTag: "wrong" },
+    ],
+    correctId: "a",
+    solution_steps: ["整数部分都是 1，比小数部分：0.23 < 0.32"],
+  }),
+  speed(sCmp, { id: "G4B_v2_cmp_15", difficulty: 3, stem: "把 0.45、0.405、0.5 按从小到大排序，最小的是？", value: 0.405, distractors: [0.45, 0.5, 0.045] }),
+  speed(sCmp, { id: "G4B_v2_cmp_16", difficulty: 3, stem: "把 0.45、0.405、0.5 按从小到大排序，最大的是？", value: 0.5, distractors: [0.45, 0.405, 0.405] }),
+  choice(sCmp, {
+    id: "G4B_v2_cmp_17", difficulty: 3,
+    stem: "下面排列从小到大顺序正确的是？",
+    options: [
+      { id: "a", text: "0.45 < 0.405 < 0.5", errorTag: "tail_zero_misread" },
+      { id: "b", text: "0.405 < 0.45 < 0.5" },
+      { id: "c", text: "0.5 < 0.45 < 0.405", errorTag: "decimal_compare_reverse" },
+      { id: "d", text: "0.405 < 0.5 < 0.45", errorTag: "wrong" },
+    ],
+    correctId: "b",
+    solution_steps: ["补齐到三位小数：0.450 / 0.405 / 0.500", "比较：0.405 < 0.450 < 0.500"],
+  }),
+  speed(sCmp, { id: "G4B_v2_cmp_18", difficulty: 4, stem: "Selena 量身高 1.42 米，比妈妈矮 0.18 米。妈妈身高多少米？", value: 1.6, unit: "米", distractors: [1.24, 1.42, 0.6] }),
 ];
 
 /* --- average_meaning (10 → 20, +10) --- */
