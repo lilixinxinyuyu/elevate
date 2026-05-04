@@ -11,6 +11,9 @@
  *     questionsSystem: "...",
  *     questionsUserTemplate: "...",
  *     questionsSchemas: { plain_choice: "...", cube_view: "...", ... },
+ *     qualityRubric: "...",
+ *     qualityJudgeSystem: "...",
+ *     qualityJudgeUserTemplate: "...",
  *     skillKeywords: { ... },
  *     gameTypeBySkill: { ... },
  *     tutorTextSystem: "...",
@@ -20,6 +23,10 @@
  *
  * 在 build 链路里跑一次（package.json 的 build 脚本里）。
  * 也可以单独 `node scripts/build-prompts.mjs` 调试。
+ *
+ * v0.28.4：支持 {{include:relpath}} 指令——build 时把 relpath 内容内联进来。
+ *   用于让 questions/system.md 和 quality-judge/system.md 共享 quality-rubric.md。
+ *   include 路径相对 prompts/ 根；递归一层（include 的文件里再 include 不展开）。
  */
 
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
@@ -30,8 +37,28 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, "..");
 const PROMPTS_DIR = join(PROJECT_ROOT, "prompts");
 
+/**
+ * 处理 {{include:relpath}} 指令。relpath 相对 prompts/ 根。
+ * 只展开一级——include 的文件里再写 {{include:...}} 不会再次展开（避免环路）。
+ */
+function expandIncludes(content, sourceLabel) {
+  return content.replace(/\{\{include:([^}]+)\}\}/g, (_, relPath) => {
+    const cleanPath = relPath.trim();
+    const fullPath = join(PROMPTS_DIR, cleanPath);
+    try {
+      return readFileSync(fullPath, "utf8").trim();
+    } catch (e) {
+      console.warn(
+        `[build-prompts] WARN: ${sourceLabel} -> include "${cleanPath}" not found, leaving placeholder`,
+      );
+      return `<!-- include:${cleanPath} not found -->`;
+    }
+  });
+}
+
 function readMd(relPath) {
-  return readFileSync(join(PROMPTS_DIR, relPath), "utf8").trim();
+  const raw = readFileSync(join(PROMPTS_DIR, relPath), "utf8").trim();
+  return expandIncludes(raw, relPath);
 }
 
 function readJson(relPath) {
@@ -44,13 +71,18 @@ const gameTypeFiles = readdirSync(gameTypesDir).filter((f) => f.endsWith(".md"))
 const questionsSchemas = {};
 for (const f of gameTypeFiles) {
   const name = basename(f, extname(f));
-  questionsSchemas[name] = readFileSync(join(gameTypesDir, f), "utf8").trim();
+  const raw = readFileSync(join(gameTypesDir, f), "utf8").trim();
+  questionsSchemas[name] = expandIncludes(raw, `questions/game-types/${f}`);
 }
 
 const data = {
   questionsSystem: readMd("questions/system.md"),
   questionsUserTemplate: readMd("questions/user-template.md"),
   questionsSchemas,
+  /** 共享质量规范——出题和质检都内联了它，但保留一份原文方便审计 */
+  qualityRubric: readMd("quality-rubric.md"),
+  qualityJudgeSystem: readMd("quality-judge/system.md"),
+  qualityJudgeUserTemplate: readMd("quality-judge/user-template.md"),
   skillKeywords: readJson("skill-keywords.json"),
   gameTypeBySkill: readJson("game-type-by-skill.json"),
   tutorTextSystem: readMd("tutor/text-system.md"),
@@ -77,9 +109,12 @@ const banner = `/**
  * 改 prompts 请编辑 /prompts/**.md，然后跑 \`pnpm build\` 或 \`node scripts/build-prompts.mjs\`。
  *
  * 源文件：
- *   - prompts/questions/system.md
+ *   - prompts/quality-rubric.md          (rock-solid 出题/质检共享规范)
+ *   - prompts/questions/system.md        (出题 system，内联 rubric)
  *   - prompts/questions/user-template.md
  *   - prompts/questions/game-types/*.md
+ *   - prompts/quality-judge/system.md    (质检 system，内联 rubric)
+ *   - prompts/quality-judge/user-template.md
  *   - prompts/tutor/text-system.md
  *   - prompts/tutor/voice-system.md
  *   - prompts/mascot/xiaojin.md
