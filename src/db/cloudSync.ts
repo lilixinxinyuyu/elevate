@@ -4,15 +4,18 @@ import { db } from "./dexie";
  * 云同步：把 IndexedDB 全表 dump 成 JSON 上传到 /api/sync；下载时反向写回。
  *
  * 数据策略：
- * - 单用户场景，全量上传/下载（每次 ~1-5MB JSON，含 AI 勋章图后会大）
- * - 服务端保留最近 50 个快照历史
+ * - 单用户场景，全量上传/下载主数据（每次 ~0.5-1 MB JSON）
+ * - **trophyImages 走独立 endpoint** /api/sync/trophy-images（按行存 D1）
+ *   —— 因为整体 payload > 1.5 MB 时 D1 单参数超限会让 Worker 抛异常
+ * - 服务端保留最近 50 个主快照历史
  * - 客户端在 localStorage 存最后一次成功 push 的 version
  *
  * 表覆盖：
- *   ✓ attempts / mastery / mistakes / sessions / trophies / meta / students /
- *     tutorSessions / trophyImages（v0.29.4 起，让 AI 勋章图跨设备同步）
+ *   ✓ 主 sync: attempts / mastery / mistakes / sessions / trophies / meta /
+ *     students / tutorSessions
+ *   ✓ 专用 sync: trophyImages（v0.30.0 拆出）
  *   ✗ questions / skills / units（教材定义从代码 seed 来）
- *     —— 但题清理通过 meta:deletedQuestionIds 同步删除列表，让 A 设备的清理在 B 生效
+ *     —— 但题清理通过 meta:deletedQuestionIds 同步删除列表
  */
 
 const PUSH_TABLES = [
@@ -24,9 +27,7 @@ const PUSH_TABLES = [
   "meta",
   "students",
   "tutorSessions",
-  // v0.29.4: AI 生成的勋章图也跨设备同步
-  // 每张 ~150 KB base64 data URL, 总 ~3-5MB. 接受这个 bandwidth 成本。
-  "trophyImages",
+  // v0.30.0: trophyImages 拆出走独立 endpoint（D1 单参数大小限制）
 ] as const;
 
 const LAST_PUSH_KEY = "selena.cloud.lastPush";
@@ -92,8 +93,7 @@ interface SnapshotPayload {
   students: unknown[];
   /** v0.27.0：小进姐姐对话日志，按 id 合并、按 updatedAt 取新 */
   tutorSessions?: unknown[];
-  /** v0.29.4：AI 生成的勋章图，按 trophyId 合并、按 generatedAt 取新 */
-  trophyImages?: unknown[];
+  /** v0.30.0: trophyImages 不再走主 sync——拆走 /api/sync/trophy-images 独立端点 */
 }
 
 async function dumpLocal(): Promise<SnapshotPayload> {
@@ -114,7 +114,7 @@ async function dumpLocal(): Promise<SnapshotPayload> {
 export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.trophyImages],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions],
     async () => {
       for (const t of PUSH_TABLES) {
         const rows = (payload[t] ?? []) as Record<string, unknown>[];
@@ -151,7 +151,7 @@ export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<v
 async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.trophyImages],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions],
     async () => {
       // attempts: pure union (immutable rows)
       const remoteA = (payload.attempts ?? []) as Array<{ id: string }>;
@@ -249,24 +249,7 @@ async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
         if (toPut.length > 0) await db.tutorSessions.bulkPut(toPut as never);
       }
 
-      // v0.29.4: trophyImages：union by trophyId, prefer newer generatedAt
-      // AI 生成的勋章图缓存，跨设备同步让 A 设备生成的图 B 设备也能看到
-      const remoteTi = (payload.trophyImages ?? []) as Array<{
-        trophyId: string;
-        generatedAt?: number;
-      }>;
-      if (remoteTi.length > 0) {
-        const localTi = await db.trophyImages.toArray();
-        const localById = new Map(localTi.map((r) => [r.trophyId, r]));
-        const toPut: typeof remoteTi = [];
-        for (const r of remoteTi) {
-          const local = localById.get(r.trophyId);
-          if (!local || (r.generatedAt ?? 0) > (local.generatedAt ?? 0)) {
-            toPut.push(r);
-          }
-        }
-        if (toPut.length > 0) await db.trophyImages.bulkPut(toPut as never);
-      }
+      // v0.30.0: trophyImages 不在主 sync payload 里了——走 /api/sync/trophy-images 独立端点
 
       // students: 保留本地（用户主动改的字段不被云端旧值覆盖）
       // 但本地不存在的 student 还是要从云端拉
@@ -408,6 +391,7 @@ export async function pushToCloud(): Promise<SyncResult> {
     totalXp: extractTotalXp(payload),
     clientId: getClientId(),
   };
+  let mainVersion: number | undefined;
   try {
     const resp = await fetch("/api/sync/upload", {
       method: "POST",
@@ -421,17 +405,36 @@ export async function pushToCloud(): Promise<SyncResult> {
     if (!resp.ok) return { ok: false, error: `http_${resp.status}` };
     const data = (await resp.json()) as { ok: boolean; version?: number };
     if (!data.ok) return { ok: false, error: "server_error" };
-    if (data.version) setLastPushAt(data.version);
-    return { ok: true, version: data.version };
+    if (data.version) {
+      setLastPushAt(data.version);
+      mainVersion = data.version;
+    }
   } catch (e) {
     return { ok: false, error: "network: " + (e as Error).message };
   }
+
+  // v0.30.0: 单独 push trophyImages（每张按行，避免 D1 单参数超限）
+  try {
+    const r = await pushTrophyImages();
+    if (!r.ok) {
+      console.warn("[pushToCloud] trophyImages push failed:", r.error);
+      // 不让 trophy-image 失败阻塞主 sync 成功；返回主版本号
+    } else if (r.pushed > 0) {
+      console.log(`[pushToCloud] pushed ${r.pushed} trophy image(s)`);
+    }
+  } catch (e) {
+    console.warn("[pushToCloud] trophyImages push threw:", e);
+  }
+
+  return { ok: true, version: mainVersion };
 }
 
 export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<SyncResult> {
   const pwd = getStoredPassword();
   if (!pwd) return { ok: false, error: "no_password" };
   const since = opts.force ? 0 : getLastPullAt();
+  let changed = false;
+  let version: number | undefined;
   try {
     const resp = await fetch(`/api/sync/download?since=${since}`, {
       headers: { Authorization: `Bearer ${pwd}` },
@@ -443,14 +446,38 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
       latest: null | { payload: SnapshotPayload; version: number };
     };
     if (!data.ok) return { ok: false, error: "server_error" };
-    if (!data.latest) return { ok: true, changed: false };
-    // v0.26.1：用 merge 而非覆盖。本地新写入永远不会被远程旧快照清掉
-    await applyPayloadMerged(data.latest.payload);
-    setLastPullAt(data.latest.version);
-    return { ok: true, changed: true, version: data.latest.version };
+    if (data.latest) {
+      // v0.26.1：用 merge 而非覆盖。本地新写入永远不会被远程旧快照清掉
+      await applyPayloadMerged(data.latest.payload);
+      setLastPullAt(data.latest.version);
+      changed = true;
+      version = data.latest.version;
+    }
   } catch (e) {
     return { ok: false, error: "network: " + (e as Error).message };
   }
+
+  // v0.30.0: 拉 trophyImages（增量；force=true 时强制全量重拉）
+  if (opts.force) {
+    try {
+      localStorage.removeItem(TROPHY_LAST_PULL_KEY);
+    } catch {
+      /* */
+    }
+  }
+  try {
+    const r = await pullTrophyImages();
+    if (r.ok && r.pulled > 0) {
+      console.log(`[pullFromCloud] pulled ${r.pulled} trophy image(s)`);
+      changed = true;
+    } else if (!r.ok) {
+      console.warn("[pullFromCloud] trophyImages pull failed:", r.error);
+    }
+  } catch (e) {
+    console.warn("[pullFromCloud] trophyImages pull threw:", e);
+  }
+
+  return { ok: true, changed, version };
 }
 
 /** 主页/管理页判定是否启用云同步：默认启用，用 localStorage 关掉。 */
@@ -471,6 +498,106 @@ export async function checkPassword(pwd: string): Promise<boolean> {
     return resp.ok;
   } catch {
     return false;
+  }
+}
+
+/**
+ * v0.30.0: trophyImages 独立同步（每张 ~30 KB，按行存 D1）。
+ *
+ * 主 sync payload 走 /api/sync/upload，但 trophyImages 走这里，因为：
+ *  - D1 单 bound 参数大小有限制，含 trophyImages 后 payload 2.77 MB → Worker 抛异常
+ *  - 拆出来按行存（每行 30 KB）就稳了
+ */
+const TROPHY_IMAGES_BATCH = 20;
+const TROPHY_LAST_PUSH_KEY = "selena.cloud.trophyImagesLastPush";
+const TROPHY_LAST_PULL_KEY = "selena.cloud.trophyImagesLastPull";
+
+interface TrophyImageRow {
+  trophyId: string;
+  subjectId?: string;
+  imageDataUrl: string;
+  prompt?: string;
+  model?: string;
+  generatedAt?: number;
+  isLottery?: boolean;
+  sourceUrl?: string;
+}
+
+async function pushTrophyImages(): Promise<{ ok: boolean; pushed: number; error?: string }> {
+  const pwd = getStoredPassword();
+  if (!pwd) return { ok: false, pushed: 0, error: "no_password" };
+
+  const all = (await db.trophyImages.toArray()) as TrophyImageRow[];
+  if (all.length === 0) return { ok: true, pushed: 0 };
+
+  let pushed = 0;
+  for (let i = 0; i < all.length; i += TROPHY_IMAGES_BATCH) {
+    const batch = all.slice(i, i + TROPHY_IMAGES_BATCH);
+    try {
+      const r = await fetch("/api/sync/trophy-images", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${pwd}`,
+        },
+        body: JSON.stringify({ rows: batch }),
+      });
+      if (!r.ok) {
+        return { ok: false, pushed, error: `http_${r.status}` };
+      }
+      const j = (await r.json()) as { ok: boolean; accepted?: number; rejected?: unknown[] };
+      if (!j.ok) return { ok: false, pushed, error: "server_error" };
+      pushed += j.accepted ?? 0;
+    } catch (e) {
+      return { ok: false, pushed, error: "network: " + (e as Error).message };
+    }
+  }
+  try {
+    localStorage.setItem(TROPHY_LAST_PUSH_KEY, String(Date.now()));
+  } catch {
+    /* */
+  }
+  return { ok: true, pushed };
+}
+
+async function pullTrophyImages(): Promise<{ ok: boolean; pulled: number; error?: string }> {
+  const pwd = getStoredPassword();
+  if (!pwd) return { ok: false, pulled: 0, error: "no_password" };
+  // 增量：拉自上次拉取后的更新。第一次为 0 全量拉。
+  const since = Number(localStorage.getItem(TROPHY_LAST_PULL_KEY) ?? 0);
+  try {
+    const r = await fetch(`/api/sync/trophy-images?since=${since}`, {
+      headers: { Authorization: `Bearer ${pwd}` },
+    });
+    if (!r.ok) return { ok: false, pulled: 0, error: `http_${r.status}` };
+    const j = (await r.json()) as { ok: boolean; rows?: TrophyImageRow[]; version?: number };
+    if (!j.ok || !Array.isArray(j.rows)) return { ok: false, pulled: 0, error: "bad_payload" };
+
+    if (j.rows.length > 0) {
+      // merge by trophyId, prefer newer generatedAt (相同 trophyId 本地新的不被覆盖)
+      const localList = (await db.trophyImages.toArray()) as TrophyImageRow[];
+      const localById = new Map(localList.map((r) => [r.trophyId, r]));
+      const toPut: TrophyImageRow[] = [];
+      for (const remote of j.rows) {
+        const local = localById.get(remote.trophyId);
+        if (!local || (remote.generatedAt ?? 0) > (local.generatedAt ?? 0)) {
+          toPut.push(remote);
+        }
+      }
+      if (toPut.length > 0) {
+        await db.trophyImages.bulkPut(toPut as never);
+      }
+    }
+    if (j.version) {
+      try {
+        localStorage.setItem(TROPHY_LAST_PULL_KEY, String(j.version));
+      } catch {
+        /* */
+      }
+    }
+    return { ok: true, pulled: j.rows.length };
+  } catch (e) {
+    return { ok: false, pulled: 0, error: "network: " + (e as Error).message };
   }
 }
 

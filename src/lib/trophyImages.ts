@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { db } from "../db/dexie";
 import { generateImage } from "./tutor";
 import type { TrophyImageRow } from "../db/dexie";
+import type { TrophyTier } from "../core/types";
 
 /** trophy 元数据（math + chinese 都能用） */
 export interface TrophyMeta {
@@ -54,66 +55,176 @@ function isSegmentTier(t: TrophyMeta): boolean {
 }
 
 /**
- * 给 trophy 拼出生成 prompt（v0.29.8 重写为单色 SVG 风路线）。
+ * 给 trophy 拼出生成 prompt（v0.29.9 回归独立精修路线）。
  *
- * 关键决策（与 v0.29.x 多彩 motif 路线分道扬镳）：
- *  - **非 commemorative trophy 一律生成纯白单色线稿在纯黑背景上**（SVG-icon 风）
- *  - CSS 端用 mask-image + luminance mask + category gradient 把白色像素染成
- *    daily=翠绿 / milestone=真金 / ability=钴蓝 / skill=紫罗兰
- *  - tier (铜银金钻) 仍由 CSS 外环 + glow + 角标承担
- *  - **AI 一致性满分**：所有 trophy 来自同一张"单色 SVG"风格画板，画风高度统一
- *  - **CSS 富色不靠 AI 抽奖**：颜色由代码硬编码，绝不漂移
+ * 设计：每枚 trophy 都有手写的 motif + signature palette，确保独特创意。
+ * 对 tiered trophy（milestone/ability/skill），同 motif 用 4 种金属调（铜银金钻）
+ * 各生成一张，构成"同一作品的 4 个珍藏版本"。
  *
- * commemorative（第一步 / 期中加冕等）保留 buildCommemorativePrompt
- * 多彩"传家宝奖章"风——它们是独立纪念物，每个独特配色合理。
- *
- * 历史背景：v0.29.0-v0.29.7 走 B++ "AI 自由发挥多彩 motif"路线，实测
- * AI 颜色严重漂移（90% 同质化绿底），用户反馈"一致性很差颜色也不好看"。
+ * 用户反馈痛点回顾：
+ *  - v0.29.0-v0.29.7 "AI 自由发挥多彩 motif" → 颜色漂移，多数偏绿
+ *  - v0.29.8 "单色+CSS 染色" → 一致但单调没质感，像 SVG 不像奖牌
+ *  - v0.29.9 "每枚独立精修+手写 prompt" → 独立创意 + 一致质感
  */
 export function buildTrophyPrompt(t: TrophyMeta): string {
   if (isSegmentTier(t)) {
     return buildTierBadgePrompt(t);
   }
-
-  // commemorative 走"传家宝"多彩专属路径（小批量纪念物，多彩合理）
   if (t.category === "commemorative") {
     return buildCommemorativePrompt(t);
   }
-
-  // 其他全部走"单色 SVG"路线，CSS 端染色
-  return buildMonochromeIconPrompt(t);
+  // 非 commemorative：从 spec 取 motif + tier 金属调拼 prompt
+  return buildRichTrophyPrompt(t);
 }
 
 /**
- * v0.29.8: 单色 SVG-icon 风 prompt — daily/milestone/ability/skill 通用。
+ * v0.29.9: 每个非 commemorative trophy 的手写 motif spec。
  *
- * 输出特征（实测验证）：
- *  - 纯白线稿/silhouette 在纯黑底上
- *  - 主体居中占 60-70% 画面，几何简洁
- *  - 无渐变、无 3D、无光影 — 像 Material Icons / Phosphor 那种 SVG icon
- *  - 完全靠 motif 表达概念，颜色由 CSS mask-image 染成 category 色
- *
- * AI 不再因为"多彩配色"提示瞎发挥 → 一致性提升 10×。
+ * key = 不带 tier 后缀的纯 trophyId（如 "math_answer_master"）
+ * value = motif 描述 + 主调色板提示（tier 会再叠加金属调）
  */
-function buildMonochromeIconPrompt(t: TrophyMeta): string {
-  const desc = t.description ? `Concept hint: ${t.description}.` : "";
+const TROPHY_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
+  // === daily（无 tier，1 张图）===
+  math_daily_complete: {
+    motif: "a glowing checkmark sticker placed on a paper calendar page, with a soft happy aura",
+    palette: "fresh emerald green + golden yellow + cream highlights",
+  },
+  math_speed_demon: {
+    motif: "a cute hand silhouette zooming forward with electric lightning trails behind, dynamic motion blur",
+    palette: "electric sapphire blue + lemon yellow + silver lightning",
+  },
+  math_no_hint_run: {
+    motif: "a bright cartoon brain wearing a tiny halo of stars and shimmering thought sparkles",
+    palette: "lavender purple + warm peach + silver star highlights",
+  },
+  math_mistake_reborn: {
+    motif: "a magical book bursting open with a tiny phoenix rising out of the pages, golden flame trail",
+    palette: "fiery ruby red + warm amber + golden flame",
+  },
+
+  // === milestone（4 tier 变体）===
+  math_answer_master: {
+    motif: "a target with a perfectly placed arrow in the bullseye, surrounded by tiny burst sparkles and small ribbon flag",
+    palette: "deep ruby red bullseye + cream rings + 闪亮 metallic arrow",
+  },
+  math_combo_king: {
+    motif: "a stylized lightning bolt strike with combo number trail dissolving into sparks, dynamic energy",
+    palette: "electric blue energy + amber lightning core",
+  },
+  math_streak_keeper: {
+    motif: "a tall flame burning steadily with a small glowing heart inside, surrounded by soft warm aura",
+    palette: "warm orange flame + ruby heart + cream glow",
+  },
+  math_mastery_climber: {
+    motif: "tiered mountain peaks with a small triangular flag planted on the highest summit, soft cloud at base",
+    palette: "deep teal mountains + cream snow + crimson flag",
+  },
+
+  // === ability（8 个，4 tier 变体）===
+  math_ability_calculation: {
+    motif: "a charming abacus with glowing colorful beads, viewed at a slight angle for depth",
+    palette: "jade green frame + ruby + sapphire + warm amber beads",
+  },
+  math_ability_concept: {
+    motif: "a cute lightbulb wearing a tiny graduation cap, with idea-sparks radiating around",
+    palette: "sunshine yellow bulb + navy cap + silver sparks",
+  },
+  math_ability_reasoning: {
+    motif: "a magnifying glass hovering over interlocking puzzle pieces, one piece glowing gold",
+    palette: "deep sapphire blue + cream paper + golden glow",
+  },
+  math_ability_modeling: {
+    motif: "a triangular ruler crossed with a brass compass, small geometric shapes floating around them",
+    palette: "teal blue + rose gold + soft cream",
+  },
+  math_ability_spatial: {
+    motif: "an isometric Rubik's cube floating with one face exploding into colorful tiles",
+    palette: "vivid rainbow cube faces + dark space backdrop",
+  },
+  math_ability_data: {
+    motif: "a 3D bar chart with colorful bars rising from a base, sparkle particles around the tallest bar",
+    palette: "violet + fuchsia + cyan bars + magenta sparkle",
+  },
+  math_ability_strategy: {
+    motif: "a chess knight piece standing on a glowing tile, soft starry tile pattern around",
+    palette: "dusty rose marble knight + golden tile + indigo backdrop",
+  },
+  math_ability_habit: {
+    motif: "a stylized heart with a small steady flame burning inside, soft golden ring around the heart",
+    palette: "ruby heart + cream flame + rose gold ring",
+  },
+
+  // === skill（5 个，4 tier 变体）===
+  math_decimal_hero: {
+    motif: "a tiny superhero kid in a flowing cape, holding a shield with a glowing decimal point, in a heroic pose",
+    palette: "sky blue cape + lemon yellow shield + cream skin",
+  },
+  math_equation_hero: {
+    motif: "a balance scale with a glowing 'X' variable on one tray and a number stack on the other, perfect equilibrium",
+    palette: "warm orange variable + turquoise scales + brass arms",
+  },
+  math_average_hero: {
+    motif: "a magnifying glass over a small bar chart, with a tiny detective deerstalker hat resting on the magnifier",
+    palette: "mauve hat + honey gold magnifier + cream bars",
+  },
+  math_triangle_hero: {
+    motif: "a sturdy triangle shape with a tiny gavel placed across its base, like a courtroom symbol",
+    palette: "deep purple triangle + amber gavel + cream backdrop",
+  },
+  math_shop_hero: {
+    motif: "a cheerful shopping bag with a glowing coin spilling out the top, surrounded by tiny price-tag sparkles",
+    palette: "mint green bag + rose gold coin + cream tags",
+  },
+};
+
+/**
+ * tier 金属调修饰：避开"24K GOLD"/"DIAMOND PLATINUM"等品牌词（wan2.7 会当文字漏入图）。
+ * 用纯描述性语言。
+ */
+const TIER_FLAVOR: Record<TrophyTier, string> = {
+  bronze:
+    "Tier finish: warm antique copper-bronze metallic surface, aged patina with hints of amber, weathered vintage charm, soft greenish oxidation in shadows.",
+  silver:
+    "Tier finish: polished cool silver-white metallic mirror, crisp pearl highlights, brushed metal striations, faint prismatic shine on the edges.",
+  gold:
+    "Tier finish: warm honey-amber metallic shine, deep embossed relief, regal warm glow, sun-kissed edges that catch the light.",
+  platinum:
+    "Tier finish: iridescent rainbow-holographic metallic surface, crystalline prismatic facets, soft aurora glow, sparkly fairy-dust particles drifting around the medal.",
+};
+
+function buildRichTrophyPrompt(t: TrophyMeta): string {
+  // 取出无 tier 后缀的 trophyId 用于查 spec
+  const baseId = t.id
+    .replace(/^math_/, "math_")
+    .replace(/_(bronze|silver|gold|platinum)$/, "");
+  const spec = TROPHY_MOTIF_SPEC[baseId];
+  const motif =
+    spec?.motif ?? `an iconic illustration that represents「${t.name}」 (${t.description ?? ""})`;
+  const palette =
+    spec?.palette ?? "rich 2-3 color signature palette";
+  const tierFlavor = t.tier ? TIER_FLAVOR[t.tier] : "Tier finish: classic colorful enamel palette.";
+
   return [
-    `A minimalist monochrome ICON, pure white silhouette / line art on solid pitch-black background.`,
-    `Subject: a clean iconic illustration that represents「${t.name}」.`,
-    desc,
-    // 风格强约束
-    `Style: extremely clean, **single color (pure white #FFFFFF) on pure black (#000000)** — like a high-quality SVG icon (Material Icons, Phosphor, or Apple SF Symbols).`,
-    `**No gradients, no shading, no 3D rendering, no perspective, no textures** — just clean flat line art and silhouette.`,
-    `Geometry: instantly readable at small size (32×32 px), bold strokes (~6-8% of canvas width), generous negative space.`,
-    `Subject occupies 60-70% of canvas, strictly centered.`,
-    // 严禁
-    `**Strictly NO color other than white silhouette + black background.** NO gold, green, blue, purple, or any other hue.`,
-    `**NO decorative wrapping** — no ribbons, no laurel wreaths, no star bursts, no rays, no particle effects.`,
-    `NO text, letters, numbers, signatures, watermarks, stamps.`,
-    `Image size 512×512, subject strictly centered with ~10% padding.`,
-  ]
-    .filter(Boolean)
-    .join(" ");
+    // 主旨——避开 "Apple Fitness" 品牌词，用描述性语言
+    `Premium 3D rendered luxury award medallion, magical and rich — designed for a 4th-grade girl to treasure and show off proudly.`,
+    // motif（核心）
+    `Subject: ${motif}.`,
+    // 风格细节
+    `Composition: the subject occupies ~78% of the medal, strictly centered, framed by subtle decorative elements (tiny star sparkles, small ribbon flecks, soft light particles) — never crowded.`,
+    `Surface: glossy enameled medal with deep 3D embossed relief, clear dimensional depth, soft inner glow, polished metallic reflections.`,
+    `Signature palette: ${palette}.`,
+    // Tier 金属调
+    tierFlavor,
+    // 风格 — 不再说品牌名
+    `Production style: high-end commemorative medallion, premium tactile feel, the kind of medal a child wants to keep forever and show friends — magical, dreamy, sparkly, slightly playful and cute.`,
+    // 框约束
+    `Outer ring: a refined thin metallic edge that matches the tier finish — NO heavy decorative wreaths, NO busy frames, NO oversized ribbon banners.`,
+    // 背景 / 大小
+    `Background: deep space-purple gradient to near-black, helps the medal colors pop dramatically.`,
+    // 强力反 text 三连
+    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS** — the medal must be ENTIRELY pictorial and graphical, zero typography.`,
+    `Image size 512×512, square, subject strictly centered with ~8% padding.`,
+  ].join(" ");
 }
 
 /**

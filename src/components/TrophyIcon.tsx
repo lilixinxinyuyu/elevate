@@ -1,18 +1,12 @@
 /**
- * 勋章图标 — v0.29.8 单色 SVG + CSS 染色路线：
+ * 勋章图标 — v0.29.9 回归独立精修 AI 图路线：
  *
- * 两种渲染模式（按 category 自动切换）：
+ * 用户反馈 v0.29.8 单色+CSS 染色"一致是一致，但太单调没质感，离 Apple Fitness 差太远"。
+ * 决定每枚 trophy 独立创作（每枚 1 个手写 rich prompt），tier 变体通过 tier 金属调
+ * 各自生成（最理想 img2img，目前用 text2img + tier flavor）。
  *
- * 1) commemorative（第一步等纪念勋章）→ "AI 多彩图" 模式：
- *    AI 图自带丰富配色（传家宝风），直接 <img> 渲染。
- *
- * 2) daily / milestone / ability / skill → "单色 SVG + CSS 染色" 模式：
- *    AI 图是纯白线稿在纯黑底上（buildMonochromeIconPrompt），CSS 用
- *    mask-image (luminance) + category gradient 把白色染成 daily=翠绿 /
- *    milestone=真金 / ability=钴蓝 / skill=紫罗兰。tier 仍由外环 + 角标承担。
- *
- *    优势：所有 trophy 来自同一画风的"白底黑字"基础图，**绝对一致**；
- *    富色由 CSS 硬编码，不靠 AI 抽奖；每类一种代表色一目了然。
+ * 渲染：所有 AI 图直接 <img> 显示（不再 mask 染色）。
+ * tier 由 image 本身的金属调 + 外层 CSS ring/glow/角标 共同表达。
  */
 
 import { useTrophyImage } from "../lib/trophyImages";
@@ -165,7 +159,8 @@ export function TrophyIcon({
   unlocked = true,
   className = "",
 }: TrophyIconProps) {
-  const fullKey = subjectId ? trophyImageKey(subjectId, trophyId) : trophyId;
+  // v0.29.9: tier-leveled 勋章每个 tier 单独存图（独立 AI 生成），key 带 tier 后缀
+  const fullKey = subjectId ? trophyImageKey(subjectId, trophyId, tier) : trophyId;
   const row = useTrophyImage(fullKey);
   const sz = SIZE_PX[size];
   const ringPx = RING_PX[size];
@@ -173,7 +168,6 @@ export function TrophyIcon({
   const clipPath = SHAPE_CLIP[category];
   const isCircle = clipPath === "";
   const tierStyle = unlocked && tier ? TIER_STYLE[tier] : null;
-  const isMonochrome = category !== "commemorative"; // commemorative 直接渲染 AI 多彩图，其他走 CSS 染色
 
   const grayClass = unlocked ? "" : "grayscale opacity-40 saturate-50";
 
@@ -200,40 +194,30 @@ export function TrophyIcon({
       className={`relative inline-flex shrink-0 ${sz.box} ${className} ${grayClass}`}
       style={outerStyle}
     >
-      {/* 内层 art：单色 AI 线稿走 mask 染色路线；commemorative 多彩图直接显示 */}
-      {isMonochrome && row?.imageDataUrl ? (
-        <MonochromeArt
-          dataUrl={row.imageDataUrl}
-          category={category}
-          shapeStyle={shapeStyle}
-          inset={tierStyle ? ringPx : 0}
-        />
-      ) : (
-        <div
-          className="absolute flex items-center justify-center overflow-hidden"
-          style={{
-            ...innerStyle,
-            // emoji 兜底：commemorative 用金色调，其他用 category 色（不被 tier 覆盖，让 category 一眼可识别）
-            background: row?.imageDataUrl
-              ? "#000"
-              : CATEGORY_BG[category],
-          }}
-        >
-          {row?.imageDataUrl ? (
-            <img
-              src={row.imageDataUrl}
-              alt={`trophy-${trophyId}`}
-              className="w-full h-full object-cover"
-              draggable={false}
-            />
-          ) : (
-            <span className={sz.emoji}>{emoji}</span>
-          )}
-        </div>
-      )}
+      {/* 内层 art：直接 <img> 渲染 AI 图（每枚独立精心生成），emoji 兜底 */}
+      <div
+        className="absolute flex items-center justify-center overflow-hidden"
+        style={{
+          ...innerStyle,
+          background: row?.imageDataUrl
+            ? "#000"
+            : tierStyle?.innerGradient ?? CATEGORY_BG[category],
+        }}
+      >
+        {row?.imageDataUrl ? (
+          <img
+            src={row.imageDataUrl}
+            alt={`trophy-${trophyId}`}
+            className="w-full h-full object-cover"
+            draggable={false}
+          />
+        ) : (
+          <span className={sz.emoji}>{emoji}</span>
+        )}
+      </div>
 
-      {/* 钻档全息光晕（仅多彩 commemorative + 钻 tier 才能看到，单色 mask 模式下天然不需要） */}
-      {tierStyle?.animated && !isMonochrome && (
+      {/* 钻档全息光晕——叠在 art 之上、corner badge 之下 */}
+      {tierStyle?.animated && (
         <div
           className="absolute pointer-events-none animate-shimmer"
           style={{
@@ -259,63 +243,5 @@ export function TrophyIcon({
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * v0.29.8: 单色 AI 线稿渲染。
- *
- * 两层结构：
- *   - 底层：CATEGORY_BG（深色 category 暗底）—— 让形状有"基底"
- *   - 顶层：CATEGORY_COLOR（亮 category gradient）+ luminance mask 把白色像素染色
- *
- * 实测：mask-mode: luminance 让纯白线条变成 category 色，黑底变透明 →
- * 透出底层暗 category bg → 整体观感是"亮 motif 浮在暗底上"，跟 Apple Fitness 一致。
- */
-function MonochromeArt({
-  dataUrl,
-  category,
-  shapeStyle,
-  inset,
-}: {
-  dataUrl: string;
-  category: TrophyCategory;
-  shapeStyle: React.CSSProperties;
-  inset: number;
-}) {
-  const cssUrl = `url("${dataUrl}")`;
-  return (
-    <>
-      {/* 底层：暗 category 底，让 motif 有立体感 */}
-      <div
-        className="absolute"
-        style={{
-          ...shapeStyle,
-          inset: `${inset}px`,
-          background: CATEGORY_BG[category],
-        }}
-      />
-      {/* 顶层：亮 category gradient + luminance mask
-          注：mask-mode 需要 type assertion，CSS Properties 类型还没 ship 这个 */}
-      <div
-        className="absolute"
-        style={{
-          ...shapeStyle,
-          inset: `${inset}px`,
-          background: CATEGORY_COLOR[category],
-          WebkitMaskImage: cssUrl,
-          maskImage: cssUrl,
-          WebkitMaskSize: "contain",
-          maskSize: "contain",
-          WebkitMaskPosition: "center",
-          maskPosition: "center",
-          WebkitMaskRepeat: "no-repeat",
-          maskRepeat: "no-repeat",
-          // luminance mode：白色像素=可见、黑底=透明
-          ["WebkitMaskMode" as never]: "luminance",
-          ["maskMode" as never]: "luminance",
-        }}
-      />
-    </>
   );
 }
