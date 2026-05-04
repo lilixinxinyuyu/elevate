@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { validateQuestion } from "../core/validateQuestion";
@@ -25,6 +26,21 @@ export function AdminPage() {
   const students = useLiveQuery(async () => db.students.toArray(), []);
   const questions = useLiveQuery(async () => db.questions.toArray(), []);
   const [importText, setImportText] = useState("");
+  const location = useLocation();
+
+  // 处理 deep link：URL 带 #trophy-images / #ai-gen 等 hash 时自动滚到对应区块。
+  // 默认浏览器会处理 hash 跳转，但 react-router SPA 内部 navigate 不触发，所以
+  // 这里在 mount + hash 变化时手动 scrollIntoView。
+  useEffect(() => {
+    if (!location.hash) return;
+    const id = location.hash.replace(/^#/, "");
+    // 等一帧让所有 card 渲染完
+    const t = setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [location.hash]);
   const [importResult, setImportResult] = useState<null | {
     ok: number;
     failed: { id: string; issues: string[] }[];
@@ -212,7 +228,7 @@ export function AdminPage() {
         <QuestionsAdminPanel />
       </div>
 
-      <div className="card">
+      <div className="card" id="trophy-images">
         <div className="font-semibold mb-2">🏆 勋章图批量生成（替换 emoji）</div>
         <TrophyImagesAdminPanel />
       </div>

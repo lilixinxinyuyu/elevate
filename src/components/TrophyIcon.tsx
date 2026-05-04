@@ -73,9 +73,10 @@ export function TrophyIcon({
     );
   }
 
-  // emoji 兜底
+  // emoji 兜底 — 不再带显式 border（避免外层卡片+TrophyIcon 双框），
+  // glow=true 时由 ring 给视觉边界，没 glow 时就是干净的圆角方块
   return (
-    <div className={`${baseClass} ${glowClass} ${grayClass} bg-gradient-to-br from-amber-500/15 to-rose-500/10 border border-amber-400/30`}>
+    <div className={`${baseClass} ${glowClass} ${grayClass} bg-gradient-to-br from-amber-500/15 to-rose-500/10`}>
       <span>{emoji}</span>
     </div>
   );
