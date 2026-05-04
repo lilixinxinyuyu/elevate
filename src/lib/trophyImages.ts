@@ -54,55 +54,63 @@ function isSegmentTier(t: TrophyMeta): boolean {
 }
 
 /**
- * 给 trophy 拼出生成 prompt（v0.29.1 B++ 重写）。
+ * 给 trophy 拼出生成 prompt（v0.29.8 重写为单色 SVG 风路线）。
  *
- * 关键变化（vs v0.29.0）：
- *  - 不再按 tier 染色——每个 trophy 就一张多彩 motif
- *  - AI 自由选 2-3 主色（与 trophy 主题相关），不再被铜银金钻锁死
- *  - 强调"独特配色"避免所有勋章看起来同一套色
+ * 关键决策（与 v0.29.x 多彩 motif 路线分道扬镳）：
+ *  - **非 commemorative trophy 一律生成纯白单色线稿在纯黑背景上**（SVG-icon 风）
+ *  - CSS 端用 mask-image + luminance mask + category gradient 把白色像素染成
+ *    daily=翠绿 / milestone=真金 / ability=钴蓝 / skill=紫罗兰
+ *  - tier (铜银金钻) 仍由 CSS 外环 + glow + 角标承担
+ *  - **AI 一致性满分**：所有 trophy 来自同一张"单色 SVG"风格画板，画风高度统一
+ *  - **CSS 富色不靠 AI 抽奖**：颜色由代码硬编码，绝不漂移
  *
- * v0.29.2 加：commemorative 走专属"传家宝奖章"路径，比 daily/milestone 更有仪式感
+ * commemorative（第一步 / 期中加冕等）保留 buildCommemorativePrompt
+ * 多彩"传家宝奖章"风——它们是独立纪念物，每个独特配色合理。
+ *
+ * 历史背景：v0.29.0-v0.29.7 走 B++ "AI 自由发挥多彩 motif"路线，实测
+ * AI 颜色严重漂移（90% 同质化绿底），用户反馈"一致性很差颜色也不好看"。
  */
 export function buildTrophyPrompt(t: TrophyMeta): string {
   if (isSegmentTier(t)) {
     return buildTierBadgePrompt(t);
   }
 
-  // commemorative 走"重器奖章"专属 prompt（更精致、更有仪式感）
+  // commemorative 走"传家宝"多彩专属路径（小批量纪念物，多彩合理）
   if (t.category === "commemorative") {
     return buildCommemorativePrompt(t);
   }
 
-  const category = t.category ?? "milestone";
+  // 其他全部走"单色 SVG"路线，CSS 端染色
+  return buildMonochromeIconPrompt(t);
+}
 
-  // 形状按分类区分（CSS clip-path 也按这个 category 切，保持一致）
-  const shape =
-    category === "skill"
-      ? "盾形 (shield-shaped) 学科徽章"
-      : category === "ability"
-        ? "六边形 (hexagonal) 能力徽章"
-        : "圆形 (circular) 标准勋章";
-
-  const desc = t.description ? `主题：「${t.description}」。` : "";
-
+/**
+ * v0.29.8: 单色 SVG-icon 风 prompt — daily/milestone/ability/skill 通用。
+ *
+ * 输出特征（实测验证）：
+ *  - 纯白线稿/silhouette 在纯黑底上
+ *  - 主体居中占 60-70% 画面，几何简洁
+ *  - 无渐变、无 3D、无光影 — 像 Material Icons / Phosphor 那种 SVG icon
+ *  - 完全靠 motif 表达概念，颜色由 CSS mask-image 染成 category 色
+ *
+ * AI 不再因为"多彩配色"提示瞎发挥 → 一致性提升 10×。
+ */
+function buildMonochromeIconPrompt(t: TrophyMeta): string {
+  const desc = t.description ? `Concept hint: ${t.description}.` : "";
   return [
-    // Apple Fitness 风高级感
-    `Apple Fitness 风格的高级成就勋章 award badge，${shape}，主体居中放大占画面 85%。`,
-    `主体：「${t.name}」概念的卡通图标，单一焦点，识别度高。`,
+    `A minimalist monochrome ICON, pure white silhouette / line art on solid pitch-black background.`,
+    `Subject: a clean iconic illustration that represents「${t.name}」.`,
     desc,
-    // 独特配色——核心差异点
-    `**配色：这枚勋章应该有自己独特的多彩配色**，2-3 种主色调和谐搭配，与「${t.name}」主题相关。`,
-    `配色示例（任选其一灵感方向，但不要照抄）：紫粉渐变 + 金色高光 / 蓝绿松石 + 银色细节 / 橘红 + 暖白 / 翡翠绿 + 金 / 桃红 + 香槟。`,
-    `**禁止单一色调**：不要"整体橘色"或"整体蓝色"这种 monochrome，必须有 2-3 色对比让画面活泼丰富。`,
-    // Apple 极简框线
-    `**外缘只有 1-2px 极细金属环线**，不要装饰围圈、不要花纹光环、不要射线。`,
-    // 背景
-    `画面背景：纯黑或深深紫，让多彩主体更突出。`,
-    // 禁项
-    `禁止出现：任何文字、字母、数字、签名、水印、印章。`,
-    // 风格收尾
-    `风格：精致 3D 浮雕质感 + 柔光内发光，像 Apple Fitness 徽章那样高级简洁，4 年级女生喜欢但不幼稚。`,
-    `画面尺寸：512×512 正方形，主体严格居中，四周留 8% 纯色边距。`,
+    // 风格强约束
+    `Style: extremely clean, **single color (pure white #FFFFFF) on pure black (#000000)** — like a high-quality SVG icon (Material Icons, Phosphor, or Apple SF Symbols).`,
+    `**No gradients, no shading, no 3D rendering, no perspective, no textures** — just clean flat line art and silhouette.`,
+    `Geometry: instantly readable at small size (32×32 px), bold strokes (~6-8% of canvas width), generous negative space.`,
+    `Subject occupies 60-70% of canvas, strictly centered.`,
+    // 严禁
+    `**Strictly NO color other than white silhouette + black background.** NO gold, green, blue, purple, or any other hue.`,
+    `**NO decorative wrapping** — no ribbons, no laurel wreaths, no star bursts, no rays, no particle effects.`,
+    `NO text, letters, numbers, signatures, watermarks, stamps.`,
+    `Image size 512×512, subject strictly centered with ~10% padding.`,
   ]
     .filter(Boolean)
     .join(" ");

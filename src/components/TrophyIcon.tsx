@@ -1,13 +1,18 @@
 /**
- * 勋章图标 — v0.29.1 B++ 多层渲染：
+ * 勋章图标 — v0.29.8 单色 SVG + CSS 染色路线：
  *
- *   ┌─ tier ring（铜银金钻外环）= 外层 div 背景色 + clip-path
- *   │  ┌─ AI motif（多彩主体，1 张图 4 tier 共用）= 内层 div，缩进 ringPx
- *   │  │  └─ emoji 兜底
- *   │  └─ 钻档全息光晕（旋转 conic-gradient mix-blend）
- *   └─ corner badge（★/★★/★★★/💎）+ tier glow drop-shadow
+ * 两种渲染模式（按 category 自动切换）：
  *
- * 一张多彩 AI 图 + CSS 多层 = 4 tier 视觉差异，零 AI 重生图。
+ * 1) commemorative（第一步等纪念勋章）→ "AI 多彩图" 模式：
+ *    AI 图自带丰富配色（传家宝风），直接 <img> 渲染。
+ *
+ * 2) daily / milestone / ability / skill → "单色 SVG + CSS 染色" 模式：
+ *    AI 图是纯白线稿在纯黑底上（buildMonochromeIconPrompt），CSS 用
+ *    mask-image (luminance) + category gradient 把白色染成 daily=翠绿 /
+ *    milestone=真金 / ability=钴蓝 / skill=紫罗兰。tier 仍由外环 + 角标承担。
+ *
+ *    优势：所有 trophy 来自同一画风的"白底黑字"基础图，**绝对一致**；
+ *    富色由 CSS 硬编码，不靠 AI 抽奖；每类一种代表色一目了然。
  */
 
 import { useTrophyImage } from "../lib/trophyImages";
@@ -61,6 +66,33 @@ const SHAPE_CLIP: Record<TrophyCategory, string> = {
   skill: "polygon(0% 5%, 100% 5%, 100% 55%, 50% 100%, 0% 55%)",
   commemorative:
     "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
+};
+
+/**
+ * v0.29.8: 每个 category 一个代表色 gradient，用于把单色 AI 线稿染成对应色。
+ *
+ * 选色逻辑：
+ *  - daily 翠绿：每天的小胜利，活力清新
+ *  - milestone 真金：里程碑成就，黄金质感
+ *  - ability 钴蓝：能力维度，冷静理性
+ *  - skill 紫罗兰：学科精通，神秘高级
+ *  - commemorative 不用（直接显示 AI 多彩图）
+ */
+const CATEGORY_COLOR: Record<TrophyCategory, string> = {
+  daily: "linear-gradient(135deg, #34d399, #059669)", // emerald
+  milestone: "linear-gradient(135deg, #fbbf24, #d97706)", // gold
+  ability: "linear-gradient(135deg, #60a5fa, #1d4ed8)", // blue
+  skill: "linear-gradient(135deg, #c084fc, #6d28d9)", // violet
+  commemorative: "transparent", // AI 图本身多彩，不需要染色
+};
+
+/** category 配色的"暗一点版本"，用于 emoji 兜底时的内底（避免太刺眼） */
+const CATEGORY_BG: Record<TrophyCategory, string> = {
+  daily: "linear-gradient(135deg, rgba(52,211,153,0.20), rgba(5,150,105,0.10), rgba(0,0,0,0.55))",
+  milestone: "linear-gradient(135deg, rgba(251,191,36,0.25), rgba(217,119,6,0.12), rgba(0,0,0,0.55))",
+  ability: "linear-gradient(135deg, rgba(96,165,250,0.20), rgba(29,78,216,0.10), rgba(0,0,0,0.55))",
+  skill: "linear-gradient(135deg, rgba(192,132,252,0.20), rgba(109,40,217,0.10), rgba(0,0,0,0.55))",
+  commemorative: "linear-gradient(135deg, rgba(251,191,36,0.20), rgba(0,0,0,0.55))",
 };
 
 interface TierStyle {
@@ -141,6 +173,7 @@ export function TrophyIcon({
   const clipPath = SHAPE_CLIP[category];
   const isCircle = clipPath === "";
   const tierStyle = unlocked && tier ? TIER_STYLE[tier] : null;
+  const isMonochrome = category !== "commemorative"; // commemorative 直接渲染 AI 多彩图，其他走 CSS 染色
 
   const grayClass = unlocked ? "" : "grayscale opacity-40 saturate-50";
 
@@ -157,45 +190,50 @@ export function TrophyIcon({
   };
 
   // 内层 art：缩进 ringPx 让外环显示出 tier 颜色
-  // v0.29.3: emoji 兜底时给 tier 色内层渐变（铜底/银底/金底/钻底有视觉差）
-  const useEmojiTierBg = !row?.imageDataUrl && !!tierStyle;
   const innerStyle: React.CSSProperties = {
     ...shapeStyle,
     inset: tierStyle ? `${ringPx}px` : 0,
-    ...(useEmojiTierBg ? { background: tierStyle!.innerGradient } : {}),
   };
-
-  // 内层 bg class：tierStyle 模式下用 inline gradient（上面），其他用 fallback
-  const innerBgClass = useEmojiTierBg
-    ? ""
-    : !row?.imageDataUrl
-      ? "bg-gradient-to-br from-violet-500/25 to-rose-500/15"
-      : "bg-black/60";
 
   return (
     <div
       className={`relative inline-flex shrink-0 ${sz.box} ${className} ${grayClass}`}
       style={outerStyle}
     >
-      {/* 内层 art */}
-      <div
-        className={`absolute flex items-center justify-center overflow-hidden ${innerBgClass}`}
-        style={innerStyle}
-      >
-        {row?.imageDataUrl ? (
-          <img
-            src={row.imageDataUrl}
-            alt={`trophy-${trophyId}`}
-            className="w-full h-full object-cover"
-            draggable={false}
-          />
-        ) : (
-          <span className={sz.emoji}>{emoji}</span>
-        )}
-      </div>
+      {/* 内层 art：单色 AI 线稿走 mask 染色路线；commemorative 多彩图直接显示 */}
+      {isMonochrome && row?.imageDataUrl ? (
+        <MonochromeArt
+          dataUrl={row.imageDataUrl}
+          category={category}
+          shapeStyle={shapeStyle}
+          inset={tierStyle ? ringPx : 0}
+        />
+      ) : (
+        <div
+          className="absolute flex items-center justify-center overflow-hidden"
+          style={{
+            ...innerStyle,
+            // emoji 兜底：commemorative 用金色调，其他用 category 色（不被 tier 覆盖，让 category 一眼可识别）
+            background: row?.imageDataUrl
+              ? "#000"
+              : CATEGORY_BG[category],
+          }}
+        >
+          {row?.imageDataUrl ? (
+            <img
+              src={row.imageDataUrl}
+              alt={`trophy-${trophyId}`}
+              className="w-full h-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <span className={sz.emoji}>{emoji}</span>
+          )}
+        </div>
+      )}
 
-      {/* 钻档全息光晕——叠在 art 之上、corner badge 之下 */}
-      {tierStyle?.animated && (
+      {/* 钻档全息光晕（仅多彩 commemorative + 钻 tier 才能看到，单色 mask 模式下天然不需要） */}
+      {tierStyle?.animated && !isMonochrome && (
         <div
           className="absolute pointer-events-none animate-shimmer"
           style={{
@@ -221,5 +259,63 @@ export function TrophyIcon({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * v0.29.8: 单色 AI 线稿渲染。
+ *
+ * 两层结构：
+ *   - 底层：CATEGORY_BG（深色 category 暗底）—— 让形状有"基底"
+ *   - 顶层：CATEGORY_COLOR（亮 category gradient）+ luminance mask 把白色像素染色
+ *
+ * 实测：mask-mode: luminance 让纯白线条变成 category 色，黑底变透明 →
+ * 透出底层暗 category bg → 整体观感是"亮 motif 浮在暗底上"，跟 Apple Fitness 一致。
+ */
+function MonochromeArt({
+  dataUrl,
+  category,
+  shapeStyle,
+  inset,
+}: {
+  dataUrl: string;
+  category: TrophyCategory;
+  shapeStyle: React.CSSProperties;
+  inset: number;
+}) {
+  const cssUrl = `url("${dataUrl}")`;
+  return (
+    <>
+      {/* 底层：暗 category 底，让 motif 有立体感 */}
+      <div
+        className="absolute"
+        style={{
+          ...shapeStyle,
+          inset: `${inset}px`,
+          background: CATEGORY_BG[category],
+        }}
+      />
+      {/* 顶层：亮 category gradient + luminance mask
+          注：mask-mode 需要 type assertion，CSS Properties 类型还没 ship 这个 */}
+      <div
+        className="absolute"
+        style={{
+          ...shapeStyle,
+          inset: `${inset}px`,
+          background: CATEGORY_COLOR[category],
+          WebkitMaskImage: cssUrl,
+          maskImage: cssUrl,
+          WebkitMaskSize: "contain",
+          maskSize: "contain",
+          WebkitMaskPosition: "center",
+          maskPosition: "center",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+          // luminance mode：白色像素=可见、黑底=透明
+          ["WebkitMaskMode" as never]: "luminance",
+          ["maskMode" as never]: "luminance",
+        }}
+      />
+    </>
   );
 }
