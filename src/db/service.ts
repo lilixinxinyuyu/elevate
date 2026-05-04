@@ -515,6 +515,8 @@ export async function finalizeSession(
         subjectId: "math",
         trophyId: award.trophyId,
         unlockedAt: Date.now(),
+        // v0.29 新增：tiered 勋章带 tier，让 UI 显示正确等级 + 让 awarder 不重发同 tier
+        meta: award.tier ? { tier: award.tier } : undefined,
       };
       await db.trophies.put(t);
     }

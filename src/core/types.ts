@@ -331,6 +331,8 @@ export interface SessionSummary {
     newTotalCount?: number;
     /** check 单次型 = true，计数型 = false */
     isRare?: boolean;
+    /** v0.29: 进阶勋章在哪个 tier 解锁（铜/银/金/钻），daily/commemorative 无 */
+    tier?: TrophyTier;
   }[];
   suggestionForTomorrow: string;
   maxCombo: number;
@@ -438,15 +440,54 @@ export interface UserTrophy {
   meta?: Record<string, unknown>;
 }
 
+/**
+ * v0.29 勋章五大分类 — 影响视觉分组 + AI 图风格 + 解锁叙事
+ *
+ *  - daily: 日常重复型（今日完成 / 五连击 / 疾风手）— 多次获得，显示 ×N
+ *  - milestone: 里程碑进阶（答题大师铜→银→金→钻）— 单槽位 4 等级
+ *  - ability: 能力勋章（8 维 calculation/concept/...）— 单槽位 4 等级
+ *  - skill: 学科领域勋章（小数小英雄 / 方程小专家）— 单槽位 4 等级
+ *  - commemorative: 纪念勋章（第一步 / 期中考完结）— 永久独一，不打等级
+ */
+export type TrophyCategory =
+  | "daily"
+  | "milestone"
+  | "ability"
+  | "skill"
+  | "commemorative";
+
+/** 进阶勋章 4 等级（仅 milestone / ability / skill 用）。daily / commemorative 不打 tier。 */
+export type TrophyTier = "bronze" | "silver" | "gold" | "platinum";
+
+export interface TrophyTierThreshold {
+  tier: TrophyTier;
+  /** 累计达到这个值进入该 tier */
+  threshold: number;
+  /** 显示用，如 "50 题" / "Elo 600" */
+  tierLabel: string;
+}
+
 export interface TrophyDef {
   id: string;
   name: string;
   description: string;
   icon?: string;
-  /** 单次解锁逻辑（条件成立 → 解锁一次，永久持有） */
+  /** v0.29 必填：勋章分类 */
+  category: TrophyCategory;
+  /** 单次解锁逻辑（commemorative 用：条件成立 → 解锁一次永久持有） */
   check?: (ctx: TrophyCheckContext) => boolean;
-  /** 计数型解锁：返回当前应该已经获得的总次数；系统会和已记录数对比补发差额 */
+  /**
+   * 计数型解锁：返回当前应该的"进度值"
+   * - daily: 累计获得次数（不分等级，UI 直接显示 ×N）
+   * - milestone/ability/skill: 当前进度（attempts、Elo、答对题数等），由 tieredThresholds 切等级
+   */
   tier?: (ctx: TrophyCheckContext) => number;
+  /**
+   * v0.29 进阶等级阈值（按 threshold 升序）。
+   * 只 milestone / ability / skill 会有；daily / commemorative 留空。
+   * UI 用 (tier(ctx) >= threshold) 决定颁发哪一档。
+   */
+  tieredThresholds?: TrophyTierThreshold[];
 }
 
 export interface TrophyCheckContext {

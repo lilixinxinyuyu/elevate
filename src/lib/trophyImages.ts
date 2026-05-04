@@ -27,42 +27,96 @@ export interface TrophyMeta {
   description?: string;
   /** 是否是 rare（单次成就），rare 才走盲盒抽奖 */
   rare?: boolean;
+  /** v0.29: 勋章分类（影响 AI 图风格） */
+  category?: "daily" | "milestone" | "ability" | "skill" | "commemorative";
+  /** v0.29: tier-leveled 勋章在哪个等级（影响 AI 图底色） */
+  tier?: "bronze" | "silver" | "gold" | "platinum";
 }
 
 /**
- * 给 trophy 拼出生成 prompt（Round 6 优化）：
- *  - 强调"贴纸 / sticker"风格 → 单一主体居中、深色纯色背景便于裁剪
- *  - 圆形 badge/medal 主体 + 周边光晕 → UI 上可以做圆形遮罩
- *  - 强调"没有任何文字"避免 AI 写错字英文
- *  - 不同 subject 用不同主色：math 紫粉，chinese 金红
- *  - tier badges 用每个段位特定的颜色
- *  - 512×512 定向（小尺寸 + 居中主体方便后续 UI mask 成圆）
+ * Tier 风格指南——铜银金钻 4 等级，配合 Apple Fitness 风（简洁、底色为主、细边）。
+ *
+ * 关键：底色 = 等级。看一眼就知道铜还是金，不靠图案区分。
+ */
+const TIER_FLAVORS = {
+  bronze: {
+    metalColor: "古铜橙 (rich antique copper / bronze)",
+    finish: "哑光铜质感，温暖橘调",
+    accent: "细金边、低调内发光",
+    aura: "清晨阳光",
+  },
+  silver: {
+    metalColor: "亮银白 (polished silver / platinum white)",
+    finish: "镜面银质感，冷调高光",
+    accent: "细钢边、银色光晕",
+    aura: "月光清辉",
+  },
+  gold: {
+    metalColor: "真金黄 (royal 24k gold)",
+    finish: "镀金高光，温暖金调",
+    accent: "金边浮雕、璀璨星芒",
+    aura: "宝石镶嵌闪光",
+  },
+  platinum: {
+    metalColor: "钻石彩虹全息 (holographic iridescent diamond)",
+    finish: "钻石切面，七彩光晕",
+    accent: "棱镜折射、霓虹幻光",
+    aura: "星河流转",
+  },
+} as const;
+
+/**
+ * 给 trophy 拼出生成 prompt（v0.29 Apple Fitness 风重写）：
+ *
+ * 设计原则：
+ *  - **底色 = 等级**：铜橙 / 银白 / 真金 / 钻彩，看一眼就知道在哪一档
+ *  - **主体大、留白少**：主体占 85%（不是 50%），不要外圈装饰围环
+ *  - **细边线**：3px 内的金属细边，不要厚重纹饰
+ *  - **不同分类不同形状**：milestone/ability=圆形 medal；skill=六角徽章；commemorative=六角星
+ *  - **强调"没有任何文字"**：避免 AI 写错字
+ *  - 512×512 中心严格构图便于 UI 圆形 mask
  */
 export function buildTrophyPrompt(t: TrophyMeta): string {
   // 段位勋章（id 形如 "tier_school" / "tier_district" 等）走专门风格
-  if (t.id.includes("tier_") || t.subjectId === "math" && /tier/i.test(t.id)) {
+  if (/_tier_/.test(t.id) || (t.id.includes("tier_") && t.subjectId === "math")) {
     return buildTierBadgePrompt(t);
   }
 
-  const subjectFlavor =
-    t.subjectId === "math"
-      ? "主色调：紫罗兰 + 樱花粉渐变，金色细节高光"
-      : "主色调：暖金色 + 中国红，墨色细节，水墨晕染";
-  const lottery = t.rare
-    ? "**稀有特殊**：钻石质感、彩虹光晕、宝石镶嵌、闪耀星芒效果，整体更华丽更精致"
-    : "";
+  const tier = t.tier;
+  const flavor = tier ? TIER_FLAVORS[tier] : null;
+  const category = t.category ?? "milestone";
+
+  // 形状按分类区分（让玩家一眼区分类别）
+  const shape =
+    category === "commemorative"
+      ? "六角星形 (six-pointed star) 纪念徽章"
+      : category === "skill"
+        ? "盾形 (shield-shaped) 学科徽章"
+        : category === "ability"
+          ? "六边形 (hexagonal) 能力徽章"
+          : "圆形 (circular) 标准勋章";
+
+  // 底色由 tier 决定；没 tier（commemorative / daily）用学科调色板
+  const palette = flavor
+    ? `底色：${flavor.metalColor}，${flavor.finish}，装饰：${flavor.accent}，氛围：${flavor.aura}`
+    : t.subjectId === "math"
+      ? "底色：深紫罗兰渐樱花粉，柔和女童感，金色细节"
+      : "底色：暖金 + 中国红，水墨晕染，墨色细节";
+
   const desc = t.description ? `主题：「${t.description}」。` : "";
 
   return [
-    `Sticker / icon 风格的圆形精美勋章 (round badge medal)，居中构图。`,
-    `主体：${t.name} 概念的卡通图标，高度凝练、容易识别。`,
+    // Apple Fitness 极简风
+    `Apple Fitness 风格的高级运动奖牌，${shape}，主体居中放大占画面 85%。`,
+    `主体：${t.name} 概念的卡通图标，高度凝练，单一焦点，识别度高。`,
     desc,
-    subjectFlavor,
-    lottery,
-    `画面构成：圆形勋章占画面 80%，背景是深色纯色（深紫罗兰或深靛蓝），便于在 UI 圆形遮罩里裁剪。`,
-    `禁止出现：任何文字、字母、数字、签名、水印。`,
-    `风格：扁平 3D 插画 + 柔光内发光，4 年级女生审美：可爱、精致、闪闪发亮。`,
-    `画面尺寸：512×512 正方形，主体严格居中，四周留 10% 边距。`,
+    palette,
+    // 简洁框线 — 关键差异点
+    `**只有一道极细 (1-2px) 的金属环线作为外缘**，不要任何装饰围圈、不要花纹、不要光环、不要射线，整体简洁高级。`,
+    `画面背景：纯黑或深深紫，让主体的 ${flavor?.metalColor ?? "金属"} 色更突出。`,
+    `禁止出现：任何文字、字母、数字、签名、水印、印章、徽章题写。`,
+    `风格：精致 3D 浮雕质感 + 柔和内发光，**像 Apple Fitness 的徽章那样高级简洁**，4 年级女生喜欢但不幼稚。`,
+    `画面尺寸：512×512 正方形，主体严格居中，四周留 8% 纯色边距。`,
   ]
     .filter(Boolean)
     .join(" ");
@@ -98,13 +152,14 @@ function buildTierBadgePrompt(t: TrophyMeta): string {
   };
   const theme = tierTheme[rawId] ?? { motif: t.name, color: "紫红" };
   return [
-    `Sticker / icon 风格的圆形段位勋章 (rank medal)，居中构图。`,
-    `主体：${theme.motif}，4 年级女生喜欢的卡通可爱风格。`,
-    `主色调：${theme.color}，丝带 + 星芒装饰。`,
-    `画面构成：圆形勋章占 80%，深色纯色背景便于 UI 圆形遮罩裁剪。`,
+    `Apple Fitness 风格的圆形段位勋章 (rank medal)，简洁高级，居中构图。`,
+    `主体：${theme.motif}，4 年级女生喜欢但不幼稚的精致风格，主体占画面 85%。`,
+    `主色调：${theme.color}。`,
+    `**只有一道极细 (1-2px) 的金属环线作为外缘**，不要装饰围圈、不要花纹光环。`,
+    `背景：纯黑或深深紫，让主体颜色更突出。`,
     `禁止出现：任何文字、字母、数字、签名、水印。`,
-    `风格：扁平 3D 插画 + 柔光内发光、闪耀光晕、宝石镶嵌细节。`,
-    `画面尺寸：512×512 正方形，主体严格居中，四周留 10% 边距。`,
+    `风格：精致 3D 浮雕 + 柔光内发光，像 Apple Fitness 徽章一样高级。`,
+    `画面尺寸：512×512 正方形，主体严格居中，四周留 8% 边距。`,
   ].join(" ");
 }
 

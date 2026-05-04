@@ -358,11 +358,34 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
               <div className="flex flex-wrap gap-2">
                 {summary.newTrophies.map((aw) => {
                   const t = trophyById(aw.trophyId);
+                  // v0.29: tiered 勋章带 tier；commemorative/daily 没有
+                  const tierLabel: Record<string, string> = {
+                    bronze: "🥉 铜",
+                    silver: "🥈 银",
+                    gold: "🥇 金",
+                    platinum: "💎 钻",
+                  };
                   return (
-                    <div key={aw.trophyId} className="flex items-center gap-2 bg-amber-500/20 border border-amber-400/40 rounded-xl px-3 py-1.5">
-                      <TrophyIcon trophyId={aw.trophyId} subjectId="math" emoji={t?.icon ?? "🏆"} size="md" glow />
+                    <div
+                      key={`${aw.trophyId}_${aw.tier ?? ""}`}
+                      className="flex items-center gap-2 bg-amber-500/20 border border-amber-400/40 rounded-xl px-3 py-1.5"
+                    >
+                      <TrophyIcon
+                        trophyId={aw.trophyId}
+                        subjectId="math"
+                        emoji={t?.icon ?? "🏆"}
+                        size="md"
+                        tier={aw.tier}
+                        category={t?.category}
+                        glow
+                      />
                       <div className="text-amber-100">
-                        <div className="text-sm font-semibold">{t?.name ?? aw.trophyId}</div>
+                        <div className="text-sm font-semibold">
+                          {t?.name ?? aw.trophyId}
+                          {aw.tier && (
+                            <span className="ml-1 text-xs text-amber-300">{tierLabel[aw.tier]}</span>
+                          )}
+                        </div>
                         {aw.count > 1 && (
                           <span className="text-xs text-amber-300 font-display font-bold">× {aw.count}</span>
                         )}

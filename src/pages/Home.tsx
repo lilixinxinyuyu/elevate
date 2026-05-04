@@ -47,6 +47,11 @@ export function HomePage() {
     async () => (student ? db.trophies.where({ studentId: student.id }).toArray() : []),
     [student?.id],
   );
+  // v0.29: TrophyWall 需要完整 ctx 才能算每个 tiered 勋章的当前进度
+  const mastery = useLiveQuery(
+    async () => (student ? db.mastery.where({ studentId: student.id }).toArray() : []),
+    [student?.id],
+  );
 
   const [rating, setRating] = useState<RatingResult | null>(null);
   const [unlockedTiers, setUnlockedTiers] = useState<string[]>(["school"]);
@@ -411,7 +416,17 @@ export function HomePage() {
       />
 
       {/* 奖杯墙 */}
-      <TrophyWall trophies={trophies ?? []} />
+      <TrophyWall
+        trophies={trophies ?? []}
+        ctx={{
+          studentId: student?.id ?? "",
+          attempts: attempts ?? [],
+          mastery: mastery ?? [],
+          mistakes: mistakes ?? [],
+          trophies: trophies ?? [],
+          todayDateKey: today,
+        }}
+      />
 
       {/* 跨段升档庆祝 */}
       {celebrationToTier && (

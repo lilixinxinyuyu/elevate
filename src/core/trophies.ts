@@ -1,4 +1,37 @@
-import type { Attempt, TrophyCheckContext, TrophyDef } from "./types";
+/**
+ * Selena 勋章系统 v0.29 — Apple Fitness 风格
+ *
+ * 五大分类（见 types.ts TrophyCategory）：
+ *   - daily: 重复型（今日完成 / 五连击 / 疾风手）— 多次获得，显示 ×N，不打等级
+ *   - milestone: 单槽 4 等级进阶（答题大师 / 连击王 / 坚持之王 / 技能精通）
+ *   - ability: 8 维能力（计算 / 概念 / 推理 / 建模 / 空间 / 数据 / 策略 / 习惯）单槽 4 等级
+ *   - skill: 单元领域（小数 / 方程 / 平均数 / 三角形 / 购物）单槽 4 等级
+ *   - commemorative: 纪念（第一步 / 期中考完结 / 新学年）— 永久独一无二
+ *
+ * 4 等级阈值（铜银金钻）配合 4 个月一学期重置的 mastery 体系：
+ *   - 铜：1-3 周可达，给即时鼓励
+ *   - 银：1-2 个月，巩固期
+ *   - 金：学期末努力学生能拿到
+ *   - 钻：学期末顶尖 ~10% 能拿，本学期最高荣誉
+ *
+ * 旧版 (v0.28) 用 total_50 / total_200 / combo_5 / mastery_starter 等独立 trophy。
+ * 新版自然迁移：v0.29 启动后 checkAndAwardTrophies 会按 Selena 的当前进度补发
+ * 所有应得的 tier。旧 UserTrophy 行留在 db 但 UI 不再渲染（new TROPHIES.id 不重叠）。
+ */
+
+import { SKILLS } from "../content/skills";
+import type {
+  AbilityId,
+  Attempt,
+  TrophyCheckContext,
+  TrophyDef,
+  TrophyTier,
+  TrophyTierThreshold,
+} from "./types";
+
+// ============================================================
+//  辅助函数
+// ============================================================
 
 function streakDays(dateKeys: string[]): number {
   if (dateKeys.length === 0) return 0;
@@ -33,6 +66,16 @@ function bestComboBySession(attempts: Attempt[]): Map<string, number> {
   return best;
 }
 
+/** 历史最高连击数（跨所有 session） */
+function bestCombo(attempts: Attempt[]): number {
+  const best = bestComboBySession(attempts);
+  let max = 0;
+  best.forEach((v) => {
+    if (v > max) max = v;
+  });
+  return max;
+}
+
 function sessionsThatHitCombo(attempts: Attempt[], n: number): number {
   const best = bestComboBySession(attempts);
   let count = 0;
@@ -48,97 +91,307 @@ function uniqueSessionFinishCount(attempts: Attempt[]): number {
   return set.size;
 }
 
-function bestRunningCorrectStreak(attempts: Attempt[], filter: (a: Attempt) => boolean): number {
-  const sorted = attempts.filter(filter).sort((a, b) => a.createdAt - b.createdAt);
-  let run = 0, best = 0;
+/** 一气连续 N 题用时 ≤ 8 秒且全对 — 每达成一次 +1 */
+function speedBurstCount(attempts: Attempt[], n = 5, maxSec = 8): number {
+  const sorted = attempts.slice().sort((a, b) => a.createdAt - b.createdAt);
+  let count = 0,
+    run = 0;
   for (const a of sorted) {
-    run = a.isCorrect ? run + 1 : 0;
-    best = Math.max(best, run);
+    if (a.isCorrect && a.elapsedSeconds <= maxSec) {
+      run += 1;
+      if (run === n) {
+        count += 1;
+        run = 0;
+      }
+    } else run = 0;
   }
-  return best;
+  return count;
 }
 
+/** 连续 N 题不用提示且全对 — 每达成一次 +1 */
+function noHintRunCount(attempts: Attempt[], n = 10): number {
+  const sorted = attempts.slice().sort((a, b) => a.createdAt - b.createdAt);
+  let count = 0,
+    run = 0;
+  for (const a of sorted) {
+    if (a.isCorrect && a.hintsOpened === 0) {
+      run += 1;
+      if (run === n) {
+        count += 1;
+        run = 0;
+      }
+    } else run = 0;
+  }
+  return count;
+}
+
+// SKILL → ability 维度的 lookup map（cold-init 一次）
+const SKILL_TO_ABILITIES = new Map<string, readonly AbilityId[]>();
+for (const s of SKILLS) {
+  SKILL_TO_ABILITIES.set(s.id, s.ability);
+}
+
+/** 答对的题数（attempts 里 isCorrect && skill.ability 含 targetAbility） */
+function correctCountByAbility(attempts: Attempt[], target: AbilityId): number {
+  let n = 0;
+  for (const a of attempts) {
+    if (!a.isCorrect) continue;
+    const abilities = SKILL_TO_ABILITIES.get(a.skillId);
+    if (abilities && abilities.includes(target)) n += 1;
+  }
+  return n;
+}
+
+/** 该 skill_id 前缀范围内答对的题数（小数 / 方程 / 三角形 等） */
+function correctCountByPrefix(attempts: Attempt[], prefix: string): number {
+  return attempts.filter((a) => a.isCorrect && a.skillId.startsWith(prefix)).length;
+}
+
+// ============================================================
+//  Tier 阈值常量
+// ============================================================
+
+/** 通用：4 等级阈值生成器 */
+function tiers(
+  bronze: number,
+  silver: number,
+  gold: number,
+  platinum: number,
+  unit = "",
+): TrophyTierThreshold[] {
+  return [
+    { tier: "bronze", threshold: bronze, tierLabel: `${bronze}${unit}` },
+    { tier: "silver", threshold: silver, tierLabel: `${silver}${unit}` },
+    { tier: "gold", threshold: gold, tierLabel: `${gold}${unit}` },
+    { tier: "platinum", threshold: platinum, tierLabel: `${platinum}${unit}` },
+  ];
+}
+
+// ============================================================
+//  TROPHIES 定义
+// ============================================================
+
 export const TROPHIES: TrophyDef[] = [
-  // —— 单次里程碑 ——
-  { id: "first_step", name: "第一步", description: "完成第一次挑战。", icon: "🌟",
-    check: (ctx) => ctx.attempts.length >= 1 },
-  { id: "streak_3", name: "三天小火苗", description: "连续 3 天挑战。", icon: "🔥",
-    check: (ctx) => streakDays(ctx.attempts.map((a) => new Date(a.createdAt).toISOString().slice(0, 10))) >= 3 },
-  { id: "streak_7", name: "一周连胜", description: "连续 7 天挑战。", icon: "🔥",
-    check: (ctx) => streakDays(ctx.attempts.map((a) => new Date(a.createdAt).toISOString().slice(0, 10))) >= 7 },
-  { id: "streak_30", name: "月度恒星", description: "连续 30 天挑战。", icon: "🌟",
-    check: (ctx) => streakDays(ctx.attempts.map((a) => new Date(a.createdAt).toISOString().slice(0, 10))) >= 30 },
-  { id: "total_50", name: "答题 50 题", description: "累计答完 50 道题。", icon: "🎯",
-    check: (ctx) => ctx.attempts.length >= 50 },
-  { id: "total_200", name: "答题 200 题", description: "累计答完 200 道题。", icon: "🎯",
-    check: (ctx) => ctx.attempts.length >= 200 },
-  { id: "total_500", name: "答题 500 题", description: "累计答完 500 道题。", icon: "🏆",
-    check: (ctx) => ctx.attempts.length >= 500 },
-
-  // —— 重复型 / 计数型 ——
-  { id: "daily_complete", name: "今日完成", description: "完成一次今日挑战。", icon: "🗓️",
-    tier: (ctx) => uniqueSessionFinishCount(ctx.attempts) },
-  { id: "combo_5", name: "五连击", description: "一局里连对 5 题。", icon: "⚡",
-    tier: (ctx) => sessionsThatHitCombo(ctx.attempts, 5) },
-  { id: "combo_10", name: "十连神", description: "一局里连对 10 题。", icon: "🌈",
-    tier: (ctx) => sessionsThatHitCombo(ctx.attempts, 10) },
-  { id: "combo_15", name: "终极爆发", description: "一局里连对 15 题。", icon: "💫",
-    tier: (ctx) => sessionsThatHitCombo(ctx.attempts, 15) },
-  { id: "mistake_reborn", name: "错题复活王", description: "成功复活错题，每 5 次解锁。", icon: "🪄",
-    tier: (ctx) => Math.floor(ctx.attempts.filter((a) => a.isReview && a.isCorrect).length / 5) },
-  { id: "speed_demon", name: "疾风手", description: "一气连续 5 题用时都 ≤ 8 秒，每达成一次解锁。", icon: "💨",
-    tier: (ctx) => {
-      const sorted = ctx.attempts.slice().sort((a, b) => a.createdAt - b.createdAt);
-      let count = 0, run = 0;
-      for (const a of sorted) {
-        if (a.isCorrect && a.elapsedSeconds <= 8) {
-          run += 1;
-          if (run === 5) {
-            count += 1;
-            run = 0;
-          }
-        } else run = 0;
-      }
-      return count;
-    },
-  },
-  { id: "no_hint_run", name: "独立思考 10 连", description: "连续 10 题不用提示且全对，每达成一次解锁。", icon: "🧠",
-    tier: (ctx) => {
-      const sorted = ctx.attempts.slice().sort((a, b) => a.createdAt - b.createdAt);
-      let count = 0, run = 0;
-      for (const a of sorted) {
-        if (a.isCorrect && a.hintsOpened === 0) {
-          run += 1;
-          if (run === 10) {
-            count += 1;
-            run = 0;
-          }
-        } else run = 0;
-      }
-      return count;
-    },
+  // ============================================
+  //  🏵️ commemorative — 纪念勋章（独一无二）
+  // ============================================
+  {
+    id: "first_step",
+    name: "第一步",
+    description: "完成第一次挑战。每个学习者的起点。",
+    icon: "🌟",
+    category: "commemorative",
+    check: (ctx) => ctx.attempts.length >= 1,
   },
 
-  // —— 技能领域类 ——
-  { id: "decimal_hero_10", name: "小数小英雄", description: "小数类题答对 10 道，每 10 次解锁一次。", icon: "💎",
-    tier: (ctx) => Math.floor(ctx.attempts.filter((a) => a.isCorrect && a.skillId.startsWith("decimal_")).length / 10) },
-  { id: "equation_hero_10", name: "方程小专家", description: "方程类题答对 10 道，每 10 次解锁一次。", icon: "⚖️",
-    tier: (ctx) => Math.floor(ctx.attempts.filter((a) => a.isCorrect && a.skillId.startsWith("equation_")).length / 10) },
-  { id: "average_hero_5", name: "平均数侦探", description: "平均数类题答对 5 道，每 5 次解锁一次。", icon: "🔍",
-    tier: (ctx) => Math.floor(ctx.attempts.filter((a) => a.isCorrect && a.skillId.startsWith("average_")).length / 5) },
-  { id: "triangle_hero_5", name: "三角形法官", description: "三角形类题答对 5 道，每 5 次解锁一次。", icon: "🔺",
-    tier: (ctx) => Math.floor(ctx.attempts.filter((a) => a.isCorrect && a.skillId.startsWith("triangle_")).length / 5) },
-  { id: "shop_master", name: "购物高手", description: "购物应用题连对 8 道。", icon: "🛍️",
-    check: (ctx) => bestRunningCorrectStreak(ctx.attempts, (a) => a.skillId === "decimal_price_quantity") >= 8 },
+  // ============================================
+  //  🌱 daily — 重复型（多次获得，UI 显示 ×N）
+  // ============================================
+  {
+    id: "daily_complete",
+    name: "今日完成",
+    description: "完成一次今日挑战。",
+    icon: "🗓️",
+    category: "daily",
+    tier: (ctx) => uniqueSessionFinishCount(ctx.attempts),
+  },
+  {
+    id: "speed_demon",
+    name: "疾风手",
+    description: "一气连续 5 题用时都 ≤ 8 秒，每达成一次解锁。",
+    icon: "💨",
+    category: "daily",
+    tier: (ctx) => speedBurstCount(ctx.attempts, 5, 8),
+  },
+  {
+    id: "no_hint_run",
+    name: "独立思考 10 连",
+    description: "连续 10 题不用提示且全对，每达成一次解锁。",
+    icon: "🧠",
+    category: "daily",
+    tier: (ctx) => noHintRunCount(ctx.attempts, 10),
+  },
+  {
+    id: "mistake_reborn",
+    name: "错题复活",
+    description: "成功复活错题，每 5 次解锁一次。",
+    icon: "🪄",
+    category: "daily",
+    tier: (ctx) => Math.floor(ctx.attempts.filter((a) => a.isReview && a.isCorrect).length / 5),
+  },
 
-  // —— 掌握度类 ——
-  { id: "mastery_starter", name: "初识掌握", description: "任意 3 个 skill 掌握度达到 70。", icon: "🌱",
-    check: (ctx) => ctx.mastery.filter((m) => m.score >= 70).length >= 3 },
-  { id: "mastery_pro", name: "稳扎稳打", description: "任意 8 个 skill 掌握度达到 80。", icon: "🌿",
-    check: (ctx) => ctx.mastery.filter((m) => m.score >= 80).length >= 8 },
-  { id: "mastery_expert", name: "数学大师", description: "任意 5 个 skill 掌握度达到 90。", icon: "🌳",
-    check: (ctx) => ctx.mastery.filter((m) => m.score >= 90).length >= 5 },
+  // ============================================
+  //  ⛰️ milestone — 单槽 4 等级进阶
+  // ============================================
+  {
+    id: "answer_master",
+    name: "答题大师",
+    description: "累计答题数。铜 50 / 银 200 / 金 500 / 钻 1500。",
+    icon: "🎯",
+    category: "milestone",
+    tier: (ctx) => ctx.attempts.length,
+    tieredThresholds: tiers(50, 200, 500, 1500, " 题"),
+  },
+  {
+    id: "combo_king",
+    name: "连击王",
+    description: "单次最高连击。铜 5 / 银 10 / 金 15 / 钻 20 连。",
+    icon: "⚡",
+    category: "milestone",
+    tier: (ctx) => bestCombo(ctx.attempts),
+    tieredThresholds: tiers(5, 10, 15, 20, " 连"),
+  },
+  {
+    id: "streak_keeper",
+    name: "坚持之王",
+    description: "连续打卡天数。铜 3 / 银 7 / 金 30 / 钻 100 天。",
+    icon: "🔥",
+    category: "milestone",
+    tier: (ctx) =>
+      streakDays(ctx.attempts.map((a) => new Date(a.createdAt).toISOString().slice(0, 10))),
+    tieredThresholds: tiers(3, 7, 30, 100, " 天"),
+  },
+  {
+    id: "mastery_climber",
+    name: "技能精通",
+    description: "掌握度 ≥ 80 的 skill 数。铜 3 / 银 8 / 金 15 / 钻 25。",
+    icon: "🌳",
+    category: "milestone",
+    tier: (ctx) => ctx.mastery.filter((m) => m.score >= 80).length,
+    tieredThresholds: tiers(3, 8, 15, 25, " 个 skill"),
+  },
+
+  // ============================================
+  //  🧠 ability — 8 维能力勋章（4 等级）
+  //  阈值：每能力下答对的题数。一学期 ~600 题分散到多能力 ≈ 75/能力。
+  //  铜 30 / 银 100 / 金 300 / 钻 800（钻几乎是"全学期专攻一个能力"才能拿到）
+  // ============================================
+  {
+    id: "ability_calculation",
+    name: "计算之星",
+    description: "在「计算力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    icon: "🧮",
+    category: "ability",
+    tier: (ctx) => correctCountByAbility(ctx.attempts, "calculation"),
+    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+  },
+  {
+    id: "ability_concept",
+    name: "概念学者",
+    description: "在「概念力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    icon: "💡",
+    category: "ability",
+    tier: (ctx) => correctCountByAbility(ctx.attempts, "concept"),
+    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+  },
+  {
+    id: "ability_reasoning",
+    name: "推理大师",
+    description: "在「推理力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    icon: "🧩",
+    category: "ability",
+    tier: (ctx) => correctCountByAbility(ctx.attempts, "reasoning"),
+    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+  },
+  {
+    id: "ability_modeling",
+    name: "建模高手",
+    description: "在「建模力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    icon: "📐",
+    category: "ability",
+    tier: (ctx) => correctCountByAbility(ctx.attempts, "modeling"),
+    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+  },
+  {
+    id: "ability_spatial",
+    name: "空间想象家",
+    description: "在「空间力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    icon: "🎲",
+    category: "ability",
+    tier: (ctx) => correctCountByAbility(ctx.attempts, "spatial"),
+    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+  },
+  {
+    id: "ability_data",
+    name: "数据分析师",
+    description: "在「数据力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    icon: "📊",
+    category: "ability",
+    tier: (ctx) => correctCountByAbility(ctx.attempts, "data"),
+    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+  },
+  {
+    id: "ability_strategy",
+    name: "策略大师",
+    description: "在「策略力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    icon: "♟️",
+    category: "ability",
+    tier: (ctx) => correctCountByAbility(ctx.attempts, "strategy"),
+    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+  },
+  {
+    id: "ability_habit",
+    name: "坚持之心",
+    description: "在「坚持力」上答对的题数。铜 30 / 银 100 / 金 300 / 钻 800。",
+    icon: "💪",
+    category: "ability",
+    tier: (ctx) => correctCountByAbility(ctx.attempts, "habit"),
+    tieredThresholds: tiers(30, 100, 300, 800, " 题"),
+  },
+
+  // ============================================
+  //  🗺️ skill — 学科领域勋章（4 等级）
+  // ============================================
+  {
+    id: "decimal_hero",
+    name: "小数小英雄",
+    description: "答对小数题数。铜 10 / 银 30 / 金 80 / 钻 200。",
+    icon: "💎",
+    category: "skill",
+    tier: (ctx) => correctCountByPrefix(ctx.attempts, "decimal_"),
+    tieredThresholds: tiers(10, 30, 80, 200, " 道"),
+  },
+  {
+    id: "equation_hero",
+    name: "方程小专家",
+    description: "答对方程题数。铜 10 / 银 30 / 金 80 / 钻 200。",
+    icon: "⚖️",
+    category: "skill",
+    tier: (ctx) => correctCountByPrefix(ctx.attempts, "equation_"),
+    tieredThresholds: tiers(10, 30, 80, 200, " 道"),
+  },
+  {
+    id: "average_hero",
+    name: "平均数侦探",
+    description: "答对平均数题数。铜 5 / 银 15 / 金 50 / 钻 150。",
+    icon: "🔍",
+    category: "skill",
+    tier: (ctx) => correctCountByPrefix(ctx.attempts, "average_"),
+    tieredThresholds: tiers(5, 15, 50, 150, " 道"),
+  },
+  {
+    id: "triangle_hero",
+    name: "三角形法官",
+    description: "答对三角形题数。铜 5 / 银 15 / 金 50 / 钻 150。",
+    icon: "🔺",
+    category: "skill",
+    tier: (ctx) => correctCountByPrefix(ctx.attempts, "triangle_"),
+    tieredThresholds: tiers(5, 15, 50, 150, " 道"),
+  },
+  {
+    id: "shop_hero",
+    name: "购物高手",
+    description: "答对购物应用题数。铜 5 / 银 15 / 金 50 / 钻 150。",
+    icon: "🛍️",
+    category: "skill",
+    tier: (ctx) => ctx.attempts.filter((a) => a.isCorrect && a.skillId === "decimal_price_quantity").length,
+    tieredThresholds: tiers(5, 15, 50, 150, " 道"),
+  },
 ];
+
+// ============================================================
+//  AwardEntry + 颁奖逻辑
+// ============================================================
 
 export interface AwardEntry {
   trophyId: string;
@@ -146,52 +399,40 @@ export interface AwardEntry {
   count: number;
   /**
    * 这次解锁后该 trophy 的累计总数。
-   * - 单次型 (check)：固定 = 1
-   * - 计数型 (tier)：等于 def.tier(ctx) 的最新值
-   *
-   * 用于 UI 判定是否到达"里程碑"（1/5/10/25/50/100）触发盲盒。
+   * - daily / commemorative：count
+   * - tiered (milestone/ability/skill)：固定 1（一个 tier 只发一次）
    */
   newTotalCount: number;
-  /** 是不是 check 型（单次解锁）—— 这种总是触发盲盒 */
+  /** 是不是 rare 解锁（commemorative + gold/platinum tier 都算 rare，触发盲盒） */
   isRare: boolean;
+  /** v0.29: tiered 勋章在哪个 tier 解锁。daily/commemorative 留空。 */
+  tier?: TrophyTier;
 }
 
 /** 里程碑数：到达这些 count 触发盲盒（首次解锁 = 1 也算里程碑） */
 const MILESTONE_COUNTS = new Set([1, 5, 10, 25, 50, 100, 200, 500]);
 
-/** 给定一次解锁后的累计 count，是不是里程碑 */
 export function isMilestoneCount(newCount: number): boolean {
   return MILESTONE_COUNTS.has(newCount);
 }
 
 /**
- * 计算这一次结算应该新发的奖杯（按 trophyId 聚合）。
- * 单次型：当前未持有且条件成立 → +1
- * 计数型：tier(ctx) 大于已持有数 → 补发差额
+ * 计算这一次结算应该新发的奖杯。
+ *
+ * 三种处理路径：
+ *   1. commemorative（check）：未持有且条件成立 → 发 1 枚
+ *   2. daily（tier 无 tieredThresholds）：当前进度 - 已持有 = 补发差额
+ *   3. milestone/ability/skill（tieredThresholds）：每个 tier 独立判定，
+ *      progress >= threshold 且未发过该 tier → 发 1 枚（meta.tier 标记）
  */
 export function checkAndAwardTrophies(ctx: TrophyCheckContext): AwardEntry[] {
-  const counts = new Map<string, number>();
-  for (const t of ctx.trophies) counts.set(t.trophyId, (counts.get(t.trophyId) ?? 0) + 1);
-
   const out: AwardEntry[] = [];
+
   for (const def of TROPHIES) {
-    const have = counts.get(def.id) ?? 0;
-    if (def.tier) {
-      try {
-        const target = def.tier(ctx);
-        const delta = target - have;
-        if (delta > 0)
-          out.push({
-            trophyId: def.id,
-            count: delta,
-            newTotalCount: target,
-            isRare: false,
-          });
-      } catch {
-        // ignore
-      }
-    } else if (def.check) {
-      if (have > 0) continue;
+    if (def.category === "commemorative") {
+      // 单次型：未持有且条件成立 → +1
+      const have = ctx.trophies.some((t) => t.trophyId === def.id);
+      if (have || !def.check) continue;
       try {
         if (def.check(ctx))
           out.push({
@@ -201,8 +442,47 @@ export function checkAndAwardTrophies(ctx: TrophyCheckContext): AwardEntry[] {
             isRare: true,
           });
       } catch {
-        // ignore
+        /* */
       }
+      continue;
+    }
+
+    if (!def.tier) continue;
+
+    let target = 0;
+    try {
+      target = def.tier(ctx);
+    } catch {
+      continue;
+    }
+
+    if (def.tieredThresholds && def.tieredThresholds.length > 0) {
+      // tiered：每个 tier 独立判定
+      for (const t of def.tieredThresholds) {
+        if (target < t.threshold) continue;
+        const alreadyAwarded = ctx.trophies.some(
+          (ut) => ut.trophyId === def.id && (ut.meta as { tier?: string } | undefined)?.tier === t.tier,
+        );
+        if (alreadyAwarded) continue;
+        out.push({
+          trophyId: def.id,
+          count: 1,
+          newTotalCount: 1,
+          isRare: t.tier === "gold" || t.tier === "platinum", // 金/钻触发盲盒
+          tier: t.tier,
+        });
+      }
+    } else {
+      // daily：补发差额
+      const have = ctx.trophies.filter((t) => t.trophyId === def.id).length;
+      const delta = target - have;
+      if (delta > 0)
+        out.push({
+          trophyId: def.id,
+          count: delta,
+          newTotalCount: target,
+          isRare: false,
+        });
     }
   }
   return out;
@@ -210,4 +490,33 @@ export function checkAndAwardTrophies(ctx: TrophyCheckContext): AwardEntry[] {
 
 export function trophyDef(id: string) {
   return TROPHIES.find((t) => t.id === id);
+}
+
+/**
+ * 给定 def + 当前进度值，判断当前已达的最高 tier。
+ * UI 用这个决定显示哪个等级的图。
+ */
+export function currentTier(def: TrophyDef, progress: number): TrophyTier | null {
+  if (!def.tieredThresholds) return null;
+  let cur: TrophyTier | null = null;
+  for (const t of def.tieredThresholds) {
+    if (progress >= t.threshold) cur = t.tier;
+  }
+  return cur;
+}
+
+/**
+ * 给定 def + 当前进度值，返回下个还没达到的 tier（用于"再差 X 进银"提示）。
+ */
+export function nextTierGap(
+  def: TrophyDef,
+  progress: number,
+): { tier: TrophyTier; gap: number; threshold: number } | null {
+  if (!def.tieredThresholds) return null;
+  for (const t of def.tieredThresholds) {
+    if (progress < t.threshold) {
+      return { tier: t.tier, gap: t.threshold - progress, threshold: t.threshold };
+    }
+  }
+  return null;
 }
