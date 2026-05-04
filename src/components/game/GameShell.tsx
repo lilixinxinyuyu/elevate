@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CountdownBar } from "./CountdownBar";
+import { speedBonus } from "../../core/scoring";
 import { ComboBadge } from "./ComboBadge";
 import { XpBar } from "./XpBar";
 import { HintLadder } from "./HintLadder";
@@ -94,6 +95,8 @@ export function GameShell(props: GameShellProps) {
     points: number;
     repeatDecay?: number;
     newSkillBonus?: number;
+    /** v0.28.1：本次提交的速度档位（lightning/quick/on_time/overdue/slow） */
+    speedTier?: "lightning" | "quick" | "on_time" | "overdue" | "slow";
     errorPattern?: GameShellProps["onSubmit"] extends (...args: any) => Promise<infer R>
       ? R extends { errorPattern?: infer EP } ? EP : never : never;
   } | null>(null);
@@ -179,6 +182,7 @@ export function GameShell(props: GameShellProps) {
           elapsedSeconds: elapsed,
           correctAnswerDisplay: describeAnswer(question),
         });
+        const { tier: speedTier } = speedBonus(elapsed, question.estimated_time_seconds, r.isCorrect);
         setFeedback({
           isCorrect: r.isCorrect,
           partialCorrect: r.partialCorrect,
@@ -187,6 +191,7 @@ export function GameShell(props: GameShellProps) {
           points: res.points,
           repeatDecay: res.repeatDecay,
           newSkillBonus: res.newSkillBonus,
+          speedTier,
           errorPattern: res.errorPattern ?? null,
         });
         finishedResetKeyRef.current = resetKey;
@@ -248,8 +253,32 @@ export function GameShell(props: GameShellProps) {
             <div className="flex-1">
               <CountdownBar
                 seconds={estimatedSec}
-                resetKey={resetKey}
-                paused={!!feedback || !starterDone}
+                resetKey={`${resetKey}::${panelKey}`}
+                paused={!!feedback || !starterDone || retryStage === "showing_hint"}
+                onTimeUp={() => {
+                  // v0.28.1：时间到自动判错入库 + 触发"再做一次"流程（含小进讲题入口）
+                  // 因为模板还没调 onFinish，这里直接走 wrong path：
+                  //   - 非考试模式 → retryStage="showing_hint" 弹"再做一次 / 让小进讲一讲"
+                  //   - 考试模式 → handleFinish 直接入库判错（empty answer）
+                  if (feedback || submitting || finishedResetKeyRef.current === resetKey) return;
+                  if (examMode) {
+                    // 考试模式：超时 = 错，立即入库
+                    void handleFinish({
+                      answer: null,
+                      isCorrect: false,
+                      partialCorrect: false,
+                      matchedErrorTags: ["timeout"],
+                    });
+                  } else {
+                    // 普通模式：超时 = 进 retryStage，让小进讲题
+                    if (retryStage === "none") {
+                      sfx.wrong();
+                      setShake(true);
+                      window.setTimeout(() => setShake(false), 450);
+                      setRetryStage("showing_hint");
+                    }
+                  }
+                }}
               />
             </div>
           )}
@@ -418,6 +447,7 @@ function FeedbackPanel({
     isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string;
     userAnswerDisplay: string;
     points: number; repeatDecay?: number; newSkillBonus?: number;
+    speedTier?: "lightning" | "quick" | "on_time" | "overdue" | "slow";
     errorPattern?: {
       matchedTag: string; tagLabel: string; remediation: string | null;
       pastQuestions: { questionId: string; stem: string; happenedAt: number }[];
@@ -426,10 +456,16 @@ function FeedbackPanel({
   question: Question;
   onNext: () => void;
 }) {
-  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, errorPattern } = feedback;
+  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, errorPattern } = feedback;
   const [showTutor, setShowTutor] = useState(false);
-  // 标签：重做递减 / 新知识点
+  // 标签：速度档位 / 重做递减 / 新知识点
   const labels: string[] = [];
+  // v0.28.1：阶梯速度奖励显示
+  if (isCorrect && speedTier === "lightning") labels.push("⚡⚡ 闪电 +5");
+  else if (isCorrect && speedTier === "quick") labels.push("⚡ 迅速 +3");
+  else if (isCorrect && speedTier === "on_time") labels.push("✓ 及时 +2");
+  else if (isCorrect && speedTier === "overdue") labels.push("⏰ 超时");
+  else if (isCorrect && speedTier === "slow") labels.push("🐢 拖拉 -1");
   if (isCorrect && repeatDecay !== undefined && repeatDecay < 1.0 && repeatDecay > 0) {
     labels.push(`重做 ×${Math.round(repeatDecay * 100)}%`);
   } else if (isCorrect && repeatDecay === 0) {
@@ -457,9 +493,17 @@ function FeedbackPanel({
             <span
               key={i}
               className={`text-[11px] px-1.5 py-0.5 rounded-full font-normal ${
-                l.startsWith("🎓")
-                  ? "bg-amber-400/20 text-amber-100 border border-amber-300/40"
-                  : "bg-slate-700/60 text-slate-300 border border-slate-500/40"
+                l.startsWith("⚡⚡")
+                  ? "bg-cyan-400/30 text-cyan-100 border border-cyan-300/50 animate-pulse"
+                  : l.startsWith("⚡")
+                    ? "bg-violet-400/20 text-violet-100 border border-violet-300/40"
+                    : l.startsWith("✓")
+                      ? "bg-emerald-400/20 text-emerald-100 border border-emerald-300/40"
+                      : l.startsWith("⏰") || l.startsWith("🐢")
+                        ? "bg-rose-500/20 text-rose-200 border border-rose-400/40"
+                        : l.startsWith("🎓")
+                          ? "bg-amber-400/20 text-amber-100 border border-amber-300/40"
+                          : "bg-slate-700/60 text-slate-300 border border-slate-500/40"
               }`}
             >
               {l}

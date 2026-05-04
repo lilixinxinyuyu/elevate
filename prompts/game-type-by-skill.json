@@ -1,5 +1,5 @@
 {
-  "_comment": "skill_id → game_type。用来决定加载哪个 game-types/{name}.md 作为 prompt 的 schema 片段。没列出的 fallback 到 plain_choice。",
+  "_comment": "skill_id → game_type。用来决定加载哪个 game-types/{name}.md 作为 prompt 的 schema 片段。没列出的 fallback 到 plain_choice。v0.28.1 起 application 类 skill 走 word_problem_lab 多阶段 schema。",
 
   "observe_front_top_left": "cube_view",
 
@@ -13,5 +13,14 @@
   "triangle_classification": "triangle_judge",
 
   "decimal_price_quantity": "shop_counter",
-  "decimal_speed_distance": "shop_counter"
+  "decimal_speed_distance": "shop_counter",
+
+  "decimal_inverse_problem": "word_problem_lab",
+  "decimal_work_total": "word_problem_lab",
+  "decimal_segment_pricing": "word_problem_lab",
+  "equation_one_step_word": "word_problem_lab",
+  "equation_two_step_word": "word_problem_lab",
+  "equation_meeting_problem": "word_problem_lab",
+  "equation_sum_difference": "word_problem_lab",
+  "average_inverse_total": "word_problem_lab"
 }

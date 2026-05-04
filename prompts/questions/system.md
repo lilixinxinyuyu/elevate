@@ -9,16 +9,25 @@
 
 输出顶层 `{ "questions": [...] }` JSON，**不要**包 markdown 代码块，**不要**写解释文字，**不要**多余字段。
 
-每题必备字段：
+具体题型 schema 见下方 game-type 片段（如 plain_choice / word_problem_lab / cube_view 等）。
+
+通用必备字段（所有题型都要有）：
 
 - `stem` — 题干，**必须紧扣传入的 skill_id 主题**，不能跑题
-- `options` — 4 选 1，A/B/C/D 各一个，干扰项要合理（不能 3 个明显错）
-- `answer` — `{ "type": "choice", "value": "A" }` 之类
 - `feedback_correct` / `feedback_wrong` — 各一句话
 - `common_errors` — 至少 2 项，每项含 `tag` `error` `remediation`
 - `difficulty` — 1-5，3 = 单元中等
 - `solution_steps` — 至少 1 步分析
 - `hints` — 至少 1 条
+- `tags` — 数组，至少含 `"ai_generated"`
+
+按题型差异化的字段（详见对应 schema）：
+
+- **plain_choice / cube_view / balance_lab / decimal_shifter / triangle_judge / shop_counter**：
+  4 选 1，含 `options`（A/B/C/D）和 `answer: { "type": "choice", "value": "A" }`
+- **word_problem_lab**：
+  分阶段答题，含 `subquestions` 数组（clue_pick / choose / numeric 三步）和
+  `answer: { "type": "multi_step", "steps": [...] }`
 
 ## 内容守则
 

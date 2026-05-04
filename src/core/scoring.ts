@@ -55,12 +55,38 @@ export function repeatDecayMultiplier(priorCorrectCount: number): number {
   return REPEAT_DECAY[priorCorrectCount] ?? 0;
 }
 
+/**
+ * 阶梯速度奖励（v0.28.1）— 像 iOS Elevate 那样"越快分越多"。
+ *
+ *   < 50% 估算时间  →  +5 XP "⚡⚡ 闪电"
+ *   < 80%           →  +3 XP "⚡ 迅速"
+ *   ≤ 100%          →  +2 XP "✓ 及时"  (老版本只有这一档)
+ *   ≤ 150%          →   0    "⏰ 超时"  (题主动答对仍计正确，但不给奖励)
+ *   > 150%          →  -1 XP "🐢 拖拉" (超时太多减一分，提醒注意速度)
+ *
+ * 注意：超时 150% 后 GameShell 已经 auto-submit；这里只是兜底。
+ * 仅 isCorrect=true 时计算，错答不奖也不罚速度。
+ */
+export function speedBonus(elapsedSeconds: number, estimatedSeconds: number, isCorrect: boolean): {
+  bonus: number;
+  tier: "lightning" | "quick" | "on_time" | "overdue" | "slow";
+} {
+  if (!isCorrect) return { bonus: 0, tier: "on_time" };
+  const ratio = elapsedSeconds / Math.max(1, estimatedSeconds);
+  if (ratio < 0.5) return { bonus: 5, tier: "lightning" };
+  if (ratio < 0.8) return { bonus: 3, tier: "quick" };
+  if (ratio <= 1.0) return { bonus: 2, tier: "on_time" };
+  if (ratio <= 1.5) return { bonus: 0, tier: "overdue" };
+  return { bonus: -1, tier: "slow" };
+}
+
 export function scoreAttempt(input: ScoreInput): ScoreDelta {
   const { question, isCorrect, hintsOpened, elapsedSeconds, isReview, multiStepAllStepsCorrect, comboAfter } = input;
   const base = 10;
   const difficultyMul = 1 + (question.difficulty - 1) * 0.2;
   const correctFactor = isCorrect ? 1 : input.partialCorrect ? 0.5 : 0.2;
-  const timeBonus = isCorrect && elapsedSeconds <= question.estimated_time_seconds ? 2 : 0;
+  // v0.28.1：阶梯速度奖励（替换原 +2 一档）
+  const { bonus: timeBonus } = speedBonus(elapsedSeconds, question.estimated_time_seconds, isCorrect);
   const hintPenalty = -hintsOpened;
   const stepBonus = multiStepAllStepsCorrect ? 3 : 0;
   const reviewBonus = isReview && isCorrect ? 2 : 0;

@@ -166,14 +166,21 @@ export function AutoGenerateOnEmpty(props: Props) {
       const perSkill = Math.max(2, Math.ceil(totalCount / skills.length));
 
       // **客户端校验**：拦截垃圾题（缺字段 / answer 指向不存在选项 / stem 空白）
+      // v0.28.1 加 multi_step 支持
       const isValid = (q: unknown): boolean => {
         if (!q || typeof q !== "object") return false;
         const o = q as Record<string, unknown>;
         if (typeof o.question_id !== "string" || !o.question_id.trim()) return false;
         if (typeof o.stem !== "string" || !o.stem.trim()) return false;
-        if (!Array.isArray(o.options) || o.options.length < 2) return false;
         if (!o.answer || typeof o.answer !== "object") return false;
         const ans = o.answer as { type?: string; value?: unknown };
+        // multi_step：要求 subquestions 数组 ≥ 1，且 answer.type === "multi_step"
+        if (ans.type === "multi_step") {
+          if (!Array.isArray(o.subquestions) || o.subquestions.length === 0) return false;
+          return true;
+        }
+        // choice / numeric / 默认：必须有 options
+        if (!Array.isArray(o.options) || o.options.length < 2) return false;
         if (ans.type === "choice") {
           const optIds = (o.options as Array<{ id?: string }>)
             .map((x) => x?.id)

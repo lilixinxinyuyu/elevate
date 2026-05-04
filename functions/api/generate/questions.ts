@@ -401,8 +401,15 @@ function isValidQuestionShape(q: unknown): boolean {
   const o = q as Record<string, unknown>;
   if (typeof o.question_id !== "string" || !o.question_id) return false;
   if (typeof o.stem !== "string" || !o.stem) return false;
-  if (!Array.isArray(o.options) || o.options.length < 2) return false;
   if (!o.answer || typeof o.answer !== "object") return false;
+  // multi_step (word_problem_lab)：靠 subquestions 数组而不是 options
+  const ans = o.answer as { type?: string };
+  if (ans.type === "multi_step") {
+    if (!Array.isArray(o.subquestions) || o.subquestions.length === 0) return false;
+    return true;
+  }
+  // 其他题型：要求 options 数组
+  if (!Array.isArray(o.options) || o.options.length < 2) return false;
   return true;
 }
 
