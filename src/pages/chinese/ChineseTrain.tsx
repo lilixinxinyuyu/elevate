@@ -30,6 +30,10 @@ import {
   type ChineseAttemptResult,
 } from "../../subjects/chinese/service";
 import { CHINESE_TROPHIES } from "../../subjects/chinese/trophies";
+import { TrophyIcon } from "../../components/TrophyIcon";
+import { LotteryBoxModal } from "../../components/LotteryBoxModal";
+import { trophyImageKey } from "../../lib/allTrophies";
+import type { TrophyMeta } from "../../lib/trophyImages";
 import {
   ChineseGameDispatcher,
   hasChineseMiniGame,
@@ -37,6 +41,7 @@ import {
 } from "../../components/chinese/games/ChineseGameDispatcher";
 import { TutorPanel } from "../../components/tutor/TutorPanel";
 import { AutoGenerateOnEmpty } from "../../components/AutoGenerateOnEmpty";
+import { triggerBackgroundGen } from "../../lib/bgGen";
 import type { Question } from "../../core/types";
 
 type TrainMode = "practice" | "review" | "mock_exam";
@@ -156,6 +161,31 @@ export function ChineseTrainPage() {
   const [allUnlockedTrophies, setAllUnlockedTrophies] = useState<string[]>([]);
   const [finishCelebrated, setFinishCelebrated] = useState(false);
   const [showTutor, setShowTutor] = useState(false);
+  /** 盲盒抽奖队列 — 解锁稀有 trophy 时入队，依次弹窗 */
+  const [lotteryQueue, setLotteryQueue] = useState<TrophyMeta[]>([]);
+
+  /** 把新解锁的 trophyIds 里筛出 rare 的（check 函数定义的单次成就），入队 */
+  const enqueueLotteryFromTrophyIds = (ids: string[]) => {
+    const rareToShow: TrophyMeta[] = [];
+    for (const id of ids) {
+      const def = CHINESE_TROPHIES.find((t) => t.id === id);
+      if (!def) continue;
+      // chinese trophy 有 check (单次解锁) = rare
+      if (typeof def.check === "function") {
+        rareToShow.push({
+          id: trophyImageKey("chinese", def.id),
+          subjectId: "chinese",
+          name: def.name,
+          icon: def.icon,
+          description: def.description,
+          rare: true,
+        });
+      }
+    }
+    if (rareToShow.length > 0) {
+      setLotteryQueue((prev) => [...prev, ...rareToShow]);
+    }
+  };
 
   // 选题：3 模式分别处理。fresh / mode / unitId / skillId 任一变化 = 全 state 重置
   // → 修 "再来一组" 卡在 summary 卡片不刷新的 bug（组件不卸载，state 不会自动清）
@@ -174,6 +204,7 @@ export function ChineseTrainPage() {
     setAudioError(null);
     setAllUnlockedTrophies([]);
     setFinishCelebrated(false);
+    setLotteryQueue([]);
     setSessionId(createChineseSessionId());
     (async () => {
       // 合并题源：seedQuestions（静态） + db.questions（AI 生成的动态题，subjectId=chinese）
@@ -256,7 +287,18 @@ export function ChineseTrainPage() {
     if (mode === "mock_exam") {
       void recordChineseMockExamCompleted(student.id);
     }
-  }, [allDone, student?.id, answers, sessionId, mode, finishCelebrated]);
+    // 完成时 fire-and-forget 触发后台 AI 出题
+    void triggerBackgroundGen({
+      subjectId: "chinese",
+      studentId: student.id,
+      skills: subject.skills,
+      units: subject.units,
+      seedQuestions: subject.seedQuestions,
+      currentTerm: "下册",
+      preferredUnitId: unitId ?? undefined,
+      count: 5,
+    });
+  }, [allDone, student?.id, answers, sessionId, mode, finishCelebrated, subject, unitId]);
 
   if (!questionsLoaded) {
     return (
@@ -386,7 +428,7 @@ export function ChineseTrainPage() {
                 if (!def) return null;
                 return (
                   <div key={`${tid}-${i}`} className="flex items-center gap-2 px-3 py-1.5 bg-ink-900/40 rounded-lg">
-                    <div className="text-2xl">{def.icon}</div>
+                    <TrophyIcon trophyId={def.id} subjectId="chinese" emoji={def.icon} size="md" glow />
                     <div className="text-left">
                       <div className="text-sm font-bold text-amber-100">{def.name}</div>
                       <div className="text-[10px] text-slate-300">{def.description}</div>
@@ -460,6 +502,7 @@ export function ChineseTrainPage() {
       if (result.newTrophyIds.length > 0) {
         sfx.chest();
         setAllUnlockedTrophies((prev) => [...prev, ...result.newTrophyIds]);
+        enqueueLotteryFromTrophyIds(result.newTrophyIds);
       }
     } catch (e) {
       console.error("[chinese-train] mini-game submit failed", e);
@@ -521,6 +564,7 @@ export function ChineseTrainPage() {
       if (result.newTrophyIds.length > 0) {
         sfx.chest();
         setAllUnlockedTrophies((prev) => [...prev, ...result.newTrophyIds]);
+        enqueueLotteryFromTrophyIds(result.newTrophyIds);
       }
     } catch (e) {
       console.error("[chinese-train] submit failed", e);
@@ -743,7 +787,7 @@ export function ChineseTrainPage() {
                   if (!def) return null;
                   return (
                     <div key={tid} className="flex items-center gap-2 px-3 py-1.5 bg-ink-900/40 rounded-lg">
-                      <div className="text-2xl">{def.icon}</div>
+                      <TrophyIcon trophyId={def.id} subjectId="chinese" emoji={def.icon} size="md" glow />
                       <div className="text-left">
                         <div className="text-sm font-bold text-amber-100">{def.name}</div>
                         <div className="text-[10px] text-slate-300">{def.description}</div>
@@ -784,6 +828,14 @@ export function ChineseTrainPage() {
           studentAnswer={describeStudentAnswer(q, chosen)}
           skillName={q.skill_name ?? q.skill_id}
           onClose={() => setShowTutor(false)}
+        />
+      )}
+
+      {/* 🎁 盲盒抽奖：解锁稀有 trophy 时弹（依次播放） */}
+      {lotteryQueue.length > 0 && (
+        <LotteryBoxModal
+          trophy={lotteryQueue[0]!}
+          onClose={() => setLotteryQueue((prev) => prev.slice(1))}
         />
       )}
 

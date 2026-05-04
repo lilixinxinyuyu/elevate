@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOptionalSubject } from "../subjects/context";
 import { ORDERED_SUBJECT_IDS, SUBJECTS } from "../subjects";
 import { mathSubject } from "../subjects/math";
+import { BgGenIndicator } from "./BgGenIndicator";
 
 /**
  * Layout：所有 /:subject/* 子路由共用的壳。
@@ -32,6 +33,7 @@ export function Layout() {
 
   return (
     <div className="min-h-full flex flex-col">
+      <BgGenIndicator />
       <header className="sticky top-0 z-20 bg-ink-900/80 border-b border-ink-700/70 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <NavLink to={`/${subject.id}`} className="flex items-center gap-2">
@@ -158,7 +160,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.24.1
+        本地优先 · v0.25.0
       </footer>
     </div>
   );

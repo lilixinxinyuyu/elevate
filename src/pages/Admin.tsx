@@ -17,6 +17,7 @@ import { normalizeJsonText } from "../lib/normalizeJsonText";
 import { isTtsAvailable, speakText } from "../lib/tts";
 import { resetChineseTestData } from "../subjects/chinese/service";
 import { generateAiQuestions, generateImage } from "../lib/tutor";
+import { TrophyImagesAdminPanel } from "../components/TrophyImagesAdminPanel";
 import type { Question } from "../core/types";
 
 export function AdminPage() {
@@ -203,6 +204,11 @@ export function AdminPage() {
       <div className="card">
         <div className="font-semibold mb-2">🎨 AI 图像生成（勋章 / 图标）</div>
         <ImageGeneratorPanel />
+      </div>
+
+      <div className="card">
+        <div className="font-semibold mb-2">🏆 勋章图批量生成（替换 emoji）</div>
+        <TrophyImagesAdminPanel />
       </div>
 
       <div className="card">

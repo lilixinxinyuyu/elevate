@@ -11,6 +11,22 @@ import type {
   UserTrophy,
 } from "../core/types";
 
+/** AI 生成的勋章图缓存（base64 持久化，URL 24h 过期） */
+export interface TrophyImageRow {
+  trophyId: string; // primary key
+  /** 跨学科隔离：math / chinese */
+  subjectId: "math" | "chinese";
+  /** data:image/png;base64,... 持久化用 */
+  imageDataUrl: string;
+  /** 原始生成 URL（仅留作参考，过期后无效） */
+  sourceUrl?: string;
+  prompt: string;
+  model: string;
+  generatedAt: number;
+  /** 是否是 lottery 抽奖独家（特殊成就） */
+  isLottery?: boolean;
+}
+
 export class HepingDB extends Dexie {
   students!: Table<StudentProfile, string>;
   units!: Table<CurriculumUnit, string>;
@@ -22,6 +38,7 @@ export class HepingDB extends Dexie {
   mistakes!: Table<MistakeReview, string>;
   trophies!: Table<UserTrophy, string>;
   meta!: Table<{ key: string; value: unknown }, string>;
+  trophyImages!: Table<TrophyImageRow, string>;
 
   constructor() {
     super("heping-math-trainer");
@@ -127,6 +144,11 @@ export class HepingDB extends Dexie {
           });
         }
       });
+
+    // v3：加 trophyImages 表（AI 生成勋章图缓存）
+    this.version(3).stores({
+      trophyImages: "trophyId, subjectId, generatedAt",
+    });
   }
 }
 

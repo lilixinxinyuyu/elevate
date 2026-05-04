@@ -25,6 +25,7 @@ import {
   getChineseSkillMastery,
 } from "../../subjects/chinese/service";
 import { CHINESE_TROPHIES, type ChineseTrophyDef } from "../../subjects/chinese/trophies";
+import { TrophyIcon } from "../../components/TrophyIcon";
 import type { MasteryScore } from "../../core/types";
 
 export function ChineseHomePage() {
@@ -285,7 +286,14 @@ export function ChineseHomePage() {
                 }`}
                 title={`${def.name}：${def.description}`}
               >
-                <div className={`text-2xl ${isOwned ? "" : "grayscale"}`}>{def.icon}</div>
+                <TrophyIcon
+                  trophyId={def.id}
+                  subjectId="chinese"
+                  emoji={def.icon}
+                  size="md"
+                  unlocked={isOwned}
+                />
+
                 <div className="text-[9px] font-semibold mt-0.5 leading-tight">
                   {def.name}
                 </div>

@@ -14,6 +14,12 @@ import { UNITS } from "../content/units";
 import { pushToCloud } from "../db/cloudSync";
 import { UnlockCelebration } from "../components/UnlockCelebration";
 import { AutoGenerateOnEmpty } from "../components/AutoGenerateOnEmpty";
+import { triggerBackgroundGen } from "../lib/bgGen";
+import { TrophyIcon } from "../components/TrophyIcon";
+import { LotteryBoxModal } from "../components/LotteryBoxModal";
+import { trophyImageKey } from "../lib/allTrophies";
+import type { TrophyMeta } from "../lib/trophyImages";
+import { TROPHIES } from "../core/trophies";
 import { tierById } from "../core/tiers";
 
 export function TrainPage() {
@@ -158,6 +164,21 @@ export function TrainPage() {
         setState({ status: "done", summary, studentId: state.studentId });
         // 后台静默上传到云端，不阻塞 UI
         pushToCloud().catch(() => {/* 忽略：失败下次再试 */});
+        // 完成时 fire-and-forget 触发后台 AI 出题，下一组自然有新题
+        const allQs = await db.questions.toArray();
+        const student = (await db.students.toArray())[0];
+        if (student) {
+          void triggerBackgroundGen({
+            subjectId: "math",
+            studentId: student.id,
+            skills: SKILLS,
+            units: UNITS,
+            seedQuestions: allQs.filter((q) => (q.subjectId ?? "math") === "math"),
+            currentTerm: (student.currentTerm as "上册" | "下册") ?? "下册",
+            preferredUnitId: student.currentUnitId,
+            count: 5,
+          });
+        }
       } catch (e) {
         setState({ status: "error", message: (e as Error).message });
       } finally {
@@ -171,10 +192,16 @@ export function TrainPage() {
   if (state.status === "loading") return <div className="card">准备今日挑战…</div>;
   if (state.status === "error") return <div className="card text-rose-300">出错了：{state.message}</div>;
   if (state.status === "empty") {
-    // 触发 reload：往 URL 加 fresh 参数，initKey 变化 → useEffect 自然重跑
+    /**
+     * AutoGen 完成后 reload session。关键：去掉 URL 里的 fresh 参数，让
+     * getOrCreateSession 走 "resume existing" 路径（找当天未完成 session 复用）。
+     * 这样 Selena 离开后再回来不会再触发一次 AutoGen。
+     */
     const reloadSession = () => {
       const newParams = new URLSearchParams(params);
-      newParams.set("fresh", String(Date.now()));
+      newParams.delete("fresh");
+      // 加 _r 微参数让 initKey 变化触发 useEffect 重跑
+      newParams.set("_r", String(Date.now()));
       navigate({ search: `?${newParams.toString()}` }, { replace: true });
     };
     return <MathAutoGen reloadSession={reloadSession} preferredSkillId={selectedSkillIds?.[0]} starved={!!state.starved} />;
@@ -206,6 +233,24 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
   const [showTierCelebration, setShowTierCelebration] = useState(
     !!summary.tierUpgrade,
   );
+  // 🎁 盲盒队列：从 newTrophies 里筛 rare（math 有 check 函数的 trophy = 单次解锁）
+  const [lotteryQueue, setLotteryQueue] = useState<TrophyMeta[]>(() => {
+    const out: TrophyMeta[] = [];
+    for (const aw of summary.newTrophies ?? []) {
+      const def = TROPHIES.find((t) => t.id === aw.trophyId);
+      if (def && typeof def.check === "function") {
+        out.push({
+          id: trophyImageKey("math", def.id),
+          subjectId: "math",
+          name: def.name,
+          icon: def.icon ?? "🏆",
+          description: def.description,
+          rare: true,
+        });
+      }
+    }
+    return out;
+  });
   const levelUp = summary.levelAfter > summary.levelBefore;
   const ratingDelta =
     summary.ratingBefore !== undefined && summary.ratingAfter !== undefined
@@ -215,6 +260,13 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
 
   return (
     <div className="space-y-5 pb-8">
+      {/* 🎁 盲盒抽奖：稀有 trophy 解锁时优先播放 */}
+      {lotteryQueue.length > 0 && (
+        <LotteryBoxModal
+          trophy={lotteryQueue[0]!}
+          onClose={() => setLotteryQueue((prev) => prev.slice(1))}
+        />
+      )}
       {showTierCelebration && summary.tierUpgrade && (
         <UnlockCelebration
           fromTierId={summary.tierUpgrade.fromTierId}
@@ -278,13 +330,15 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
                 {summary.newTrophies.map((aw) => {
                   const t = trophyById(aw.trophyId);
                   return (
-                    <span key={aw.trophyId} className="chip bg-amber-500/20 text-amber-100 border border-amber-400/40 px-3 py-1.5">
-                      <span className="mr-1">{t?.icon ?? "🏆"}</span>
-                      {t?.name ?? aw.trophyId}
-                      {aw.count > 1 && (
-                        <span className="ml-2 text-amber-300 font-display font-bold">× {aw.count}</span>
-                      )}
-                    </span>
+                    <div key={aw.trophyId} className="flex items-center gap-2 bg-amber-500/20 border border-amber-400/40 rounded-xl px-3 py-1.5">
+                      <TrophyIcon trophyId={aw.trophyId} subjectId="math" emoji={t?.icon ?? "🏆"} size="md" glow />
+                      <div className="text-amber-100">
+                        <div className="text-sm font-semibold">{t?.name ?? aw.trophyId}</div>
+                        {aw.count > 1 && (
+                          <span className="text-xs text-amber-300 font-display font-bold">× {aw.count}</span>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

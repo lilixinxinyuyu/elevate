@@ -29,6 +29,7 @@ import {
 } from "../../subjects/chinese/service";
 import { CHINESE_TROPHIES } from "../../subjects/chinese/trophies";
 import { generateChineseQuestions, generateImage } from "../../lib/tutor";
+import { TrophyImagesAdminPanel } from "../../components/TrophyImagesAdminPanel";
 import type { Attempt, MasteryScore, MistakeReview, Question } from "../../core/types";
 
 /**
@@ -156,6 +157,11 @@ export function ChineseAdminPage() {
       <div className="card">
         <div className="font-semibold mb-2">🎨 AI 图像生成（语文勋章 / 古诗配图）</div>
         <ChineseImageGeneratorPanel />
+      </div>
+
+      <div className="card">
+        <div className="font-semibold mb-2">🏆 勋章图批量生成（替换 emoji）</div>
+        <TrophyImagesAdminPanel />
       </div>
 
       <div className="card">

@@ -1,5 +1,22 @@
 /** 极简 Web Audio 音效 —— 无外部依赖 */
 let ctx: AudioContext | null = null;
+let visibilityHooked = false;
+
+function hookVisibility() {
+  if (visibilityHooked) return;
+  visibilityHooked = true;
+  if (typeof document === "undefined") return;
+  document.addEventListener("visibilitychange", () => {
+    if (!ctx) return;
+    if (document.hidden) {
+      // 页面切到后台 → 静音 audio context（修 "切 tab 后还在响" bug）
+      ctx.suspend().catch(() => void 0);
+    } else {
+      ctx.resume().catch(() => void 0);
+    }
+  });
+}
+
 function getCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
   if (!ctx) {
@@ -9,6 +26,7 @@ function getCtx(): AudioContext | null {
       ctx = null;
     }
   }
+  hookVisibility();
   return ctx;
 }
 
