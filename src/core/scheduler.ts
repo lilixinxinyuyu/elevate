@@ -246,7 +246,11 @@ function scoreSkill(
 }
 
 function selectTopSkills(input: InternalInput, n: number): Skill[] {
-  const arr = SKILLS.map((s) => ({
+  // **关键**：只考虑在 pool 里有题的 skill。否则会选到当前学期没出题的 G4A skill，
+  // 然后 pickQuestionsForSkill 找不到题 → 整 session 空 → empty 状态死循环。
+  const skillsInPool = new Set(input.pool.map((q) => q.skill_id));
+  const eligible = SKILLS.filter((s) => skillsInPool.has(s.id));
+  const arr = eligible.map((s) => ({
     s,
     score: scoreSkill(s, input.masteryMap.get(s.id), input.dueMistakes, input.now),
   }));

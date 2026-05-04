@@ -34,21 +34,29 @@ export interface AiProviderContext {
   label: "token-plan" | "dashscope-intl";
 }
 
-/** 选 chat 模型用的 provider 列表（按优先级）。*/
+/**
+ * 选 chat 模型用的 provider 列表（按优先级）。
+ *
+ * Round 6.8 实测：DashScope/qwen-plus 25s 内能返回；token-plan 上的 deepseek/
+ * glm/MiniMax/qwen3.6-plus 都经常 25s+ 超时。**所以 DashScope 优先**，
+ * token-plan 当兜底。
+ *
+ * 注：token-plan 的某些模型可能也能用，等以后实测再调整。
+ */
 export function getChatProviders(env: Env): AiProviderContext[] {
   const providers: AiProviderContext[] = [];
-  if (env.TOKEN_PLAN_API_KEY) {
-    providers.push({
-      baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com",
-      apiKey: env.TOKEN_PLAN_API_KEY,
-      label: "token-plan",
-    });
-  }
   if (env.DASHSCOPE_API_KEY) {
     providers.push({
       baseUrl: "https://dashscope-intl.aliyuncs.com",
       apiKey: env.DASHSCOPE_API_KEY,
       label: "dashscope-intl",
+    });
+  }
+  if (env.TOKEN_PLAN_API_KEY) {
+    providers.push({
+      baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com",
+      apiKey: env.TOKEN_PLAN_API_KEY,
+      label: "token-plan",
     });
   }
   return providers;
@@ -57,18 +65,18 @@ export function getChatProviders(env: Env): AiProviderContext[] {
 /**
  * 给定 provider，返回它对应的可用 chat 模型链。
  *
- * Round 6.2 重排：**速度优先于质量**。出题对智力要求中等，宁可用快速模型快速
- * 失败也别等慢推理模型把整个请求拖死。qwen3.6-plus 是 reasoning 模型——即使
- * enable_thinking=false 也偶发慢/挂，挪到链尾兜底。
+ * Round 6.5 实测调整：
+ * - DashScope 账号是 **Free Tier** ── qwen-flash/turbo/max 都返回
+ *   `AllocationQuota.FreeTierOnly` 错误。**只 qwen-plus 能用**，且它较慢（~15-25s）。
+ * - token-plan 的 MiniMax-M2.5 实测 18s+ 经常超时；deepseek-v3.2/glm-5 没充分测试。
+ *   尝试用 deepseek 第一（非 reasoning，应较快），其次 glm-5 / MiniMax / qwen3.6-plus 兜底。
  */
 export function getChatModelsFor(ctx: AiProviderContext): string[] {
   if (ctx.label === "token-plan") {
-    // MiniMax / deepseek / glm 都是非 reasoning 的快模型；qwen3.6-plus 兜底
-    return ["MiniMax-M2.5", "deepseek-v3.2", "glm-5", "qwen3.6-plus"];
+    return ["deepseek-v3.2", "glm-5", "MiniMax-M2.5", "qwen3.6-plus"];
   }
-  // qwen-flash / qwen-turbo 是 dashscope 最快的；qwen-plus / qwen-max 兜底
-  // 去掉 omni-plus / omni-flash（多模态模型，对纯文本 JSON 出题反而慢）
-  return ["qwen-flash", "qwen-turbo", "qwen-plus", "qwen-max"];
+  // 只留 qwen-plus；其他都被 Free Tier 限了反而浪费 budget
+  return ["qwen-plus"];
 }
 
 /** 给定 provider，返回它对应的图像生成模型链。 */

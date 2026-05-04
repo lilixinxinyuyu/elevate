@@ -5,10 +5,18 @@ import { SEED_QUESTIONS } from "../content/questions";
 import { validateQuestion } from "../core/validateQuestion";
 import type { Question, StudentProfile } from "../core/types";
 
-const SEED_VERSION = 18;
+const SEED_VERSION = 19;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
+
+/**
+ * v0.26.3 起 seed 题统一 stamp subjectId="math"。
+ * UNITS / SKILLS 也同样 stamp（之前 schema 加了字段但没填值）。
+ */
+function stampMathSubject<T extends Record<string, unknown>>(rows: T[]): T[] {
+  return rows.map((r) => ({ ...r, subjectId: r.subjectId ?? "math" }));
+}
 
 export async function ensureSeeded(): Promise<void> {
   const existing = await db.meta.get(SEED_KEY);
@@ -17,12 +25,16 @@ export async function ensureSeeded(): Promise<void> {
   if (existing?.value === SEED_VERSION && hasQuestions > 0) {
     pullAgentQuestionsIfStale().catch(() => {});
     migrateAttemptScoresV7().catch((e) => console.warn("[migrate v7] failed:", e));
+    // v19 一次性补 stamp（即使 seed 没动也跑）
+    void backfillMissingSubjectIds().catch(() => {});
     return;
   }
 
   await db.transaction("rw", [db.units, db.skills, db.questions, db.students, db.meta], async () => {
-    await db.units.bulkPut(UNITS);
-    await db.skills.bulkPut(SKILLS);
+    // v19: stamp subjectId="math" on all seed rows（之前没 stamp 导致 admin 诊断
+    // 显示 720/720 都是 undef）
+    await db.units.bulkPut(stampMathSubject(UNITS as unknown as Record<string, unknown>[]) as never);
+    await db.skills.bulkPut(stampMathSubject(SKILLS as unknown as Record<string, unknown>[]) as never);
 
     const ok: typeof SEED_QUESTIONS = [];
     const bad: { id: string; issues: string[] }[] = [];
@@ -34,7 +46,7 @@ export async function ensureSeeded(): Promise<void> {
     if (bad.length > 0) {
       console.warn("[seed] 以下题目校验失败，未导入：", bad);
     }
-    await db.questions.bulkPut(ok);
+    await db.questions.bulkPut(stampMathSubject(ok as unknown as Record<string, unknown>[]) as never);
 
     const existing = await db.students.get("default-student");
     const now = Date.now();
@@ -64,6 +76,38 @@ export async function ensureSeeded(): Promise<void> {
 
   // v7：检查是否需要按新规则迁移历史 attempts 的 XP（一次性）
   migrateAttemptScoresV7().catch((e) => console.warn("[migrate v7] failed:", e));
+
+  // v19: backfill subjectId
+  void backfillMissingSubjectIds().catch(() => {});
+}
+
+/**
+ * v19 一次性补 stamp：把所有 subjectId=null/undef 的题/skill/unit 标成 "math"。
+ *
+ * 背景：seed.ts v7-v18 期间 db.questions.bulkPut(SEED_QUESTIONS) 没填 subjectId，
+ * 而 dexie v2 migration 只在升级时跑一次。如果用户先升级、后从 cloud 拉新 seed，
+ * 这些 row 就永远 undef。诊断面板显示 720/720 都是 undef 就是这个 bug。
+ */
+const BACKFILL_KEY = "subjectIdBackfill_v19";
+async function backfillMissingSubjectIds(): Promise<void> {
+  const meta = await db.meta.get(BACKFILL_KEY);
+  if (meta?.value === true) return;
+  let touched = 0;
+  const stamp = (row: { subjectId?: string }) => {
+    if (!row.subjectId) {
+      row.subjectId = "math";
+      touched++;
+    }
+  };
+  await db.transaction("rw", [db.questions, db.skills, db.units, db.meta], async () => {
+    await db.questions.toCollection().modify(stamp);
+    await db.skills.toCollection().modify(stamp);
+    await db.units.toCollection().modify(stamp);
+    await db.meta.put({ key: BACKFILL_KEY, value: true });
+  });
+  if (touched > 0) {
+    console.log(`[backfill v19] stamped subjectId=math on ${touched} rows`);
+  }
 }
 
 /**

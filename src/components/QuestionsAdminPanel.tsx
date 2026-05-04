@@ -25,6 +25,33 @@ interface QStats {
 
 const SKILL_NAME = new Map(SKILLS.map((s) => [s.id, s.name]));
 
+/**
+ * 只有"基于选项"的题型需要校验 options + answer.value 对应。
+ * 迷你游戏（balance_lab / shop_counter / equation_builder / vertical_repair /
+ * speed_match / sort_ladder / poem_cloze / pair_match / sentence_shuffle 等）
+ * 不用 options，不应被标"bad_options"。
+ */
+const OPTION_BASED_TEMPLATES = new Set([
+  "plain_choice",
+  "single_choice",
+  "multi_choice",
+  "true_false_swipe",
+  "true_false",
+  "clue_finder",
+  "plain_choice_visual",
+]);
+
+function needsOptions(q: Record<string, unknown>): boolean {
+  const playAs = (q.play_as as string) || "";
+  const gameType = (q.game_type as string) || "";
+  const fmt = (q.question_format as string) || "";
+  // 只要 play_as / game_type / question_format 任意一个是 option-based 就需要
+  if (playAs && OPTION_BASED_TEMPLATES.has(playAs)) return true;
+  if (gameType && OPTION_BASED_TEMPLATES.has(gameType)) return true;
+  if (fmt === "single_choice" || fmt === "multi_choice") return true;
+  return false;
+}
+
 function isBadQuestion(q: unknown): { bad: true; reason: string } | { bad: false } {
   if (!q || typeof q !== "object") return { bad: true, reason: "非对象" };
   const o = q as Record<string, unknown>;
@@ -32,17 +59,20 @@ function isBadQuestion(q: unknown): { bad: true; reason: string } | { bad: false
     return { bad: true, reason: "缺 question_id" };
   if (typeof o.stem !== "string" || !o.stem.trim())
     return { bad: true, reason: "stem 空" };
-  if (!Array.isArray(o.options) || o.options.length < 2)
-    return { bad: true, reason: "options 少于 2" };
-  if (!o.answer || typeof o.answer !== "object")
-    return { bad: true, reason: "缺 answer" };
-  const ans = o.answer as { type?: string; value?: unknown };
-  if (ans.type === "choice") {
-    const optIds = (o.options as Array<{ id?: string }>)
-      .map((x) => x?.id)
-      .filter((x): x is string => typeof x === "string");
-    if (typeof ans.value !== "string" || !optIds.includes(ans.value))
-      return { bad: true, reason: `answer.value="${String(ans.value)}" 不在 options` };
+  // 只对"option-based"题型校验 options
+  if (needsOptions(o)) {
+    if (!Array.isArray(o.options) || o.options.length < 2)
+      return { bad: true, reason: "options 少于 2 (但题型需要 options)" };
+    if (!o.answer || typeof o.answer !== "object")
+      return { bad: true, reason: "缺 answer" };
+    const ans = o.answer as { type?: string; value?: unknown };
+    if (ans.type === "choice") {
+      const optIds = (o.options as Array<{ id?: string }>)
+        .map((x) => x?.id)
+        .filter((x): x is string => typeof x === "string");
+      if (typeof ans.value !== "string" || !optIds.includes(ans.value))
+        return { bad: true, reason: `answer.value="${String(ans.value)}" 不在 options` };
+    }
   }
   return { bad: false };
 }

@@ -52,14 +52,23 @@ interface GenerateRequest {
   gameType?: string;
 }
 
-/** 单 sub-batch 题数上限（让单次 LLM 调用 < 18s） */
-const SUB_BATCH_SIZE = 4;
+/** 单 sub-batch 题数上限。
+ * Round 6.6: 4 → 2，因为 LLM 输出 ~800 tokens 用 25s+。改 2 题/批 ~400 tokens
+ * 在 12-15s 完成。count=10 → 5 个并发批，总墙钟 ~15s。 */
+const SUB_BATCH_SIZE = 2;
 /** 整个请求的最大题数（防止恶意调用） */
 const MAX_TOTAL_COUNT = 30;
-/** 单次 LLM 调用的 wall-clock 限制（ms） */
-const PER_CALL_TIMEOUT_MS = 18_000;
-/** 整个 API 请求的 wallclock budget。超了立刻 abort 全部 in-flight 调用，返回部分成功。 */
-const TOTAL_WALLCLOCK_BUDGET_MS = 50_000;
+/** 单次 LLM 调用的 wall-clock 限制（ms）。
+ * Round 6.7：去掉 response_format json_object 约束后，模型可以快 2-3 倍。
+ * 但 first-token 时间仍可能 10s+ — 给 30s 兜底。 */
+const PER_CALL_TIMEOUT_MS = 30_000;
+/**
+ * 单个 provider 的 wallclock budget。
+ *
+ * lazy 启动 — token-plan 用完 35s 后 dashscope 还有 35s 单独的预算。
+ * worst case = 70s（client 90s 之内）。
+ */
+const PER_PROVIDER_BUDGET_MS = 35_000;
 
 function buildSystemPrompt(subjectId: string): string {
   const subjLabel = subjectId === "math" ? "数学" : "语文";
@@ -111,11 +120,16 @@ async function callQwenChat(
       { role: "user", content: userPrompt },
     ],
     temperature: 0.7,
-    // Round 6: 4000 → 2000，单 sub-batch 最多 4 题，2000 token 完全够
-    max_tokens: 2000,
-    // qwen3.6-plus 是 reasoning 模型，关掉 thinking 不浪费 token
-    enable_thinking: false,
+    // Round 6.9: 1500 → 2500. 实测 2 题 + 全字段 JSON ~1500-2200 token，
+    // 1500 容易截断导致 json_parse_failed。2500 给安全边际。
+    max_tokens: 2500,
   };
+  // qwen3.x 系列是 reasoning 模型，关掉 thinking 不浪费 token；
+  // 其他模型（MiniMax / deepseek / glm）会拒收 enable_thinking=false
+  // (Round 6.4 root cause fix: MiniMax 报 invalid_parameter_error)
+  if (/^qwen3/i.test(model)) {
+    requestBody.enable_thinking = false;
+  }
   if (withJsonFormat) {
     requestBody.response_format = { type: "json_object" };
   }
@@ -358,7 +372,10 @@ async function runSubBatch(
   batchIndex: number,
   providers: AiProviderContext[],
   systemPrompt: string,
-  globalSignal: AbortSignal,
+  providerCtrls: Map<
+    string,
+    { signal: AbortSignal; ensureStarted: () => void; cleanup: () => void }
+  >,
   brokenModels: Set<string>,
 ): Promise<{
   questions: unknown[];
@@ -370,23 +387,33 @@ async function runSubBatch(
   const errors: { provider: string; model: string; code: string; message: string }[] = [];
 
   for (const ctx of providers) {
-    if (globalSignal.aborted) break;
+    const ctrl = providerCtrls.get(ctx.label);
+    if (!ctrl || ctrl.signal.aborted) continue; // 这家预算用光，试下一家
+    ctrl.ensureStarted(); // 第一次摸到才开始烧 30s budget
+    const providerSignal = ctrl.signal;
     const models = getChatModelsFor(ctx);
     for (const m of models) {
-      if (globalSignal.aborted) break;
+      if (providerSignal.aborted) break;
       const modelKey = `${ctx.label}/${m}`;
       // 跨 batch 已知坏模型 → 直接跳过，省时间
       if (brokenModels.has(modelKey)) continue;
 
-      let r = await callQwenChat(ctx, m, systemPrompt, userPrompt, true, globalSignal);
+      // Round 6.7：默认不带 response_format=json_object（实测它让 deepseek/qwen
+       // constrained decoding 慢 2-3 倍）。extractJsonArray 5 级 fallback 已经很
+       // 鲁棒，纯 prompt 引导 + 解析就够。
+      let r = await callQwenChat(ctx, m, systemPrompt, userPrompt, false, providerSignal);
       if (!r.ok) {
         errors.push({ provider: ctx.label, model: m, code: r.code, message: r.message });
-        // 标记坏模型让其他 batch 跳过
+        // 标记坏模型让其他 batch 跳过：
+        // - timeout / budget exhausted / 鉴权挂 / 不支持参数 → 一定是模型问题
+        // - AllocationQuota.* → DashScope 账户 Free Tier 限制，永远不会变
         if (
           r.code === "timeout" ||
           r.code === "global_budget_exceeded" ||
           r.code === "InvalidApiKey" ||
-          r.code === "AccessDenied"
+          r.code === "AccessDenied" ||
+          r.code === "invalid_parameter_error" ||
+          r.code.startsWith("Allocation") // FreeTierOnly / Quota etc.
         ) {
           brokenModels.add(modelKey);
         }
@@ -401,7 +428,7 @@ async function runSubBatch(
           systemPrompt,
           `${userPrompt}\n\n（重要：只输出顶层 { "questions": [...] } JSON，不要解释、不要 markdown）`,
           false,
-          globalSignal,
+          providerSignal,
         );
         if (r2.ok) arr = extractJsonArray(r2.text);
         if (!arr) {
@@ -458,14 +485,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const systemPrompt = buildSystemPrompt(subjectId);
 
-  // **全局 wallclock budget**：超过 TOTAL_WALLCLOCK_BUDGET_MS（50s）后所有
-  // 还在跑的 sub-batch 调用会立即 abort，本次请求返回当前已收集的题（partial-success）。
-  // 比 client 的 90s 硬超时早 40s 返回，避免 client 看到 "出题失败" 时 server 还在烧 LLM token。
-  const globalCtrl = new AbortController();
-  const globalTimer = setTimeout(() => globalCtrl.abort(), TOTAL_WALLCLOCK_BUDGET_MS);
-
   // 跨 batch 共享：某个 model 在 batch A 已 timeout 了，batch B 直接跳过
   const brokenModels = new Set<string>();
+
+  // **每 provider 独立 budget**：每家 30s。如果 token-plan 全失败，dashscope
+  // 仍能从 30s 新预算开始尝试。client 总 timeout 90s。
+  // sub-batch 内部按 provider 顺序串行（试完 token-plan 才试 dashscope）。
+  // 多 sub-batch 之间并发，但每个 sub-batch 共享同一组 perProviderSignal。
+
+  // **Lazy timer**：每个 provider 的 30s budget 只在第一次"摸到"它时启动，
+  // 而不是 t=0 就开始烧。修复 bug：token-plan 用 30s 时 dashscope 的预算也烧光了。
+  const providerCtrls = new Map<
+    string,
+    { signal: AbortSignal; ensureStarted: () => void; cleanup: () => void }
+  >();
+  for (const p of providers) {
+    const ctrl = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let started = false;
+    providerCtrls.set(p.label, {
+      signal: ctrl.signal,
+      ensureStarted: () => {
+        if (started) return;
+        started = true;
+        timer = setTimeout(() => ctrl.abort(), PER_PROVIDER_BUDGET_MS);
+      },
+      cleanup: () => {
+        if (timer) clearTimeout(timer);
+      },
+    });
+  }
 
   // 拆 sub-batches: 每批 4 题，并发跑
   const batchCount = Math.ceil(requestedCount / SUB_BATCH_SIZE);
@@ -480,14 +529,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         i,
         providers,
         systemPrompt,
-        globalCtrl.signal,
+        providerCtrls,
         brokenModels,
       ),
     );
   }
 
   const settled = await Promise.allSettled(batches);
-  clearTimeout(globalTimer);
+  // 清理所有 timer
+  for (const { cleanup } of providerCtrls.values()) cleanup();
 
   const allQuestions: unknown[] = [];
   const allErrors: { provider: string; model: string; code: string; message: string }[] = [];

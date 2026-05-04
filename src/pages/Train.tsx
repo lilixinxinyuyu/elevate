@@ -195,15 +195,17 @@ export function TrainPage() {
   if (state.status === "error") return <div className="card text-rose-300">出错了：{state.message}</div>;
   if (state.status === "empty") {
     /**
-     * AutoGen 完成后 reload session。关键：去掉 URL 里的 fresh 参数，让
-     * getOrCreateSession 走 "resume existing" 路径（找当天未完成 session 复用）。
-     * 这样 Selena 离开后再回来不会再触发一次 AutoGen。
+     * AutoGen 完成后 reload session。
+     *
+     * v0.26.10 修复：必须保留/重置 fresh=Date.now()，否则 getOrCreateSession 走
+     * "resume existing" 会拿到 AutoGen 之前那个 questionIds=[] 的空 session，
+     * 进入死循环（再次 empty → 再次 AutoGen）。
+     *
+     * 用 fresh 强制创建新 session，新 session 会从已经填充好的 db.questions 里挑题。
      */
     const reloadSession = () => {
       const newParams = new URLSearchParams(params);
-      newParams.delete("fresh");
-      // 加 _r 微参数让 initKey 变化触发 useEffect 重跑
-      newParams.set("_r", String(Date.now()));
+      newParams.set("fresh", String(Date.now()));
       navigate({ search: `?${newParams.toString()}` }, { replace: true });
     };
     return <MathAutoGen reloadSession={reloadSession} preferredSkillId={selectedSkillIds?.[0]} starved={!!state.starved} />;
