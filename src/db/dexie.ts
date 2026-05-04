@@ -158,6 +158,59 @@ export class HepingDB extends Dexie {
     this.version(4).stores({
       tutorSessions: "id, studentId, subjectId, attemptId, questionId, skillId, startedAt, updatedAt",
     });
+
+    // v5 (v0.28.0)：mastery 算法重写 (Elo + 滚动窗口 + Fragility)。
+    // 老 mastery row 没有 studentElo / recent / lastSuccessAt 等字段。
+    // upgrade 里扫所有 attempts 重放算法，让现有进度直接换算成新分数。
+    //
+    // 副作用：Selena 之前看到全"熟练"的 skill 都会重新算，预期会下来到
+    // "较稳"或"进步中"，跟模考 75% 的真实水平对得上。
+    this.version(5).stores({
+      // 不改 schema 字段（recent 是数组，不需要 index）。只触发 upgrade hook。
+    }).upgrade(async (tx) => {
+      const { backfillFromAttempts } = await import("../core/mastery");
+      const masteryRows = await tx.table("mastery").toArray();
+      const now = Date.now();
+      for (const row of masteryRows) {
+        // 拿这个 student × skill 的所有历史 attempt
+        const attempts = await tx
+          .table("attempts")
+          .where("studentId")
+          .equals(row.studentId)
+          .filter((a: { skillId?: string }) => a.skillId === row.skillId)
+          .toArray();
+        const sorted = attempts
+          .map((a: {
+            questionId: string;
+            isCorrect: boolean;
+            createdAt: number;
+          }) => ({
+            questionId: a.questionId,
+            difficulty: 3, // attempts 没存 difficulty，用中位数 3 兜底
+            isCorrect: a.isCorrect,
+            ts: a.createdAt,
+          }))
+          .sort((a: { ts: number }, b: { ts: number }) => a.ts - b.ts);
+        // 试图从 questions 表查每条 attempt 对应题的 difficulty
+        for (const a of sorted) {
+          const q = await tx.table("questions").get(a.questionId);
+          if (q && typeof q.difficulty === "number") a.difficulty = q.difficulty;
+        }
+        const re = backfillFromAttempts(sorted, now);
+        await tx.table("mastery").put({
+          ...row,
+          score: re.score,
+          studentElo: re.studentElo,
+          recent: re.recent,
+          attemptsCount: re.attemptsCount,
+          correctCount: re.correctCount,
+          lastPracticedAt: re.lastPracticedAt,
+          lastSuccessAt: re.lastSuccessAt,
+          lastErrorAt: re.lastErrorAt,
+          updatedAt: now,
+        });
+      }
+    });
   }
 }
 

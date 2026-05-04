@@ -368,17 +368,50 @@ export interface Attempt {
   createdAt: number;
 }
 
+/**
+ * Mastery 记录里保留的"近期 attempt 摘要"——给新算法 (v0.28+) 算
+ * 滚动窗口加权命中率 + 多样性 + Fragility 用。
+ */
+export interface MasteryRecentEntry {
+  /** 答题时间戳 (createdAt) */
+  ts: number;
+  /** 是否答对 */
+  correct: boolean;
+  /** 题目难度 1-5（来自 question.difficulty） */
+  difficulty: number;
+  /** 题目 id（用于多样性去重） */
+  questionId: string;
+}
+
 export interface MasteryScore {
   id: string;
   studentId: string;
   /** 多学科 v2 */
   subjectId?: SubjectId;
   skillId: string;
+  /** 0-100 综合掌握度。v0.28+ 由 computeMasteryScore() 综合算出 */
   score: number;
   attemptsCount: number;
   correctCount: number;
   lastPracticedAt?: number;
   updatedAt: number;
+
+  // === v0.28 新字段（可选，老数据 v5 migration 自动回填）===
+  /**
+   * 学生在这个 skill 上的 Elo 等级分。每次答题都更新（答对涨、答错跌；
+   * 难题涨得更多、简单题几乎不涨）。1200 起始，1700+ ≈ 精通水平。
+   * 对应 Duolingo Birdbrain 的 self-calibrating 机制。
+   */
+  studentElo?: number;
+  /**
+   * 最近 30 条 attempt 摘要（FIFO，最旧的被挤出）。
+   * 用来算 time-decayed accuracy + 多样性奖励。
+   */
+  recent?: MasteryRecentEntry[];
+  /** 上次答对的时间戳（fragility / 遗忘曲线判定用） */
+  lastSuccessAt?: number;
+  /** 上次答错的时间戳（连错检测用） */
+  lastErrorAt?: number;
 }
 
 export interface MistakeReview {
