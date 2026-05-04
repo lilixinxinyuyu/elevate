@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { MascotAvatar } from "../MascotAvatar";
 import {
   createMicRecorder,
   explainQuestion,
@@ -325,12 +326,11 @@ export function TutorPanel(props: TutorPanelProps) {
         {/* header */}
         <div className="flex items-center justify-between p-3 border-b border-ink-700/60 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-rose-400 text-white flex items-center justify-center font-display font-bold shadow-glow text-sm shrink-0">
-              小进
-            </div>
+            {/* 小进吉祥物头像 */}
+            <MascotAvatar size="md" autoEnsure glow />
             <div className="min-w-0">
-              <div className="font-display font-bold text-amber-200">AI 引导</div>
-              <div className="text-[10px] text-slate-400 truncate">小进姐姐 · {props.skillName ?? props.subjectId}</div>
+              <div className="font-display font-bold text-amber-200">小进姐姐</div>
+              <div className="text-[10px] text-slate-400 truncate">AI 引导 · {props.skillName ?? props.subjectId}</div>
             </div>
           </div>
           {/* 内嵌 × 兜底（如果浮动 × 被某个布局遮住） */}

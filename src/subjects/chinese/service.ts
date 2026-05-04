@@ -107,19 +107,39 @@ interface MasteryUpdate {
  *   对 +6（D1）/ +5（D2）/ +4（D3）/ +3（D4）/ +2（D5）
  *   错 -3（D1）/ -3（D2）/ -3（D3）/ -2（D4）/ -2（D5）
  *   越简单的题做错惩罚越大；越难的题做对奖励大但增量平缓
+ *
+ * Round 6 加防护：
+ *   - priorCorrectCount：第 N 次答对同题衰减（×1.0/0.5/0.2/0.1/0）
+ *   - uniqueQuestionsTried：题面广度封顶 30+10×N
+ *   防"刷一道题刷到 mastery=100" 假象。
  */
+const CHINESE_REPEAT_DECAY = [1.0, 0.5, 0.2, 0.1] as const;
+function chineseRepeatMul(priorCorrectCount: number): number {
+  if (priorCorrectCount <= 0) return 1.0;
+  if (priorCorrectCount >= CHINESE_REPEAT_DECAY.length) return 0;
+  return CHINESE_REPEAT_DECAY[priorCorrectCount] ?? 0;
+}
+
 function computeMasteryUpdate(
   oldScore: number | undefined,
   difficulty: number,
   isCorrect: boolean,
+  priorCorrectCount = 0,
+  uniqueQuestionsTried?: number,
 ): MasteryUpdate {
   const old = oldScore ?? MASTERY_INIT;
   const correctTable: Record<number, number> = { 1: 6, 2: 5, 3: 4, 4: 3, 5: 2 };
   const wrongTable: Record<number, number> = { 1: -3, 2: -3, 3: -3, 4: -2, 5: -2 };
-  const delta = isCorrect
+  let delta = isCorrect
     ? correctTable[difficulty] ?? 4
     : wrongTable[difficulty] ?? -3;
-  const next = Math.max(MASTERY_MIN, Math.min(MASTERY_MAX, old + delta));
+  if (isCorrect) delta *= chineseRepeatMul(priorCorrectCount);
+  let next = Math.max(MASTERY_MIN, Math.min(MASTERY_MAX, old + delta));
+  // 题面广度封顶
+  if (typeof uniqueQuestionsTried === "number") {
+    const cap = Math.min(MASTERY_MAX, 30 + uniqueQuestionsTried * 10);
+    if (next > cap && delta > 0) next = Math.max(old, cap);
+  }
   return { oldScore: old, newScore: next, delta: next - old };
 }
 
@@ -135,6 +155,8 @@ export interface ChineseAttemptResult {
   masteryTo: number;
   totalXpAfter: number;
   newTrophyIds: string[];
+  /** 富信息 award：用于 milestone 判定（缺省 = 全空数组兼容老调用方） */
+  newAwards?: ChineseAwardEntry[];
 }
 
 /**
@@ -158,7 +180,41 @@ export async function submitChineseAttempt(args: {
   });
 
   const masteryRow = await db.mastery.get(masteryRowId(args.studentId, args.question.skill_id));
-  const m = computeMasteryUpdate(masteryRow?.score, args.question.difficulty, args.isCorrect);
+
+  // 同题刷分防护：算这道题之前答对过几次
+  const priorCorrectCount = args.isCorrect
+    ? (
+        await db.attempts
+          .where("studentId")
+          .equals(args.studentId)
+          .filter(
+            (a) =>
+              (a.subjectId ?? "math") === SUBJECT &&
+              a.questionId === args.question.question_id &&
+              a.isCorrect,
+          )
+          .count()
+      )
+    : 0;
+  // 题面广度：这个 skill 学生做过多少道唯一题
+  const skillAttempts = await db.attempts
+    .where("studentId")
+    .equals(args.studentId)
+    .filter(
+      (a) =>
+        (a.subjectId ?? "math") === SUBJECT && a.skillId === args.question.skill_id,
+    )
+    .toArray();
+  const uniqueQs = new Set(skillAttempts.map((a) => a.questionId));
+  uniqueQs.add(args.question.question_id);
+
+  const m = computeMasteryUpdate(
+    masteryRow?.score,
+    args.question.difficulty,
+    args.isCorrect,
+    priorCorrectCount,
+    uniqueQs.size,
+  );
 
   const attempt: Attempt = {
     id: uid("a-"),
@@ -254,7 +310,12 @@ export async function submitChineseAttempt(args: {
   });
 
   // 检查 trophy（独立事务，避免拉长主事务）
-  const newTrophyIds = await checkAndAwardChineseTrophies(args.studentId);
+  const newAwards = await checkAndAwardChineseTrophies(args.studentId);
+  // 兼容老 caller：展开成 string[]
+  const newTrophyIds: string[] = [];
+  for (const aw of newAwards) {
+    for (let i = 0; i < aw.count; i++) newTrophyIds.push(aw.trophyId);
+  }
 
   return {
     attempt,
@@ -264,13 +325,28 @@ export async function submitChineseAttempt(args: {
     masteryTo: m.newScore,
     totalXpAfter,
     newTrophyIds,
+    /** Round 6: 富信息 award，用于 milestone 判定 */
+    newAwards,
   };
 }
 
 /**
- * 检查所有 chinese trophy 定义，发现新解锁的就写入 db.trophies 并返回 trophyId 列表。
+ * Round 6 加：chinese 也用 award entry 富信息（newTotalCount + isRare），
+ * UI 可以判定 milestone 触发盲盒。
  */
-async function checkAndAwardChineseTrophies(studentId: string): Promise<string[]> {
+export interface ChineseAwardEntry {
+  trophyId: string;
+  count: number;
+  newTotalCount: number;
+  isRare: boolean;
+}
+
+/**
+ * 检查所有 chinese trophy 定义，发现新解锁的就写入 db.trophies 并返回富信息。
+ *
+ * 兼容回 `string[]` 调用：repeated 展开 entry.count 次。
+ */
+async function checkAndAwardChineseTrophies(studentId: string): Promise<ChineseAwardEntry[]> {
   const allAttempts = await db.attempts
     .where("studentId")
     .equals(studentId)
@@ -292,7 +368,7 @@ async function checkAndAwardChineseTrophies(studentId: string): Promise<string[]
     ownedCounts.set(t.trophyId, (ownedCounts.get(t.trophyId) ?? 0) + 1);
   }
 
-  const newlyAwarded: string[] = [];
+  const awards: ChineseAwardEntry[] = [];
   for (const def of CHINESE_TROPHIES) {
     const owned = ownedCounts.get(def.id) ?? 0;
 
@@ -307,7 +383,7 @@ async function checkAndAwardChineseTrophies(studentId: string): Promise<string[]
           unlockedAt: Date.now(),
         };
         await db.trophies.put(t);
-        newlyAwarded.push(def.id);
+        awards.push({ trophyId: def.id, count: 1, newTotalCount: 1, isRare: true });
       }
     }
 
@@ -315,20 +391,27 @@ async function checkAndAwardChineseTrophies(studentId: string): Promise<string[]
     if (def.tier) {
       const target = def.tier({ studentId, attempts: allAttempts, mastery: allMastery });
       const need = target - owned;
-      for (let i = 0; i < need; i++) {
-        const t: UserTrophy = {
-          id: uid("t-"),
-          studentId,
-          subjectId: SUBJECT,
+      if (need > 0) {
+        for (let i = 0; i < need; i++) {
+          const t: UserTrophy = {
+            id: uid("t-"),
+            studentId,
+            subjectId: SUBJECT,
+            trophyId: def.id,
+            unlockedAt: Date.now(),
+          };
+          await db.trophies.put(t);
+        }
+        awards.push({
           trophyId: def.id,
-          unlockedAt: Date.now(),
-        };
-        await db.trophies.put(t);
-        newlyAwarded.push(def.id);
+          count: need,
+          newTotalCount: target,
+          isRare: false,
+        });
       }
     }
   }
-  return newlyAwarded;
+  return awards;
 }
 
 // ============================================================

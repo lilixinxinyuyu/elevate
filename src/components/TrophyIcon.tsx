@@ -50,7 +50,9 @@ export function TrophyIcon({
   const fullKey = subjectId ? trophyImageKey(subjectId, trophyId) : trophyId;
   const row = useTrophyImage(fullKey);
   const sizeClass = SIZE_CLASSES[size];
-  const baseClass = `${sizeClass} ${className} rounded-2xl overflow-hidden flex items-center justify-center shrink-0 transition-all`;
+  // AI 图用圆形（badge medal 风格）；emoji 兜底用圆角方形（图标式）
+  const shapeClass = row?.imageDataUrl ? "rounded-full" : "rounded-2xl";
+  const baseClass = `${sizeClass} ${className} ${shapeClass} overflow-hidden flex items-center justify-center shrink-0 transition-all`;
   const glowClass = glow
     ? "ring-2 ring-amber-400/60 shadow-glow-amber"
     : "";

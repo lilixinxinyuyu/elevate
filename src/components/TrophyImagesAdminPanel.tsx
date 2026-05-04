@@ -18,6 +18,8 @@ import {
   useAllTrophyImages,
 } from "../lib/trophyImages";
 import { getAllTrophyMeta } from "../lib/allTrophies";
+import { regenerateMascot } from "../lib/mascot";
+import { MascotAvatar } from "./MascotAvatar";
 
 export function TrophyImagesAdminPanel() {
   const allTrophies = getAllTrophyMeta();
@@ -99,10 +101,40 @@ export function TrophyImagesAdminPanel() {
 
   return (
     <div className="text-sm space-y-3">
+      {/* 小进吉祥物专区 */}
+      <div className="rounded-lg border border-violet-400/40 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 p-3 flex items-center gap-3">
+        <MascotAvatar size="lg" autoEnsure glow />
+        <div className="flex-1 min-w-0">
+          <div className="text-violet-100 font-bold">小进 · 你的 AI 学习伙伴</div>
+          <div className="text-[11px] text-slate-300 leading-relaxed">
+            出现在 BgGen 提示条 / 盲盒生成 / Tutor 面板 / AutoGen 卡片。<br />
+            如果不喜欢现在的样子，可以重抽。
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          className="btn-ghost text-xs border border-violet-400/40 text-violet-200"
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await regenerateMascot();
+            } catch (e) {
+              window.alert("失败：" + (e instanceof Error ? e.message : String(e)));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          🔁 重抽
+        </button>
+      </div>
+
       <div className="text-xs text-slate-400 leading-relaxed">
         用 wan2.7-image-pro 给每个勋章生成专属卡通图（替换 emoji）。已生成{" "}
         <span className="text-emerald-300">{cachedCount}</span> / {allTrophies.length}，
-        缺 <span className="text-amber-300">{missingCount}</span>。每张 ~20 秒。
+        缺 <span className="text-amber-300">{missingCount}</span>。每张 ~20 秒。<br />
+        Round 6 改进：512×512 + sticker 风格 + 圆形遮罩 + 段位勋章 + 彻底禁文字
       </div>
 
       <div className="flex flex-wrap gap-2">

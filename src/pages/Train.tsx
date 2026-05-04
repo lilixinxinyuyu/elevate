@@ -14,7 +14,7 @@ import { UNITS } from "../content/units";
 import { pushToCloud } from "../db/cloudSync";
 import { UnlockCelebration } from "../components/UnlockCelebration";
 import { AutoGenerateOnEmpty } from "../components/AutoGenerateOnEmpty";
-import { triggerBackgroundGen } from "../lib/bgGen";
+import { triggerBgGenIfLow } from "../lib/bgGen";
 import { TrophyIcon } from "../components/TrophyIcon";
 import { LotteryBoxModal } from "../components/LotteryBoxModal";
 import { trophyImageKey } from "../lib/allTrophies";
@@ -164,11 +164,12 @@ export function TrainPage() {
         setState({ status: "done", summary, studentId: state.studentId });
         // 后台静默上传到云端，不阻塞 UI
         pushToCloud().catch(() => {/* 忽略：失败下次再试 */});
-        // 完成时 fire-and-forget 触发后台 AI 出题，下一组自然有新题
+        // 完成时智能补题：检查 fresh 题数，< 30 才触发；触发时跨 3 个最弱 skill
+        // 各出 10 题，整出 30 道丰富新题。Selena 离开时不打扰，回来题库丰富。
         const allQs = await db.questions.toArray();
         const student = (await db.students.toArray())[0];
         if (student) {
-          void triggerBackgroundGen({
+          void triggerBgGenIfLow({
             subjectId: "math",
             studentId: student.id,
             skills: SKILLS,
@@ -176,7 +177,8 @@ export function TrainPage() {
             seedQuestions: allQs.filter((q) => (q.subjectId ?? "math") === "math"),
             currentTerm: (student.currentTerm as "上册" | "下册") ?? "下册",
             preferredUnitId: student.currentUnitId,
-            count: 5,
+            count: 10,
+            multiSkillCount: 3,
           });
         }
       } catch (e) {
@@ -233,21 +235,46 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
   const [showTierCelebration, setShowTierCelebration] = useState(
     !!summary.tierUpgrade,
   );
-  // 🎁 盲盒队列：从 newTrophies 里筛 rare（math 有 check 函数的 trophy = 单次解锁）
+  // 🎁 盲盒队列（Round 6 升级）：
+  //   1. 段位升档（school→district 等）→ 队首，开 tier badge 盲盒
+  //   2. rare check trophy（单次解锁）→ 100% 入队
+  //   3. 计数型 trophy 在 milestone (1/5/10/25/50/100/...) 入队
+  //   4. 普通增量解锁不入队（避免节奏被打断）
   const [lotteryQueue, setLotteryQueue] = useState<TrophyMeta[]>(() => {
     const out: TrophyMeta[] = [];
-    for (const aw of summary.newTrophies ?? []) {
-      const def = TROPHIES.find((t) => t.id === aw.trophyId);
-      if (def && typeof def.check === "function") {
+    const MILESTONES = new Set([1, 5, 10, 25, 50, 100, 200, 500]);
+
+    // 1. 段位升档优先
+    if (summary.tierUpgrade) {
+      const newTier = tierById(summary.tierUpgrade.toTierId);
+      if (newTier) {
         out.push({
-          id: trophyImageKey("math", def.id),
+          id: trophyImageKey("math", `tier_${newTier.id}`),
           subjectId: "math",
-          name: def.name,
-          icon: def.icon ?? "🏆",
-          description: def.description,
+          name: `跨入 ${newTier.name}！`,
+          icon: newTier.badgeIcon,
+          description: newTier.unlockSlogan,
           rare: true,
         });
       }
+    }
+
+    // 2 + 3. trophy awards
+    for (const aw of summary.newTrophies ?? []) {
+      const def = TROPHIES.find((t) => t.id === aw.trophyId);
+      if (!def) continue;
+      const isRareAw = aw.isRare ?? typeof def.check === "function";
+      const newTotal = aw.newTotalCount ?? 1;
+      const shouldFire = isRareAw || MILESTONES.has(newTotal);
+      if (!shouldFire) continue;
+      out.push({
+        id: trophyImageKey("math", def.id),
+        subjectId: "math",
+        name: newTotal > 1 ? `${def.name} ×${newTotal}` : def.name,
+        icon: def.icon ?? "🏆",
+        description: def.description,
+        rare: isRareAw,
+      });
     }
     return out;
   });

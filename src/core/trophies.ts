@@ -142,7 +142,26 @@ export const TROPHIES: TrophyDef[] = [
 
 export interface AwardEntry {
   trophyId: string;
+  /** 这次新发了几枚 */
   count: number;
+  /**
+   * 这次解锁后该 trophy 的累计总数。
+   * - 单次型 (check)：固定 = 1
+   * - 计数型 (tier)：等于 def.tier(ctx) 的最新值
+   *
+   * 用于 UI 判定是否到达"里程碑"（1/5/10/25/50/100）触发盲盒。
+   */
+  newTotalCount: number;
+  /** 是不是 check 型（单次解锁）—— 这种总是触发盲盒 */
+  isRare: boolean;
+}
+
+/** 里程碑数：到达这些 count 触发盲盒（首次解锁 = 1 也算里程碑） */
+const MILESTONE_COUNTS = new Set([1, 5, 10, 25, 50, 100, 200, 500]);
+
+/** 给定一次解锁后的累计 count，是不是里程碑 */
+export function isMilestoneCount(newCount: number): boolean {
+  return MILESTONE_COUNTS.has(newCount);
 }
 
 /**
@@ -161,14 +180,26 @@ export function checkAndAwardTrophies(ctx: TrophyCheckContext): AwardEntry[] {
       try {
         const target = def.tier(ctx);
         const delta = target - have;
-        if (delta > 0) out.push({ trophyId: def.id, count: delta });
+        if (delta > 0)
+          out.push({
+            trophyId: def.id,
+            count: delta,
+            newTotalCount: target,
+            isRare: false,
+          });
       } catch {
         // ignore
       }
     } else if (def.check) {
       if (have > 0) continue;
       try {
-        if (def.check(ctx)) out.push({ trophyId: def.id, count: 1 });
+        if (def.check(ctx))
+          out.push({
+            trophyId: def.id,
+            count: 1,
+            newTotalCount: 1,
+            isRare: true,
+          });
       } catch {
         // ignore
       }

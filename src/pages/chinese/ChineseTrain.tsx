@@ -41,7 +41,7 @@ import {
 } from "../../components/chinese/games/ChineseGameDispatcher";
 import { TutorPanel } from "../../components/tutor/TutorPanel";
 import { AutoGenerateOnEmpty } from "../../components/AutoGenerateOnEmpty";
-import { triggerBackgroundGen } from "../../lib/bgGen";
+import { triggerBgGenIfLow } from "../../lib/bgGen";
 import type { Question } from "../../core/types";
 
 type TrainMode = "practice" | "review" | "mock_exam";
@@ -164,27 +164,43 @@ export function ChineseTrainPage() {
   /** 盲盒抽奖队列 — 解锁稀有 trophy 时入队，依次弹窗 */
   const [lotteryQueue, setLotteryQueue] = useState<TrophyMeta[]>([]);
 
-  /** 把新解锁的 trophyIds 里筛出 rare 的（check 函数定义的单次成就），入队 */
-  const enqueueLotteryFromTrophyIds = (ids: string[]) => {
+  /**
+   * 入队盲盒（Round 6 升级）：
+   * - rare check trophy（单次解锁）→ 一定入队
+   * - 计数型 trophy 在 milestone (1/5/10/25/50/100) 时入队
+   * - 否则普通解锁不入队（避免每个连击都弹盲盒打扰节奏）
+   */
+  const enqueueLotteryFromAwards = (
+    awards: { trophyId: string; newTotalCount: number; isRare: boolean }[],
+  ) => {
     const rareToShow: TrophyMeta[] = [];
-    for (const id of ids) {
-      const def = CHINESE_TROPHIES.find((t) => t.id === id);
+    for (const aw of awards) {
+      const def = CHINESE_TROPHIES.find((t) => t.id === aw.trophyId);
       if (!def) continue;
-      // chinese trophy 有 check (单次解锁) = rare
-      if (typeof def.check === "function") {
-        rareToShow.push({
-          id: trophyImageKey("chinese", def.id),
-          subjectId: "chinese",
-          name: def.name,
-          icon: def.icon,
-          description: def.description,
-          rare: true,
-        });
-      }
+      const shouldFire =
+        aw.isRare ||
+        // milestone 触发：1/5/10/25/50/100/...
+        [1, 5, 10, 25, 50, 100, 200, 500].includes(aw.newTotalCount);
+      if (!shouldFire) continue;
+      rareToShow.push({
+        id: trophyImageKey("chinese", def.id),
+        subjectId: "chinese",
+        name: aw.newTotalCount > 1 ? `${def.name} ×${aw.newTotalCount}` : def.name,
+        icon: def.icon,
+        description: def.description,
+        rare: aw.isRare,
+      });
     }
     if (rareToShow.length > 0) {
       setLotteryQueue((prev) => [...prev, ...rareToShow]);
     }
+  };
+
+  /** 老 caller 兼容：从纯 trophyId 列表直接入队（视作"未知 newTotalCount"） */
+  const enqueueLotteryFromTrophyIds = (ids: string[]) => {
+    enqueueLotteryFromAwards(
+      ids.map((id) => ({ trophyId: id, newTotalCount: 1, isRare: true })),
+    );
   };
 
   // 选题：3 模式分别处理。fresh / mode / unitId / skillId 任一变化 = 全 state 重置
@@ -287,8 +303,8 @@ export function ChineseTrainPage() {
     if (mode === "mock_exam") {
       void recordChineseMockExamCompleted(student.id);
     }
-    // 完成时 fire-and-forget 触发后台 AI 出题
-    void triggerBackgroundGen({
+    // 完成时智能补题：检查 fresh 题数，< 30 才触发；触发时跨 3 个最弱 skill
+    void triggerBgGenIfLow({
       subjectId: "chinese",
       studentId: student.id,
       skills: subject.skills,
@@ -296,7 +312,8 @@ export function ChineseTrainPage() {
       seedQuestions: subject.seedQuestions,
       currentTerm: "下册",
       preferredUnitId: unitId ?? undefined,
-      count: 5,
+      count: 10,
+      multiSkillCount: 3,
     });
   }, [allDone, student?.id, answers, sessionId, mode, finishCelebrated, subject, unitId]);
 
@@ -502,7 +519,12 @@ export function ChineseTrainPage() {
       if (result.newTrophyIds.length > 0) {
         sfx.chest();
         setAllUnlockedTrophies((prev) => [...prev, ...result.newTrophyIds]);
-        enqueueLotteryFromTrophyIds(result.newTrophyIds);
+        // Round 6: 用富信息 award 判定 milestone；newAwards 不存在时退化到老 path
+        if (result.newAwards && result.newAwards.length > 0) {
+          enqueueLotteryFromAwards(result.newAwards);
+        } else {
+          enqueueLotteryFromTrophyIds(result.newTrophyIds);
+        }
       }
     } catch (e) {
       console.error("[chinese-train] mini-game submit failed", e);
@@ -564,7 +586,12 @@ export function ChineseTrainPage() {
       if (result.newTrophyIds.length > 0) {
         sfx.chest();
         setAllUnlockedTrophies((prev) => [...prev, ...result.newTrophyIds]);
-        enqueueLotteryFromTrophyIds(result.newTrophyIds);
+        // Round 6: 用富信息 award 判定 milestone；newAwards 不存在时退化到老 path
+        if (result.newAwards && result.newAwards.length > 0) {
+          enqueueLotteryFromAwards(result.newAwards);
+        } else {
+          enqueueLotteryFromTrophyIds(result.newTrophyIds);
+        }
       }
     } catch (e) {
       console.error("[chinese-train] submit failed", e);

@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ensureTrophyImage, type TrophyMeta } from "../lib/trophyImages";
 import { sfx } from "../lib/sfx";
+import { MascotAvatar } from "./MascotAvatar";
 
 interface Props {
   trophy: TrophyMeta;
@@ -127,8 +128,12 @@ export function LotteryBoxModal({ trophy, onClose }: Props) {
             )}
             {phase === "opening" && <div className="text-9xl animate-pop">🎁</div>}
             {phase === "generating" && (
-              <div className="space-y-3">
-                <div className="text-7xl animate-pulse">✨</div>
+              <div className="space-y-3 flex flex-col items-center">
+                {/* 小进头像 + 旋转的魔法光晕 */}
+                <div className="relative">
+                  <MascotAvatar size="lg" autoEnsure glow />
+                  <div className="absolute inset-0 rounded-full ring-4 ring-amber-400/30 animate-ping pointer-events-none" />
+                </div>
                 <div className="text-sm text-amber-200">
                   <span className="animate-pulse">小进正在为你画一枚专属勋章…</span>
                 </div>

@@ -199,6 +199,18 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
 
   const priorMastery = await db.mastery.get(masteryId(studentId, question.skill_id));
   const priorTags = await getRecentErrorTags(studentId, question.skill_id);
+
+  // 独立题数：这个 skill 下学生答过多少道唯一的题（去重后）
+  // 用于 mastery 封顶：题面少不许刷上去
+  const skillAttempts = await db.attempts
+    .where("studentId")
+    .equals(studentId)
+    .filter((a) => a.skillId === question.skill_id)
+    .toArray();
+  const uniqueQs = new Set(skillAttempts.map((a) => a.questionId));
+  uniqueQs.add(question.question_id); // 这次的算进来
+  const uniqueQuestionsTried = uniqueQs.size;
+
   const newMasteryScore = updateMastery({
     oldScore: priorMastery?.score ?? MASTERY_BOUNDS.min + 50,
     difficulty: question.difficulty,
@@ -209,6 +221,10 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     errorTags: matchedErrorTags,
     priorErrorTags: priorTags,
     cognitiveLevel: question.cognitive_level,
+    // **同题刷分防护**：第 N 次答对衰减
+    priorCorrectCount,
+    // **题面广度封顶**：做过 < 5 道唯一题时 mastery 上限被压到 80 以下
+    uniqueQuestionsTried,
   });
   const masteryDelta = newMasteryScore - (priorMastery?.score ?? 50);
 

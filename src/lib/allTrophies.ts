@@ -7,9 +7,10 @@
 
 import { TROPHIES } from "../core/trophies";
 import { CHINESE_TROPHIES } from "../subjects/chinese/trophies";
+import { TIERS } from "../core/tiers";
 import type { TrophyMeta } from "./trophyImages";
 
-/** 把 math + chinese 的 trophy 都拉平成 TrophyMeta */
+/** 把 math + chinese trophy + 段位勋章都拉平成 TrophyMeta */
 export function getAllTrophyMeta(): TrophyMeta[] {
   const math: TrophyMeta[] = TROPHIES.map((t) => ({
     id: `math_${t.id}`, // 加前缀避免 id 冲突
@@ -27,7 +28,24 @@ export function getAllTrophyMeta(): TrophyMeta[] {
     description: t.description,
     rare: typeof t.check === "function",
   }));
-  return [...math, ...chinese];
+  // 段位勋章：5 个 tier，math + chinese 各一份（视觉风格不同）
+  const mathTiers: TrophyMeta[] = TIERS.map((tier) => ({
+    id: `math_tier_${tier.id}`,
+    subjectId: "math" as const,
+    name: `${tier.name} 段位勋章`,
+    icon: tier.badgeIcon,
+    description: tier.badgeDesc,
+    rare: true, // 段位勋章都是稀有
+  }));
+  const chineseTiers: TrophyMeta[] = TIERS.map((tier) => ({
+    id: `chinese_tier_${tier.id}`,
+    subjectId: "chinese" as const,
+    name: `${tier.name} 段位勋章`,
+    icon: tier.badgeIcon,
+    description: tier.badgeDesc,
+    rare: true,
+  }));
+  return [...math, ...chinese, ...mathTiers, ...chineseTiers];
 }
 
 /** 给定 (subjectId, raw trophyId) 算出 TrophyImage 的 keyed id */

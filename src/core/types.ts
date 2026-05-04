@@ -323,8 +323,15 @@ export interface SessionSummary {
   abilityPoints: Partial<Record<AbilityId, number>>;
   masteryImprovements: { skillId: string; skillName: string; from: number; to: number }[];
   needReview: { skillId: string; skillName: string }[];
-  /** 本次新解锁/再解锁的奖杯，每个 trophyId 带这次拿到的次数 */
-  newTrophies: { trophyId: string; count: number }[];
+  /** 本次新解锁/再解锁的奖杯。新字段是 Round 6 加的，老 summary 没有 → optional */
+  newTrophies: {
+    trophyId: string;
+    count: number;
+    /** 解锁后的累计总数（计数型），check 单次型恒为 1 */
+    newTotalCount?: number;
+    /** check 单次型 = true，计数型 = false */
+    isRare?: boolean;
+  }[];
   suggestionForTomorrow: string;
   maxCombo: number;
   fastestSeconds: number;

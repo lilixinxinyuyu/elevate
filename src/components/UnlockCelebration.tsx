@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { tierById } from "../core/tiers";
+import { TrophyIcon } from "./TrophyIcon";
 
 /**
  * 跨段升档全屏庆祝。
@@ -69,14 +70,21 @@ export function UnlockCelebration({
           transition: "transform 700ms cubic-bezier(0.34, 1.56, 0.64, 1)",
         }}
       >
-        {/* 大勋章 */}
+        {/* 大勋章 — 优先用 AI 生成的段位 badge 图（math 风格），fallback emoji */}
         <div
-          className="text-7xl mb-3 inline-block"
+          className="mb-3 inline-block"
           style={{
             animation: phase === "show" ? "pulse-glow 1.5s ease-in-out infinite" : undefined,
           }}
         >
-          {toTier.badgeIcon}
+          <TrophyIcon
+            trophyId={`tier_${toTier.id}`}
+            subjectId="math"
+            emoji={toTier.badgeIcon}
+            size="xl"
+            glow
+            unlocked
+          />
         </div>
 
         <div className="text-xs text-slate-300 font-display mb-1">恭喜跨段升档</div>

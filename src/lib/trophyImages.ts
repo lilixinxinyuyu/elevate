@@ -30,28 +30,80 @@ export interface TrophyMeta {
 }
 
 /**
- * 给 trophy 拼出生成 prompt：
- *  - 通用模板 + trophy.name + 风格要求（卡通可爱 / 4 年级女生）
+ * 给 trophy 拼出生成 prompt（Round 6 优化）：
+ *  - 强调"贴纸 / sticker"风格 → 单一主体居中、深色纯色背景便于裁剪
+ *  - 圆形 badge/medal 主体 + 周边光晕 → UI 上可以做圆形遮罩
+ *  - 强调"没有任何文字"避免 AI 写错字英文
  *  - 不同 subject 用不同主色：math 紫粉，chinese 金红
+ *  - tier badges 用每个段位特定的颜色
+ *  - 512×512 定向（小尺寸 + 居中主体方便后续 UI mask 成圆）
  */
 export function buildTrophyPrompt(t: TrophyMeta): string {
+  // 段位勋章（id 形如 "tier_school" / "tier_district" 等）走专门风格
+  if (t.id.includes("tier_") || t.subjectId === "math" && /tier/i.test(t.id)) {
+    return buildTierBadgePrompt(t);
+  }
+
   const subjectFlavor =
     t.subjectId === "math"
-      ? "数学风：紫色和粉色渐变，背景星空和数学符号闪烁"
-      : "语文风：金色和暖红色，背景中国风云纹和水墨笔触";
-  const lottery = t.rare ? "稀有金边光晕、独一无二闪耀质感、带宝石点缀" : "";
-  const desc = t.description ? `这枚勋章纪念「${t.description}」。` : "";
+      ? "主色调：紫罗兰 + 樱花粉渐变，金色细节高光"
+      : "主色调：暖金色 + 中国红，墨色细节，水墨晕染";
+  const lottery = t.rare
+    ? "**稀有特殊**：钻石质感、彩虹光晕、宝石镶嵌、闪耀星芒效果，整体更华丽更精致"
+    : "";
+  const desc = t.description ? `主题：「${t.description}」。` : "";
+
   return [
-    `一枚精美的卡通圆形勋章 (badge medal)，正中央是「${t.name}」主题图标。`,
+    `Sticker / icon 风格的圆形精美勋章 (round badge medal)，居中构图。`,
+    `主体：${t.name} 概念的卡通图标，高度凝练、容易识别。`,
     desc,
     subjectFlavor,
     lottery,
-    "整体扁平 3D 插画风格，柔和光泽，纯色背景突出主体。",
-    "适合 4 年级女生喜欢的可爱风，没有任何文字、字母、数字。",
-    "高清 1024x1024，居中构图，圆形勋章占据大部分画面。",
+    `画面构成：圆形勋章占画面 80%，背景是深色纯色（深紫罗兰或深靛蓝），便于在 UI 圆形遮罩里裁剪。`,
+    `禁止出现：任何文字、字母、数字、签名、水印。`,
+    `风格：扁平 3D 插画 + 柔光内发光，4 年级女生审美：可爱、精致、闪闪发亮。`,
+    `画面尺寸：512×512 正方形，主体严格居中，四周留 10% 边距。`,
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/**
+ * 段位勋章专用 prompt：每段位有自己的"地点 + 主色 + 标志"。
+ * t.id 形如 "tier_school" / "tier_district" / "tier_city" / "tier_province" / "tier_country"。
+ */
+function buildTierBadgePrompt(t: TrophyMeta): string {
+  // 抽取 tier id（去掉前缀）
+  const rawId = t.id.replace(/^math_/, "").replace(/^chinese_/, "").replace(/^tier_/, "");
+  const tierTheme: Record<string, { motif: string; color: string }> = {
+    school: { motif: "可爱卡通校园建筑（学校大门 + 课本）", color: "天蓝色 + 浅青色，柔和" },
+    district: {
+      motif: "锦江区地标 + 春天嫩芽（嫩绿色丝带 + 锦江水波）",
+      color: "翠绿 + 蜜蓝绿，新生感",
+    },
+    city: {
+      motif: "成都熊猫宝宝头像 + 蓉城都市轮廓",
+      color: "紫罗兰 + 紫红，神秘感",
+    },
+    province: {
+      motif: "金色国宝大熊猫 + 四川山川剪影",
+      color: "金色 + 橘红，辉煌感",
+    },
+    country: {
+      motif: "中国地图轮廓 + 凤凰展翅 + 五星",
+      color: "深红 + 真金，传奇质感",
+    },
+  };
+  const theme = tierTheme[rawId] ?? { motif: t.name, color: "紫红" };
+  return [
+    `Sticker / icon 风格的圆形段位勋章 (rank medal)，居中构图。`,
+    `主体：${theme.motif}，4 年级女生喜欢的卡通可爱风格。`,
+    `主色调：${theme.color}，丝带 + 星芒装饰。`,
+    `画面构成：圆形勋章占 80%，深色纯色背景便于 UI 圆形遮罩裁剪。`,
+    `禁止出现：任何文字、字母、数字、签名、水印。`,
+    `风格：扁平 3D 插画 + 柔光内发光、闪耀光晕、宝石镶嵌细节。`,
+    `画面尺寸：512×512 正方形，主体严格居中，四周留 10% 边距。`,
+  ].join(" ");
 }
 
 /** 把任意 URL 下载成 base64 data URL（持久化到 IndexedDB） */
@@ -88,9 +140,10 @@ export async function ensureTrophyImage(
     if (cached?.imageDataUrl) return cached;
   }
   const prompt = buildTrophyPrompt(t);
+  // Round 6: 默认 512×512（最小尺寸 + 省 token + 主体严格居中）
   const r = await generateImage({
     prompt,
-    size: "1024*1024",
+    size: "512*512",
     n: 1,
   });
   const url = r.urls[0];

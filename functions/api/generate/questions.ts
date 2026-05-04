@@ -11,25 +11,31 @@ import {
 /**
  * POST /api/generate/questions
  *
- * 用 qwen-plus 按 Selena 当前的薄弱情况自动生成新题，去重 / 难度梯度由 prompt
- * 控制。返回到客户端后，客户端再用 validateQuestion 校验 + 写入 db.questions。
+ * Round 6 重写：**并发批次** 模式。
+ *
+ * 之前的单调用模型出 5-10 道题 + 长 prompt + reasoning model → 经常 30-50s
+ * 触发 60s 客户端硬超时 + Cloudflare Pages 30s wall clock。
+ *
+ * 现在：把 count 拆成 N 个并发的 4 题 sub-batch，Promise.allSettled 等 max。
+ * 每个 sub-batch 25s AbortController 兜底。整体即使 30 题也能 ~25s 完成。
  *
  * 输入 body:
  *   {
- *     subjectId: "chinese",            // 暂时只支持 chinese
- *     unitId: "C4B_U2_SCIENCE",        // 单元 id
- *     unitName: "第二单元 · 科学之光",  // 单元名（让 AI 知道主题）
- *     skillId: "C4B_U2_VOCAB",         // 技能 id
- *     skillName: "科技词语 / 形近字辨析",
- *     count: 5,                        // 生成多少题（1-10）
- *     difficulty: "2-4",               // 难度范围
- *     existingStems?: string[],        // 现有题的题干前缀，让 AI 避免重复
- *     recentMistakeStems?: string[],   // 最近错题题干，AI 可侧重这些
+ *     subjectId: "chinese" | "math",
+ *     unitId, unitName, skillId, skillName,
+ *     count: 1-30,                 // 30 题以内一次搞定（内部并发）
+ *     difficulty: "2-4",
+ *     term: "上册" | "下册",
+ *     existingStems?: string[],    // 截断到 10 条避免 prompt 爆长
+ *     recentMistakeStems?: string[],
  *   }
  *
  * 输出:
- *   { ok: true, questions: Question[], model: string, raw?: string }
- *   或 { ok: false, error, detail? }
+ *   { ok: true, questions: Question[], model, provider, generatedCount, requestedCount }
+ *   或 { ok: false, error, detail }
+ *
+ * 关键设计：**partial success** —— 哪怕 5 个 sub-batch 里只有 1 个返回了
+ * 有效题，我们也返回 ok:true（请求方至少能用上）。
  */
 
 interface GenerateRequest {
@@ -40,13 +46,18 @@ interface GenerateRequest {
   skillName?: string;
   count?: number;
   difficulty?: string;
-  /** "上册" / "下册"，让 AI 知道是 G4A 还是 G4B */
   term?: "上册" | "下册";
   existingStems?: string[];
   recentMistakeStems?: string[];
-  /** 可选：让 AI 输出哪种题型（plain_choice / pair_match / sentence_shuffle / poem_cloze） */
   gameType?: string;
 }
+
+/** 单 sub-batch 题数上限（让单次 LLM 调用 < 25s） */
+const SUB_BATCH_SIZE = 4;
+/** 整个请求的最大题数（防止恶意调用） */
+const MAX_TOTAL_COUNT = 30;
+/** 单次 LLM 调用的 wall-clock 限制（ms），超了就 abort 让其他 sub-batch 完成 */
+const PER_CALL_TIMEOUT_MS = 25_000;
 
 function buildSystemPrompt(subjectId: string): string {
   const subjLabel = subjectId === "math" ? "数学" : "语文";
@@ -54,23 +65,17 @@ function buildSystemPrompt(subjectId: string): string {
     subjectId === "math"
       ? "（北师大版四年级下册：小数 / 方程 / 三角形 / 立体观察 / 平均数等单元；不要超纲到五年级如比例、函数）"
       : "（人教版四年级下册：1-4单元字音字形 / 古诗 / 修辞 / 听写词语 / 阅读）";
-  return `你是 Selena（4 年级女生）的${subjLabel}出题助手。${dictionary}
+  // **简化**：去掉一切非必要规则，只留对生成 JSON 严格性的要求
+  return `你是 4 年级女生 Selena 的${subjLabel}出题助手。${dictionary}
 
-你必须严格输出 JSON 数组，每个对象都符合下面给的题目模板。
+输出顶层 { "questions": [...] } JSON，不要 markdown，不要解释。
 
-题目质量要求：
-1. 内容必须符合 4 年级下册大纲（不能超纲）
-2. 题面（stem）写在题目内，不要"请选择"等多余前缀
-3. 4 个选项（id 用 "A" "B" "C" "D"），其中一个正确，三个干扰项必须看似合理但能讲出错因
-4. feedback_correct 用一句话解释为什么对（含知识点要点）
-5. feedback_wrong 用一句话给学习方向，不要批评（不要用"笨"等负面词）
-6. solution_steps 给 1-2 步思路文字
-7. 必须有 common_errors，至少 2 项（tag + error + remediation）
-8. 不重复给定的 existingStems 题干（要换不同语境 / 例字 / 数字）
-9. difficulty 1-5：1=送分，3=单元中等，5=拔高
-10. 内容安全：不出现真实姓名、广告、付费、负面词
-
-输出格式：必须输出顶层 { "questions": [...] } 的 JSON 对象，不要 markdown 代码块标记，不要解释文字。`;
+每题：
+- stem 写在题目里，4 选 1（A/B/C/D），feedback_correct/wrong 各一句话
+- common_errors 至少 2 项 (tag/error/remediation)
+- difficulty 1-5：3=单元中等
+- 不重复 existingStems
+- 不超纲，不出现真实姓名/广告/负面词`;
 }
 
 interface QwenChatResponse {
@@ -78,6 +83,12 @@ interface QwenChatResponse {
   error?: { code?: string; message?: string };
 }
 
+/**
+ * 单次 LLM 调用 — 带 25s AbortController 兜底。
+ *
+ * 失败时返回 ok:false + 详细 code/message，调用方自己决定要不要降级到下一个
+ * model / provider / sub-batch 容错。
+ */
 async function callQwenChat(
   ctx: AiProviderContext,
   model: string,
@@ -92,73 +103,80 @@ async function callQwenChat(
       { role: "user", content: userPrompt },
     ],
     temperature: 0.7,
-    max_tokens: 4000,
-    // qwen3.6-plus 是 reasoning 模型，默认会先 think 再答；
-    // 出题任务不需要 reasoning（消耗 token），关掉
+    // Round 6: 4000 → 2000，单 sub-batch 最多 4 题，2000 token 完全够
+    max_tokens: 2000,
+    // qwen3.6-plus 是 reasoning 模型，关掉 thinking 不浪费 token
     enable_thinking: false,
   };
   if (withJsonFormat) {
     requestBody.response_format = { type: "json_object" };
   }
-  const upstream = await fetch(
-    `${ctx.baseUrl}/compatible-mode/v1/chat/completions`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${ctx.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    },
-  );
-  let json: QwenChatResponse | null = null;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), PER_CALL_TIMEOUT_MS);
   try {
-    json = (await upstream.json()) as QwenChatResponse;
-  } catch {
-    return { ok: false, status: upstream.status, code: "non_json", message: "upstream non-JSON" };
-  }
-  if (!upstream.ok || json.error) {
-    // 部分模型不支持 response_format → 自动重试一次不带这个字段
-    const errMsg = `${json.error?.code ?? ""} ${json.error?.message ?? ""}`;
-    if (
-      withJsonFormat &&
-      /response_format|json_object|not.*support|unrecognized|invalid.*parameter/i.test(
-        errMsg,
-      )
-    ) {
-      return await callQwenChat(ctx, model, systemPrompt, userPrompt, false);
+    const upstream = await fetch(
+      `${ctx.baseUrl}/compatible-mode/v1/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ctx.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: ctrl.signal,
+      },
+    );
+    let json: QwenChatResponse | null = null;
+    try {
+      json = (await upstream.json()) as QwenChatResponse;
+    } catch {
+      return { ok: false, status: upstream.status, code: "non_json", message: "upstream non-JSON" };
     }
+    if (!upstream.ok || json.error) {
+      const errMsg = `${json.error?.code ?? ""} ${json.error?.message ?? ""}`;
+      // 一些模型不支持 response_format → 自动重试一次
+      if (
+        withJsonFormat &&
+        /response_format|json_object|not.*support|unrecognized|invalid.*parameter/i.test(
+          errMsg,
+        )
+      ) {
+        return await callQwenChat(ctx, model, systemPrompt, userPrompt, false);
+      }
+      return {
+        ok: false,
+        status: upstream.status,
+        code: json.error?.code ?? "http_error",
+        message: json.error?.message ?? `upstream ${upstream.status}`,
+      };
+    }
+    const text = json.choices?.[0]?.message?.content?.trim();
+    if (!text) return { ok: false, status: 200, code: "empty_response", message: "empty content" };
+    return { ok: true, text };
+  } catch (e) {
+    const isAbort = (e as Error)?.name === "AbortError";
     return {
       ok: false,
-      status: upstream.status,
-      code: json.error?.code ?? "http_error",
-      message: json.error?.message ?? `upstream ${upstream.status}`,
+      status: isAbort ? 408 : 0,
+      code: isAbort ? "timeout" : "fetch_error",
+      message: isAbort
+        ? `per-call ${PER_CALL_TIMEOUT_MS / 1000}s timeout`
+        : (e instanceof Error ? e.message : String(e)),
     };
+  } finally {
+    clearTimeout(timer);
   }
-  const text = json.choices?.[0]?.message?.content?.trim();
-  if (!text) return { ok: false, status: 200, code: "empty_response", message: "empty content" };
-  return { ok: true, text };
 }
 
-/**
- * 从 LLM 文本里安全抓 JSON 数组。
- * 优先级：
- *   1. 直接 JSON.parse（response_format=json_object 时一般可以）
- *   2. 顶层对象 → 找值是数组的字段（key="questions" 等）
- *   3. 去 markdown ``` 包裹再试
- *   4. 用 brace-counting 找最大 { ... } JSON 子串
- *   5. 找最大 [ ... ] JSON 数组子串
- *   6. 修正常见错误（trailing comma、单引号）后再试
- */
+/** 从 LLM 文本里安全抓 JSON 数组（5 级降级 fallback） */
 function extractJsonArray(text: string): unknown[] | null {
   if (!text) return null;
-
   const tryParseTopLevel = (s: string): unknown[] | null => {
     try {
       const parsed = JSON.parse(s);
       if (Array.isArray(parsed)) return parsed;
       if (parsed && typeof parsed === "object") {
-        // 找第一个值是数组的字段（如 questions: [...]）
         for (const v of Object.values(parsed)) {
           if (Array.isArray(v)) return v;
         }
@@ -169,12 +187,10 @@ function extractJsonArray(text: string): unknown[] | null {
     return null;
   };
 
-  // 1. 直接试
   let cleaned = text.trim();
   let r = tryParseTopLevel(cleaned);
   if (r) return r;
 
-  // 2. 去 markdown code block
   cleaned = cleaned
     .replace(/^```(?:json|JSON)?\s*\n?/, "")
     .replace(/\n?```\s*$/, "")
@@ -182,7 +198,6 @@ function extractJsonArray(text: string): unknown[] | null {
   r = tryParseTopLevel(cleaned);
   if (r) return r;
 
-  // 3. 用 brace-count 找最大对象（容忍前后有解释文字）
   const findBalanced = (s: string, open: string, close: string): string | null => {
     const startIdx = s.indexOf(open);
     if (startIdx < 0) return null;
@@ -218,19 +233,15 @@ function extractJsonArray(text: string): unknown[] | null {
     r = tryParseTopLevel(objSubstr);
     if (r) return r;
   }
-
   const arrSubstr = findBalanced(cleaned, "[", "]");
   if (arrSubstr) {
     r = tryParseTopLevel(arrSubstr);
     if (r) return r;
   }
 
-  // 4. 修正常见 LLM JSON 错误（trailing comma、unquoted keys）
   const fixJson = (s: string): string =>
     s
-      // trailing comma
       .replace(/,(\s*[}\]])/g, "$1")
-      // 中文弯引号 → 直引号（最常见）
       .replace(/[“”]/g, '"')
       .replace(/[‘’]/g, "'");
 
@@ -246,8 +257,17 @@ function extractJsonArray(text: string): unknown[] | null {
   return null;
 }
 
-function buildUserPrompt(args: GenerateRequest): string {
-  const count = Math.max(1, Math.min(10, args.count ?? 5));
+/**
+ * 单 sub-batch 的 user prompt。
+ *
+ * 关键改动：
+ *   - existingStems 截断到 8 条（之前 30 条让 prompt 长一倍）
+ *   - 每条 stem 截短到 30 字符（之前 50）
+ *   - JSON 模板用 placeholder ${SKILL_ID} 替换，下面会运行时填
+ *   - count 单 sub-batch ≤ 4
+ */
+function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
+  const count = Math.max(1, Math.min(SUB_BATCH_SIZE, args.count ?? SUB_BATCH_SIZE));
   const subj = args.subjectId === "math" ? "数学" : "语文";
   const subjectId = args.subjectId === "math" ? "math" : "chinese";
   const defaultAbility = subjectId === "math" ? "calculation" : "vocabulary";
@@ -256,72 +276,54 @@ function buildUserPrompt(args: GenerateRequest): string {
   const term = args.term ?? "下册";
 
   const lines: string[] = [];
-  lines.push(`请生成 ${count} 道四年级${term}（${term === "上册" ? "G4A" : "G4B"}）${subj}题：`);
-  lines.push(`- ⚠️ 重要：必须是【${term}】的内容，不要混入【${term === "上册" ? "下册" : "上册"}】的考点`);
-  lines.push(`- 单元：${args.unitName ?? args.unitId} (id: ${args.unitId})`);
-  lines.push(`- 技能点：${args.skillName ?? args.skillId} (id: ${args.skillId})`);
-  lines.push(`- 难度范围：${args.difficulty ?? "2-4"}`);
-  lines.push(`- 题型：plain_choice（4 选 1 单选）`);
+  lines.push(`生成 ${count} 道四年级${term}（${term === "上册" ? "G4A" : "G4B"}）${subj}题：`);
+  lines.push(`⚠️ 内容必须是【${term}】，不要混【${term === "上册" ? "下册" : "上册"}】`);
+  lines.push(`单元：${args.unitName ?? args.unitId} (${args.unitId})`);
+  lines.push(`技能：${args.skillName ?? args.skillId} (${args.skillId})`);
+  lines.push(`难度：${args.difficulty ?? "2-4"}（在该范围内分布）`);
+  // 关键：批次种子让不同并发批次出不同的题（情境/数字/字词）
+  lines.push(`变化方向${batchIndex}：本批用 ${["A 角度", "B 角度", "C 角度", "D 角度", "E 角度", "F 角度", "G 角度", "H 角度"][batchIndex % 8]}（不同情境/不同数字/不同字词组合）`);
+
   if (args.existingStems && args.existingStems.length > 0) {
-    lines.push(`\n以下题干已有，请勿重复同样的语境（可换字 / 换情境 / 换例句 / 换数字）：`);
-    for (const s of args.existingStems.slice(0, 30)) {
-      lines.push(`- ${s.slice(0, 50)}`);
+    lines.push(`\n以下题干已有，请勿重复（换情境换字换数）：`);
+    for (const s of args.existingStems.slice(0, 8)) {
+      lines.push(`- ${s.slice(0, 30)}`);
     }
   }
   if (args.recentMistakeStems && args.recentMistakeStems.length > 0) {
-    lines.push(`\nSelena 最近答错过这些类型的题（请围绕同样的考点出新题加练）：`);
-    for (const s of args.recentMistakeStems.slice(0, 10)) {
-      lines.push(`- ${s.slice(0, 50)}`);
+    lines.push(`\n围绕这些考点出新题：`);
+    for (const s of args.recentMistakeStems.slice(0, 5)) {
+      lines.push(`- ${s.slice(0, 30)}`);
     }
   }
-  lines.push(`\n严格按照下面的字段结构输出 JSON，question_id 全部以 "AI_${args.skillId}_" 开头加 3 位序号：
 
-{
-  "questions": [
-    {
-      "question_id": "AI_${args.skillId}_001",
-      "subjectId": "${subjectId}",
-      "version": 1,
-      "status": "approved",
-      "grade": 4,
-      "term": "${term}",
-      "unit_id": "${args.unitId}",
-      "unit_name": "${args.unitName ?? ""}",
-      "skill_id": "${args.skillId}",
-      "skill_name": "${args.skillName ?? ""}",
-      "ability_dimension": ["${defaultAbility}"],
-      "exam_priority": "HIGH_BIG",
-      "game_type": "plain_choice",
-      "play_as": "plain_choice",
-      "cognitive_level": "conceptual",
-      "difficulty": 3,
-      "estimated_time_seconds": 25,
-      "stem": "题目题面",
-      "question_format": "single_choice",
-      "options": [
-        { "id": "A", "text": "选项 A 内容" },
-        { "id": "B", "text": "选项 B 内容" },
-        { "id": "C", "text": "选项 C 内容" },
-        { "id": "D", "text": "选项 D 内容" }
-      ],
-      "answer": { "type": "choice", "value": "A" },
-      "solution_steps": ["分析步骤 1"],
-      "common_errors": [
-        { "tag": "${errorTagExample}", "error": "学生可能这样错", "remediation": "怎样纠正" }
-      ],
-      "feedback_correct": "对的解释",
-      "feedback_wrong": "错的提示，鼓励为主",
-      "hints": [{ "text": "提示一", "penalty": 1 }],
-      "tags": ["ai_generated"]
-    }
-  ]
-}
+  // 紧凑 schema 模板，省 token
+  lines.push(`\n输出 JSON：
 
-请直接输出顶层为 { "questions": [...] } 的 JSON。`);
+{"questions":[
+  {
+    "question_id":"AI_${args.skillId}_001",
+    "subjectId":"${subjectId}",
+    "version":1,"status":"approved","grade":4,"term":"${term}",
+    "unit_id":"${args.unitId}","unit_name":"${args.unitName ?? ""}",
+    "skill_id":"${args.skillId}","skill_name":"${args.skillName ?? ""}",
+    "ability_dimension":["${defaultAbility}"],
+    "exam_priority":"HIGH_BIG","game_type":"plain_choice","play_as":"plain_choice",
+    "cognitive_level":"conceptual","difficulty":3,"estimated_time_seconds":25,
+    "stem":"题面",
+    "question_format":"single_choice",
+    "options":[{"id":"A","text":""},{"id":"B","text":""},{"id":"C","text":""},{"id":"D","text":""}],
+    "answer":{"type":"choice","value":"A"},
+    "solution_steps":["分析"],
+    "common_errors":[{"tag":"${errorTagExample}","error":"","remediation":""}],
+    "feedback_correct":"","feedback_wrong":"",
+    "hints":[{"text":"","penalty":1}],
+    "tags":["ai_generated"]
+  }
+]}`);
   return lines.join("\n");
 }
 
-/** 简单 schema 校验，确保关键字段都在（前端会再 validateQuestion 一次） */
 function isValidQuestionShape(q: unknown): boolean {
   if (!q || typeof q !== "object") return false;
   const o = q as Record<string, unknown>;
@@ -330,6 +332,78 @@ function isValidQuestionShape(q: unknown): boolean {
   if (!Array.isArray(o.options) || o.options.length < 2) return false;
   if (!o.answer || typeof o.answer !== "object") return false;
   return true;
+}
+
+/**
+ * 跑单 sub-batch（迭代 provider × model）：
+ *   - 拿到任何一个 model 给的有效 questions 数组就 return ok
+ *   - 全失败才 return failure
+ *
+ * 注意：内部已有 PER_CALL_TIMEOUT_MS 兜底；上层 Promise.allSettled 不需要再加。
+ */
+async function runSubBatch(
+  args: GenerateRequest,
+  batchIndex: number,
+  providers: AiProviderContext[],
+  systemPrompt: string,
+): Promise<{
+  questions: unknown[];
+  modelUsed?: string;
+  providerUsed?: string;
+  errors: { provider: string; model: string; code: string; message: string }[];
+}> {
+  const userPrompt = buildUserPrompt(args, batchIndex);
+  const errors: { provider: string; model: string; code: string; message: string }[] = [];
+
+  for (const ctx of providers) {
+    const models = getChatModelsFor(ctx);
+    for (const m of models) {
+      let r = await callQwenChat(ctx, m, systemPrompt, userPrompt);
+      if (!r.ok) {
+        errors.push({ provider: ctx.label, model: m, code: r.code, message: r.message });
+        if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
+        continue;
+      }
+      let arr = extractJsonArray(r.text);
+      if (!arr) {
+        const r2 = await callQwenChat(
+          ctx,
+          m,
+          systemPrompt,
+          `${userPrompt}\n\n（重要：只输出顶层 { "questions": [...] } JSON，不要解释、不要 markdown）`,
+          false,
+        );
+        if (r2.ok) arr = extractJsonArray(r2.text);
+        if (!arr) {
+          errors.push({
+            provider: ctx.label,
+            model: m,
+            code: "json_parse_failed",
+            message: r.text.slice(0, 120),
+          });
+          continue;
+        }
+        r = r2.ok ? r2 : r;
+      }
+      const valid = arr.filter(isValidQuestionShape);
+      if (valid.length === 0) {
+        errors.push({
+          provider: ctx.label,
+          model: m,
+          code: "no_valid_questions",
+          message: `${arr.length} items but none valid`,
+        });
+        continue;
+      }
+      return {
+        questions: valid,
+        modelUsed: m,
+        providerUsed: ctx.label,
+        errors,
+      };
+    }
+  }
+  return { questions: [], errors };
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -350,109 +424,97 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return jsonResponse({ ok: false, error: "missing_unitId_or_skillId" }, 400);
   }
   const subjectId = body.subjectId === "math" ? "math" : "chinese";
+  const requestedCount = Math.max(1, Math.min(MAX_TOTAL_COUNT, body.count ?? 5));
 
   const systemPrompt = buildSystemPrompt(subjectId);
-  const userPrompt = buildUserPrompt({ ...body, subjectId });
 
-  const tried: {
-    provider: string;
-    model: string;
-    status: number;
-    code: string;
-    message: string;
-  }[] = [];
+  // 拆 sub-batches: 每批 4 题，并发跑
+  const batchCount = Math.ceil(requestedCount / SUB_BATCH_SIZE);
+  const batches: Promise<Awaited<ReturnType<typeof runSubBatch>>>[] = [];
+  let remaining = requestedCount;
+  for (let i = 0; i < batchCount; i++) {
+    const thisBatch = Math.min(SUB_BATCH_SIZE, remaining);
+    remaining -= thisBatch;
+    batches.push(
+      runSubBatch(
+        { ...body, subjectId, count: thisBatch },
+        i,
+        providers,
+        systemPrompt,
+      ),
+    );
+  }
 
-  // 双层迭代：每个 provider × 该 provider 的所有 model 链
-  for (const ctx of providers) {
-    const models = getChatModelsFor(ctx);
-    for (const m of models) {
-      let r = await callQwenChat(ctx, m, systemPrompt, userPrompt);
-      if (!r.ok) {
-        tried.push({
-          provider: ctx.label,
-          model: m,
-          status: r.status,
-          code: r.code,
-          message: r.message,
-        });
-        if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
-        continue;
-      }
-      let arr = extractJsonArray(r.text);
-      // 第一次没解析出 JSON → 同 model 不带 response_format 再试
-      if (!arr) {
-        const r2 = await callQwenChat(
-          ctx,
-          m,
-          systemPrompt,
-          `${userPrompt}\n\n（重要：只输出顶层为 { "questions": [...] } 的纯 JSON，不要任何解释、不要 markdown。）`,
-          false,
-        );
-        if (r2.ok) arr = extractJsonArray(r2.text);
-        if (!arr) {
-          tried.push({
-            provider: ctx.label,
-            model: m,
-            status: 200,
-            code: "json_parse_failed",
-            message: r.text.slice(0, 200),
-          });
-          continue;
-        }
-        r = r2.ok ? r2 : r;
-      }
-      const valid = arr.filter(isValidQuestionShape);
-      if (valid.length === 0) {
-        tried.push({
-          provider: ctx.label,
-          model: m,
-          status: 200,
-          code: "no_valid_questions",
-          message: `got ${arr.length} items but none valid`,
-        });
-        continue;
-      }
-      // 给每道题加唯一时间戳后缀
-      const stamp = Date.now().toString(36);
-      const stamped = valid.map((q, i) => {
-        const obj = q as Record<string, unknown>;
-        const baseId =
-          typeof obj.question_id === "string"
-            ? obj.question_id
-            : `AI_${body.skillId}_${i}`;
-        return {
-          ...obj,
-          question_id: `${baseId}__${stamp}_${i}`,
-          subjectId,
-          tags: Array.isArray(obj.tags)
-            ? Array.from(new Set([...(obj.tags as string[]), "ai_generated"]))
-            : ["ai_generated"],
-        };
-      });
-      return jsonResponse({
-        ok: true,
-        questions: stamped,
-        model: m,
-        provider: ctx.label,
-        generatedCount: stamped.length,
-        requestedCount: body.count ?? 5,
+  const settled = await Promise.allSettled(batches);
+
+  const allQuestions: unknown[] = [];
+  const allErrors: { provider: string; model: string; code: string; message: string }[] = [];
+  let modelUsed: string | undefined;
+  let providerUsed: string | undefined;
+
+  for (const s of settled) {
+    if (s.status === "fulfilled") {
+      allQuestions.push(...s.value.questions);
+      allErrors.push(...s.value.errors);
+      if (!modelUsed && s.value.modelUsed) modelUsed = s.value.modelUsed;
+      if (!providerUsed && s.value.providerUsed) providerUsed = s.value.providerUsed;
+    } else {
+      allErrors.push({
+        provider: "?",
+        model: "?",
+        code: "batch_rejected",
+        message: (s.reason as Error)?.message ?? String(s.reason),
       });
     }
   }
 
-  console.error("[generate.questions] all providers/models failed", tried);
-  return jsonResponse(
-    {
-      ok: false,
-      error: "no_model_worked",
-      detail: tried
-        .slice(0, 6)
-        .map((t) => `${t.provider}/${t.model}:${t.code}`)
-        .join(", "),
-      tried,
-    },
-    502,
-  );
+  // partial-success：只要总数 ≥ 1 就返回，让客户端能用上
+  if (allQuestions.length === 0) {
+    console.error("[generate.questions] all batches failed", allErrors);
+    return jsonResponse(
+      {
+        ok: false,
+        error: "no_model_worked",
+        detail: allErrors
+          .slice(0, 6)
+          .map((t) => `${t.provider}/${t.model}:${t.code}`)
+          .join(", "),
+        tried: allErrors,
+      },
+      502,
+    );
+  }
+
+  // 给每道题加唯一时间戳后缀（避免 question_id 撞）
+  const stamp = Date.now().toString(36);
+  const stamped = allQuestions.map((q, i) => {
+    const obj = q as Record<string, unknown>;
+    const baseId =
+      typeof obj.question_id === "string"
+        ? obj.question_id
+        : `AI_${body.skillId}_${i}`;
+    return {
+      ...obj,
+      question_id: `${baseId}__${stamp}_${i}`,
+      subjectId,
+      tags: Array.isArray(obj.tags)
+        ? Array.from(new Set([...(obj.tags as string[]), "ai_generated"]))
+        : ["ai_generated"],
+    };
+  });
+
+  return jsonResponse({
+    ok: true,
+    questions: stamped,
+    model: modelUsed ?? "mixed",
+    provider: providerUsed ?? "mixed",
+    generatedCount: stamped.length,
+    requestedCount,
+    /** 部分成功标记：返回数比请求数少时，UI 可以提示"AI 出了 N 道（你点的是 M 道）" */
+    partial: stamped.length < requestedCount,
+    /** 失败的批次详情（用于诊断） */
+    batchErrors: allErrors.length > 0 && stamped.length < requestedCount ? allErrors.slice(0, 6) : undefined,
+  });
 };
 
 export const onRequestOptions: PagesFunction<Env> = async () =>

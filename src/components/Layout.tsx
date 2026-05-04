@@ -4,6 +4,7 @@ import { useOptionalSubject } from "../subjects/context";
 import { ORDERED_SUBJECT_IDS, SUBJECTS } from "../subjects";
 import { mathSubject } from "../subjects/math";
 import { BgGenIndicator } from "./BgGenIndicator";
+import { ensureMascotImage } from "../lib/mascot";
 
 /**
  * Layout：所有 /:subject/* 子路由共用的壳。
@@ -30,6 +31,12 @@ export function Layout() {
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [chipOpen]);
+
+  // 第一次进入 Layout 时（用户登录后访问任何 page），后台静默生成小进吉祥物
+  // 缓存命中就立刻 return，缺失才 fetch image。失败 fallback emoji 不影响主流程。
+  useEffect(() => {
+    void ensureMascotImage().catch(() => void 0);
+  }, []);
 
   return (
     <div className="min-h-full flex flex-col">
@@ -160,7 +167,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.25.0
+        本地优先 · v0.26.0
       </footer>
     </div>
   );

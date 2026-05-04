@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 import { db } from "../db/dexie";
 import { generateAiQuestions } from "../lib/tutor";
 import { sfx } from "../lib/sfx";
+import { MascotAvatar } from "./MascotAvatar";
 import type { Question, Skill, CurriculumUnit } from "../core/types";
 
 interface Props {
@@ -153,16 +154,16 @@ export function AutoGenerateOnEmpty(props: Props) {
       const unit = props.units.find((u) => u.id === skill.unitId);
       safeSetPhase({
         status: "running",
-        message: `小进正在为「${skill.name}」出题，10-25 秒…`,
+        message: `小进正在为「${skill.name}」出题，并发出 ${props.count ?? 8} 道，约 15-30 秒…`,
       });
       const existingStems = props.seedQuestions
         .filter((q) => q.skill_id === skill.id)
         .map((q) => q.stem)
         .slice(0, 30);
 
-      // 60 秒硬超时 — 避免后端卡死时 UI 永远停在"出题中"
+      // Round 6: 服务端改成并发 4 题/批，30 题 ~25s；客户端 90s 兜底
       const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("AI 出题超时（60 秒）")), 60_000),
+        setTimeout(() => reject(new Error("AI 出题超时（90 秒）")), 90_000),
       );
       const r = await Promise.race([
         generateAiQuestions({
@@ -171,7 +172,8 @@ export function AutoGenerateOnEmpty(props: Props) {
           unitName: unit?.name,
           skillId: skill.id,
           skillName: skill.name,
-          count: props.count ?? 5,
+          // 默认改 8 道，内部分 2 个并发批次跑
+          count: props.count ?? 8,
           difficulty: "2-4",
           term: props.currentTerm ?? "下册",
           existingStems,
@@ -221,7 +223,21 @@ export function AutoGenerateOnEmpty(props: Props) {
 
   return (
     <div className="card-glow border-violet-400/40 bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-amber-500/10 text-center space-y-3 p-5">
-      <div className="text-5xl animate-pop">{phase.status === "running" ? "🤖" : phase.status === "success" ? "🎉" : phase.status === "failed" ? "🤔" : "📝"}</div>
+      {/* 头部：小进头像（running 时 pulse 发光，其他状态正常） */}
+      <div className="flex justify-center">
+        <div className={`relative ${phase.status === "running" ? "animate-pulse" : "animate-pop"}`}>
+          <MascotAvatar size="lg" autoEnsure glow={phase.status !== "failed"} />
+          {phase.status === "running" && (
+            <div className="absolute inset-0 rounded-full ring-4 ring-violet-400/40 animate-ping pointer-events-none" />
+          )}
+          {phase.status === "success" && (
+            <div className="absolute -top-1 -right-1 text-2xl animate-bounce">✨</div>
+          )}
+          {phase.status === "failed" && (
+            <div className="absolute -top-1 -right-1 text-2xl">🤔</div>
+          )}
+        </div>
+      </div>
 
       <div className="font-display font-bold text-violet-100 text-xl">
         {phase.status === "idle" && (props.headlineText ?? "题库是空的")}
@@ -248,7 +264,9 @@ export function AutoGenerateOnEmpty(props: Props) {
           <div>
             <div className="text-rose-300 break-all text-xs">{phase.message}</div>
             <div className="text-xs text-slate-400 mt-2">
-              可能是 DashScope 配额问题，或者今天 AI 心情不好。
+              可能是 AI 配额满 / 网络抖动 / 模型暂时挂了。
+              <br />
+              再试一次大概率就能出来；连续 3 次失败再去管理页查诊断。
             </div>
           </div>
         )}
@@ -256,7 +274,7 @@ export function AutoGenerateOnEmpty(props: Props) {
 
       {phase.status === "idle" && (
         <button type="button" onClick={runGeneration} className="btn-primary text-sm">
-          🤖 让 AI 给我出 {props.count ?? 5} 道题
+          🤖 让 AI 给我出 {props.count ?? 8} 道题
         </button>
       )}
 
