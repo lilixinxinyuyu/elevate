@@ -1,27 +1,38 @@
 /**
  * 盲盒抽奖弹窗 — Selena 解锁稀有 trophy 时显示。
  *
- * 体验流程：
- *  1. 礼物盒摇晃 + "你解锁了一个特殊成就！" 文字
- *  2. 点击礼物盒 → 闪光 + 调 wan2.7-image-pro 生成独家专属图
- *  3. 揭示阶段：图渐显（fade + scale），背景金色烟花
- *  4. "太棒啦" 关闭按钮
+ * 两种模式（v0.29.2）：
  *
- * 这一张图永久存在 db.trophyImages（trophyId 为 key），下次该 trophy 显示
- * 时直接用这张独家图。
+ *   1. "generate" (默认)：图还没生成 → 礼物盒摇晃 → 点击 → 调 AI 生成专属图 →
+ *      闪光揭示。用于：commemorative 首次解锁 / 段位升档 / daily 首次解锁。
+ *
+ *   2. "reveal-only"：图已经存在（B++ 后多 tier 共用一张图） → 礼物盒摇晃 →
+ *      点击 → 直接闪光揭示已有图。用于：tier 升钻（恭喜你拿到钻牌！但图不重画）。
+ *
+ * 这一张图永久存在 db.trophyImages（trophyId 为 key）。
  */
 
 import { useEffect, useRef, useState } from "react";
-import { ensureTrophyImage, type TrophyMeta } from "../lib/trophyImages";
+import { ensureTrophyImage, getTrophyImage, type TrophyMeta } from "../lib/trophyImages";
 import { sfx } from "../lib/sfx";
 import { MascotAvatar } from "./MascotAvatar";
 
 interface Props {
   trophy: TrophyMeta;
   onClose: () => void;
+  /**
+   * v0.29.2: 模式
+   *  - "generate"（默认）：force 重新生成 AI 图（首次解锁场景）
+   *  - "reveal-only"：图已在 cache 中，跳过 generating 阶段直接展示（tier 升级场景）
+   */
+  mode?: "generate" | "reveal-only";
+  /**
+   * v0.29.2: 可选自定义副标题（reveal-only 时显示"恭喜升级到钻石！"等不同文案）
+   */
+  subtitle?: string;
 }
 
-export function LotteryBoxModal({ trophy, onClose }: Props) {
+export function LotteryBoxModal({ trophy, onClose, mode = "generate", subtitle }: Props) {
   const [phase, setPhase] = useState<"closed" | "opening" | "generating" | "revealed" | "failed">(
     "closed",
   );
@@ -29,19 +40,39 @@ export function LotteryBoxModal({ trophy, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const fired = useRef(false);
 
+  const isReveal = mode === "reveal-only";
+
   const handleOpen = async () => {
     if (fired.current) return;
     fired.current = true;
     sfx.chest();
     setPhase("opening");
-    // 短暂的开盖动画再调 AI
     await new Promise((r) => setTimeout(r, 600));
-    setPhase("generating");
+
     try {
-      const row = await ensureTrophyImage(trophy, { force: true, isLottery: true });
-      sfx.levelUp();
-      setImageUrl(row.imageDataUrl);
-      setPhase("revealed");
+      if (isReveal) {
+        // reveal-only: 先读 cache；cache miss 才生成（兜底）
+        const cached = await getTrophyImage(trophy.id);
+        if (cached?.imageDataUrl) {
+          setImageUrl(cached.imageDataUrl);
+          sfx.levelUp();
+          setPhase("revealed");
+          return;
+        }
+        // cache miss → fallthrough to generate (走慢路径)
+        setPhase("generating");
+        const row = await ensureTrophyImage(trophy, { force: false });
+        sfx.levelUp();
+        setImageUrl(row.imageDataUrl);
+        setPhase("revealed");
+      } else {
+        // generate: force 重画一张专属图
+        setPhase("generating");
+        const row = await ensureTrophyImage(trophy, { force: true, isLottery: true });
+        sfx.levelUp();
+        setImageUrl(row.imageDataUrl);
+        setPhase("revealed");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setPhase("failed");
@@ -56,6 +87,8 @@ export function LotteryBoxModal({ trophy, onClose }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const headerLabel = isReveal ? "✨ 等级跃升 ✨" : "✨ 稀有成就解锁 ✨";
 
   return (
     <div
@@ -105,13 +138,13 @@ export function LotteryBoxModal({ trophy, onClose }: Props) {
 
         <div className="card-glow border-amber-400/60 bg-gradient-to-br from-violet-900/95 via-fuchsia-900/95 to-amber-900/90 text-center px-6 py-8 space-y-4 overflow-hidden">
           <div className="text-xs uppercase tracking-widest text-amber-300 font-display">
-            ✨ 稀有成就解锁 ✨
+            {headerLabel}
           </div>
           <div className="font-display font-bold text-3xl text-amber-100 leading-tight">
             {trophy.name}
           </div>
-          {trophy.description && (
-            <div className="text-sm text-amber-200/80">{trophy.description}</div>
+          {(subtitle ?? trophy.description) && (
+            <div className="text-sm text-amber-200/80">{subtitle ?? trophy.description}</div>
           )}
 
           {/* 主舞台 */}
@@ -129,7 +162,6 @@ export function LotteryBoxModal({ trophy, onClose }: Props) {
             {phase === "opening" && <div className="text-9xl animate-pop">🎁</div>}
             {phase === "generating" && (
               <div className="space-y-3 flex flex-col items-center">
-                {/* 小进头像 + 旋转的魔法光晕 */}
                 <div className="relative">
                   <MascotAvatar size="lg" autoEnsure glow />
                   <div className="absolute inset-0 rounded-full ring-4 ring-amber-400/30 animate-ping pointer-events-none" />
@@ -178,21 +210,30 @@ export function LotteryBoxModal({ trophy, onClose }: Props) {
 
           {phase === "closed" && (
             <div className="text-sm text-amber-200/90 italic">
-              点击礼物盒抽取你的<span className="font-bold text-amber-100">独家专属勋章</span>～
-              <br />
-              <span className="text-xs text-slate-400">
-                每个稀有成就都会生成一枚独一无二的图案
-              </span>
+              {isReveal ? (
+                <>
+                  你升到了一个新的等级！<br />
+                  <span className="text-xs text-slate-400">点击礼物盒展示你的勋章</span>
+                </>
+              ) : (
+                <>
+                  点击礼物盒抽取你的<span className="font-bold text-amber-100">独家专属勋章</span>～
+                  <br />
+                  <span className="text-xs text-slate-400">
+                    每个稀有成就都会生成一枚独一无二的图案
+                  </span>
+                </>
+              )}
             </div>
           )}
 
           {phase === "revealed" && (
             <div className="space-y-3">
               <div className="text-emerald-200 text-sm font-semibold">
-                ✓ 这是属于你的专属勋章！
+                {isReveal ? "✓ 等级提升！继续保持～" : "✓ 这是属于你的专属勋章！"}
               </div>
               <div className="text-xs text-slate-400">
-                已永久保存到你的勋章墙
+                {isReveal ? "已记入勋章墙的等级标志" : "已永久保存到你的勋章墙"}
               </div>
               <button
                 type="button"

@@ -237,46 +237,105 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
   const [showTierCelebration, setShowTierCelebration] = useState(
     !!summary.tierUpgrade,
   );
-  // 🎁 盲盒队列（Round 6 升级）：
-  //   1. 段位升档（school→district 等）→ 队首，开 tier badge 盲盒
-  //   2. rare check trophy（单次解锁）→ 100% 入队
-  //   3. 计数型 trophy 在 milestone (1/5/10/25/50/100/...) 入队
-  //   4. 普通增量解锁不入队（避免节奏被打断）
-  const [lotteryQueue, setLotteryQueue] = useState<TrophyMeta[]>(() => {
-    const out: TrophyMeta[] = [];
-    const MILESTONES = new Set([1, 5, 10, 25, 50, 100, 200, 500]);
+  // 🎁 盲盒队列（v0.29.2 重写规则）：
+  //
+  //   触发条件（什么时候弹盲盒）：
+  //     ✅ 段位升档（school→district 等）       → mode=generate（生成段位 badge 图）
+  //     ✅ commemorative 首次解锁（第一步等）  → mode=generate（生成专属图）
+  //     ✅ daily trophy 首次解锁 (count=1)    → mode=generate（生成专属图）
+  //     ✅ tiered 勋章升钻 (platinum)          → mode=reveal-only（图已存在，弹庆祝）
+  //     🚫 tiered 升金 (gold)                  → 不入队，只在"新奖杯"卡片里高亮
+  //     🚫 tiered 升铜/银                       → 静默（角标更新就好）
+  //     🚫 daily 累计 (count > 1)              → 静默（避免每 5 次都弹打断节奏）
+  //
+  //   新规则核心：盲盒 = "真正不可重得的事件" 或 "本学期级里程碑"。
+  //   减少打扰频率 + 同 prop 区分新生成/已存在图（reveal-only 走快路径）。
+  type QueueItem = {
+    trophy: TrophyMeta;
+    mode: "generate" | "reveal-only";
+    subtitle?: string;
+  };
+  const [lotteryQueue, setLotteryQueue] = useState<QueueItem[]>(() => {
+    const out: QueueItem[] = [];
 
-    // 1. 段位升档优先
+    // 1. 段位升档优先（最高优先级，队首）
     if (summary.tierUpgrade) {
       const newTier = tierById(summary.tierUpgrade.toTierId);
       if (newTier) {
         out.push({
-          id: trophyImageKey("math", `tier_${newTier.id}`),
-          subjectId: "math",
-          name: `跨入 ${newTier.name}！`,
-          icon: newTier.badgeIcon,
-          description: newTier.unlockSlogan,
-          rare: true,
+          trophy: {
+            id: trophyImageKey("math", `tier_${newTier.id}`),
+            subjectId: "math",
+            name: `跨入 ${newTier.name}！`,
+            icon: newTier.badgeIcon,
+            description: newTier.unlockSlogan,
+            rare: true,
+          },
+          mode: "generate",
         });
       }
     }
 
-    // 2 + 3. trophy awards
+    // 2. trophy awards 按规则筛选
     for (const aw of summary.newTrophies ?? []) {
       const def = TROPHIES.find((t) => t.id === aw.trophyId);
       if (!def) continue;
-      const isRareAw = aw.isRare ?? typeof def.check === "function";
       const newTotal = aw.newTotalCount ?? 1;
-      const shouldFire = isRareAw || MILESTONES.has(newTotal);
-      if (!shouldFire) continue;
-      out.push({
-        id: trophyImageKey("math", def.id),
-        subjectId: "math",
-        name: newTotal > 1 ? `${def.name} ×${newTotal}` : def.name,
-        icon: def.icon ?? "🏆",
-        description: def.description,
-        rare: isRareAw,
-      });
+
+      // commemorative 首次解锁 → 生成专属图
+      if (def.category === "commemorative" && newTotal === 1) {
+        out.push({
+          trophy: {
+            id: trophyImageKey("math", def.id),
+            subjectId: "math",
+            name: def.name,
+            icon: def.icon ?? "🏆",
+            description: def.description,
+            rare: true,
+            category: def.category,
+          },
+          mode: "generate",
+        });
+        continue;
+      }
+
+      // tiered 升钻 → 已有图，弹庆祝（reveal-only）
+      if (aw.tier === "platinum") {
+        out.push({
+          trophy: {
+            id: trophyImageKey("math", def.id),
+            subjectId: "math",
+            name: `${def.name} · 钻石档`,
+            icon: def.icon ?? "💎",
+            description: `本学期最高荣誉解锁！${def.description}`,
+            rare: true,
+            category: def.category,
+            tier: "platinum",
+          },
+          mode: "reveal-only",
+          subtitle: "你拿到了本学期级别的最高荣誉 💎",
+        });
+        continue;
+      }
+
+      // daily trophy 首次解锁 (count=1) → 生成专属图
+      if (def.category === "daily" && newTotal === 1) {
+        out.push({
+          trophy: {
+            id: trophyImageKey("math", def.id),
+            subjectId: "math",
+            name: def.name,
+            icon: def.icon ?? "🏆",
+            description: def.description,
+            rare: true,
+            category: def.category,
+          },
+          mode: "generate",
+        });
+        continue;
+      }
+
+      // 其他（金/银/铜 tier、daily count>1）→ 静默或 inline 处理
     }
     return out;
   });
@@ -292,7 +351,9 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
       {/* 🎁 盲盒抽奖：稀有 trophy 解锁时优先播放 */}
       {lotteryQueue.length > 0 && (
         <LotteryBoxModal
-          trophy={lotteryQueue[0]!}
+          trophy={lotteryQueue[0]!.trophy}
+          mode={lotteryQueue[0]!.mode}
+          subtitle={lotteryQueue[0]!.subtitle}
           onClose={() => setLotteryQueue((prev) => prev.slice(1))}
         />
       )}

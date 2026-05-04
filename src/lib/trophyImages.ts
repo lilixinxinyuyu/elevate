@@ -60,23 +60,28 @@ function isSegmentTier(t: TrophyMeta): boolean {
  *  - 不再按 tier 染色——每个 trophy 就一张多彩 motif
  *  - AI 自由选 2-3 主色（与 trophy 主题相关），不再被铜银金钻锁死
  *  - 强调"独特配色"避免所有勋章看起来同一套色
+ *
+ * v0.29.2 加：commemorative 走专属"传家宝奖章"路径，比 daily/milestone 更有仪式感
  */
 export function buildTrophyPrompt(t: TrophyMeta): string {
   if (isSegmentTier(t)) {
     return buildTierBadgePrompt(t);
   }
 
+  // commemorative 走"重器奖章"专属 prompt（更精致、更有仪式感）
+  if (t.category === "commemorative") {
+    return buildCommemorativePrompt(t);
+  }
+
   const category = t.category ?? "milestone";
 
   // 形状按分类区分（CSS clip-path 也按这个 category 切，保持一致）
   const shape =
-    category === "commemorative"
-      ? "六角星形 (six-pointed star) 纪念徽章"
-      : category === "skill"
-        ? "盾形 (shield-shaped) 学科徽章"
-        : category === "ability"
-          ? "六边形 (hexagonal) 能力徽章"
-          : "圆形 (circular) 标准勋章";
+    category === "skill"
+      ? "盾形 (shield-shaped) 学科徽章"
+      : category === "ability"
+        ? "六边形 (hexagonal) 能力徽章"
+        : "圆形 (circular) 标准勋章";
 
   const desc = t.description ? `主题：「${t.description}」。` : "";
 
@@ -101,6 +106,39 @@ export function buildTrophyPrompt(t: TrophyMeta): string {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/**
+ * v0.29.2: 纪念勋章专属 prompt — "传家宝"级仪式感。
+ *
+ * commemorative 类是"一辈子只拿一次"的事件勋章（第一步 / 期中加冕 / 新学年起航 / 生日 等），
+ * 应该明显比 daily / milestone / ability / skill 更精致、更有奖章质感、更值得珍藏。
+ *
+ * 设计要点：
+ *  - 形状：六角星（六芒星）—— 跟其他勋章形状有明显区分
+ *  - 质感：传家宝奖章 (heirloom medallion) / 浮雕 / 厚重金属感
+ *  - 缎带 + 月桂枝 / 棕榈叶 等仪式装饰元素
+ *  - 配色仍多彩，但可加金色高光（不是 tier 锁死的金）
+ *  - 强调"独一无二""值得永久珍藏"的氛围
+ */
+function buildCommemorativePrompt(t: TrophyMeta): string {
+  const desc = t.description ? `主题：「${t.description}」。` : "";
+  return [
+    `Apple Fitness 风格的高级**纪念奖章 commemorative medallion**，六角星形 (six-pointed star)，主体居中放大占画面 85%。`,
+    `这是一枚**传家宝级别 (heirloom)** 的纪念勋章 —— 比普通成就勋章更精致、更有仪式感、更值得珍藏。`,
+    `主体：「${t.name}」概念的卡通图标，配合**月桂枝 / 棕榈叶 / 缎带 / 星芒**等仪式性装饰元素围绕主体（不要写文字）。`,
+    desc,
+    // 多彩配色 + 仪式感
+    `**配色：2-3 种主色调和谐多彩搭配**，与「${t.name}」主题相关，可加金色或银色高光做奖章质感。`,
+    `示例方向（任选灵感）：金 + 深紫 + 樱花粉 / 银 + 翡翠绿 + 金 / 玫瑰金 + 香槟 + 暖白。`,
+    // 重点：奖章质感
+    `**质感关键**：厚重金属奖章浮雕感 (3D embossed metal medallion)，比普通勋章更深的浮雕、更精细的边缘细节、更明显的光影立体感。`,
+    `**外缘**：1-2px 极细金属环线，可有轻微的雕花纹理（但不要厚装饰围圈）。`,
+    `背景：纯黑或深深紫，让多彩主体和金属光泽更突出。`,
+    `禁止出现：任何文字、字母、数字、签名、水印。`,
+    `风格：精致 3D 浮雕 + 柔光内发光 + 仪式感 + Apple Fitness 高级简洁感，4 年级女生喜欢但不幼稚，让人有"想永远收藏"的冲动。`,
+    `画面尺寸：512×512 正方形，主体严格居中，四周留 8% 边距。`,
+  ].join(" ");
 }
 
 /**
