@@ -111,10 +111,83 @@ async function createTask(
 }
 
 /**
- * OpenAI-compatible 同步 endpoint，部分新模型（qwen-image）走这里更稳。
+ * Token-plan 通过 chat-completion 出图（用 multimodal content 格式）。
+ * 实测发现 token-plan 不支持 /images/generations 路径（404），但通过
+ * /compatible-mode/v1/chat/completions + content 是 list 格式，可以让
+ * qwen-image-2.0-pro / wan2.7-image-pro 直接返回图片 URL。
+ *
+ * 响应是 DashScope native shape:
+ *   { output: { choices: [{ message: { content: [{image: "https://..."}] } }] } }
+ */
+async function callTokenPlanImageGen(
+  ctx: AiProviderContext,
+  model: string,
+  prompt: string,
+  _size: string,
+  _n: number,
+): Promise<{ ok: true; urls: string[] } | { ok: false; status: number; code: string; message: string }> {
+  const r = await fetch(
+    `${ctx.baseUrl}/compatible-mode/v1/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ctx.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "user", content: [{ type: "text", text: prompt }] },
+        ],
+        max_tokens: 2000,
+      }),
+    },
+  );
+  type TokenPlanImageResp = {
+    output?: {
+      choices?: {
+        message?: {
+          content?: Array<{ image?: string; type?: string; text?: string }>;
+        };
+      }[];
+    };
+    code?: string;
+    message?: string;
+  };
+  let json: TokenPlanImageResp;
+  try {
+    json = (await r.json()) as TokenPlanImageResp;
+  } catch {
+    return { ok: false, status: r.status, code: "non_json", message: "token-plan image non-JSON" };
+  }
+  if (!r.ok || json.code) {
+    return {
+      ok: false,
+      status: r.status,
+      code: json.code ?? "http_error",
+      message: json.message ?? `upstream ${r.status}`,
+    };
+  }
+  const contentArr = json.output?.choices?.[0]?.message?.content ?? [];
+  const urls = contentArr
+    .map((c) => c.image)
+    .filter((u): u is string => typeof u === "string" && u.startsWith("http"));
+  if (urls.length === 0) {
+    return {
+      ok: false,
+      status: r.status,
+      code: "no_urls",
+      message: `no image URLs in response: ${JSON.stringify(json).slice(0, 200)}`,
+    };
+  }
+  return { ok: true, urls };
+}
+
+/**
+ * OpenAI-compatible 同步 endpoint，dashscope-intl 用这个走 wanx2.1 等。
  * POST /compatible-mode/v1/images/generations
  *   { model, prompt, n, size }
- * 直接返回 { data: [{url}] } 或 { data: [{b64_json}] }
+ * 返回 { data: [{url}] }
  */
 async function callSyncImageGen(
   ctx: AiProviderContext,
@@ -240,11 +313,32 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }[] = [];
 
   for (const ctx of providers) {
-    // 用户指定 model 就只跑那一个，否则用 provider 对应的链
     const models = body.model ? [body.model] : getImageModelsFor(ctx);
     for (const m of models) {
+      // token-plan: 用 chat-completion 出图（实测唯一 work 的方式）
+      if (ctx.label === "token-plan") {
+        const r = await callTokenPlanImageGen(ctx, m, fullPrompt, size, n);
+        if (r.ok) {
+          return jsonResponse({
+            ok: true,
+            urls: r.urls,
+            model: m,
+            provider: ctx.label,
+            endpoint: "chat",
+          });
+        }
+        tried.push({
+          provider: ctx.label,
+          model: m,
+          endpoint: "chat",
+          status: r.status,
+          code: r.code,
+          message: r.message,
+        });
+        if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
+        continue;
+      }
       const isLikelySync = m.startsWith("qwen-image") || m.startsWith("wan2.7");
-      // qwen-image / wan2.7 优先 sync OpenAI-compat；wanx2.1 系列用 async task
       if (isLikelySync) {
         const sync = await callSyncImageGen(ctx, m, fullPrompt, size, n);
         if (sync.ok) {

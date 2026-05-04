@@ -132,6 +132,8 @@ async function callQwenChat(
         messages,
         temperature: 0.6,
         max_tokens: 350,
+        // 讲题不需要 reasoning（qwen3.6-plus 默认会先 think，浪费 token + 慢）
+        enable_thinking: false,
       }),
     },
   );

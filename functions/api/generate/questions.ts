@@ -93,6 +93,9 @@ async function callQwenChat(
     ],
     temperature: 0.7,
     max_tokens: 4000,
+    // qwen3.6-plus 是 reasoning 模型，默认会先 think 再答；
+    // 出题任务不需要 reasoning（消耗 token），关掉
+    enable_thinking: false,
   };
   if (withJsonFormat) {
     requestBody.response_format = { type: "json_object" };
