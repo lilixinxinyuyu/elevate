@@ -8,6 +8,7 @@ import type {
   Question,
   Skill,
   StudentProfile,
+  TutorSession,
   UserTrophy,
 } from "../core/types";
 
@@ -39,6 +40,8 @@ export class HepingDB extends Dexie {
   trophies!: Table<UserTrophy, string>;
   meta!: Table<{ key: string; value: unknown }, string>;
   trophyImages!: Table<TrophyImageRow, string>;
+  /** v0.27.0：小进姐姐对话日志，事后分析 Selena 思维轨迹用 */
+  tutorSessions!: Table<TutorSession, string>;
 
   constructor() {
     super("heping-math-trainer");
@@ -148,6 +151,12 @@ export class HepingDB extends Dexie {
     // v3：加 trophyImages 表（AI 生成勋章图缓存）
     this.version(3).stores({
       trophyImages: "trophyId, subjectId, generatedAt",
+    });
+
+    // v4 (v0.27.0)：加 tutorSessions 表，记录小进姐姐和 Selena 的所有对话。
+    // 事后可以用这个表分析她在哪些 skill 上反复求助、用什么语言描述思路。
+    this.version(4).stores({
+      tutorSessions: "id, studentId, subjectId, attemptId, questionId, skillId, startedAt, updatedAt",
     });
   }
 }

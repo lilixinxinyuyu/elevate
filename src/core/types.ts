@@ -424,3 +424,36 @@ export interface TrophyCheckContext {
   trophies: UserTrophy[];
   todayDateKey: string;
 }
+
+/**
+ * 小进姐姐对话日志 — 每次 Selena 打开 TutorPanel 就建一行；面板内每多一轮（assistant
+ * 或 user 任意一方）就 append 进 messages 并更新 updatedAt。
+ *
+ * v0.27.0 加这个表，目的是事后能分析 Selena 的思维轨迹：哪些题让她卡住、她
+ * 怎么用语言描述自己的思路、哪些线索她能接住、哪些她还需要更具体的引导。
+ */
+export interface TutorMessage {
+  role: "assistant" | "user";
+  content: string;
+  via?: "voice" | "text";
+  ts: number;
+}
+
+export interface TutorSession {
+  /** primary key */
+  id: string;
+  studentId: string;
+  subjectId?: SubjectId;
+  /** 触发面板的 attempt（用来事后链回那次答题） */
+  attemptId?: string;
+  questionId?: string;
+  skillId?: string;
+  skillName?: string;
+  questionStem?: string;
+  correctAnswer?: string;
+  /** 触发面板时 Selena 的答案（错题才会有） */
+  studentInitialAnswer?: string;
+  messages: TutorMessage[];
+  startedAt: number;
+  updatedAt: number;
+}

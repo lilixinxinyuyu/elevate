@@ -7,6 +7,7 @@ import {
   type AiProviderContext,
   type Env,
 } from "../../_shared";
+import { PROMPTS } from "../../_prompts.generated";
 
 /**
  * POST /api/generate/questions
@@ -71,22 +72,9 @@ const PER_CALL_TIMEOUT_MS = 30_000;
 const PER_PROVIDER_BUDGET_MS = 35_000;
 
 function buildSystemPrompt(subjectId: string): string {
+  // 模板从 prompts/questions/system.md 读，运行时只替换占位符
   const subjLabel = subjectId === "math" ? "数学" : "语文";
-  const dictionary =
-    subjectId === "math"
-      ? "（北师大版四年级下册：小数 / 方程 / 三角形 / 立体观察 / 平均数等单元；不要超纲到五年级如比例、函数）"
-      : "（人教版四年级下册：1-4单元字音字形 / 古诗 / 修辞 / 听写词语 / 阅读）";
-  // **简化**：去掉一切非必要规则，只留对生成 JSON 严格性的要求
-  return `你是 4 年级女生 Selena 的${subjLabel}出题助手。${dictionary}
-
-输出顶层 { "questions": [...] } JSON，不要 markdown，不要解释。
-
-每题：
-- stem 写在题目里，4 选 1（A/B/C/D），feedback_correct/wrong 各一句话
-- common_errors 至少 2 项 (tag/error/remediation)
-- difficulty 1-5：3=单元中等
-- 不重复 existingStems
-- 不超纲，不出现真实姓名/广告/负面词`;
+  return PROMPTS.questionsSystem.replace(/\{\{subjectLabel\}\}/g, subjLabel);
 }
 
 interface QwenChatResponse {
@@ -285,70 +273,127 @@ function extractJsonArray(text: string): unknown[] | null {
 }
 
 /**
- * 单 sub-batch 的 user prompt。
+ * 选用 game-type 对应的 schema 片段。
  *
- * 关键改动：
- *   - existingStems 截断到 8 条（之前 30 条让 prompt 长一倍）
- *   - 每条 stem 截短到 30 字符（之前 50）
- *   - JSON 模板用 placeholder ${SKILL_ID} 替换，下面会运行时填
- *   - count 单 sub-batch ≤ 4
+ * 优先级：
+ *   1. body.gameType 显式指定
+ *   2. game-type-by-skill.json 里 skill_id 的映射
+ *   3. fallback：plain_choice
+ */
+function pickGameTypeSchema(args: GenerateRequest): { gameType: string; schema: string } {
+  const explicit = args.gameType && PROMPTS.questionsSchemas[args.gameType as keyof typeof PROMPTS.questionsSchemas]
+    ? args.gameType
+    : null;
+  const fromSkill = args.skillId
+    ? (PROMPTS.gameTypeBySkill as Record<string, string>)[args.skillId]
+    : undefined;
+  const gameType = explicit ?? fromSkill ?? "plain_choice";
+  const schema =
+    PROMPTS.questionsSchemas[gameType as keyof typeof PROMPTS.questionsSchemas] ??
+    PROMPTS.questionsSchemas.plain_choice;
+  return { gameType, schema };
+}
+
+/**
+ * 用 PROMPTS.questionsUserTemplate 模板拼出当前 batch 的 user prompt。
+ *
+ * 替换占位符 + 注入 game-type schema + existingStems / recentMistakes。
  */
 function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
   const count = Math.max(1, Math.min(SUB_BATCH_SIZE, args.count ?? SUB_BATCH_SIZE));
-  const subj = args.subjectId === "math" ? "数学" : "语文";
   const subjectId = args.subjectId === "math" ? "math" : "chinese";
+  const subjLabel = subjectId === "math" ? "数学" : "语文";
   const defaultAbility = subjectId === "math" ? "calculation" : "vocabulary";
   const errorTagExample =
     subjectId === "math" ? "decimal_point_error" : "wrong_phonics";
   const term = args.term ?? "下册";
+  const otherTerm = term === "上册" ? "下册" : "上册";
+  const termCode = term === "上册" ? "G4A" : "G4B";
+  const angles = ["A 角度", "B 角度", "C 角度", "D 角度", "E 角度", "F 角度", "G 角度", "H 角度"];
+  const batchAngle = angles[batchIndex % angles.length]!;
 
-  const lines: string[] = [];
-  lines.push(`生成 ${count} 道四年级${term}（${term === "上册" ? "G4A" : "G4B"}）${subj}题：`);
-  lines.push(`⚠️ 内容必须是【${term}】，不要混【${term === "上册" ? "下册" : "上册"}】`);
-  lines.push(`单元：${args.unitName ?? args.unitId} (${args.unitId})`);
-  lines.push(`技能：${args.skillName ?? args.skillId} (${args.skillId})`);
-  lines.push(`难度：${args.difficulty ?? "2-4"}（在该范围内分布）`);
-  // 关键：批次种子让不同并发批次出不同的题（情境/数字/字词）
-  lines.push(`变化方向${batchIndex}：本批用 ${["A 角度", "B 角度", "C 角度", "D 角度", "E 角度", "F 角度", "G 角度", "H 角度"][batchIndex % 8]}（不同情境/不同数字/不同字词组合）`);
+  const existingStemsBlock =
+    args.existingStems && args.existingStems.length > 0
+      ? `以下题干已有，请勿重复（换情境换字换数）：\n${args.existingStems
+          .slice(0, 8)
+          .map((s) => `- ${s.slice(0, 30)}`)
+          .join("\n")}`
+      : "";
 
-  if (args.existingStems && args.existingStems.length > 0) {
-    lines.push(`\n以下题干已有，请勿重复（换情境换字换数）：`);
-    for (const s of args.existingStems.slice(0, 8)) {
-      lines.push(`- ${s.slice(0, 30)}`);
+  const recentMistakesBlock =
+    args.recentMistakeStems && args.recentMistakeStems.length > 0
+      ? `围绕这些考点出新题：\n${args.recentMistakeStems
+          .slice(0, 5)
+          .map((s) => `- ${s.slice(0, 30)}`)
+          .join("\n")}`
+      : "";
+
+  const { schema: gameTypeSchema } = pickGameTypeSchema(args);
+
+  const replacements: Record<string, string> = {
+    count: String(count),
+    term,
+    termCode,
+    otherTerm,
+    subjectId,
+    subjectLabel: subjLabel,
+    unitName: args.unitName ?? "",
+    unitId: args.unitId ?? "",
+    skillName: args.skillName ?? "",
+    skillId: args.skillId ?? "",
+    difficulty: args.difficulty ?? "2-4",
+    batchIndex: String(batchIndex),
+    batchAngle,
+    existingStemsBlock,
+    recentMistakesBlock,
+    gameTypeSchema,
+    defaultAbility,
+    errorTagExample,
+  };
+
+  // 模板替换 + schema 内部也可能有 {{vars}}（题型模板里 ${skillId} 等）
+  const template = PROMPTS.questionsUserTemplate + "\n";
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
+    const v = replacements[key];
+    if (v != null) return v;
+    return `{{${key}}}`;
+  }).replace(/\$\{(\w+)\}/g, (_, key: string) => {
+    // schema 片段里用了 ${var} 占位（来自历史代码风格）
+    const v = replacements[key];
+    return v ?? "";
+  });
+}
+
+/**
+ * 校验 LLM 输出的 stem 是否真的围绕请求的 skill。
+ *
+ * 防止 LLM 偷懒乱出"求平均数"题（那是它最熟的）当作"积的小数位数"。
+ *
+ * 算法：
+ *   1. 拿 prompts/skill-keywords.json 里 skillId 的关键词数组
+ *   2. 没列在表里 → 用 skill_name 自己 tokenize（fallback，宽松）
+ *   3. stem 里命中 ≥ 1 个关键词就 pass，0 个就拒绝
+ *
+ * 返回 true = 通过校验，false = 跑题。
+ */
+function stemMatchesSkill(stem: string, skillId: string | undefined, skillName: string | undefined): boolean {
+  if (!stem) return false;
+  if (!skillId) return true; // 没传 skillId 就不校验（兼容旧调用）
+  const explicit = (PROMPTS.skillKeywords as unknown as Record<string, readonly string[]>)[skillId];
+  let keywords: readonly string[];
+  if (explicit && explicit.length > 0) {
+    keywords = explicit;
+  } else if (skillName) {
+    // 把 skill name 切成 2-3 字的中文片段做 fuzzy 匹配（比如 "三位数乘两位数笔算" → ["三位", "位数", "数乘", "乘两", "两位", "笔算"]）
+    const fuzz: string[] = [];
+    for (let i = 0; i < skillName.length - 1; i++) {
+      fuzz.push(skillName.slice(i, i + 2));
     }
+    keywords = fuzz;
+  } else {
+    return true;
   }
-  if (args.recentMistakeStems && args.recentMistakeStems.length > 0) {
-    lines.push(`\n围绕这些考点出新题：`);
-    for (const s of args.recentMistakeStems.slice(0, 5)) {
-      lines.push(`- ${s.slice(0, 30)}`);
-    }
-  }
-
-  // 紧凑 schema 模板，省 token
-  lines.push(`\n输出 JSON：
-
-{"questions":[
-  {
-    "question_id":"AI_${args.skillId}_001",
-    "subjectId":"${subjectId}",
-    "version":1,"status":"approved","grade":4,"term":"${term}",
-    "unit_id":"${args.unitId}","unit_name":"${args.unitName ?? ""}",
-    "skill_id":"${args.skillId}","skill_name":"${args.skillName ?? ""}",
-    "ability_dimension":["${defaultAbility}"],
-    "exam_priority":"HIGH_BIG","game_type":"plain_choice","play_as":"plain_choice",
-    "cognitive_level":"conceptual","difficulty":3,"estimated_time_seconds":25,
-    "stem":"题面",
-    "question_format":"single_choice",
-    "options":[{"id":"A","text":""},{"id":"B","text":""},{"id":"C","text":""},{"id":"D","text":""}],
-    "answer":{"type":"choice","value":"A"},
-    "solution_steps":["分析"],
-    "common_errors":[{"tag":"${errorTagExample}","error":"","remediation":""}],
-    "feedback_correct":"","feedback_wrong":"",
-    "hints":[{"text":"","penalty":1}],
-    "tags":["ai_generated"]
-  }
-]}`);
-  return lines.join("\n");
+  return keywords.some((kw) => stem.includes(kw));
 }
 
 function isValidQuestionShape(q: unknown): boolean {
@@ -442,13 +487,32 @@ async function runSubBatch(
         }
         r = r2.ok ? r2 : r;
       }
-      const valid = arr.filter(isValidQuestionShape);
+      const shapeValid = arr.filter(isValidQuestionShape);
+      // **skill-fidelity 校验**：把跑题的丢掉（修 "总是出平均数/方程式" bug）
+      const valid = shapeValid.filter((q) => {
+        const o = q as Record<string, unknown>;
+        return stemMatchesSkill(
+          typeof o.stem === "string" ? o.stem : "",
+          args.skillId,
+          args.skillName,
+        );
+      });
+      const droppedOffTopic = shapeValid.length - valid.length;
+      if (droppedOffTopic > 0) {
+        console.warn(
+          `[generate.questions] skill="${args.skillId}" dropped ${droppedOffTopic}/${shapeValid.length} off-topic questions`,
+        );
+      }
       if (valid.length === 0) {
         errors.push({
           provider: ctx.label,
           model: m,
-          code: "no_valid_questions",
-          message: `${arr.length} items but none valid`,
+          code:
+            shapeValid.length > 0 ? "off_topic" : "no_valid_questions",
+          message:
+            shapeValid.length > 0
+              ? `${shapeValid.length} items but none matched skill "${args.skillId}"`
+              : `${arr.length} items but none valid`,
         });
         continue;
       }

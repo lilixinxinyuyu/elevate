@@ -29,6 +29,8 @@ import {
   type MicRecorder,
 } from "../../lib/tutor";
 import { speakText } from "../../lib/tts";
+import { db } from "../../db/dexie";
+import type { TutorMessage, TutorSession } from "../../core/types";
 
 interface TutorPanelProps {
   subjectId: "math" | "chinese";
@@ -36,6 +38,14 @@ interface TutorPanelProps {
   correctAnswer: string;
   studentAnswer: string;
   skillName?: string;
+  /** 当前 Selena 学生 id（用于关联对话日志） */
+  studentId?: string;
+  /** 触发面板的 attempt id（错题才有） */
+  attemptId?: string;
+  /** 题目 id */
+  questionId?: string;
+  /** skill id */
+  skillId?: string;
   onClose: () => void;
 }
 
@@ -64,6 +74,71 @@ export function TutorPanel(props: TutorPanelProps) {
   const [recording, setRecording] = useState(false);
   const recorderRef = useRef<MicRecorder | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * 本次面板的对话日志 row id（首次写入 db 时生成，后续每条消息都更新这一行）。
+   * 没传 studentId 时不持久化（只有 admin 测试场景）。
+   */
+  const tutorSessionIdRef = useRef<string | null>(null);
+
+  /**
+   * 把当前 conversation 持久化到 db.tutorSessions。upsert 模式：第一次创建 row，
+   * 后续更新 messages + updatedAt。失败静默（不影响主流程）。
+   *
+   * studentId 没传就从 db.students 查（默认 selena 那 1 行）。
+   */
+  const persistTutorSession = async (msgs: ChatMsg[]) => {
+    if (msgs.length === 0) return;
+    try {
+      let studentId = props.studentId;
+      if (!studentId) {
+        const students = await db.students.toArray();
+        studentId = students[0]?.id;
+      }
+      if (!studentId) return;
+      const now = Date.now();
+      let id = tutorSessionIdRef.current;
+      if (!id) {
+        id = `tutor-${props.attemptId ?? "free"}-${now}-${Math.random().toString(36).slice(2, 8)}`;
+        tutorSessionIdRef.current = id;
+        const row: TutorSession = {
+          id,
+          studentId,
+          subjectId: props.subjectId,
+          attemptId: props.attemptId,
+          questionId: props.questionId,
+          skillId: props.skillId,
+          skillName: props.skillName,
+          questionStem: props.stem,
+          correctAnswer: props.correctAnswer,
+          studentInitialAnswer: props.studentAnswer,
+          messages: msgs.map<TutorMessage>((m) => ({
+            role: m.role,
+            content: m.content,
+            via: m.via,
+            ts: m.ts,
+          })),
+          startedAt: now,
+          updatedAt: now,
+        };
+        await db.tutorSessions.put(row);
+      } else {
+        const existing = await db.tutorSessions.get(id);
+        if (existing) {
+          existing.messages = msgs.map<TutorMessage>((m) => ({
+            role: m.role,
+            content: m.content,
+            via: m.via,
+            ts: m.ts,
+          }));
+          existing.updatedAt = now;
+          await db.tutorSessions.put(existing);
+        }
+      }
+    } catch (e) {
+      console.warn("[tutor] persistTutorSession failed", e);
+    }
+  };
 
   // TTS 单声源管控
   const [audioStatus, setAudioStatus] = useState<AudioStatus>({ kind: "idle" });
@@ -132,6 +207,7 @@ export function TutorPanel(props: TutorPanelProps) {
         if (cancelled) return;
         const msg: ChatMsg = { role: "assistant", content: r.explanation, ts: Date.now() };
         setConversation([msg]);
+        void persistTutorSession([msg]);
         // 自动朗读（但 safe，不会和手动点击叠播）
         void safePlayTts(r.explanation, msg.ts);
       } catch (e) {
@@ -184,7 +260,9 @@ export function TutorPanel(props: TutorPanelProps) {
         conversation: newConv.map((m) => ({ role: m.role, content: m.content })),
       });
       const aiMsg: ChatMsg = { role: "assistant", content: r.explanation, ts: Date.now() };
-      setConversation((prev) => [...prev, aiMsg]);
+      const updated = [...newConv, aiMsg];
+      setConversation(updated);
+      void persistTutorSession(updated);
       void safePlayTts(r.explanation, aiMsg.ts);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -238,7 +316,9 @@ export function TutorPanel(props: TutorPanelProps) {
         conversation: conversation.map((m) => ({ role: m.role, content: m.content })),
       });
       const aiMsg: ChatMsg = { role: "assistant", content: r.reply, ts: Date.now() };
-      setConversation((prev) => [...prev, aiMsg]);
+      const updated = [...newConv, aiMsg];
+      setConversation(updated);
+      void persistTutorSession(updated);
       void safePlayTts(r.reply, aiMsg.ts);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

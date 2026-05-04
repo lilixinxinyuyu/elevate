@@ -13,7 +13,7 @@ import { db } from "./dexie";
  *   ✗ questions / skills / units（这些是「教材定义」从代码 seed 来，不需要同步）
  */
 
-const PUSH_TABLES = ["attempts", "mastery", "mistakes", "sessions", "trophies", "meta", "students"] as const;
+const PUSH_TABLES = ["attempts", "mastery", "mistakes", "sessions", "trophies", "meta", "students", "tutorSessions"] as const;
 
 const LAST_PUSH_KEY = "selena.cloud.lastPush";
 const LAST_PULL_KEY = "selena.cloud.lastPull";
@@ -76,6 +76,8 @@ interface SnapshotPayload {
   trophies: unknown[];
   meta: unknown[];
   students: unknown[];
+  /** v0.27.0：小进姐姐对话日志，按 id 合并、按 updatedAt 取新 */
+  tutorSessions?: unknown[];
 }
 
 async function dumpLocal(): Promise<SnapshotPayload> {
@@ -96,7 +98,7 @@ async function dumpLocal(): Promise<SnapshotPayload> {
 export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions],
     async () => {
       for (const t of PUSH_TABLES) {
         const rows = (payload[t] ?? []) as Record<string, unknown>[];
@@ -133,7 +135,7 @@ export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<v
 async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions],
     async () => {
       // attempts: pure union (immutable rows)
       const remoteA = (payload.attempts ?? []) as Array<{ id: string }>;
@@ -210,6 +212,25 @@ async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
         const localIds = new Set(localT.map((r) => r.id));
         const toAdd = remoteT.filter((r) => !localIds.has(r.id));
         if (toAdd.length > 0) await db.trophies.bulkPut(toAdd as never);
+      }
+
+      // tutorSessions: union by id, prefer newer updatedAt
+      // 对话日志只增不删，本地 / 云端各有的最终都汇总到本地。
+      const remoteTu = (payload.tutorSessions ?? []) as Array<{
+        id: string;
+        updatedAt?: number;
+      }>;
+      if (remoteTu.length > 0) {
+        const localTu = await db.tutorSessions.toArray();
+        const localById = new Map(localTu.map((r) => [r.id, r]));
+        const toPut: typeof remoteTu = [];
+        for (const r of remoteTu) {
+          const local = localById.get(r.id);
+          if (!local || (r.updatedAt ?? 0) > (local.updatedAt ?? 0)) {
+            toPut.push(r);
+          }
+        }
+        if (toPut.length > 0) await db.tutorSessions.bulkPut(toPut as never);
       }
 
       // students: 保留本地（用户主动改的字段不被云端旧值覆盖）

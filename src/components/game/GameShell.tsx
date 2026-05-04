@@ -528,6 +528,8 @@ function FeedbackPanel({
           correctAnswer={feedback.correctAnswerDisplay}
           studentAnswer={feedback.userAnswerDisplay}
           skillName={question.skill_name ?? question.skill_id}
+          questionId={question.question_id}
+          skillId={question.skill_id}
           onClose={() => setShowTutor(false)}
         />
       )}
@@ -603,6 +605,8 @@ function RetryHintPanel({
           correctAnswer={describeAnswer(question)}
           studentAnswer="（第一次答错，还没看到正确答案）"
           skillName={question.skill_name ?? question.skill_id}
+          questionId={question.question_id}
+          skillId={question.skill_id}
           onClose={() => setShowTutor(false)}
         />
       )}

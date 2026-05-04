@@ -14,6 +14,7 @@
 import { db } from "../db/dexie";
 import { type TrophyMeta } from "./trophyImages";
 import { generateImage } from "./tutor";
+import { PROMPTS } from "./_prompts.generated";
 
 /** 小进 trophy meta（id 加下划线前缀避免和 trophyId 撞） */
 export const MASCOT_XIAOJIN: TrophyMeta = {
@@ -27,20 +28,10 @@ export const MASCOT_XIAOJIN: TrophyMeta = {
 };
 
 /**
- * 让小进的 prompt 生成不走 buildTrophyPrompt 的 trophy 格式。
- * 我们直接覆盖 prompt 走 generateImage。
+ * mascot prompt 从 prompts/mascot/xiaojin.md 读，不再硬编码。
+ * 改 prompt 直接编辑 .md 文件，跑 `pnpm build` 即可。
  */
-const MASCOT_PROMPT = [
-  `Sticker / icon 风格的可爱卡通角色：四川大熊猫宝宝形象的"AI 学习小精灵"。`,
-  `角色：圆滚滚的小熊猫，戴一顶紫色学士帽，眼睛闪闪发亮充满智慧，一只小爪握着发光的魔法棒。`,
-  `表情：友善温暖、鼓励的笑容（不要严肃、不要凶）。`,
-  `姿态：胸前抱着一本紫色魔法书，背景有少量数学符号 + 中文笔画飘浮（淡淡的，不抢主体）。`,
-  `主色调：黑白熊猫毛 + 紫罗兰 + 樱花粉点缀 + 金色魔法光晕。`,
-  `画面构成：圆形头肩特写居中，深紫罗兰纯色背景，主体占画面 75%，便于 UI 圆形遮罩裁剪。`,
-  `禁止出现：任何文字、字母、数字、签名、水印、其他角色。`,
-  `风格：扁平 3D 插画 + 柔光内发光，4 年级女生审美：超萌、超精致、超可爱。`,
-  `画面尺寸：512×512 正方形，主体严格居中，四周留 12% 边距。`,
-].join(" ");
+const MASCOT_PROMPT = PROMPTS.mascotXiaojin;
 
 /** 拿 mascot 图：缓存命中直接 return，缺失就生成 + 持久化 */
 export async function ensureMascotImage(): Promise<string | null> {

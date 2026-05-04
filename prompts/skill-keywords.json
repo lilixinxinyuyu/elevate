@@ -1,0 +1,67 @@
+{
+  "_comment": "skill_id → 题干必须包含的关键词数组（任一即可命中）。用于校验 LLM 是否真的按 skill 出题。命中 0 个则视为跑题，丢弃重试。skill_id 没列在这里的，从 skill_name 自动 tokenize（fallback）。",
+
+  "decimal_meaning_place": ["小数", "数位", "十分位", "百分位", "千分位"],
+  "decimal_unit_conversion": ["米", "厘米", "千米", "克", "千克", "元", "角", "分", "平方", "换算", "化成"],
+  "decimal_compare": ["大小", "比较", ">", "<", "=", "大于", "小于"],
+  "decimal_add_sub_vertical": ["+", "-", "竖式", "对齐", "加", "减", "和", "差"],
+  "decimal_add_sub_simplify": ["简便", "简算", "+", "-"],
+  "decimal_inverse_problem": ["和", "差", "比", "多", "少", "原来"],
+
+  "decimal_mul_meaning": ["小数乘法", "意义", "几个", "倍"],
+  "decimal_point_shift": ["小数点", "移动", "扩大", "缩小", "倍", "1/10", "1/100"],
+  "decimal_mul_vertical": ["小数乘", "竖式", "×"],
+  "decimal_product_digits": ["位数", "积", "几位小数"],
+  "decimal_mul_mix": ["小数", "+", "-", "×", "运算"],
+  "decimal_mul_simplify": ["小数", "简便", "运算律"],
+  "decimal_price_quantity": ["元", "买", "卖", "单价", "总价", "数量", "购物", "商店", "支", "盒", "千克"],
+  "decimal_speed_distance": ["千米", "小时", "分钟", "秒", "速度", "路程", "时间", "走", "跑"],
+  "decimal_work_total": ["完成", "工程", "件", "天", "效率", "总量"],
+  "decimal_segment_pricing": ["分段", "计费", "超过", "首", "递增"],
+
+  "triangle_inequality": ["三角形", "三边", "围成", "构成", "能", "不能"],
+  "triangle_angle_sum": ["三角形", "内角", "和", "180", "度"],
+  "triangle_classification": ["三角形", "锐角", "钝角", "直角", "等腰", "等边", "分类"],
+
+  "observe_front_top_left": ["正面", "上面", "左面", "看", "观察", "立体", "正方体", "形状"],
+
+  "letter_expression": ["字母", "表示", "用", "x", "a", "b", "n"],
+  "equation_meaning_balance": ["方程", "等式", "天平", "平衡", "等量"],
+  "equation_solve_simple": ["方程", "x", "解", "等式性质", "="],
+  "equation_one_step_word": ["方程", "解", "x", "应用", "求", "已知"],
+  "equation_two_step_word": ["方程", "x", "两步", "比", "多", "少"],
+  "equation_meeting_problem": ["相遇", "出发", "甲", "乙", "千米", "速度", "时间"],
+  "equation_sum_difference": ["和", "差", "倍", "原来", "少", "多"],
+
+  "data_bar_chart": ["条形", "统计图", "图", "数据", "横轴", "纵轴"],
+  "average_meaning": ["平均数", "平均", "意义", "代表"],
+  "average_compute": ["平均", "求", "计算", "几", "总数"],
+  "average_inverse_total": ["平均", "总数", "几个", "求", "多少"],
+
+  "large_place_value": ["数位", "万", "亿", "位", "级"],
+  "large_read_write": ["读", "写", "万", "亿", "数"],
+  "large_compare": ["比较", "大小", "大于", "小于"],
+  "large_rewrite_wan_yi": ["改写", "万", "亿", "单位"],
+  "large_approx_rounding": ["四舍五入", "近似", "约等于", "≈"],
+
+  "angle_types": ["锐角", "直角", "钝角", "平角", "周角", "度"],
+  "angle_measure": ["量角器", "度", "量", "角"],
+
+  "int_mul_3_by_2": ["乘", "×", "三位数", "两位数", "笔算"],
+  "int_mul_estimation": ["估算", "约", "≈", "大约"],
+
+  "mixed_ops_brackets": ["运算", "括号", "+", "-", "×", "÷"],
+  "distributive_law": ["乘法分配律", "分配", "(", ")"],
+  "simplify_integer": ["简便", "简算", "整数", "运算律"],
+
+  "grid_coordinates": ["数对", "位置", "列", "行", "(", ",", ")"],
+
+  "div_3_by_2_trial": ["除", "÷", "试商", "三位数", "两位数"],
+  "div_adjust_quotient": ["调商", "商", "大", "小"],
+  "speed_time_distance": ["速度", "时间", "路程", "千米", "小时"],
+
+  "negative_temperature": ["温度", "正", "负", "-", "零下", "℃"],
+  "zero_not_pos_neg": ["0", "正数", "负数", "既不", "也不"],
+
+  "probability_compare": ["可能", "一定", "不可能", "摸", "球"]
+}

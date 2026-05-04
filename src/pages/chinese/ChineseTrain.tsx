@@ -860,6 +860,8 @@ export function ChineseTrainPage() {
           correctAnswer={describeCorrectAnswer(q, correctOptionId)}
           studentAnswer={describeStudentAnswer(q, chosen)}
           skillName={q.skill_name ?? q.skill_id}
+          questionId={q.question_id}
+          skillId={q.skill_id}
           onClose={() => setShowTutor(false)}
         />
       )}

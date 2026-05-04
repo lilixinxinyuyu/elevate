@@ -50,6 +50,8 @@ export function HomePage() {
 
   const [rating, setRating] = useState<RatingResult | null>(null);
   const [unlockedTiers, setUnlockedTiers] = useState<string[]>(["school"]);
+  /** 所有学期 union 的段位徽章，给奖杯墙看（终身收藏，跨赛季叠加） */
+  const [allTermsUnlockedTiers, setAllTermsUnlockedTiers] = useState<string[]>(["school"]);
   const [equippedTierId, setEquippedTierId] = useState<string>("school");
   const [term, setTerm] = useState<Term>("下册");
   const [poolHealth, setPoolHealth] = useState<{
@@ -103,6 +105,15 @@ export function HomePage() {
         }
       }
       setUnlockedTiers(newUnlocked);
+      // 全学期 union（奖杯墙用）：上册 ∪ 下册 ∪ 综合复习 ∪ 当前刚解锁
+      const allTerms: Term[] = ["上册", "下册", "综合复习"];
+      const unionSet = new Set<string>(newUnlocked);
+      for (const t of allTerms) {
+        if (t === term) continue;
+        const u = await getUnlockedTiers(student.id, t);
+        for (const id of u) unionSet.add(id);
+      }
+      setAllTermsUnlockedTiers(Array.from(unionSet));
       setEquippedTierId(await getEquippedBadge(student.id));
       setPoolHealth(await checkPoolHealth(student.id));
       setStruggleSkills(await getStruggleSkills(student.id));
@@ -411,7 +422,7 @@ export function HomePage() {
       />
 
       {/* 奖杯墙 */}
-      <TrophyWall trophies={trophies ?? []} />
+      <TrophyWall trophies={trophies ?? []} unlockedTierIds={allTermsUnlockedTiers} />
 
       {/* 跨段升档庆祝 */}
       {celebrationToTier && (

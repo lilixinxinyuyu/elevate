@@ -1,0 +1,17 @@
+{
+  "_comment": "skill_id → game_type。用来决定加载哪个 game-types/{name}.md 作为 prompt 的 schema 片段。没列出的 fallback 到 plain_choice。",
+
+  "observe_front_top_left": "cube_view",
+
+  "equation_meaning_balance": "balance_lab",
+  "equation_solve_simple": "balance_lab",
+
+  "decimal_point_shift": "decimal_shifter",
+
+  "triangle_inequality": "triangle_judge",
+  "triangle_angle_sum": "triangle_judge",
+  "triangle_classification": "triangle_judge",
+
+  "decimal_price_quantity": "shop_counter",
+  "decimal_speed_distance": "shop_counter"
+}
