@@ -1,17 +1,13 @@
 /**
- * 勋章图标 — 优先用 AI 生成的图，没有就 emoji + tier 底色兜底。
+ * 勋章图标 — v0.29.1 B++ 多层渲染：
  *
- * v0.29 重写：
- *  - 支持 tier prop（铜银金钻）→ 4 套底色 + 边框，看一眼就知道等级
- *  - 去厚装饰围圈，主体放大占 85%
- *  - 形状按 category：commemorative=六角星，skill=盾，ability=六边形，其他=圆
+ *   ┌─ tier ring（铜银金钻外环）= 外层 div 背景色 + clip-path
+ *   │  ┌─ AI motif（多彩主体，1 张图 4 tier 共用）= 内层 div，缩进 ringPx
+ *   │  │  └─ emoji 兜底
+ *   │  └─ 钻档全息光晕（旋转 conic-gradient mix-blend）
+ *   └─ corner badge（★/★★/★★★/💎）+ tier glow drop-shadow
  *
- * 用法：
- *   <TrophyIcon trophyId="answer_master" subjectId="math" emoji="🎯"
- *               tier="silver" category="milestone" size="lg" />
- *
- * 内部用 (subjectId)_(trophyId)[_tier] 做 db.trophyImages 的 key —— 不同 tier
- * 是不同 AI 图（铜银金钻底色不同）。
+ * 一张多彩 AI 图 + CSS 多层 = 4 tier 视觉差异，零 AI 重生图。
  */
 
 import { useTrophyImage } from "../lib/trophyImages";
@@ -19,100 +15,194 @@ import { trophyImageKey } from "../lib/allTrophies";
 import type { TrophyCategory, TrophyTier } from "../core/types";
 
 interface TrophyIconProps {
-  /** 该 subject 的原始 trophy id（如 "answer_master"），不要加学科前缀 */
   trophyId: string;
-  /** 学科隔离（math / chinese 同名 trophy 用不同图） */
   subjectId?: "math" | "chinese";
-  /** v0.29: 当前 tier。tier-leveled 勋章（milestone/ability/skill）必须传；其他可以不传。 */
+  /** tier-leveled 勋章必须传；其他可不传。 */
   tier?: TrophyTier;
-  /** v0.29: 勋章分类（决定形状）。不传默认圆形。 */
+  /** 决定形状：commemorative=六角星 / skill=盾 / ability=六边形 / 其他=圆 */
   category?: TrophyCategory;
   emoji: string;
   size?: "sm" | "md" | "lg" | "xl";
-  /** 是否给图加发光边框（rare 用） */
+  /** 已废弃保留兼容；现 tier 自带 glow */
   glow?: boolean;
-  /** 是否解锁（false 时灰色） */
+  /** 是否解锁（false 时灰色 + 不显示 tier 框） */
   unlocked?: boolean;
   className?: string;
 }
 
-const SIZE_CLASSES: Record<NonNullable<TrophyIconProps["size"]>, string> = {
-  sm: "w-8 h-8 text-xl",
-  md: "w-12 h-12 text-2xl",
-  lg: "w-20 h-20 text-4xl",
-  xl: "w-32 h-32 text-6xl",
+const SIZE_PX: Record<NonNullable<TrophyIconProps["size"]>, { box: string; emoji: string; corner: string }> = {
+  sm: { box: "w-8 h-8", emoji: "text-xl", corner: "text-[8px] px-1 py-px" },
+  md: { box: "w-12 h-12", emoji: "text-2xl", corner: "text-[9px] px-1.5 py-0.5" },
+  lg: { box: "w-20 h-20", emoji: "text-4xl", corner: "text-[10px] px-1.5 py-0.5" },
+  xl: { box: "w-32 h-32", emoji: "text-6xl", corner: "text-xs px-2 py-1" },
 };
 
-/** v0.29: 4 套 tier 底色（emoji 兜底用；AI 图本身就带了正确底色） */
-const TIER_BG: Record<TrophyTier, string> = {
-  bronze:
-    "bg-gradient-to-br from-amber-700/45 via-orange-600/30 to-amber-800/40 ring-1 ring-amber-600/60",
-  silver:
-    "bg-gradient-to-br from-slate-300/40 via-slate-100/25 to-slate-300/35 ring-1 ring-slate-200/70",
-  gold:
-    "bg-gradient-to-br from-yellow-400/55 via-amber-300/40 to-yellow-500/50 ring-1 ring-yellow-300/80",
-  platinum:
-    "bg-[conic-gradient(from_180deg,rgba(186,230,253,0.6),rgba(244,114,182,0.5),rgba(196,181,253,0.55),rgba(186,230,253,0.6))] ring-1 ring-cyan-200/70",
+const RING_PX: Record<NonNullable<TrophyIconProps["size"]>, number> = {
+  sm: 1.5,
+  md: 2,
+  lg: 2.5,
+  xl: 3,
 };
 
-/** v0.29: 默认（无 tier）底色——commemorative / daily 用 */
-const DEFAULT_BG =
-  "bg-gradient-to-br from-violet-500/25 to-rose-500/15 ring-1 ring-violet-400/40";
+const GLOW_PX: Record<NonNullable<TrophyIconProps["size"]>, number> = {
+  sm: 4,
+  md: 6,
+  lg: 10,
+  xl: 14,
+};
 
-/** v0.29: 形状按 category */
-const SHAPE_BY_CATEGORY: Record<TrophyCategory, string> = {
-  daily: "rounded-full", // 圆
-  milestone: "rounded-full", // 圆
-  ability: "rounded-2xl [clip-path:polygon(50%_0%,93%_25%,93%_75%,50%_100%,7%_75%,7%_25%)]", // 六边形
-  skill: "rounded-2xl [clip-path:polygon(50%_0%,100%_25%,100%_75%,50%_100%,0%_75%,0%_25%)]", // 盾（拉伸六边形）
+/** 形状：CSS clip-path 完整值（含 polygon(...)）；圆形用空字符串特判 */
+const SHAPE_CLIP: Record<TrophyCategory, string> = {
+  daily: "",
+  milestone: "",
+  ability: "polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)",
+  skill: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
   commemorative:
-    "rounded-2xl [clip-path:polygon(50%_0%,61%_35%,98%_35%,68%_57%,79%_91%,50%_70%,21%_91%,32%_57%,2%_35%,39%_35%)]", // 六角星
+    "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
+};
+
+interface TierStyle {
+  /** 外环背景色（实色）。platinum 用 ringGradient 不用 ring。 */
+  ring: string;
+  /** 外环渐变背景（platinum 用） */
+  ringGradient?: string;
+  glowColor: string;
+  cornerBg: string;
+  cornerFg: string;
+  cornerLabel: string;
+  /** 钻档：是否叠加旋转全息光晕动画 */
+  animated?: boolean;
+}
+
+const TIER_STYLE: Record<TrophyTier, TierStyle> = {
+  bronze: {
+    ring: "#cd7f32",
+    glowColor: "rgba(205,127,50,0.55)",
+    cornerBg: "linear-gradient(135deg, #d8954a, #a0522d)",
+    cornerFg: "#fff7ed",
+    cornerLabel: "★",
+  },
+  silver: {
+    ring: "#cbd5e1",
+    glowColor: "rgba(203,213,225,0.6)",
+    cornerBg: "linear-gradient(135deg, #f1f5f9, #94a3b8)",
+    cornerFg: "#0f172a",
+    cornerLabel: "★★",
+  },
+  gold: {
+    ring: "#fbbf24",
+    glowColor: "rgba(251,191,36,0.7)",
+    cornerBg: "linear-gradient(135deg, #fde68a, #d97706)",
+    cornerFg: "#451a03",
+    cornerLabel: "★★★",
+  },
+  platinum: {
+    ring: "transparent",
+    ringGradient:
+      "conic-gradient(from 0deg, #bae6fd, #f9a8d4, #c4b5fd, #67e8f9, #fde68a, #bae6fd)",
+    glowColor: "rgba(196,181,253,0.75)",
+    cornerBg: "conic-gradient(from 0deg, #bae6fd, #f9a8d4, #c4b5fd, #67e8f9, #bae6fd)",
+    cornerFg: "#1e1b4b",
+    cornerLabel: "💎",
+    animated: true,
+  },
 };
 
 export function TrophyIcon({
   trophyId,
   subjectId,
   tier,
-  category,
+  category = "milestone",
   emoji,
   size = "md",
-  glow = false,
   unlocked = true,
   className = "",
 }: TrophyIconProps) {
-  const fullKey = subjectId
-    ? trophyImageKey(subjectId, trophyId, tier)
-    : trophyId;
+  const fullKey = subjectId ? trophyImageKey(subjectId, trophyId) : trophyId;
   const row = useTrophyImage(fullKey);
-  const sizeClass = SIZE_CLASSES[size];
+  const sz = SIZE_PX[size];
+  const ringPx = RING_PX[size];
+  const glowPx = GLOW_PX[size];
+  const clipPath = SHAPE_CLIP[category];
+  const isCircle = clipPath === "";
+  const tierStyle = unlocked && tier ? TIER_STYLE[tier] : null;
 
-  // 形状：有 AI 图时按 category；emoji 兜底也按 category
-  const shapeClass = category
-    ? SHAPE_BY_CATEGORY[category]
-    : "rounded-full";
+  const grayClass = unlocked ? "" : "grayscale opacity-40 saturate-50";
 
-  const baseClass = `${sizeClass} ${className} ${shapeClass} overflow-hidden flex items-center justify-center shrink-0 transition-all`;
-  const glowClass = glow ? "shadow-glow" : "";
-  const grayClass = unlocked ? "" : "grayscale opacity-50 saturate-50";
+  // 圆形用 border-radius；多边形用 clip-path（外内层共用同一形状）
+  const shapeStyle: React.CSSProperties = isCircle
+    ? { borderRadius: "50%" }
+    : { clipPath };
 
-  if (row?.imageDataUrl) {
-    return (
-      <div className={`${baseClass} ${glowClass} ${grayClass}`}>
-        <img
-          src={row.imageDataUrl}
-          alt={`trophy-${trophyId}`}
-          className="w-full h-full object-cover"
-          draggable={false}
-        />
-      </div>
-    );
-  }
+  // 外层 wrapper：tier 环色 + drop-shadow glow + 形状
+  const outerStyle: React.CSSProperties = {
+    ...shapeStyle,
+    background: tierStyle?.ringGradient ?? tierStyle?.ring ?? "transparent",
+    filter: tierStyle ? `drop-shadow(0 0 ${glowPx}px ${tierStyle.glowColor})` : undefined,
+  };
 
-  // emoji 兜底：tier 决定底色 + 细金属边
-  const bgClass = tier ? TIER_BG[tier] : DEFAULT_BG;
+  // 内层 art：缩进 ringPx 让外环显示出 tier 颜色
+  const innerStyle: React.CSSProperties = {
+    ...shapeStyle,
+    inset: tierStyle ? `${ringPx}px` : 0,
+  };
+
+  // 内层背景：有 AI 图就深色不挡；没图就 emoji 兜底底色
+  const innerBgClass =
+    !row?.imageDataUrl && !tierStyle
+      ? "bg-gradient-to-br from-violet-500/25 to-rose-500/15"
+      : !row?.imageDataUrl
+        ? "bg-black/40"
+        : "bg-black/60";
+
   return (
-    <div className={`${baseClass} ${glowClass} ${grayClass} ${bgClass}`}>
-      <span>{emoji}</span>
+    <div
+      className={`relative inline-flex shrink-0 ${sz.box} ${className} ${grayClass}`}
+      style={outerStyle}
+    >
+      {/* 内层 art */}
+      <div
+        className={`absolute flex items-center justify-center overflow-hidden ${innerBgClass}`}
+        style={innerStyle}
+      >
+        {row?.imageDataUrl ? (
+          <img
+            src={row.imageDataUrl}
+            alt={`trophy-${trophyId}`}
+            className="w-full h-full object-cover"
+            draggable={false}
+          />
+        ) : (
+          <span className={sz.emoji}>{emoji}</span>
+        )}
+      </div>
+
+      {/* 钻档全息光晕——叠在 art 之上、corner badge 之下 */}
+      {tierStyle?.animated && (
+        <div
+          className="absolute pointer-events-none animate-shimmer"
+          style={{
+            ...innerStyle,
+            background:
+              "conic-gradient(from 0deg, rgba(186,230,253,0.4), rgba(249,168,212,0.35), rgba(196,181,253,0.4), rgba(103,232,249,0.35), rgba(186,230,253,0.4))",
+            mixBlendMode: "overlay",
+          }}
+        />
+      )}
+
+      {/* tier corner badge（右下） — sm 太小不显示 */}
+      {tierStyle && size !== "sm" && (
+        <div
+          className={`absolute -bottom-1 -right-1 z-10 rounded-full font-bold leading-none whitespace-nowrap shadow-md border border-black/30 ${sz.corner}`}
+          style={{
+            background: tierStyle.cornerBg,
+            color: tierStyle.cornerFg,
+          }}
+          aria-label={`tier-${tier}`}
+        >
+          {tierStyle.cornerLabel}
+        </div>
+      )}
     </div>
   );
 }

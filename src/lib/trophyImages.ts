@@ -34,59 +34,41 @@ export interface TrophyMeta {
 }
 
 /**
- * Tier 风格指南——铜银金钻 4 等级，配合 Apple Fitness 风（简洁、底色为主、细边）。
+ * v0.29.1 B++ 方案：每枚勋章 **一张 AI 图**（不分 tier），让 AI 自由发挥独特配色。
  *
- * 关键：底色 = 等级。看一眼就知道铜还是金，不靠图案区分。
+ * 设计哲学（对齐 Apple Fitness）：
+ *  - 每枚勋章 = 一份独特的多彩插画，主体丰富 + 配色独特
+ *  - tier (铜银金钻) 的视觉表达 **不进 AI 图**，而是 CSS 在外层加：
+ *      1. 1-2px 金属外环（铜橙 / 银白 / 真金 / 钻彩）
+ *      2. 右下角小角标 ★ / ★★ / ★★★ / 💎
+ *      3. tier 色 glow / drop-shadow
+ *      4. 钻档专属：CSS conic-gradient 全息光晕动画
+ *  - 这样 17 张图够用（vs 68），主体有 Apple 级丰富，tier 升级靠"加 buff"语言
+ *
+ * 注意：TrophyMeta.tier 字段虽还在但本函数 **不读取**——所有 tier 在 CSS 处理。
  */
-const TIER_FLAVORS = {
-  bronze: {
-    metalColor: "古铜橙 (rich antique copper / bronze)",
-    finish: "哑光铜质感，温暖橘调",
-    accent: "细金边、低调内发光",
-    aura: "清晨阳光",
-  },
-  silver: {
-    metalColor: "亮银白 (polished silver / platinum white)",
-    finish: "镜面银质感，冷调高光",
-    accent: "细钢边、银色光晕",
-    aura: "月光清辉",
-  },
-  gold: {
-    metalColor: "真金黄 (royal 24k gold)",
-    finish: "镀金高光，温暖金调",
-    accent: "金边浮雕、璀璨星芒",
-    aura: "宝石镶嵌闪光",
-  },
-  platinum: {
-    metalColor: "钻石彩虹全息 (holographic iridescent diamond)",
-    finish: "钻石切面，七彩光晕",
-    accent: "棱镜折射、霓虹幻光",
-    aura: "星河流转",
-  },
-} as const;
+
+/** 段位勋章特殊处理（5 个 tier 段位需要不同地标，不走通用流程） */
+function isSegmentTier(t: TrophyMeta): boolean {
+  return /_tier_/.test(t.id) || (t.id.includes("tier_") && t.subjectId === "math");
+}
 
 /**
- * 给 trophy 拼出生成 prompt（v0.29 Apple Fitness 风重写）：
+ * 给 trophy 拼出生成 prompt（v0.29.1 B++ 重写）。
  *
- * 设计原则：
- *  - **底色 = 等级**：铜橙 / 银白 / 真金 / 钻彩，看一眼就知道在哪一档
- *  - **主体大、留白少**：主体占 85%（不是 50%），不要外圈装饰围环
- *  - **细边线**：3px 内的金属细边，不要厚重纹饰
- *  - **不同分类不同形状**：milestone/ability=圆形 medal；skill=六角徽章；commemorative=六角星
- *  - **强调"没有任何文字"**：避免 AI 写错字
- *  - 512×512 中心严格构图便于 UI 圆形 mask
+ * 关键变化（vs v0.29.0）：
+ *  - 不再按 tier 染色——每个 trophy 就一张多彩 motif
+ *  - AI 自由选 2-3 主色（与 trophy 主题相关），不再被铜银金钻锁死
+ *  - 强调"独特配色"避免所有勋章看起来同一套色
  */
 export function buildTrophyPrompt(t: TrophyMeta): string {
-  // 段位勋章（id 形如 "tier_school" / "tier_district" 等）走专门风格
-  if (/_tier_/.test(t.id) || (t.id.includes("tier_") && t.subjectId === "math")) {
+  if (isSegmentTier(t)) {
     return buildTierBadgePrompt(t);
   }
 
-  const tier = t.tier;
-  const flavor = tier ? TIER_FLAVORS[tier] : null;
   const category = t.category ?? "milestone";
 
-  // 形状按分类区分（让玩家一眼区分类别）
+  // 形状按分类区分（CSS clip-path 也按这个 category 切，保持一致）
   const shape =
     category === "commemorative"
       ? "六角星形 (six-pointed star) 纪念徽章"
@@ -96,26 +78,25 @@ export function buildTrophyPrompt(t: TrophyMeta): string {
           ? "六边形 (hexagonal) 能力徽章"
           : "圆形 (circular) 标准勋章";
 
-  // 底色由 tier 决定；没 tier（commemorative / daily）用学科调色板
-  const palette = flavor
-    ? `底色：${flavor.metalColor}，${flavor.finish}，装饰：${flavor.accent}，氛围：${flavor.aura}`
-    : t.subjectId === "math"
-      ? "底色：深紫罗兰渐樱花粉，柔和女童感，金色细节"
-      : "底色：暖金 + 中国红，水墨晕染，墨色细节";
-
   const desc = t.description ? `主题：「${t.description}」。` : "";
 
   return [
-    // Apple Fitness 极简风
-    `Apple Fitness 风格的高级运动奖牌，${shape}，主体居中放大占画面 85%。`,
-    `主体：${t.name} 概念的卡通图标，高度凝练，单一焦点，识别度高。`,
+    // Apple Fitness 风高级感
+    `Apple Fitness 风格的高级成就勋章 award badge，${shape}，主体居中放大占画面 85%。`,
+    `主体：「${t.name}」概念的卡通图标，单一焦点，识别度高。`,
     desc,
-    palette,
-    // 简洁框线 — 关键差异点
-    `**只有一道极细 (1-2px) 的金属环线作为外缘**，不要任何装饰围圈、不要花纹、不要光环、不要射线，整体简洁高级。`,
-    `画面背景：纯黑或深深紫，让主体的 ${flavor?.metalColor ?? "金属"} 色更突出。`,
-    `禁止出现：任何文字、字母、数字、签名、水印、印章、徽章题写。`,
-    `风格：精致 3D 浮雕质感 + 柔和内发光，**像 Apple Fitness 的徽章那样高级简洁**，4 年级女生喜欢但不幼稚。`,
+    // 独特配色——核心差异点
+    `**配色：这枚勋章应该有自己独特的多彩配色**，2-3 种主色调和谐搭配，与「${t.name}」主题相关。`,
+    `配色示例（任选其一灵感方向，但不要照抄）：紫粉渐变 + 金色高光 / 蓝绿松石 + 银色细节 / 橘红 + 暖白 / 翡翠绿 + 金 / 桃红 + 香槟。`,
+    `**禁止单一色调**：不要"整体橘色"或"整体蓝色"这种 monochrome，必须有 2-3 色对比让画面活泼丰富。`,
+    // Apple 极简框线
+    `**外缘只有 1-2px 极细金属环线**，不要装饰围圈、不要花纹光环、不要射线。`,
+    // 背景
+    `画面背景：纯黑或深深紫，让多彩主体更突出。`,
+    // 禁项
+    `禁止出现：任何文字、字母、数字、签名、水印、印章。`,
+    // 风格收尾
+    `风格：精致 3D 浮雕质感 + 柔光内发光，像 Apple Fitness 徽章那样高级简洁，4 年级女生喜欢但不幼稚。`,
     `画面尺寸：512×512 正方形，主体严格居中，四周留 8% 纯色边距。`,
   ]
     .filter(Boolean)

@@ -88,6 +88,11 @@ export default {
           "0%,100%": { opacity: "0.2", transform: "scale(0.8)" },
           "50%": { opacity: "1", transform: "scale(1.3)" },
         },
+        // v0.29.1 钻档全息光晕——绕勋章慢速旋转一圈
+        shimmer: {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)" },
+        },
       },
       animation: {
         shake: "shake 0.45s ease-in-out",
@@ -102,6 +107,8 @@ export default {
         "slide-up": "slideUp 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards",
         "pulse-bar": "pulseBar 0.6s ease-in-out infinite",
         sparkle: "sparkle 1.2s ease-in-out infinite",
+        // 钻档：4 秒 1 圈，让全息光晕缓慢转动（不要太快免得分散注意力）
+        shimmer: "shimmer 4s linear infinite",
       },
     },
   },

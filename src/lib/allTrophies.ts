@@ -1,67 +1,43 @@
 /**
  * 跨学科 trophy 元数据汇总。
  *
- * 给 trophyImages 批量生成 / lottery 抽奖判断 / TrophyIcon 渲染共用一份统一
- * 数据源。
- *
- * v0.29 进阶系统：math TROPHIES 里 milestone/ability/skill 类的勋章每个有
- * 4 等级（铜/银/金/钻），AI 图按 tier 单独生成。所以一个 def "answer_master"
- * 实际会展开成 4 个 TrophyMeta（id 后缀 _bronze/_silver/_gold/_platinum）。
- * daily/commemorative 类没有 tier 后缀。
+ * v0.29.1 B++ 方案：每个勋章只有一张 AI 图（不再按 tier 展开 4 张）。
+ *   - tier 视觉差异由 CSS 层（外环 / 角标 / glow / 钻档动画）处理
+ *   - 大幅省 quota（17 张 vs 68 张）+ 同图 4 tier 视觉一致
+ *   - trophyImageKey(subj, id) 不带 tier 后缀
  */
 
 import { TROPHIES } from "../core/trophies";
 import { CHINESE_TROPHIES } from "../subjects/chinese/trophies";
 import { TIERS } from "../core/tiers";
-import type { TrophyDef, TrophyTier } from "../core/types";
+import type { TrophyDef } from "../core/types";
 import type { TrophyMeta } from "./trophyImages";
 
-const TIER_NAMES: Record<TrophyTier, string> = {
-  bronze: "铜",
-  silver: "银",
-  gold: "金",
-  platinum: "钻",
-};
-
 /**
- * 把一个 math TrophyDef 展开成它对应的所有 TrophyMeta。
+ * math TrophyDef → TrophyMeta（一对一，不再按 tier 展开）。
  *
- * - commemorative / daily：单条
- * - milestone / ability / skill：4 条（每个 tier 一条），AI 图各自生成
+ * 历史：v0.29.0 一度按 tier 展开成 4 张图，后来发现：
+ *   1. 4 张 AI 图视觉一致性靠运气（兄弟卡风格不齐）
+ *   2. 生成量翻 4 倍（68 张 vs 17 张），quota 浪费严重
+ *   3. tier 升级体验被弱化（明明该是"框升级"，硬被解读成"主体重画"）
+ * → 改成一张多彩主体，CSS 套 tier 框（B++ 方案）
  */
-function expandMathTrophy(t: TrophyDef): TrophyMeta[] {
-  const baseDescription = t.description ?? "";
-  const isTiered = !!t.tieredThresholds && t.tieredThresholds.length > 0;
-  if (!isTiered) {
-    return [
-      {
-        id: `math_${t.id}`,
-        subjectId: "math",
-        name: t.name,
-        icon: t.icon ?? "🏆",
-        description: baseDescription,
-        // commemorative 和 daily 都不打 tier；commemorative 是 rare（盲盒触发）
-        rare: t.category === "commemorative",
-        category: t.category,
-      },
-    ];
-  }
-  return t.tieredThresholds!.map((th) => ({
-    id: `math_${t.id}_${th.tier}`,
+function mathTrophyToMeta(t: TrophyDef): TrophyMeta {
+  return {
+    id: `math_${t.id}`,
     subjectId: "math",
-    name: `${t.name} · ${TIER_NAMES[th.tier]}`,
+    name: t.name,
     icon: t.icon ?? "🏆",
-    description: `${baseDescription}（${TIER_NAMES[th.tier]}：${th.tierLabel}）`,
-    // 金/钻是 rare 触发盲盒
-    rare: th.tier === "gold" || th.tier === "platinum",
+    description: t.description,
+    // commemorative 是 rare（盲盒触发）；其他靠 tier 升级到 gold/platinum 时才 rare
+    rare: t.category === "commemorative",
     category: t.category,
-    tier: th.tier,
-  }));
+  };
 }
 
 /** 把 math + chinese trophy + 段位勋章都拉平成 TrophyMeta */
 export function getAllTrophyMeta(): TrophyMeta[] {
-  const math: TrophyMeta[] = TROPHIES.flatMap(expandMathTrophy);
+  const math: TrophyMeta[] = TROPHIES.map(mathTrophyToMeta);
   const chinese: TrophyMeta[] = CHINESE_TROPHIES.map((t) => ({
     id: `chinese_${t.id}`,
     subjectId: "chinese" as const,
@@ -77,7 +53,7 @@ export function getAllTrophyMeta(): TrophyMeta[] {
     name: `${tier.name} 段位勋章`,
     icon: tier.badgeIcon,
     description: tier.badgeDesc,
-    rare: true, // 段位勋章都是稀有
+    rare: true,
   }));
   const chineseTiers: TrophyMeta[] = TIERS.map((tier) => ({
     id: `chinese_tier_${tier.id}`,
@@ -91,25 +67,26 @@ export function getAllTrophyMeta(): TrophyMeta[] {
 }
 
 /**
- * 给定 (subjectId, raw trophyId, optional tier) 算出 TrophyImage 的 keyed id。
- * tier 只对 math 的 milestone/ability/skill 类才有；commemorative/daily 不带。
+ * 给定 (subjectId, raw trophyId) 算出 TrophyImage 的 keyed id。
+ *
+ * v0.29.1: tier 参数不再使用（B++ 方案下一张图 4 tier 共用）。
+ * 保留参数签名兼容老调用，但内部忽略。
  */
 export function trophyImageKey(
   subjectId: "math" | "chinese",
   rawId: string,
-  tier?: TrophyTier,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _tier?: import("../core/types").TrophyTier,
 ): string {
-  const base = `${subjectId}_${rawId}`;
-  return tier ? `${base}_${tier}` : base;
+  return `${subjectId}_${rawId}`;
 }
 
 /** 给定 trophy raw id（不带前缀），从全集里查 meta（math 优先） */
 export function findTrophyMeta(
   rawId: string,
   subjectId?: "math" | "chinese",
-  tier?: TrophyTier,
 ): TrophyMeta | undefined {
   const all = getAllTrophyMeta();
-  const target = trophyImageKey(subjectId ?? "math", rawId, tier);
+  const target = trophyImageKey(subjectId ?? "math", rawId);
   return all.find((t) => t.id === target);
 }
