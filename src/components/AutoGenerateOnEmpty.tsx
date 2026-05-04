@@ -188,10 +188,39 @@ export function AutoGenerateOnEmpty(props: Props) {
         return;
       }
 
-      const stamped = r.questions.map((q) => ({
-        ...q,
-        subjectId: props.subjectId,
-      }));
+      // **客户端校验**：拦截垃圾题（缺字段 / answer 指向不存在选项 / stem 空白）
+      const isValid = (q: unknown): boolean => {
+        if (!q || typeof q !== "object") return false;
+        const o = q as Record<string, unknown>;
+        if (typeof o.question_id !== "string" || !o.question_id.trim()) return false;
+        if (typeof o.stem !== "string" || !o.stem.trim()) return false;
+        if (!Array.isArray(o.options) || o.options.length < 2) return false;
+        if (!o.answer || typeof o.answer !== "object") return false;
+        const ans = o.answer as { type?: string; value?: unknown };
+        if (ans.type === "choice") {
+          const optIds = (o.options as Array<{ id?: string }>)
+            .map((x) => x?.id)
+            .filter((x): x is string => typeof x === "string");
+          if (typeof ans.value !== "string" || !optIds.includes(ans.value)) return false;
+        }
+        return true;
+      };
+
+      const stamped = r.questions
+        .map((q) => ({ ...q, subjectId: props.subjectId }))
+        .filter(isValid);
+
+      const rejected = r.questions.length - stamped.length;
+      if (stamped.length === 0) {
+        safeSetPhase({
+          status: "failed",
+          message: `AI 出了 ${r.questions.length} 道但全部校验失败（缺字段或答案不对应）`,
+        });
+        return;
+      }
+      if (rejected > 0) {
+        console.warn(`[AutoGen] rejected ${rejected}/${r.questions.length} bad questions`);
+      }
       await db.questions.bulkPut(stamped as never);
 
       if (!mountedRef.current) return;

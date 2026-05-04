@@ -52,12 +52,14 @@ interface GenerateRequest {
   gameType?: string;
 }
 
-/** 单 sub-batch 题数上限（让单次 LLM 调用 < 25s） */
+/** 单 sub-batch 题数上限（让单次 LLM 调用 < 18s） */
 const SUB_BATCH_SIZE = 4;
 /** 整个请求的最大题数（防止恶意调用） */
 const MAX_TOTAL_COUNT = 30;
-/** 单次 LLM 调用的 wall-clock 限制（ms），超了就 abort 让其他 sub-batch 完成 */
-const PER_CALL_TIMEOUT_MS = 25_000;
+/** 单次 LLM 调用的 wall-clock 限制（ms） */
+const PER_CALL_TIMEOUT_MS = 18_000;
+/** 整个 API 请求的 wallclock budget。超了立刻 abort 全部 in-flight 调用，返回部分成功。 */
+const TOTAL_WALLCLOCK_BUDGET_MS = 50_000;
 
 function buildSystemPrompt(subjectId: string): string {
   const subjLabel = subjectId === "math" ? "数学" : "语文";
@@ -84,10 +86,11 @@ interface QwenChatResponse {
 }
 
 /**
- * 单次 LLM 调用 — 带 25s AbortController 兜底。
+ * 单次 LLM 调用 — 带双 AbortController：
+ *   1. PER_CALL_TIMEOUT_MS 单调用上限（18s）
+ *   2. globalSignal 全局预算（50s 总 budget），超了所有 in-flight 都 abort
  *
- * 失败时返回 ok:false + 详细 code/message，调用方自己决定要不要降级到下一个
- * model / provider / sub-batch 容错。
+ * 失败时返回 ok:false + 详细 code/message。
  */
 async function callQwenChat(
   ctx: AiProviderContext,
@@ -95,7 +98,12 @@ async function callQwenChat(
   systemPrompt: string,
   userPrompt: string,
   withJsonFormat = true,
+  globalSignal?: AbortSignal,
 ): Promise<{ ok: true; text: string } | { ok: false; status: number; code: string; message: string }> {
+  // 全局 budget 已经过期 → 立即返回（不再发起调用）
+  if (globalSignal?.aborted) {
+    return { ok: false, status: 408, code: "global_budget_exceeded", message: "skipped after wallclock budget" };
+  }
   const requestBody: Record<string, unknown> = {
     model,
     messages: [
@@ -114,6 +122,9 @@ async function callQwenChat(
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PER_CALL_TIMEOUT_MS);
+  // 全局 budget abort 时也要 abort 这个 call
+  const onGlobalAbort = () => ctrl.abort();
+  globalSignal?.addEventListener("abort", onGlobalAbort, { once: true });
   try {
     const upstream = await fetch(
       `${ctx.baseUrl}/compatible-mode/v1/chat/completions`,
@@ -142,7 +153,7 @@ async function callQwenChat(
           errMsg,
         )
       ) {
-        return await callQwenChat(ctx, model, systemPrompt, userPrompt, false);
+        return await callQwenChat(ctx, model, systemPrompt, userPrompt, false, globalSignal);
       }
       return {
         ok: false,
@@ -156,16 +167,18 @@ async function callQwenChat(
     return { ok: true, text };
   } catch (e) {
     const isAbort = (e as Error)?.name === "AbortError";
+    const reason = globalSignal?.aborted ? "global_budget_exceeded" : "timeout";
     return {
       ok: false,
       status: isAbort ? 408 : 0,
-      code: isAbort ? "timeout" : "fetch_error",
+      code: isAbort ? reason : "fetch_error",
       message: isAbort
-        ? `per-call ${PER_CALL_TIMEOUT_MS / 1000}s timeout`
+        ? `per-call ${PER_CALL_TIMEOUT_MS / 1000}s timeout (or global budget)`
         : (e instanceof Error ? e.message : String(e)),
     };
   } finally {
     clearTimeout(timer);
+    globalSignal?.removeEventListener("abort", onGlobalAbort);
   }
 }
 
@@ -337,15 +350,16 @@ function isValidQuestionShape(q: unknown): boolean {
 /**
  * 跑单 sub-batch（迭代 provider × model）：
  *   - 拿到任何一个 model 给的有效 questions 数组就 return ok
- *   - 全失败才 return failure
- *
- * 注意：内部已有 PER_CALL_TIMEOUT_MS 兜底；上层 Promise.allSettled 不需要再加。
+ *   - 跨 batch 共享 brokenModels Set——某 model 在另一 batch 已挂，本 batch 直接跳过
+ *   - 全局 wallclock 用 globalSignal abort
  */
 async function runSubBatch(
   args: GenerateRequest,
   batchIndex: number,
   providers: AiProviderContext[],
   systemPrompt: string,
+  globalSignal: AbortSignal,
+  brokenModels: Set<string>,
 ): Promise<{
   questions: unknown[];
   modelUsed?: string;
@@ -356,11 +370,26 @@ async function runSubBatch(
   const errors: { provider: string; model: string; code: string; message: string }[] = [];
 
   for (const ctx of providers) {
+    if (globalSignal.aborted) break;
     const models = getChatModelsFor(ctx);
     for (const m of models) {
-      let r = await callQwenChat(ctx, m, systemPrompt, userPrompt);
+      if (globalSignal.aborted) break;
+      const modelKey = `${ctx.label}/${m}`;
+      // 跨 batch 已知坏模型 → 直接跳过，省时间
+      if (brokenModels.has(modelKey)) continue;
+
+      let r = await callQwenChat(ctx, m, systemPrompt, userPrompt, true, globalSignal);
       if (!r.ok) {
         errors.push({ provider: ctx.label, model: m, code: r.code, message: r.message });
+        // 标记坏模型让其他 batch 跳过
+        if (
+          r.code === "timeout" ||
+          r.code === "global_budget_exceeded" ||
+          r.code === "InvalidApiKey" ||
+          r.code === "AccessDenied"
+        ) {
+          brokenModels.add(modelKey);
+        }
         if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
         continue;
       }
@@ -372,6 +401,7 @@ async function runSubBatch(
           systemPrompt,
           `${userPrompt}\n\n（重要：只输出顶层 { "questions": [...] } JSON，不要解释、不要 markdown）`,
           false,
+          globalSignal,
         );
         if (r2.ok) arr = extractJsonArray(r2.text);
         if (!arr) {
@@ -428,6 +458,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const systemPrompt = buildSystemPrompt(subjectId);
 
+  // **全局 wallclock budget**：超过 TOTAL_WALLCLOCK_BUDGET_MS（50s）后所有
+  // 还在跑的 sub-batch 调用会立即 abort，本次请求返回当前已收集的题（partial-success）。
+  // 比 client 的 90s 硬超时早 40s 返回，避免 client 看到 "出题失败" 时 server 还在烧 LLM token。
+  const globalCtrl = new AbortController();
+  const globalTimer = setTimeout(() => globalCtrl.abort(), TOTAL_WALLCLOCK_BUDGET_MS);
+
+  // 跨 batch 共享：某个 model 在 batch A 已 timeout 了，batch B 直接跳过
+  const brokenModels = new Set<string>();
+
   // 拆 sub-batches: 每批 4 题，并发跑
   const batchCount = Math.ceil(requestedCount / SUB_BATCH_SIZE);
   const batches: Promise<Awaited<ReturnType<typeof runSubBatch>>>[] = [];
@@ -441,11 +480,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         i,
         providers,
         systemPrompt,
+        globalCtrl.signal,
+        brokenModels,
       ),
     );
   }
 
   const settled = await Promise.allSettled(batches);
+  clearTimeout(globalTimer);
 
   const allQuestions: unknown[] = [];
   const allErrors: { provider: string; model: string; code: string; message: string }[] = [];

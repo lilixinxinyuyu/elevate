@@ -54,19 +54,21 @@ export function getChatProviders(env: Env): AiProviderContext[] {
   return providers;
 }
 
-/** 给定 provider，返回它对应的可用 chat 模型链（按降序质量）。 */
+/**
+ * 给定 provider，返回它对应的可用 chat 模型链。
+ *
+ * Round 6.2 重排：**速度优先于质量**。出题对智力要求中等，宁可用快速模型快速
+ * 失败也别等慢推理模型把整个请求拖死。qwen3.6-plus 是 reasoning 模型——即使
+ * enable_thinking=false 也偶发慢/挂，挪到链尾兜底。
+ */
 export function getChatModelsFor(ctx: AiProviderContext): string[] {
   if (ctx.label === "token-plan") {
-    return ["qwen3.6-plus", "deepseek-v3.2", "glm-5", "MiniMax-M2.5"];
+    // MiniMax / deepseek / glm 都是非 reasoning 的快模型；qwen3.6-plus 兜底
+    return ["MiniMax-M2.5", "deepseek-v3.2", "glm-5", "qwen3.6-plus"];
   }
-  return [
-    "qwen-plus",
-    "qwen3.5-omni-plus",
-    "qwen3.5-omni-flash",
-    "qwen-max",
-    "qwen-flash",
-    "qwen-turbo",
-  ];
+  // qwen-flash / qwen-turbo 是 dashscope 最快的；qwen-plus / qwen-max 兜底
+  // 去掉 omni-plus / omni-flash（多模态模型，对纯文本 JSON 出题反而慢）
+  return ["qwen-flash", "qwen-turbo", "qwen-plus", "qwen-max"];
 }
 
 /** 给定 provider，返回它对应的图像生成模型链。 */

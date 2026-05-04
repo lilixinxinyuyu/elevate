@@ -1,4 +1,31 @@
 /**
+ * 客户端轻量校验：拦截垃圾题入库。server 也校验（isValidQuestionShape），
+ * 这里是双保险——网络中间环节可能 mangle JSON。
+ *
+ * 拒绝条件：
+ *   - 缺 question_id / stem / options / answer
+ *   - options 数组少于 2 项
+ *   - answer.value 不在 options 的 id 列表里（指向不存在的选项 = 烂题）
+ *   - stem 为空字符串或只有空格
+ */
+function isValidQuestionRow(q: unknown): boolean {
+  if (!q || typeof q !== "object") return false;
+  const o = q as Record<string, unknown>;
+  if (typeof o.question_id !== "string" || !o.question_id.trim()) return false;
+  if (typeof o.stem !== "string" || !o.stem.trim()) return false;
+  if (!Array.isArray(o.options) || o.options.length < 2) return false;
+  if (!o.answer || typeof o.answer !== "object") return false;
+  const ans = o.answer as { type?: string; value?: unknown };
+  if (ans.type === "choice") {
+    const optIds = (o.options as Array<{ id?: string }>)
+      .map((x) => x?.id)
+      .filter((x): x is string => typeof x === "string");
+    if (typeof ans.value !== "string" || !optIds.includes(ans.value)) return false;
+  }
+  return true;
+}
+
+/**
  * 后台 AI 出题 — 单例状态机 + 订阅模式。
  *
  * 用途：
@@ -247,12 +274,25 @@ export async function triggerBackgroundGen(args: TriggerArgs): Promise<void> {
         continue;
       }
 
-      const stamped = r.questions.map((q) => ({
-        ...q,
-        subjectId: args.subjectId,
-      }));
-      await db.questions.bulkPut(stamped as never);
-      totalGenerated += stamped.length;
+      // **关键**：客户端校验拦截垃圾题。否则 server 部分成功的"半成品"
+      // (option 缺、answer.value 指向不存在的选项 等) 会污染题库。
+      const validated = r.questions
+        .map((q) => ({ ...q, subjectId: args.subjectId }))
+        .filter(isValidQuestionRow);
+
+      const rejected = r.questions.length - validated.length;
+      if (rejected > 0) {
+        console.warn(
+          `[bgGen] ${pickedSkill.name}: rejected ${rejected}/${r.questions.length} bad questions`,
+        );
+      }
+      if (validated.length === 0) {
+        allFailures.push(`${pickedSkill.name}: 全部 ${r.questions.length} 道客户端校验失败`);
+        continue;
+      }
+
+      await db.questions.bulkPut(validated as never);
+      totalGenerated += validated.length;
     } catch (e) {
       allFailures.push(
         `${pickedSkill.name}: ${e instanceof Error ? e.message : String(e)}`,
