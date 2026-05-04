@@ -293,6 +293,8 @@ export function ChineseTrainPage() {
         units={subject.units}
         seedQuestions={subject.seedQuestions}
         studentId={student?.id}
+        currentTerm="下册" /* chinese MVP 全是 G4B 下册 */
+        preferredUnitId={unitId ?? undefined}
         onGenerated={reloadSession}
         autoStart={true}
         headlineText={

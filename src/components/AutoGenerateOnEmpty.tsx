@@ -38,6 +38,14 @@ interface Props {
   autoStart?: boolean;
   /** 优先生成的 skillId（错题挑战 / 自由练时知道目标 skill） */
   preferredSkillId?: string;
+  /** 优先 unit（今日挑战时如果 student 有 currentUnitId 就用这个） */
+  preferredUnitId?: string;
+  /**
+   * 当前学期（"上册" / "下册"）。
+   * 关键：math 题库横跨 G4A 上册 + G4B 下册，没传就会随便挑到上册题。
+   * Selena 在下册期中冲刺，只能出下册的题。
+   */
+  currentTerm?: "上册" | "下册";
   /** 这次想出几道（默认 5） */
   count?: number;
   /** chinese 校验需要的 unit/skill 集合（math 用 core validateQuestion） */
@@ -54,33 +62,63 @@ export function AutoGenerateOnEmpty(props: Props) {
   const [phase, setPhase] = useState<Phase>({ status: "idle" });
   const startedRef = useRef(false);
 
+  /**
+   * 选 skill 顺序：
+   *   1. preferredSkillId（自由练 / 错题挑战明确指定）
+   *   2. preferredUnitId 范围内 mastery 最弱
+   *   3. currentTerm 范围内 mastery 最弱
+   *   4. 任意 currentTerm 范围内难度最低的 skill（无 mastery 数据时）
+   *   5. 任意 currentTerm skill
+   *
+   * 关键：永远先按 currentTerm 过滤 → 不会错出上册题给下册的 Selena。
+   */
   const pickSkillToTrain = async (): Promise<Skill | null> => {
     if (props.preferredSkillId) {
       const s = props.skills.find((x) => x.id === props.preferredSkillId);
       if (s) return s;
     }
+
+    // 按当前学期过滤 unit 和 skill
+    const termUnits = props.currentTerm
+      ? props.units.filter((u) => u.term === props.currentTerm)
+      : props.units;
+    const termUnitIds = new Set(termUnits.map((u) => u.id));
+    const termSkills = props.skills.filter((s) => termUnitIds.has(s.unitId));
+    // 极端 fallback：term 过滤后没 skill 就回到全集（chinese 没 term 概念）
+    const candidates = termSkills.length > 0 ? termSkills : props.skills;
+
+    // preferred unit 优先（如果在 term 范围内）
+    let unitFiltered = candidates;
+    if (props.preferredUnitId) {
+      const unitSkills = candidates.filter((s) => s.unitId === props.preferredUnitId);
+      if (unitSkills.length > 0) unitFiltered = unitSkills;
+    }
+
     if (!props.studentId) {
-      // 第一题之前 → 选难度最低、第一单元的 skill
       return (
-        props.skills
-          .filter((s) => s.unitId === props.units[0]?.id)
+        unitFiltered
+          .slice()
           .sort((a, b) => (a.difficultyBase ?? 3) - (b.difficultyBase ?? 3))[0] ??
-        props.skills[0] ??
+        candidates[0] ??
         null
       );
     }
-    // 看 mastery：选最弱
+
+    // 看 mastery：在筛选后的池子里选最弱
     const masteryRows = await db.mastery
       .where("studentId")
       .equals(props.studentId)
       .filter((m) => m.subjectId === props.subjectId)
       .toArray();
-    if (masteryRows.length === 0) return props.skills[0] ?? null;
     const masteryById = new Map(masteryRows.map((m) => [m.skillId, m.score]));
-    const sorted = props.skills
+    const sorted = unitFiltered
       .map((s) => ({ s, m: masteryById.get(s.id) ?? 50 }))
-      .sort((a, b) => a.m - b.m);
-    return sorted[0]?.s ?? null;
+      // mastery 50 = 没数据；优先返回真有数据且分低的，没数据的次之（按难度低排）
+      .sort((a, b) => {
+        if (a.m !== b.m) return a.m - b.m;
+        return (a.s.difficultyBase ?? 3) - (b.s.difficultyBase ?? 3);
+      });
+    return sorted[0]?.s ?? candidates[0] ?? null;
   };
 
   const runGeneration = async () => {
@@ -110,6 +148,7 @@ export function AutoGenerateOnEmpty(props: Props) {
         skillName: skill.name,
         count: props.count ?? 5,
         difficulty: "2-4",
+        term: props.currentTerm ?? "下册",
         existingStems,
       });
 

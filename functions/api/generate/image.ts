@@ -61,21 +61,22 @@ const ENDPOINT_TASK = (id: string) =>
   `https://dashscope-intl.aliyuncs.com/api/v1/tasks/${id}`;
 
 /**
- * 候选模型链（按降序质量 / 升序通用度）。
- * 用户截图显示 Qwen-Image 是按日期命名的（qwen-image-2.0-pro-2026-04-22 等），
- * 裸 alias 不一定存在 → 把所有候选都试一遍。
+ * 候选模型链 — 按"在 DashScope intl free tier 实际可用"排序。
+ *
+ * Round 4 调整：用户上轮所有 qwen-image-* 都返回 InvalidParameter（要么模型不
+ * 存在要么 endpoint 不对）。改成万相 wanx2.1 优先（DashScope 老牌文生图，free
+ * tier 一般有），qwen-image 留作 best-effort。
  */
 const MODELS = [
-  // Qwen-Image 系列（按用户 Model Square 截图）
-  "qwen-image-2.0-pro-2026-04-22",
-  "qwen-image-2.0-2026-03-03",
-  "qwen-image-pro",
+  // 万相 2.1 — 多数账号可用
+  "wanx2.1-t2i-turbo",
+  "wanx2.1-t2i-plus",
+  "wanx-v1",
+  // Qwen-Image 系列（用户截图里的，但调用格式可能不一样）
   "qwen-image-plus",
   "qwen-image",
-  // 万相 wanx 系列（更通用，高概率所有 plan 都可用）
-  "wanx2.1-t2i-plus",
-  "wanx2.1-t2i-turbo",
-  "wanx-v1",
+  "qwen-image-2.0-pro-2026-04-22",
+  "qwen-image-2.0-2026-03-03",
 ];
 
 async function createTask(

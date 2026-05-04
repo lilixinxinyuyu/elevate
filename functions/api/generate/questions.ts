@@ -32,6 +32,8 @@ interface GenerateRequest {
   skillName?: string;
   count?: number;
   difficulty?: string;
+  /** "上册" / "下册"，让 AI 知道是 G4A 还是 G4B */
+  term?: "上册" | "下册";
   existingStems?: string[];
   recentMistakeStems?: string[];
   /** 可选：让 AI 输出哪种题型（plain_choice / pair_match / sentence_shuffle / poem_cloze） */
@@ -73,7 +75,20 @@ async function callQwenChat(
   model: string,
   systemPrompt: string,
   userPrompt: string,
+  withJsonFormat = true,
 ): Promise<{ ok: true; text: string } | { ok: false; status: number; code: string; message: string }> {
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature: 0.7,
+    max_tokens: 4000,
+  };
+  if (withJsonFormat) {
+    requestBody.response_format = { type: "json_object" };
+  }
   const upstream = await fetch(
     "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
     {
@@ -82,17 +97,7 @@ async function callQwenChat(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.8,
-        max_tokens: 4000,
-        // 强制 JSON 输出
-        response_format: { type: "json_object" },
-      }),
+      body: JSON.stringify(requestBody),
     },
   );
   let json: QwenChatResponse | null = null;
@@ -102,6 +107,16 @@ async function callQwenChat(
     return { ok: false, status: upstream.status, code: "non_json", message: "upstream non-JSON" };
   }
   if (!upstream.ok || json.error) {
+    // 部分模型不支持 response_format → 自动重试一次不带这个字段
+    const errMsg = `${json.error?.code ?? ""} ${json.error?.message ?? ""}`;
+    if (
+      withJsonFormat &&
+      /response_format|json_object|not.*support|unrecognized|invalid.*parameter/i.test(
+        errMsg,
+      )
+    ) {
+      return await callQwenChat(apiKey, model, systemPrompt, userPrompt, false);
+    }
     return {
       ok: false,
       status: upstream.status,
@@ -114,47 +129,124 @@ async function callQwenChat(
   return { ok: true, text };
 }
 
-/** 从 LLM 文本里安全抓出 JSON 数组（容忍 ```json 包裹和零碎换行）。 */
+/**
+ * 从 LLM 文本里安全抓 JSON 数组。
+ * 优先级：
+ *   1. 直接 JSON.parse（response_format=json_object 时一般可以）
+ *   2. 顶层对象 → 找值是数组的字段（key="questions" 等）
+ *   3. 去 markdown ``` 包裹再试
+ *   4. 用 brace-counting 找最大 { ... } JSON 子串
+ *   5. 找最大 [ ... ] JSON 数组子串
+ *   6. 修正常见错误（trailing comma、单引号）后再试
+ */
 function extractJsonArray(text: string): unknown[] | null {
+  if (!text) return null;
+
+  const tryParseTopLevel = (s: string): unknown[] | null => {
+    try {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === "object") {
+        // 找第一个值是数组的字段（如 questions: [...]）
+        for (const v of Object.values(parsed)) {
+          if (Array.isArray(v)) return v;
+        }
+      }
+    } catch {
+      /* fallthrough */
+    }
+    return null;
+  };
+
+  // 1. 直接试
   let cleaned = text.trim();
-  // 去掉 markdown code block
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  // 如果是对象包裹（response_format=json_object 时），找数组字段
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (Array.isArray(parsed)) return parsed;
-    if (parsed && typeof parsed === "object") {
-      // 找第一个数组值
-      for (const v of Object.values(parsed)) {
-        if (Array.isArray(v)) return v;
+  let r = tryParseTopLevel(cleaned);
+  if (r) return r;
+
+  // 2. 去 markdown code block
+  cleaned = cleaned
+    .replace(/^```(?:json|JSON)?\s*\n?/, "")
+    .replace(/\n?```\s*$/, "")
+    .trim();
+  r = tryParseTopLevel(cleaned);
+  if (r) return r;
+
+  // 3. 用 brace-count 找最大对象（容忍前后有解释文字）
+  const findBalanced = (s: string, open: string, close: string): string | null => {
+    const startIdx = s.indexOf(open);
+    if (startIdx < 0) return null;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = startIdx; i < s.length; i++) {
+      const ch = s[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === open) depth++;
+      else if (ch === close) {
+        depth--;
+        if (depth === 0) return s.substring(startIdx, i + 1);
       }
     }
     return null;
-  } catch {
-    // 容错：找 [ ... ] 子串
-    const m = cleaned.match(/\[[\s\S]*\]/);
-    if (!m) return null;
-    try {
-      const arr = JSON.parse(m[0]);
-      return Array.isArray(arr) ? arr : null;
-    } catch {
-      return null;
-    }
+  };
+
+  const objSubstr = findBalanced(cleaned, "{", "}");
+  if (objSubstr) {
+    r = tryParseTopLevel(objSubstr);
+    if (r) return r;
   }
+
+  const arrSubstr = findBalanced(cleaned, "[", "]");
+  if (arrSubstr) {
+    r = tryParseTopLevel(arrSubstr);
+    if (r) return r;
+  }
+
+  // 4. 修正常见 LLM JSON 错误（trailing comma、unquoted keys）
+  const fixJson = (s: string): string =>
+    s
+      // trailing comma
+      .replace(/,(\s*[}\]])/g, "$1")
+      // 中文弯引号 → 直引号（最常见）
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'");
+
+  if (objSubstr) {
+    r = tryParseTopLevel(fixJson(objSubstr));
+    if (r) return r;
+  }
+  if (arrSubstr) {
+    r = tryParseTopLevel(fixJson(arrSubstr));
+    if (r) return r;
+  }
+
+  return null;
 }
 
 function buildUserPrompt(args: GenerateRequest): string {
   const count = Math.max(1, Math.min(10, args.count ?? 5));
   const subj = args.subjectId === "math" ? "数学" : "语文";
   const subjectId = args.subjectId === "math" ? "math" : "chinese";
-  // 数学按 ability 默认 calculation；语文 vocabulary
   const defaultAbility = subjectId === "math" ? "calculation" : "vocabulary";
-  // 数学常用 errorTag 示例 vs 语文
   const errorTagExample =
     subjectId === "math" ? "decimal_point_error" : "wrong_phonics";
+  const term = args.term ?? "下册";
 
   const lines: string[] = [];
-  lines.push(`请生成 ${count} 道${subj}题：`);
+  lines.push(`请生成 ${count} 道四年级${term}（${term === "上册" ? "G4A" : "G4B"}）${subj}题：`);
+  lines.push(`- ⚠️ 重要：必须是【${term}】的内容，不要混入【${term === "上册" ? "下册" : "上册"}】的考点`);
   lines.push(`- 单元：${args.unitName ?? args.unitId} (id: ${args.unitId})`);
   lines.push(`- 技能点：${args.skillName ?? args.skillId} (id: ${args.skillId})`);
   lines.push(`- 难度范围：${args.difficulty ?? "2-4"}`);
@@ -181,7 +273,7 @@ function buildUserPrompt(args: GenerateRequest): string {
       "version": 1,
       "status": "approved",
       "grade": 4,
-      "term": "下册",
+      "term": "${term}",
       "unit_id": "${args.unitId}",
       "unit_name": "${args.unitName ?? ""}",
       "skill_id": "${args.skillId}",
@@ -250,24 +342,45 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const systemPrompt = buildSystemPrompt(subjectId);
   const userPrompt = buildUserPrompt({ ...body, subjectId });
 
-  const models = ["qwen-plus", "qwen-flash", "qwen-turbo"];
+  // 模型链：qwen-plus（高质量）→ omni-plus（用户截图里 authorized）→
+  //          omni-flash（authorized）→ free-tier 兜底（多半 quota 拒绝）
+  const models = [
+    "qwen-plus",
+    "qwen3.5-omni-plus",
+    "qwen3.5-omni-flash",
+    "qwen-max",
+    "qwen-flash",
+    "qwen-turbo",
+  ];
   const tried: { model: string; status: number; code: string; message: string }[] = [];
   for (const m of models) {
-    const r = await callQwenChat(env.DASHSCOPE_API_KEY, m, systemPrompt, userPrompt);
+    let r = await callQwenChat(env.DASHSCOPE_API_KEY, m, systemPrompt, userPrompt);
     if (!r.ok) {
       tried.push({ model: m, status: r.status, code: r.code, message: r.message });
       if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
       continue;
     }
-    const arr = extractJsonArray(r.text);
+    let arr = extractJsonArray(r.text);
+    // 第一次没解析出 JSON → 试一次不带 response_format（有时模型把 JSON 嵌在解释里更干净）
     if (!arr) {
-      tried.push({
-        model: m,
-        status: 200,
-        code: "json_parse_failed",
-        message: r.text.slice(0, 200),
-      });
-      continue;
+      const r2 = await callQwenChat(
+        env.DASHSCOPE_API_KEY,
+        m,
+        systemPrompt,
+        `${userPrompt}\n\n（重要：只输出顶层为 { "questions": [...] } 的纯 JSON，不要任何解释、不要 markdown。）`,
+        false,
+      );
+      if (r2.ok) arr = extractJsonArray(r2.text);
+      if (!arr) {
+        tried.push({
+          model: m,
+          status: 200,
+          code: "json_parse_failed",
+          message: r.text.slice(0, 200),
+        });
+        continue;
+      }
+      r = r2.ok ? r2 : r;
     }
     const valid = arr.filter(isValidQuestionShape);
     if (valid.length === 0) {

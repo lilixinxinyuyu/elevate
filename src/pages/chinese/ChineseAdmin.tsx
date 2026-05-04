@@ -174,7 +174,7 @@ function ChineseImageGeneratorPanel() {
   const [prompt, setPrompt] = useState(
     "一枚卡通圆形勋章，上面是中国古风「诗」字毛笔字，金色边框，背景樱花和水墨画山水，扁平 3D 插画风，4 年级女生喜欢的可爱风格",
   );
-  const [size, setSize] = useState<"512*512" | "1024*1024">("512*512");
+  const [size, setSize] = useState<"512*512" | "1024*1024">("1024*1024");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ urls: string[]; model: string } | null>(null);
   const [error, setError] = useState<string | null>(null);

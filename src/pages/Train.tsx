@@ -177,24 +177,7 @@ export function TrainPage() {
       newParams.set("fresh", String(Date.now()));
       navigate({ search: `?${newParams.toString()}` }, { replace: true });
     };
-    return (
-      <AutoGenerateOnEmpty
-        subjectId="math"
-        skills={SKILLS}
-        units={UNITS}
-        seedQuestions={[]}
-        studentId={undefined}
-        onGenerated={reloadSession}
-        autoStart={true}
-        headlineText={
-          state.starved
-            ? "今天的题都被你做光啦！"
-            : "题库还没准备好，让 AI 帮你出几道～"
-        }
-        count={5}
-        preferredSkillId={selectedSkillIds?.[0]}
-      />
-    );
+    return <MathAutoGen reloadSession={reloadSession} preferredSkillId={selectedSkillIds?.[0]} starved={!!state.starved} />;
   }
 
   if (state.status === "done") {
@@ -329,6 +312,64 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * MathAutoGen — empty state 的小包装：读 student 拿到 currentTerm + studentId，
+ * 然后传给 AutoGenerateOnEmpty 做正确的"按学期出题"。
+ */
+function MathAutoGen({
+  reloadSession,
+  preferredSkillId,
+  starved,
+}: {
+  reloadSession: () => void;
+  preferredSkillId: string | undefined;
+  starved: boolean;
+}) {
+  const [studentInfo, setStudentInfo] = useState<{
+    id: string;
+    currentTerm: "上册" | "下册";
+    currentUnitId: string | undefined;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const students = await db.students.toArray();
+      const s = students[0];
+      if (cancelled || !s) return;
+      setStudentInfo({
+        id: s.id,
+        currentTerm: (s.currentTerm as "上册" | "下册") ?? "下册",
+        currentUnitId: s.currentUnitId,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <AutoGenerateOnEmpty
+      subjectId="math"
+      skills={SKILLS}
+      units={UNITS}
+      seedQuestions={[]}
+      studentId={studentInfo?.id}
+      currentTerm={studentInfo?.currentTerm ?? "下册"}
+      preferredUnitId={studentInfo?.currentUnitId}
+      onGenerated={reloadSession}
+      autoStart={true}
+      headlineText={
+        starved
+          ? "今天的题都被你做光啦！"
+          : "题库还没准备好，让 AI 帮你出几道～"
+      }
+      count={5}
+      preferredSkillId={preferredSkillId}
+    />
   );
 }
 

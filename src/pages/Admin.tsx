@@ -735,7 +735,7 @@ function ImageGeneratorPanel() {
   const [prompt, setPrompt] = useState(
     "一枚卡通风格的金色奖杯勋章，上面是数字 100，背景紫色渐变，圆形，扁平插画风，4 年级女生喜欢的可爱风",
   );
-  const [size, setSize] = useState<"512*512" | "1024*1024">("512*512");
+  const [size, setSize] = useState<"512*512" | "1024*1024">("1024*1024");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ urls: string[]; model: string } | null>(null);
   const [error, setError] = useState<string | null>(null);

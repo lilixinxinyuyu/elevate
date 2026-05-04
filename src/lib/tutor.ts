@@ -136,6 +136,8 @@ export interface GenerateQuestionsArgs {
   skillName?: string;
   count: number;
   difficulty?: string;
+  /** "上册" / "下册"，让 AI 出对应学期的题（关键，避免出错版本） */
+  term?: "上册" | "下册";
   existingStems?: string[];
   recentMistakeStems?: string[];
 }
