@@ -86,7 +86,14 @@ async function dumpLocal(): Promise<SnapshotPayload> {
   return bag as unknown as SnapshotPayload;
 }
 
-async function applyPayload(payload: SnapshotPayload): Promise<void> {
+/**
+ * 紧急覆盖：清空本地表然后从云端整体写回。**会丢失本地未推送的所有数据**。
+ *
+ * 平时不要用！只在需要"全设备硬重置回云端最近一份快照"时用（admin 紧急恢复）。
+ *
+ * 默认 pullFromCloud 走 applyPayloadMerged 安全合并。
+ */
+export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
     [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students],
@@ -97,6 +104,180 @@ async function applyPayload(payload: SnapshotPayload): Promise<void> {
         const tbl = db.table(t);
         await tbl.clear();
         if (rows.length > 0) await tbl.bulkPut(rows);
+      }
+    },
+  );
+}
+
+/**
+ * 三方合并：云端 ⊕ 本地 → 写回本地。
+ *
+ * 设计原则：**本地新写入永不被远程旧快照覆盖**。
+ *
+ * 表逻辑：
+ * - attempts：append-only。union by id，从来不动已有 row（attempts 不可改）
+ * - mastery：id-keyed (studentId::skillId)。比 updatedAt，新覆盖旧
+ * - mistakes：id-keyed。比 lastAttemptAt，新覆盖旧
+ * - sessions：id-keyed。比 finishedAt > startedAt，新覆盖旧
+ * - trophies：append-only (每次 unlock 一个 row)。union by id
+ * - students：id-keyed (一般就 1 行)。**保留本地**（user 主动改的 currentUnitId/currentTerm）
+ * - meta：key-keyed。分类处理：
+ *     - 数值（totalXp 等单调递增）→ 取 max
+ *     - 数组（tiersUnlocked 等只增加）→ union
+ *     - object 带 computedAt（rating::*）→ 取 newer
+ *     - 其他（selectedTerm/selectedSubject/equippedBadge）→ **保留本地**
+ *
+ * 这套逻辑保证：A 设备的进度被 push 后，B 设备 pull 能拿到 A 的所有 row；
+ * 同时 B 在 pull 之间做的进度不会被 pull 清空。
+ */
+async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
+  await db.transaction(
+    "rw",
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students],
+    async () => {
+      // attempts: pure union (immutable rows)
+      const remoteA = (payload.attempts ?? []) as Array<{ id: string }>;
+      if (remoteA.length > 0) {
+        const localA = await db.attempts.toArray();
+        const localIds = new Set(localA.map((r) => r.id));
+        const toAdd = remoteA.filter((r) => !localIds.has(r.id));
+        if (toAdd.length > 0) await db.attempts.bulkPut(toAdd as never);
+      }
+
+      // mastery: union by id, prefer newer updatedAt
+      const remoteM = (payload.mastery ?? []) as Array<{
+        id: string;
+        updatedAt?: number;
+      }>;
+      if (remoteM.length > 0) {
+        const localM = await db.mastery.toArray();
+        const localById = new Map(localM.map((r) => [r.id, r]));
+        const toPut: typeof remoteM = [];
+        for (const r of remoteM) {
+          const local = localById.get(r.id);
+          if (!local || (r.updatedAt ?? 0) > (local.updatedAt ?? 0)) {
+            toPut.push(r);
+          }
+        }
+        if (toPut.length > 0) await db.mastery.bulkPut(toPut as never);
+      }
+
+      // mistakes: union by id, prefer newer lastAttemptAt
+      const remoteMi = (payload.mistakes ?? []) as Array<{
+        id: string;
+        lastAttemptAt?: number;
+      }>;
+      if (remoteMi.length > 0) {
+        const localMi = await db.mistakes.toArray();
+        const localById = new Map(localMi.map((r) => [r.id, r]));
+        const toPut: typeof remoteMi = [];
+        for (const r of remoteMi) {
+          const local = localById.get(r.id);
+          if (!local || (r.lastAttemptAt ?? 0) > (local.lastAttemptAt ?? 0)) {
+            toPut.push(r);
+          }
+        }
+        if (toPut.length > 0) await db.mistakes.bulkPut(toPut as never);
+      }
+
+      // sessions: union by id, prefer newer finishedAt or startedAt
+      const remoteS = (payload.sessions ?? []) as Array<{
+        id: string;
+        startedAt?: number;
+        finishedAt?: number;
+      }>;
+      if (remoteS.length > 0) {
+        const localS = await db.sessions.toArray();
+        const localById = new Map(localS.map((r) => [r.id, r]));
+        const toPut: typeof remoteS = [];
+        for (const r of remoteS) {
+          const local = localById.get(r.id);
+          if (!local) {
+            toPut.push(r);
+            continue;
+          }
+          const remoteTs = r.finishedAt ?? r.startedAt ?? 0;
+          const localTs = local.finishedAt ?? local.startedAt ?? 0;
+          if (remoteTs > localTs) toPut.push(r);
+        }
+        if (toPut.length > 0) await db.sessions.bulkPut(toPut as never);
+      }
+
+      // trophies: pure union by id (each unlock creates a unique row)
+      const remoteT = (payload.trophies ?? []) as Array<{ id: string }>;
+      if (remoteT.length > 0) {
+        const localT = await db.trophies.toArray();
+        const localIds = new Set(localT.map((r) => r.id));
+        const toAdd = remoteT.filter((r) => !localIds.has(r.id));
+        if (toAdd.length > 0) await db.trophies.bulkPut(toAdd as never);
+      }
+
+      // students: 保留本地（用户主动改的字段不被云端旧值覆盖）
+      // 但本地不存在的 student 还是要从云端拉
+      const remoteSt = (payload.students ?? []) as Array<{ id: string }>;
+      if (remoteSt.length > 0) {
+        const localSt = await db.students.toArray();
+        const localIds = new Set(localSt.map((r) => r.id));
+        const toAdd = remoteSt.filter((r) => !localIds.has(r.id));
+        if (toAdd.length > 0) await db.students.bulkPut(toAdd as never);
+      }
+
+      // meta: 按 key 类型分别处理
+      const remoteMeta = (payload.meta ?? []) as Array<{
+        key: string;
+        value: unknown;
+      }>;
+      if (remoteMeta.length > 0) {
+        const localMeta = await db.meta.toArray();
+        const localByKey = new Map(localMeta.map((r) => [r.key, r]));
+        for (const r of remoteMeta) {
+          const local = localByKey.get(r.key);
+          if (!local) {
+            await db.meta.put(r);
+            continue;
+          }
+          // 数值（totalXp 等单调递增计数器）→ 取 max
+          if (typeof r.value === "number" && typeof local.value === "number") {
+            if (r.value > local.value) await db.meta.put(r);
+            continue;
+          }
+          // 数组（tiersUnlocked 等只增加的解锁集）→ union
+          if (Array.isArray(r.value) && Array.isArray(local.value)) {
+            const merged = Array.from(
+              new Set([...(local.value as unknown[]), ...(r.value as unknown[])]),
+            );
+            await db.meta.put({ key: r.key, value: merged });
+            continue;
+          }
+          // object 带 computedAt（rating::*）→ 取 newer
+          if (
+            r.value &&
+            typeof r.value === "object" &&
+            local.value &&
+            typeof local.value === "object" &&
+            "computedAt" in (r.value as Record<string, unknown>) &&
+            "computedAt" in (local.value as Record<string, unknown>)
+          ) {
+            const rTs = (r.value as { computedAt: number }).computedAt;
+            const lTs = (local.value as { computedAt: number }).computedAt;
+            if (rTs > lTs) await db.meta.put(r);
+            continue;
+          }
+          // 其他（selectedTerm / selectedSubject / equippedBadge / mockExamLastAt）
+          // → 保留本地（这些是 user 主动选的最新偏好）
+          // 但 mockExamLastAt 应该取 max（最近一次完成更应保留）
+          if (r.key.startsWith("mockExamLastAt::")) {
+            if (
+              typeof r.value === "number" &&
+              typeof local.value === "number" &&
+              r.value > local.value
+            ) {
+              await db.meta.put(r);
+            }
+            continue;
+          }
+          // 默认：保留本地不动
+        }
       }
     },
   );
@@ -161,7 +342,8 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
     };
     if (!data.ok) return { ok: false, error: "server_error" };
     if (!data.latest) return { ok: true, changed: false };
-    await applyPayload(data.latest.payload);
+    // v0.26.1：用 merge 而非覆盖。本地新写入永远不会被远程旧快照清掉
+    await applyPayloadMerged(data.latest.payload);
     setLastPullAt(data.latest.version);
     return { ok: true, changed: true, version: data.latest.version };
   } catch (e) {

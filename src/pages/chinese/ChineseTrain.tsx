@@ -42,6 +42,7 @@ import {
 import { TutorPanel } from "../../components/tutor/TutorPanel";
 import { AutoGenerateOnEmpty } from "../../components/AutoGenerateOnEmpty";
 import { triggerBgGenIfLow } from "../../lib/bgGen";
+import { pushToCloud } from "../../db/cloudSync";
 import type { Question } from "../../core/types";
 
 type TrainMode = "practice" | "review" | "mock_exam";
@@ -315,6 +316,11 @@ export function ChineseTrainPage() {
       count: 10,
       multiSkillCount: 3,
     });
+
+    // v0.26.1：完成会话推到云端。**关键修复**——之前 chinese 永远不 push，
+    // 刷新后被云端旧快照（math 推的）merge 回来，chinese 进度看似"丢"。
+    // 现在每次 chinese train 完成也 push，云端始终有最新快照
+    pushToCloud().catch(() => {/* 忽略：失败下次再试 */});
   }, [allDone, student?.id, answers, sessionId, mode, finishCelebrated, subject, unitId]);
 
   if (!questionsLoaded) {
