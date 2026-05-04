@@ -1,10 +1,15 @@
 import { TIERS } from "../core/tiers";
+import { TrophyIcon } from "./TrophyIcon";
 
 /**
  * 勋章柜：显示所有段位勋章。
  * - 已解锁的：彩色，可点击佩戴
  * - 未解锁的：灰色，hover 显示门槛
  * - 当前佩戴的：边框高亮 + 角标"佩戴中"
+ *
+ * v0.29.4 修复：之前只渲染 emoji `t.badgeIcon`，从来没用过 AI 生成的段位 badge 图。
+ *   现在通过 <TrophyIcon trophyId={`tier_${t.id}`} subjectId="math" /> 优先显示
+ *   db.trophyImages 里 `math_tier_${t.id}` 的 AI 图，emoji 兜底。
  */
 export function BadgeInventory({
   unlockedTierIds,
@@ -45,13 +50,21 @@ export function BadgeInventory({
               title={got ? `点击佩戴：${t.badgeName}` : lockedTip}
             >
               {equipped && (
-                <span className="absolute -top-2 -right-2 chip bg-amber-400 text-ink-900 border border-amber-200 font-display font-bold px-2 py-0.5 text-[10px] shadow-glow-amber whitespace-nowrap">
+                <span className="absolute -top-2 -right-2 chip bg-amber-400 text-ink-900 border border-amber-200 font-display font-bold px-2 py-0.5 text-[10px] shadow-glow-amber whitespace-nowrap z-10">
                   佩戴中
                 </span>
               )}
-              <div className="text-3xl">{t.badgeIcon}</div>
+              <div className="flex justify-center">
+                <TrophyIcon
+                  trophyId={`tier_${t.id}`}
+                  subjectId="math"
+                  emoji={t.badgeIcon}
+                  size="lg"
+                  unlocked={got}
+                />
+              </div>
               <div
-                className={`text-xs mt-1 leading-tight font-display ${
+                className={`text-xs mt-2 leading-tight font-display ${
                   got ? t.theme.textColor : "text-slate-400"
                 }`}
               >

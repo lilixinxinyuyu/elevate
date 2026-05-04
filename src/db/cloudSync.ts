@@ -4,16 +4,30 @@ import { db } from "./dexie";
  * 云同步：把 IndexedDB 全表 dump 成 JSON 上传到 /api/sync；下载时反向写回。
  *
  * 数据策略：
- * - 单用户场景，全量上传/下载（每次 ~1-2MB JSON）
+ * - 单用户场景，全量上传/下载（每次 ~1-5MB JSON，含 AI 勋章图后会大）
  * - 服务端保留最近 50 个快照历史
  * - 客户端在 localStorage 存最后一次成功 push 的 version
  *
  * 表覆盖：
- *   ✓ attempts / mastery / mistakes / sessions / trophies / meta / students
- *   ✗ questions / skills / units（这些是「教材定义」从代码 seed 来，不需要同步）
+ *   ✓ attempts / mastery / mistakes / sessions / trophies / meta / students /
+ *     tutorSessions / trophyImages（v0.29.4 起，让 AI 勋章图跨设备同步）
+ *   ✗ questions / skills / units（教材定义从代码 seed 来）
+ *     —— 但题清理通过 meta:deletedQuestionIds 同步删除列表，让 A 设备的清理在 B 生效
  */
 
-const PUSH_TABLES = ["attempts", "mastery", "mistakes", "sessions", "trophies", "meta", "students", "tutorSessions"] as const;
+const PUSH_TABLES = [
+  "attempts",
+  "mastery",
+  "mistakes",
+  "sessions",
+  "trophies",
+  "meta",
+  "students",
+  "tutorSessions",
+  // v0.29.4: AI 生成的勋章图也跨设备同步
+  // 每张 ~150 KB base64 data URL, 总 ~3-5MB. 接受这个 bandwidth 成本。
+  "trophyImages",
+] as const;
 
 const LAST_PUSH_KEY = "selena.cloud.lastPush";
 const LAST_PULL_KEY = "selena.cloud.lastPull";
@@ -78,6 +92,8 @@ interface SnapshotPayload {
   students: unknown[];
   /** v0.27.0：小进姐姐对话日志，按 id 合并、按 updatedAt 取新 */
   tutorSessions?: unknown[];
+  /** v0.29.4：AI 生成的勋章图，按 trophyId 合并、按 generatedAt 取新 */
+  trophyImages?: unknown[];
 }
 
 async function dumpLocal(): Promise<SnapshotPayload> {
@@ -98,7 +114,7 @@ async function dumpLocal(): Promise<SnapshotPayload> {
 export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.trophyImages],
     async () => {
       for (const t of PUSH_TABLES) {
         const rows = (payload[t] ?? []) as Record<string, unknown>[];
@@ -135,7 +151,7 @@ export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<v
 async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.trophyImages],
     async () => {
       // attempts: pure union (immutable rows)
       const remoteA = (payload.attempts ?? []) as Array<{ id: string }>;
@@ -231,6 +247,25 @@ async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
           }
         }
         if (toPut.length > 0) await db.tutorSessions.bulkPut(toPut as never);
+      }
+
+      // v0.29.4: trophyImages：union by trophyId, prefer newer generatedAt
+      // AI 生成的勋章图缓存，跨设备同步让 A 设备生成的图 B 设备也能看到
+      const remoteTi = (payload.trophyImages ?? []) as Array<{
+        trophyId: string;
+        generatedAt?: number;
+      }>;
+      if (remoteTi.length > 0) {
+        const localTi = await db.trophyImages.toArray();
+        const localById = new Map(localTi.map((r) => [r.trophyId, r]));
+        const toPut: typeof remoteTi = [];
+        for (const r of remoteTi) {
+          const local = localById.get(r.trophyId);
+          if (!local || (r.generatedAt ?? 0) > (local.generatedAt ?? 0)) {
+            toPut.push(r);
+          }
+        }
+        if (toPut.length > 0) await db.trophyImages.bulkPut(toPut as never);
       }
 
       // students: 保留本地（用户主动改的字段不被云端旧值覆盖）

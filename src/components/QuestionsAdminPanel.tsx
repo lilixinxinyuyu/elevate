@@ -14,6 +14,7 @@ import { db } from "../db/dexie";
 import type { Question } from "../core/types";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
+import { recordDeletedQuestionIds } from "../db/seed";
 import {
   judgeQuestionsInBatches,
   type Judgment,
@@ -205,7 +206,8 @@ export function QuestionsAdminPanel() {
     setBusy(true);
     try {
       const ids = stats.bad.map((b) => b.q.question_id);
-      await db.questions.bulkDelete(ids);
+      // v0.29.4: 记录到 deletedQuestionIds（同步 + 防 seed 复活）
+      await recordDeletedQuestionIds(ids);
       await refresh();
       window.alert(`已清理 ${ids.length} 道损坏题`);
     } finally {
@@ -243,7 +245,8 @@ export function QuestionsAdminPanel() {
       return;
     setBusy(true);
     try {
-      await db.questions.bulkDelete(idsToDelete);
+      // v0.29.4: 记录到 deletedQuestionIds
+      await recordDeletedQuestionIds(idsToDelete);
       await refresh();
     } finally {
       setBusy(false);
@@ -267,7 +270,8 @@ export function QuestionsAdminPanel() {
             (q.tags ?? []).includes("ai_generated"),
         )
         .map((q) => q.question_id);
-      await db.questions.bulkDelete(aiIds);
+      // v0.29.4: 记录到 deletedQuestionIds
+      await recordDeletedQuestionIds(aiIds);
       await refresh();
       window.alert(`已删除 ${aiIds.length} 道 AI 题，剩 ${all.length - aiIds.length} 道 seed`);
     } finally {
@@ -607,7 +611,8 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
     if (!window.confirm(`将永久删除 ${ids.length} 道题（AI 判定为 delete 的题）。确定吗？`)) {
       return;
     }
-    await db.questions.bulkDelete(ids);
+    // v0.29.4: 记录到 deletedQuestionIds
+    await recordDeletedQuestionIds(ids);
     // 从 results 里把删掉的剔出
     setResults((prev) => prev.filter((r) => !selectedToDelete.has(r.q.question_id)));
     setSelectedToDelete(new Set());

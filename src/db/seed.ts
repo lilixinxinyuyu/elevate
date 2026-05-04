@@ -14,6 +14,57 @@ const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
 
 /**
+ * v0.29.4 题清理跨设备同步机制
+ *
+ * 问题：seed.ts 每次启动都 bulkPut(SEED_QUESTIONS)，把 720 道 seed 全部 upsert 回来。
+ * 用户在 admin 删的题下次开 app 自动复活。导致：
+ *   - 设备 A 清到 431 → 下次开 app 又回到 720
+ *   - 即使 push 到云，B 设备拉下来也是 720（因为同样的 seed 重塞）
+ *
+ * 修法：用 meta:deletedQuestionIds 记录被删的 question_id 列表。
+ *   - admin 清理时：append 删除 ID 到这个列表
+ *   - seed.ts bulkPut：filter 掉列表里的 ID（不再复活）
+ *   - agent pull：同 filter
+ *   - app boot：把 db 里仍存在但属于 deletedQuestionIds 的删掉（B 设备同步后立刻生效）
+ *   - meta 已经被 cloudSync 同步 → 删除列表自动跨设备
+ */
+const DELETED_QIDS_KEY = "deletedQuestionIds";
+
+export async function getDeletedQuestionIds(): Promise<Set<string>> {
+  const meta = await db.meta.get(DELETED_QIDS_KEY);
+  const arr = Array.isArray(meta?.value) ? (meta.value as string[]) : [];
+  return new Set(arr);
+}
+
+/** 添加 IDs 到删除列表。同时立刻从 db.questions 删掉（如果还在） */
+export async function recordDeletedQuestionIds(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const cur = await getDeletedQuestionIds();
+  for (const id of ids) cur.add(id);
+  await db.meta.put({ key: DELETED_QIDS_KEY, value: Array.from(cur) });
+  // 真删掉（如果还在）
+  await db.questions.bulkDelete(ids);
+}
+
+/** seed/agent pull 用：从一组 questions 里过滤掉已删除的 */
+function filterDeleted<T extends { question_id?: string }>(qs: T[], deletedIds: Set<string>): T[] {
+  if (deletedIds.size === 0) return qs;
+  return qs.filter((q) => !deletedIds.has(q.question_id ?? ""));
+}
+
+/** app boot：把 db 里仍存在但属于 deletedQuestionIds 的删掉（同步后 B 设备立刻生效） */
+async function applyPendingDeletions(): Promise<void> {
+  const deleted = await getDeletedQuestionIds();
+  if (deleted.size === 0) return;
+  const all = await db.questions.toCollection().primaryKeys() as string[];
+  const toDelete = all.filter((id) => deleted.has(id));
+  if (toDelete.length > 0) {
+    await db.questions.bulkDelete(toDelete);
+    console.log(`[deletedQuestionIds] applied ${toDelete.length} pending deletion(s)`);
+  }
+}
+
+/**
  * v0.26.3 起 seed 题统一 stamp subjectId="math"。
  * UNITS / SKILLS 也同样 stamp（之前 schema 加了字段但没填值）。
  */
@@ -24,6 +75,10 @@ function stampMathSubject<T extends Record<string, unknown>>(rows: T[]): T[] {
 export async function ensureSeeded(): Promise<void> {
   const existing = await db.meta.get(SEED_KEY);
   const hasQuestions = await db.questions.count();
+
+  // v0.29.4: 先把 deletedQuestionIds 里仍存在的题再删一遍（B 设备同步后立刻生效）
+  await applyPendingDeletions().catch((e) => console.warn("[applyPendingDeletions]", e));
+
   // 即使 seed 已最新，也要跑 v7 迁移（一次性，幂等）
   if (existing?.value === SEED_VERSION && hasQuestions > 0) {
     pullAgentQuestionsIfStale().catch(() => {});
@@ -32,6 +87,9 @@ export async function ensureSeeded(): Promise<void> {
     void backfillMissingSubjectIds().catch(() => {});
     return;
   }
+
+  // v0.29.4: 拿到当前删除列表，bulkPut 时跳过这些 id（不让被删的题复活）
+  const deletedIds = await getDeletedQuestionIds();
 
   await db.transaction("rw", [db.units, db.skills, db.questions, db.students, db.meta], async () => {
     // v19: stamp subjectId="math" on all seed rows（之前没 stamp 导致 admin 诊断
@@ -49,7 +107,9 @@ export async function ensureSeeded(): Promise<void> {
     if (bad.length > 0) {
       console.warn("[seed] 以下题目校验失败，未导入：", bad);
     }
-    await db.questions.bulkPut(stampMathSubject(ok as unknown as Record<string, unknown>[]) as never);
+    // v0.29.4: 过滤掉 deletedQuestionIds 里的（不复活已删除的题）
+    const filtered = filterDeleted(ok as unknown as Array<{ question_id?: string }>, deletedIds);
+    await db.questions.bulkPut(stampMathSubject(filtered as Record<string, unknown>[]) as never);
 
     const existing = await db.students.get("default-student");
     const now = Date.now();
@@ -213,10 +273,17 @@ export async function pullAgentQuestionsIfStale(force = false): Promise<{ added:
     const data = (await resp.json()) as { ok: boolean; questions?: Question[] };
     if (!data.ok || !Array.isArray(data.questions)) return null;
 
+    // v0.29.4: 过滤掉已删除的题（A 设备 admin 删的题不应被 agent pull 复活）
+    const deletedIds = await getDeletedQuestionIds();
+
     let added = 0;
     let skipped = 0;
     const accepted: Question[] = [];
     for (const q of data.questions) {
+      if (deletedIds.has(q.question_id)) {
+        skipped += 1;
+        continue;
+      }
       const r = validateQuestion(q);
       if (r.ok && r.question) {
         accepted.push(r.question);
