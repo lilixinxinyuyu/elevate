@@ -65,6 +65,55 @@ async function applyPendingDeletions(): Promise<void> {
 }
 
 /**
+ * v0.29.6 一次性回填：v0.29.4 之前的清理操作没记进 deletedQuestionIds，
+ * 导致 A 设备清的题不能跨设备同步。
+ *
+ * 推断方法：
+ *   - SEED_QUESTIONS 是代码里硬编码的全部静态题
+ *   - 任何 SEED 题如果在本地 db.questions 里没有，**只能是被 admin 删掉了**
+ *     （seed 启动时 bulkPut 是 upsert，否则它一定会塞回来）
+ *   - 所以：SEED 在代码里 \\ 本地缺失的 = 历史删除集合
+ *
+ * 把这些 ID 补进 deletedQuestionIds，下次 sync push 就能传给其他设备。
+ *
+ * 用 meta:deletedQuestionIdsBackfilledAt 标记防重复执行。
+ *
+ * 注意：这个 backfill 只识别 SEED 题；本地 AI 生成的题如果被删了，
+ * 现在没法回溯（因为不知道哪些 AI 题"应该存在"）。但 v0.29.4 起新的 admin 删
+ * 都会正确记录，所以这是一次性补丁。
+ */
+const DELETED_BACKFILL_KEY = "deletedQuestionIdsBackfilledAt";
+async function backfillDeletedQuestionIdsFromSeed(): Promise<void> {
+  const meta = await db.meta.get(DELETED_BACKFILL_KEY);
+  if (meta?.value) return; // 已经做过
+
+  const localKeys = (await db.questions.toCollection().primaryKeys()) as string[];
+  const localSet = new Set(localKeys);
+
+  const seedIdsMissing: string[] = [];
+  for (const q of SEED_QUESTIONS) {
+    if (q.question_id && !localSet.has(q.question_id)) {
+      seedIdsMissing.push(q.question_id);
+    }
+  }
+
+  if (seedIdsMissing.length === 0) {
+    // 本地有所有 SEED → 用户没删过，纯 sync 上来的 deletedQuestionIds 已经覆盖
+    await db.meta.put({ key: DELETED_BACKFILL_KEY, value: Date.now() });
+    return;
+  }
+
+  // 与现有 deletedQuestionIds 合并
+  const cur = await getDeletedQuestionIds();
+  for (const id of seedIdsMissing) cur.add(id);
+  await db.meta.put({ key: DELETED_QIDS_KEY, value: Array.from(cur) });
+  await db.meta.put({ key: DELETED_BACKFILL_KEY, value: Date.now() });
+  console.log(
+    `[deletedQuestionIds backfill] inferred ${seedIdsMissing.length} historical deletions from SEED diff (总表 ${cur.size})`,
+  );
+}
+
+/**
  * v0.26.3 起 seed 题统一 stamp subjectId="math"。
  * UNITS / SKILLS 也同样 stamp（之前 schema 加了字段但没填值）。
  */
@@ -78,6 +127,12 @@ export async function ensureSeeded(): Promise<void> {
 
   // v0.29.4: 先把 deletedQuestionIds 里仍存在的题再删一遍（B 设备同步后立刻生效）
   await applyPendingDeletions().catch((e) => console.warn("[applyPendingDeletions]", e));
+
+  // v0.29.6: 回填历史 admin 清理（v0.29.4 前的清理没记进 deletedQuestionIds，
+  // 推断为 "SEED 在代码里 \\ 本地缺失" 的差集，让老删除可以跨设备同步）
+  await backfillDeletedQuestionIdsFromSeed().catch((e) =>
+    console.warn("[backfillDeletedQuestionIdsFromSeed]", e),
+  );
 
   // v0.29.5: 一次性把过大的勋章图压缩（之前 ~7MB/张 → ~50KB/张，让 sync 不爆）
   void (async () => {

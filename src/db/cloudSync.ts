@@ -347,9 +347,34 @@ export interface SyncResult {
   changed?: boolean;
 }
 
+/**
+ * 推送本地到云端。
+ *
+ * v0.29.6 关键修复：**先 pull-merge 再 push**。
+ *
+ * 老版本（v0.29.5 及之前）每次 push 直接 dump 本地 + INSERT 一行新 snapshot，
+ * 服务端 download 总返最新一条 → 谁最后 push 谁覆盖。多设备场景下：
+ *   - 设备 A 生成了一堆 trophyImages → push 上去
+ *   - 设备 B 没生成图，自动 push → 把 A 的图 wipe 掉
+ *   - 结果：cloud 总是 trophyImages=0
+ *
+ * 新版本：push 前 force-pull 一次，applyPayloadMerged 把云端"我没有的"合进本地，
+ * 然后再 dump+push。push 的快照永远 ≥ cloud 当前快照（在合并意义上），
+ * 不会发生数据缩水。
+ *
+ * 即使 pull 失败（网络抖动），仍然继续 push（本地优先策略）。
+ */
 export async function pushToCloud(): Promise<SyncResult> {
   const pwd = getStoredPassword();
   if (!pwd) return { ok: false, error: "no_password" };
+
+  // v0.29.6: pull-merge 防覆盖
+  try {
+    await pullFromCloud({ force: true });
+  } catch (e) {
+    console.warn("[pushToCloud] pre-push pull failed (continuing anyway):", e);
+  }
+
   let payload: SnapshotPayload;
   try {
     payload = await dumpLocal();
