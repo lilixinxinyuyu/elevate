@@ -14,6 +14,20 @@
 
 import type { Question } from "../../core/types";
 
+/**
+ * v0.28.2：根据 game_type 给不同的默认时间（之前一刀切 30s 不合理）。
+ *   - poem_cloze 古诗补字 → 28s（要回忆 + 操作填字）
+ *   - pair_match 配对 → 30s（看选项 + 配对）
+ *   - sentence_shuffle 句子重排 → 35s（要理解结构）
+ * Question 自己显式给 estimated_time_seconds 时覆盖默认。
+ */
+function defaultTimeFor(gameType: string | undefined): number {
+  if (gameType === "poem_cloze") return 28;
+  if (gameType === "sentence_shuffle") return 35;
+  if (gameType === "pair_match") return 30;
+  return 30;
+}
+
 const v = (q: Partial<Question>): Question =>
   ({
     version: 1,
@@ -21,7 +35,7 @@ const v = (q: Partial<Question>): Question =>
     grade: 4,
     term: "下册",
     subjectId: "chinese",
-    estimated_time_seconds: 30,
+    estimated_time_seconds: defaultTimeFor(q.game_type),
     cognitive_level: "conceptual",
     ability_dimension: ["accumulation"],
     exam_priority: "HIGH_BIG",

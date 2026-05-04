@@ -1,5 +1,7 @@
 ## 题型：balance_lab（天平 / 等量代换）
 
+⏱️ **答题时间**：`estimated_time_seconds: 50`（要看懂图 + 列方程 + 解方程，难度 5 给 60）
+
 ⚠️ 这种题用客户端 BalanceLab 组件渲染，**必须**在 `tags` 里给一个 `eq:` tag 描述天平两边。
 
 ### tag 格式

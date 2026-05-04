@@ -1,5 +1,10 @@
 ## 题型：plain_choice（4 选 1 标准选择题）
 
+⏱️ **答题时间**：必须按 difficulty 给：
+- difficulty 1-2 → `estimated_time_seconds: 20`
+- difficulty 3   → `estimated_time_seconds: 30`
+- difficulty 4-5 → `estimated_time_seconds: 40`
+
 输出每题的 JSON 形如：
 
 ```json
@@ -20,7 +25,7 @@
   "play_as": "plain_choice",
   "cognitive_level": "conceptual",
   "difficulty": 3,
-  "estimated_time_seconds": 25,
+  "estimated_time_seconds": 30,
   "stem": "题面文字",
   "question_format": "single_choice",
   "options": [

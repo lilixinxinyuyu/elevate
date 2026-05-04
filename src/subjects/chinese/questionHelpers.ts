@@ -65,7 +65,10 @@ export function pickChoice(args: PickArgs): Question {
     play_as: args.template ?? "plain_choice",
     cognitive_level: "recall",
     difficulty: args.difficulty,
-    estimated_time_seconds: args.estimated_time ?? 8,
+    // v0.28.2：默认从 8s 改 20s（拼音字音单选题），需要听写类传 estimated_time=28；
+    // 其他题型（poem_cloze / pair_match / sentence_shuffle）走自己的 helper。
+    // 8s 太短让任何答题都 100% 拿不到 ⚡⚡ 闪电奖励——既不公平也不教育。
+    estimated_time_seconds: args.estimated_time ?? 20,
     stem: args.stem,
     question_format: "single_choice",
     options: args.options.map((o) => ({
