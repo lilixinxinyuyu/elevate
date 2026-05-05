@@ -209,8 +209,10 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
     `Premium 3D rendered luxury award medallion, magical and rich — designed for a 4th-grade girl to treasure and show off proudly.`,
     // motif（核心）
     `Subject: ${motif}.`,
+    // v0.30.11 关键修复：勋章必须填满画面，避免渲染出小勋章 + 一圈空白背景的"双边框"看感
+    `**The circular/shaped medal fills the entire frame edge-to-edge — the outer rim touches all four sides of the square canvas with at most 1-2 pixel margin.** No visible empty padding around the medal.`,
     // 风格细节
-    `Composition: the subject occupies ~78% of the medal, strictly centered, framed by subtle decorative elements (tiny star sparkles, small ribbon flecks, soft light particles) — never crowded.`,
+    `Composition: the subject motif occupies ~80% of the medal interior, strictly centered, framed by subtle decorative elements (tiny star sparkles, small ribbon flecks, soft light particles) — never crowded.`,
     `Surface: glossy enameled medal with deep 3D embossed relief, clear dimensional depth, soft inner glow, polished metallic reflections.`,
     `Signature palette: ${palette}.`,
     // Tier 金属调
@@ -218,12 +220,13 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
     // 风格 — 不再说品牌名
     `Production style: high-end commemorative medallion, premium tactile feel, the kind of medal a child wants to keep forever and show friends — magical, dreamy, sparkly, slightly playful and cute.`,
     // 框约束
-    `Outer ring: a refined thin metallic edge that matches the tier finish — NO heavy decorative wreaths, NO busy frames, NO oversized ribbon banners.`,
-    // 背景 / 大小
-    `Background: deep space-purple gradient to near-black, helps the medal colors pop dramatically.`,
+    `Outer ring: a refined thin metallic edge that matches the tier finish exactly at the canvas edge — NO heavy decorative wreaths, NO busy frames, NO oversized ribbon banners.`,
+    // 背景 / 大小：v0.30.11 改成 medal 内的 BG，不是 canvas 外的
+    `Inside the medal rim: deep space-purple to near-black radial gradient, helps the medal colors pop dramatically. Outside the rim: there should be NO visible canvas — the medal IS the canvas.`,
     // 强力反 text 三连
     `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS** — the medal must be ENTIRELY pictorial and graphical, zero typography.`,
-    `Image size 512×512, square, subject strictly centered with ~8% padding.`,
+    // v0.30.11: 改尺寸描述，强制 98%+ 占用
+    `Output: 512×512 square, the medallion occupies 98%+ of the canvas (1-2 pixel margin only), strictly centered.`,
   ].join(" ");
 }
 
@@ -243,20 +246,21 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
 function buildCommemorativePrompt(t: TrophyMeta): string {
   const desc = t.description ? `主题：「${t.description}」。` : "";
   return [
-    `Apple Fitness 风格的高级**纪念奖章 commemorative medallion**，六角星形 (six-pointed star)，主体居中放大占画面 85%。`,
+    `高级纪念奖章 commemorative medallion，**六角星形 (six-pointed star)**，主体居中放大。`,
+    // v0.30.11: 强制填满 canvas
+    `**The six-pointed star medallion fills the entire frame edge-to-edge — the outer star tips touch all four sides of the square canvas with at most 1-2 pixel margin.** No empty padding around the medal.`,
     `这是一枚**传家宝级别 (heirloom)** 的纪念勋章 —— 比普通成就勋章更精致、更有仪式感、更值得珍藏。`,
-    `主体：「${t.name}」概念的卡通图标，配合**月桂枝 / 棕榈叶 / 缎带 / 星芒**等仪式性装饰元素围绕主体（不要写文字）。`,
+    `主体：「${t.name}」概念的卡通图标，**主体填满星形内部 85%+**，配合**月桂枝 / 棕榈叶 / 缎带 / 星芒**等仪式性装饰元素围绕主体（不要写文字）。`,
     desc,
-    // 多彩配色 + 仪式感
     `**配色：2-3 种主色调和谐多彩搭配**，与「${t.name}」主题相关，可加金色或银色高光做奖章质感。`,
     `示例方向（任选灵感）：金 + 深紫 + 樱花粉 / 银 + 翡翠绿 + 金 / 玫瑰金 + 香槟 + 暖白。`,
-    // 重点：奖章质感
     `**质感关键**：厚重金属奖章浮雕感 (3D embossed metal medallion)，比普通勋章更深的浮雕、更精细的边缘细节、更明显的光影立体感。`,
-    `**外缘**：1-2px 极细金属环线，可有轻微的雕花纹理（但不要厚装饰围圈）。`,
-    `背景：纯黑或深深紫，让多彩主体和金属光泽更突出。`,
+    `**外缘**：1-2px 极细金属环线沿星形外缘，紧贴 canvas 边，不要装饰围圈。`,
+    `星形内部背景：深紫到近黑径向渐变。星形外部：直接是空（不画任何东西）。`,
     `禁止出现：任何文字、字母、数字、签名、水印。`,
-    `风格：精致 3D 浮雕 + 柔光内发光 + 仪式感 + Apple Fitness 高级简洁感，4 年级女生喜欢但不幼稚，让人有"想永远收藏"的冲动。`,
-    `画面尺寸：512×512 正方形，主体严格居中，四周留 8% 边距。`,
+    `风格：精致 3D 浮雕 + 柔光内发光 + 仪式感，4 年级女生喜欢但不幼稚，让人有"想永远收藏"的冲动。`,
+    // v0.30.11: 改尺寸描述强制 98%+
+    `Output: 512×512 square, the six-pointed star medallion occupies 98%+ of the canvas (1-2 pixel margin only), strictly centered.`,
   ].join(" ");
 }
 

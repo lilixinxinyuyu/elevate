@@ -93,6 +93,18 @@ export default {
           "0%": { transform: "rotate(0deg)" },
           "100%": { transform: "rotate(360deg)" },
         },
+        // v0.30.11 钻档"光带扫过"——叠在 shimmer 上，3.5s 一道斜光带从 -100% 扫到 100%
+        shimmerSweep: {
+          "0%": { transform: "translateX(-100%) rotate(15deg)", opacity: "0" },
+          "30%": { opacity: "0.85" },
+          "70%": { opacity: "0.85" },
+          "100%": { transform: "translateX(150%) rotate(15deg)", opacity: "0" },
+        },
+        // v0.30.11 钻档径向脉冲——内层亮度 0.92 → 1.05 → 0.92，呼吸节律
+        shimmerPulse: {
+          "0%,100%": { filter: "brightness(0.95) saturate(1)" },
+          "50%": { filter: "brightness(1.12) saturate(1.15)" },
+        },
         // v0.30.2 hero 校徽进场：fade in + slight scale + tiny rotate
         badgeEnter: {
           "0%": { transform: "scale(0.55) rotate(-12deg)", opacity: "0" },
@@ -124,8 +136,10 @@ export default {
         "slide-up": "slideUp 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards",
         "pulse-bar": "pulseBar 0.6s ease-in-out infinite",
         sparkle: "sparkle 1.2s ease-in-out infinite",
-        // 钻档：4 秒 1 圈，让全息光晕缓慢转动（不要太快免得分散注意力）
-        shimmer: "shimmer 4s linear infinite",
+        // 钻档：v0.30.11 减速到 8 秒 1 圈（之前 4s 太快会眼花），更"慢慢转动的传家宝"
+        shimmer: "shimmer 8s linear infinite",
+        "shimmer-sweep": "shimmerSweep 3.5s ease-in-out infinite",
+        "shimmer-pulse": "shimmerPulse 2.6s ease-in-out infinite",
         "badge-enter": "badgeEnter 720ms cubic-bezier(0.34,1.56,0.64,1) both",
         "badge-wiggle": "badgeHoverWiggle 0.7s ease-in-out",
         "score-slide-in": "scoreSlideIn 480ms cubic-bezier(0.16,1,0.3,1) both",

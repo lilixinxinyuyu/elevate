@@ -21,6 +21,7 @@
 
 import { SKILLS } from "../content/skills";
 import { MIDTERM_DATE, FINAL_DATE } from "./examDates";
+import { tierFromScore, tierIndex, subRank } from "./tiers";
 import type {
   AbilityId,
   Attempt,
@@ -90,6 +91,30 @@ function uniqueSessionFinishCount(attempts: Attempt[]): number {
   const set = new Set<string>();
   for (const a of attempts) if (a.sessionId) set.add(a.sessionId);
   return set.size;
+}
+
+/**
+ * v0.30.11: 累计已达成的"小段位级别"数（subrank stages above start）。
+ *
+ * 段位 5 档 × 每档 4 小段 = 20 stages。从 school★I 起步算 0；school★II=1，
+ * school★III=2，... district★I=4，... country★IV=19。
+ *
+ * 每升一小段（包括跨大段，比如 school★IV → district★I）算 +1。
+ * 跨大段的 tier badge 单独走另一条庆祝路径，subrank_up 计数是"星升次数"汇总。
+ *
+ * 用 attempts 总 XP 反推（跟 service.computeRating 用同样的 tierFromScore +
+ * subRank 函数，保证一致）。注：这里是 all-time XP，但实际 mastery system 按学期
+ * 独立赛季——选择 all-time 是因为 ctx 不带 term；轻微误差但不影响"星升计数"语义。
+ */
+function totalSubrankStagesAchieved(attempts: Attempt[]): number {
+  const totalXp = attempts.reduce(
+    (s, a) => s + (a.scoreDelta?.total ?? 0),
+    0,
+  );
+  const tier = tierFromScore(totalXp);
+  const tierIdx = tierIndex(tier.id); // 0-4
+  const sub = subRank(totalXp, tier); // 1-4
+  return tierIdx * 4 + (sub - 1);
 }
 
 /** 一气连续 N 题用时 ≤ 8 秒且全对 — 每达成一次 +1 */
@@ -259,6 +284,15 @@ export const TROPHIES: TrophyDef[] = [
     icon: "🪄",
     category: "daily",
     tier: (ctx) => Math.floor(ctx.attempts.filter((a) => a.isReview && a.isCorrect).length / 5),
+  },
+  // v0.30.11: subrank_up — 段位升小段勋章（每升一小段 +1 解锁，跨大段也算）
+  {
+    id: "subrank_up",
+    name: "星升时刻",
+    description: "段位升小段（★I→II→III→IV / 跨大段）就来一枚。每次升星都珍贵。",
+    icon: "✨",
+    category: "daily",
+    tier: (ctx) => totalSubrankStagesAchieved(ctx.attempts),
   },
 
   // ============================================

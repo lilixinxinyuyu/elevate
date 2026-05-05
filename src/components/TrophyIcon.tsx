@@ -58,8 +58,12 @@ const SHAPE_CLIP: Record<TrophyCategory, string> = {
   ability: "polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)",
   // 真盾形（flat top + 底部尖角）—— skill 用，跟 ability 六边形明显区分
   skill: "polygon(0% 5%, 100% 5%, 100% 55%, 50% 100%, 0% 55%)",
+  // commemorative 五角星 v0.30.11 调胖：之前 inner radius ≈ 18.6%（凹得很深，
+  // AI 图被切剩 ~50%）；现在 inner radius ≈ 30%（凹缓很多，AI 图保留 ~75% 可见面积）。
+  // 用经典五角星几何：outer R=50, inner R=30，五个外尖在 90/-54/342/270/198 度 +
+  // 五个内点在 54/-18/270/198 度对偶角。
   commemorative:
-    "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)",
+    "polygon(50% 0%, 67.6% 25.7%, 97.5% 34.5%, 78.5% 59.3%, 79.4% 90.5%, 50% 80%, 20.6% 90.5%, 21.5% 59.3%, 2.5% 34.5%, 32.4% 25.7%)",
 };
 
 /**
@@ -216,17 +220,48 @@ export function TrophyIcon({
         )}
       </div>
 
-      {/* 钻档全息光晕——叠在 art 之上、corner badge 之下 */}
+      {/* 钻档全息光晕——v0.30.11 三层叠加：
+         1) shimmer：8s 慢慢绕轴 conic 全息（之前 4s 太快头晕）
+         2) shimmer-pulse：2.6s 内层呼吸亮度
+         3) shimmer-sweep：3.5s 一道斜光带从左到右扫过（"折射光"感）
+       */}
       {tierStyle?.animated && (
-        <div
-          className="absolute pointer-events-none animate-shimmer"
-          style={{
-            ...innerStyle,
-            background:
-              "conic-gradient(from 0deg, rgba(186,230,253,0.4), rgba(249,168,212,0.35), rgba(196,181,253,0.4), rgba(103,232,249,0.35), rgba(186,230,253,0.4))",
-            mixBlendMode: "overlay",
-          }}
-        />
+        <>
+          <div
+            className="absolute pointer-events-none animate-shimmer"
+            style={{
+              ...innerStyle,
+              background:
+                "conic-gradient(from 0deg, rgba(186,230,253,0.45), rgba(249,168,212,0.4), rgba(196,181,253,0.45), rgba(103,232,249,0.4), rgba(253,230,138,0.4), rgba(186,230,253,0.45))",
+              mixBlendMode: "overlay",
+            }}
+          />
+          <div
+            className="absolute pointer-events-none animate-shimmer-pulse"
+            style={{
+              ...innerStyle,
+              background:
+                "radial-gradient(circle, rgba(255,255,255,0.18), rgba(255,255,255,0) 55%)",
+              mixBlendMode: "screen",
+            }}
+          />
+          <div
+            className="absolute pointer-events-none overflow-hidden"
+            style={innerStyle}
+            aria-hidden="true"
+          >
+            <div
+              className="absolute inset-0 animate-shimmer-sweep"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%)",
+                mixBlendMode: "screen",
+                width: "200%",
+                left: "-50%",
+              }}
+            />
+          </div>
+        </>
       )}
 
       {/* tier corner badge（右下） — sm 太小不显示 */}
