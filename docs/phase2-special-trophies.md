@@ -30,18 +30,18 @@
 - **场景**：Selena 在锦江★II → 锦江★III 时 → 弹"星升"勋章
 - **frequency**：4 个月学期内可能 6-12 次（每段 4 小段，跨段时也会从 ★IV 进下一段 ★I）
 
-### 2. `midterm_done` — 期中加冕
+### 2. `midterm_done` — 期中加冕 ✅ v0.30.10 已实现
 
-- **触发**：检测到当前日期 = 期中考结束日 + 1 天 ~ +7 天，且当天 Selena 第一次进 app
-- **实施位**：新增 `src/lib/seasonalEvents.ts` + `examDates.ts` 已存在期中日期表
-- **trophy meta**：每学期一次（用 meta.semester 防重发）
-- **prompt 主题**：月桂枝 + 书卷 + 锦旗 + 金色光环
-- **frequency**：每学期 1 次
+- **触发**：今天 ≥ MIDTERM_DATE（默认 2026-05-06），第一次进 app 即解锁
+- **实施位**：`src/core/trophies.ts` check 函数 `ctx.todayDateKey >= MIDTERM_DATE`
+- **去重**：commemorative 类自带 dedupe，已颁发过就不再触发
+- **prompt 主题**：月桂枝 + 书卷 + 锦旗 + 金色光环（commemorative pipeline 自动渲染）
+- **frequency**：每学期 1 次（同 MIDTERM_DATE 期内）
 
-### 3. `final_done` — 期末凯旋
+### 3. `final_done` — 期末凯旋 ✅ v0.30.10 已实现
 
-- **触发**：期末考结束后第一次进 app
-- 类似 midterm_done，但更隆重（"凯旋"语气）
+- **触发**：今天 ≥ FINAL_DATE（默认 2026-06-29）
+- 类似 midterm_done，commemorative 类天然 dedupe
 - **prompt 主题**：王冠 + 奖杯 + 金色锦旗
 - **frequency**：每学期 1 次
 
@@ -118,21 +118,24 @@
 
 ---
 
-## 优先级建议
+## 优先级建议（v0.30.10 已部分完成）
 
-如果暑期时间有限，按 ROI 排序：
+✅ **已做**（v0.30.10）：
+- midterm_done — 期中考完日起触发
+- final_done — 期末考完日起触发
 
-🔥 **先做（情感价值最高）**：
-1. subrank_up — 你提到她记得有，是误以为 milestone 是 subrank → 真正实现一个
-2. new_semester — 学期重置时给个仪式感入口
-3. midterm_done / final_done — 配合考试节奏
+🔥 **下次先做（情感价值最高）**：
+1. subrank_up — 段位升小段（school★II → school★III）就解锁；
+   实施位 finalizeSession（service.ts），对比 prevSubRank vs newSubRank。
+2. new_semester — 学期重置（上→下 / 下→新学年上）时仪式感入口；
+   实施位需给 student.lastSeenTerm 字段做 transition 检测。
 
 ⭐ **其次（趣味性）**：
-4. birthday — 简单实现，每年仪式感
-5. all_ability_gold — 钻石级隐藏，激励长期目标
+3. birthday — student.birthday 字段 + boot 时检测；每年 1 枚（meta.year 防重）
+4. all_ability_gold — 钻石级隐藏，激励长期目标
 
 🌳 **可选（精装修）**：
-6-10. 其他
+5-10. perfect_revival_week / pre_exam_streak / season_special / centurion 等
 
 ---
 

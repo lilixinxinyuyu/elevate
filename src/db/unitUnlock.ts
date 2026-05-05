@@ -24,6 +24,7 @@
 import { db } from "./dexie";
 import { UNITS } from "../content/units";
 import type { Term } from "../core/types";
+import { todayKey } from "../lib/date";
 
 /** Term → 持久化用的 code（缩短 key + 兼容） */
 function termCode(term: Term): "G4A" | "G4B" | "MIX" {
@@ -145,4 +146,68 @@ export async function getUnlockedUnitIdSet(
     return new Set([...a, ...b]);
   }
   return new Set(await getUnlockedUnitIds(studentId, term));
+}
+
+// ============================================================
+//  v0.30.10：基于时间的自动解锁
+// ============================================================
+
+/**
+ * 单元自动解锁日历——unitId → 该日期当天起自动解锁。
+ *
+ * 规则：
+ *   - 调 runScheduledUnlocks(studentId) 时检查 today >= scheduledDate 的所有项
+ *   - 还没解锁的就静默写入 + 加进返回的"刚解锁"列表给 UI 弹庆祝
+ *   - 已解锁的跳过
+ *
+ * 默认排期（2026 年北师大下册）：
+ *   - U5 方程：2026-05-08 期中后 2 天
+ *   - U6 数据：2026-06-01 6 月初
+ *
+ * 想加 / 改：直接编辑这个 dict。家长 / Selena 也能从 UnitProgress 手动提前解锁。
+ */
+export const UNIT_UNLOCK_SCHEDULE: Record<string, string> = {
+  G4B_U5_EQUATIONS: "2026-05-08",
+  G4B_U6_DATA: "2026-06-01",
+};
+
+/** 单元自动解锁结果项（供 UI 弹庆祝） */
+export interface ScheduledUnlockResult {
+  unitId: string;
+  unitName: string;
+  scheduledFor: string;
+  unlockedAt: number;
+}
+
+/**
+ * 检查 UNIT_UNLOCK_SCHEDULE，把"今天该解锁但还没解锁"的 unit 自动解锁。
+ *
+ * 调用时机：app 启动时（Layout mount）。返回新解锁的列表给 UI 弹庆祝动画。
+ *
+ * 注：这里只处理"下册"的自动排期。上册默认全解锁，不需要排期。
+ *      综合复习模式不直接管，因为它读的是上下册的并集。
+ */
+export async function runScheduledUnlocks(
+  studentId: string,
+  now: Date = new Date(),
+): Promise<ScheduledUnlockResult[]> {
+  const today = todayKey(now);
+  const newlyUnlocked: ScheduledUnlockResult[] = [];
+  // 当前下册已解锁列表
+  const current = new Set(await getUnlockedUnitIds(studentId, "下册"));
+
+  for (const [unitId, scheduledDate] of Object.entries(UNIT_UNLOCK_SCHEDULE)) {
+    if (current.has(unitId)) continue; // 已经手动解锁了，不重复
+    if (today < scheduledDate) continue; // 还没到日期
+    // 解锁
+    await unlockUnit(studentId, "下册", unitId);
+    const unit = UNITS.find((u) => u.id === unitId);
+    newlyUnlocked.push({
+      unitId,
+      unitName: unit?.name ?? unitId,
+      scheduledFor: scheduledDate,
+      unlockedAt: now.getTime(),
+    });
+  }
+  return newlyUnlocked;
 }

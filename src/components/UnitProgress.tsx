@@ -22,6 +22,7 @@ import { db } from "../db/dexie";
 import { UNITS } from "../content/units";
 import { getUnlockedUnitIds, unlockUnit, lockUnit } from "../db/unitUnlock";
 import type { Term } from "../core/types";
+import { UnitUnlockCelebration } from "./UnitUnlockCelebration";
 
 export function UnitProgress({
   studentId,
@@ -56,10 +57,17 @@ export function UnitProgress({
 
   const unlockedCount = units.filter((u) => unlocked?.has(u.id)).length;
 
+  // v0.30.10: 手动解锁后弹庆祝（区别于 Layout 自动解锁）
+  const [celebration, setCelebration] = useState<{ name: string; description?: string } | null>(null);
+
   const handleUnlock = async (unitId: string) => {
     if (!unlocked) return;
     const next = await unlockUnit(studentId, term, unitId);
     setUnlocked(new Set(next));
+    const unit = UNITS.find((u) => u.id === unitId);
+    if (unit) {
+      setCelebration({ name: unit.name, description: unit.description });
+    }
   };
   const handleLock = async (unitId: string) => {
     if (!unlocked) return;
@@ -92,6 +100,15 @@ export function UnitProgress({
           ▾
         </span>
       </button>
+
+      {celebration && (
+        <UnitUnlockCelebration
+          unitName={celebration.name}
+          unitDescription={celebration.description}
+          isScheduled={false}
+          onClose={() => setCelebration(null)}
+        />
+      )}
 
       {open && (
         <div className="mt-3 space-y-2 animate-slide-up">

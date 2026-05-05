@@ -20,6 +20,7 @@
  */
 
 import { SKILLS } from "../content/skills";
+import { MIDTERM_DATE, FINAL_DATE } from "./examDates";
 import type {
   AbilityId,
   Attempt,
@@ -199,18 +200,21 @@ export const TROPHIES: TrophyDef[] = [
   {
     id: "midterm_done",
     name: "期中加冕",
-    description: "完成期中考试的勋章。Phase 2 待实施触发器。",
+    description: "期中考试结束后第一次进 app 解锁。专属盲盒勋章。",
     icon: "📜",
     category: "commemorative",
-    check: () => false,
+    // v0.30.10: 期中考试当天或之后第一次进 app 即解锁。
+    // todayDateKey 是字符串 "YYYY-MM-DD"，跟 MIDTERM_DATE 比较 lexicographically。
+    check: (ctx) => ctx.todayDateKey >= MIDTERM_DATE,
   },
   {
     id: "final_done",
     name: "期末凯旋",
-    description: "完成期末考试的勋章。Phase 2 待实施触发器。",
+    description: "期末考试结束后第一次进 app 解锁。专属盲盒勋章。",
     icon: "👑",
     category: "commemorative",
-    check: () => false,
+    // v0.30.10: 期末考试当天或之后第一次进 app 即解锁
+    check: (ctx) => ctx.todayDateKey >= FINAL_DATE,
   },
   {
     id: "new_semester",

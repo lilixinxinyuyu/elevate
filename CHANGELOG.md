@@ -3,6 +3,114 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.30.10 — 2026-05-05 · 学期进度自动解锁 + 期中/期末勋章
+
+**学期进度自动解锁排期**（`src/db/unitUnlock.ts`）：
+- `UNIT_UNLOCK_SCHEDULE`：G4B_U5_EQUATIONS=2026-05-08（期中后 2 天）/
+  G4B_U6_DATA=2026-06-01（6 月初）
+- `runScheduledUnlocks(studentId, now)` 进 Layout 时调一次：把"今天该解锁但
+  还没解锁"的单元自动开放，返回新解锁列表给 UI 弹庆祝。幂等。
+- 已手动解锁的单元跳过；过期那些一次性补齐。
+
+**单元解锁庆祝弹窗**（`UnitUnlockCelebration.tsx`）：
+- 全屏 backdrop + bounce 卡片 + 6 颗 sparkle 旋转闪烁
+- 自动解锁前缀"⏰ 时间到啦！"；手动解锁前缀"🎉"
+- "去练一练 →" CTA 直跳 free-practice，让她试新单元的 skill
+
+**期中 / 期末勋章实装**（phase2-special-trophies.md 1 + 2 号）：
+- `midterm_done` 期中加冕：今天 ≥ MIDTERM_DATE 第一次进 app 解锁
+- `final_done` 期末凯旋：今天 ≥ FINAL_DATE 同上
+- 用 commemorative 类自带 dedupe，每学期 1 枚
+
+新增 6 个测试（runScheduledUnlocks / UNIT_UNLOCK_SCHEDULE 各场景），120 / 120 pass。
+
+---
+
+## v0.30.9 — 2026-05-05 · 学期进度门控 + 自由练修 bug + tutor XP 0.5
+
+**核心**：考期中只考到 U4，但每日挑战经常出 U5/U6 没学过的题 —— 加单元解锁系统。
+
+- **`src/db/unitUnlock.ts`**：每个 (studentId, term) 维护已解锁 unitId 集合，
+  默认 G4A 全开 / G4B U1-U4（期中范围）/ 综合复习 = 上下册 union
+- **`UnitProgress` 组件**：Home 页折叠卡，按顺序显示所有单元 + 解锁/锁回按钮，
+  强制按顺序解锁（U6 必须先解 U5）
+- **过滤生效在 3 处**：buildDailySession / SkillPicker / bgGen 都跳过锁定单元
+- **期中/期末/模拟考保留 hard-coded 范围**，不受 unlock 限制（这些就是测覆盖范围）
+
+**自由练自动选 4 个最弱 bug 修**（SkillPicker.tsx）：
+- 之前所有未练过 skill mastery score 都 ?? 50 → 并列 → JS sort stable
+  退回到 SKILLS 数组顺序 → 看起来"选最前面 4 个"
+- 现在显式 weaknessRank：已尝试 score=0 → rank=100（最优先）/
+  未尝试 → rank=50 / 已尝试 score=100 → rank=0
+
+**tutor-assisted XP 0.7 → 0.5**（scoring.ts）：
+"分数偏严比虚高好；错题以后还能再做拿分，现在不要慷慨加分"
+
+7 个 unitUnlock 测试，114 / 114 pass。
+
+---
+
+## v0.30.8 — 2026-05-05 · 错题后给"同型同难度变式题"重做
+
+**痛点**：v0.30.7 让错→讲题→对扣了 XP 和 combo，但学生还是在重做"刚看过答案的同一道题"——把数字背下来就能对，不是真理解。
+
+**解法**：1st 错答后自动从题库找一道：
+  - 同 skill_id（学的概念相同）/ 同 game_type（UI 玩法相同）/ 同 difficulty
+  - 不同 question_id（强迫迁移到新情境）
+  - 用户从未见过的优先（最锐利的"是否真会"测试）
+
+变式题就绪 → "再做一次"时 swap 显示。变式题不存在 → fallback 同题重做。
+`findParallelQuestion` in `src/core/scheduler.ts`，5 个 test。
+
+---
+
+## v0.30.7 — 2026-05-05 · 讲题/重做计分大改 — 防"刷讲题"
+
+**痛点**：错→讲题→对，combo 累积 + summary "全对" + mastery 涨满，跟独立答对几乎一样。重复同题重复讲题重复做对就成了刷分。
+
+**对照表**：
+
+| 维度 | 直接答对 | 自己重做对 | 讲题后做对 | 直接错 |
+|---|---|---|---|---|
+| XP base | 100% | 100% | **70%（v0.30.9 改 50%）** | 20% |
+| Combo +1 | ✓ | ✗ | ✗ | ✗ |
+| 速度奖励 | ✓ | ✗ | ✗ | ✗ |
+| 新 skill +5 | ✓ | ✗ | ✗ | ✗ |
+| Elo actual | 1.0 | 1.0 | **0.5** | 0 |
+| Mistake 入库 | — | ✓（1st 错时）| ✓ | ✓ |
+| Mistake stage 推进 | ✓ | ✗ | ✗ | regress |
+
+核心：combo 是"独立连续答对"勋章；mistake 入库永远基于 1st 错答事实；
+重复"刷讲题"被 repeatDecay 进一步削减（5 次后 0 XP）。
+
+新加 schema 字段：`Attempt.usedTutor` / `Attempt.attemptOrdinal` /
+`MasteryRecentEntry.usedTutor` / `SessionSummary.tutorAssistedCount` /
+`SessionSummary.firstTryCorrectCount`。
+
+结算页加"X 道一遍就对 · X 道讲题后才对"真实统计。
+
+6 个新 scoring test，102 / 102 pass。
+
+---
+
+## v0.30.0 ~ v0.30.6 — 2026-05-04 · Hero 大改 + 题库补强 + 校徽
+
+跨多个迭代：
+
+- **G4B AI 题库补强**：浏览器自动化跑 /api/generate/questions，DashScope qwen-plus
+  出题 18 个 G4B skill 各补 4-12 道。174 道 → 153 入选（去重 + 禁词扫 + answer.type 校验）
+- **AI provider 分流**：chat 用 DashScope（qwen-plus 25s 内可返回），image 用
+  token-plan（wan2.7-image-pro 比 wanx2.1-turbo 强很多）
+- **Hero 重设计**（TierCard.tsx）：BIG 校徽 210px 移右、段位文字捆绑校徽下方、
+  能力诊断折叠、垂直节奏 4-base grid、双 rim 冲突删 CSS ring
+- **校徽 sharpness**：tier badge 压缩 256→512 q=0.92 retina 不糊
+- **Tier badge prompt v2**：勋章圆形 fill 整画面 98%+、内部 tier 主题色径向渐变、
+  绝对禁文字
+- **5 段位校徽 AI 重生成**：用 wan2.7-image-pro 出，全无黑边
+- **Cache key 统一**：Hero / 段位勋章柜 / XP 下小图都用同一 `math_tier_${id}`
+
+---
+
 ## v0.28.0 — 2026-05-04 · 掌握度算法换骨
 
 **核心改动**：mastery 算法重写为 Elo + 滚动窗口 + 难度加权 + Fragility。

@@ -6,6 +6,9 @@ import { mathSubject } from "../subjects/math";
 import { BgGenIndicator } from "./BgGenIndicator";
 import { ensureMascotImage } from "../lib/mascot";
 import { migrateOldTierBadgeKeys } from "../lib/tierBadge";
+import { runScheduledUnlocks, type ScheduledUnlockResult } from "../db/unitUnlock";
+import { UnitUnlockCelebration } from "./UnitUnlockCelebration";
+import { db } from "../db/dexie";
 
 /**
  * Layout：所有 /:subject/* 子路由共用的壳。
@@ -20,6 +23,8 @@ export function Layout() {
   const items = subject.navItems;
   const [chipOpen, setChipOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  // v0.30.10: 进 layout 时检查"按时间自动解锁"的单元；如果有就排队弹庆祝
+  const [pendingUnlockCelebration, setPendingUnlockCelebration] = useState<ScheduledUnlockResult[]>([]);
 
   // 点击外部关闭下拉
   useEffect(() => {
@@ -39,6 +44,20 @@ export function Layout() {
     void ensureMascotImage().catch(() => void 0);
     // v0.30.3 一次性清理 v0.30.2 的旧 _tier_badge_* 键（key 改为 math_tier_*）
     void migrateOldTierBadgeKeys().catch(() => void 0);
+    // v0.30.10: 检查 UNIT_UNLOCK_SCHEDULE，把"今天该解锁但还没解锁"的单元自动开放，
+    // 弹庆祝弹窗。失败不影响主流程（catch 静默）。
+    void (async () => {
+      try {
+        const students = await db.students.toArray();
+        if (!students[0]) return;
+        const newlyUnlocked = await runScheduledUnlocks(students[0].id);
+        if (newlyUnlocked.length > 0) {
+          setPendingUnlockCelebration(newlyUnlocked);
+        }
+      } catch (e) {
+        console.warn("[Layout] runScheduledUnlocks failed:", e);
+      }
+    })();
   }, []);
 
   return (
@@ -170,8 +189,19 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.30.9
+        本地优先 · v0.30.10
       </footer>
+
+      {/* v0.30.10: 自动解锁的单元庆祝（一次弹一个，关掉再弹下一个）*/}
+      {pendingUnlockCelebration.length > 0 && (
+        <UnitUnlockCelebration
+          unitName={pendingUnlockCelebration[0]!.unitName}
+          isScheduled
+          onClose={() =>
+            setPendingUnlockCelebration((qs) => qs.slice(1))
+          }
+        />
+      )}
     </div>
   );
 }
