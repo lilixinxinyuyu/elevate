@@ -25,7 +25,8 @@
  */
 
 import { build } from "esbuild";
-import { writeFileSync, readFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import { writeFileSync, readFileSync, mkdirSync, existsSync, rmSync, statSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +46,12 @@ function parseArgs(argv) {
     apiBase: process.env.ELEVATE_API_BASE || "https://selena-elevate.pages.dev",
     concurrency: 1, // 并发；token-plan 限流，1 最稳
     skipPng: false,
+    // v0.31.7：默认 --push-d1，生成完直接 POST /api/sync/trophy-images
+    // 用户刷新页面即同步到 IndexedDB（pullFromCloud 自动跑）。
+    pushD1: true,
+    // 压缩：512×512 jpeg q=85，~50KB/张（D1 单行 500KB 限制内 + AuthGate
+    // pull 后客户端走 migrateCompressOversizedTrophyImages 兜底）
+    compress: true,
   };
   for (let i = 2; i < argv.length; i++) {
     const x = argv[i];
@@ -67,6 +74,12 @@ function parseArgs(argv) {
         break;
       case "--skip-png":
         a.skipPng = true;
+        break;
+      case "--no-push":
+        a.pushD1 = false;
+        break;
+      case "--no-compress":
+        a.compress = false;
         break;
       case "-h":
       case "--help":
@@ -95,6 +108,8 @@ mode（默认 --missing）:
 opts:
   --concurrency N      并发数 1-3，默认 1（token-plan 限流，3 容易 429）
   --skip-png           不写 png，仅打印 prompt（dry run）
+  --no-push            不自动 POST /api/sync/trophy-images，默认 push
+  --no-compress        不压缩到 512×512 jpeg q=85（默认压缩，单张 ~50KB）
 
 env:
   APP_PASSWORD         Cloudflare Pages 的认证密码（必填）
@@ -173,6 +188,69 @@ async function downloadPng(url) {
   if (!r.ok) throw new Error(`download ${r.status}`);
   const buf = Buffer.from(await r.arrayBuffer());
   return buf;
+}
+
+// ---------------------------------------------------------------------------
+// 压缩 PNG → JPEG（用系统 ImageMagick，512×512 q=85，~50KB/张）
+// ---------------------------------------------------------------------------
+
+function compressToJpeg(pngPath) {
+  const jpgPath = pngPath.replace(/\.png$/, ".jpg");
+  try {
+    execSync(
+      `magick "${pngPath}" -resize 512x512 -quality 85 -strip "${jpgPath}"`,
+      { stdio: "ignore" },
+    );
+    return jpgPath;
+  } catch (e) {
+    console.warn(
+      `  ⚠ compress failed (need ImageMagick \`magick\` in PATH): ${e instanceof Error ? e.message : e}`,
+    );
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 直接 POST 到 D1：用户刷新页面 pullFromCloud 自动拉到 IndexedDB
+// ---------------------------------------------------------------------------
+
+async function pushToD1(apiBase, okOnes) {
+  const allRows = okOnes.map((r) => {
+    const fp = r.jpg ?? r.png;
+    const buf = readFileSync(fp);
+    const ext = fp.endsWith(".jpg") ? "jpeg" : "png";
+    return {
+      trophyId: r.id,
+      subjectId: r.id.startsWith("chinese_") ? "chinese" : "math",
+      imageDataUrl: `data:image/${ext};base64,${buf.toString("base64")}`,
+      prompt: r.prompt,
+      model: r.model,
+      sourceUrl: r.sourceUrl,
+      generatedAt: Date.now(),
+    };
+  });
+  let totalAccepted = 0;
+  const allRejected = [];
+  // /api/sync/trophy-images 限 30 行/批，但稳妥用 10
+  for (let i = 0; i < allRows.length; i += 10) {
+    const batch = allRows.slice(i, i + 10);
+    const r = await fetch(`${apiBase}/api/sync/trophy-images`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.APP_PASSWORD}`,
+      },
+      body: JSON.stringify({ rows: batch }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`POST trophy-images ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const j = await r.json();
+    totalAccepted += j.accepted ?? 0;
+    if (j.rejected) allRejected.push(...j.rejected);
+  }
+  return { accepted: totalAccepted, rejected: allRejected };
 }
 
 // ---------------------------------------------------------------------------
@@ -263,8 +341,13 @@ async function main() {
       const buf = await downloadPng(url);
       const png = join(OUT_DIR, `${t.id}.png`);
       writeFileSync(png, buf);
-      results.push({ id: t.id, ok: true, png, prompt, model, sourceUrl: url });
-      console.log(`✓ (${(buf.length / 1024).toFixed(0)} KB, ${model})`);
+      // v0.31.7：压缩到 512×512 jpeg q=85（D1 单行 500KB 限制 + 浏览器 IndexedDB 不爆）
+      let jpg = null;
+      if (args.compress) {
+        jpg = compressToJpeg(png);
+      }
+      results.push({ id: t.id, ok: true, png, jpg, prompt, model, sourceUrl: url });
+      console.log(`✓ (${(buf.length / 1024).toFixed(0)} KB png${jpg ? ` → ${(statSync(jpg).size / 1024).toFixed(0)} KB jpg` : ""}, ${model})`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       results.push({ id: t.id, ok: false, error: msg, prompt });
@@ -272,13 +355,22 @@ async function main() {
     }
   }
 
-  // 写 _import.js
+  // 写 _import.js（用压缩 jpg 如果有）
   const okOnes = results.filter((r) => r.ok && !r.dryRun);
   if (okOnes.length > 0) {
     const importJs = buildImportJs(okOnes);
     const importPath = join(OUT_DIR, "_import.js");
     writeFileSync(importPath, importJs);
     console.log(`\n→ 写好 ${importPath}`);
+  }
+
+  // v0.31.7：默认直接 push 到 D1 — 用户刷新页面就同步到 IndexedDB（pullFromCloud）
+  if (args.pushD1 && okOnes.length > 0) {
+    console.log(`\n→ POST /api/sync/trophy-images (${okOnes.length} 张)`);
+    const r = await pushToD1(args.apiBase, okOnes);
+    console.log(
+      `  accepted=${r.accepted} rejected=${r.rejected.length}${r.rejected.length ? "  详: " + JSON.stringify(r.rejected) : ""}`,
+    );
   }
 
   // 写 _summary.json
@@ -305,9 +397,15 @@ async function main() {
   console.log(
     `      APP_PASSWORD=$APP_PASSWORD node scripts/regenerate-trophies.mjs --ids <ID1,ID2>`,
   );
-  console.log(
-    `   3. 全合格：复制 ${OUT_DIR}/_import.js 到 selena 浏览器 console 粘贴`,
-  );
+  if (args.pushD1) {
+    console.log(
+      `   3. 已 push 到 D1。Selena 刷新 https://selena-elevate.pages.dev/math 即可（pullFromCloud 自动同步）。`,
+    );
+  } else {
+    console.log(
+      `   3. --no-push 模式：复制 ${OUT_DIR}/_import.js 到 selena 浏览器 console 粘贴`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
