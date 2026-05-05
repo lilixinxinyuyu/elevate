@@ -1,6 +1,8 @@
 # Phase 2 — 多步骤化 + Fluency + 自动化
 
-> 起草 2026-05-05，跟父亲讨论后确认。期中考 5/6，**5/7 之后开始实施**。
+> 起草 2026-05-05，跟父亲讨论后确认。**立刻开始实施**（不等期中考完）。
+> Axis 4 build-only 零 runtime 影响今晚先动；Axis 3/1/2 涉及 runtime 用
+> feature flag 攒着，5/6 期中后给 Selena flip 开。
 > 触发：分析锦江 / 盐道街 2024-2025 期中真题，发现当前游戏化只覆盖单知识点，
 > 缺少多步应用题、画图操作题、跨单元基础功（fluency）。
 
@@ -157,12 +159,18 @@ skill 映射。**等多模态视觉能力上来再做**。
 
 ## 实施顺序（已确认）
 
-1. **Axis 4 CLI 自动化** — 1.5-2 天 → 后面所有改动都受益
-2. **Axis 3 Fluency** — 2-3 天 → Selena 用上几周内见效最快
-3. **Axis 1 大题营** — 1-2 天 → 用 Axis 4 generator 批量出题
-4. **Axis 2 Canvas 画图** — 2 天 → 期末前补完即可
+1. **Axis 4 CLI 自动化** — 1.5-2 天 → 后面所有改动都受益。**今晚先动**（build-only 零 runtime 影响）
+2. **Axis 3 Fluency** — 2-3 天 → Selena 用上几周内见效最快。代码先 ship，UI 入口用 feature flag 隐藏到 5/6 期中后
+3. **Axis 1 大题营** — 1-2 天 → 用 Axis 4 generator 批量出题。同 feature flag 套路
+4. **Axis 2 Canvas 画图** — 2 天 → 同 feature flag 套路
 
 **总计** ~7-9 个工作日。
+
+## Feature flag 约定
+
+新模式入口（Fluency / 大题营 / Canvas 画图）入口在 navItems 里用 `subtle: true` 加个开关变量
+`PHASE2_LIVE`（环境变量或 localStorage flag）控制是否对 Selena 可见。开发期父亲设备开启验证；
+Selena 期中前完全看不到。期中考完 5/6 晚上 flip 开。
 
 ## 关键 invariant（开发时不能违反）
 
