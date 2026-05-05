@@ -121,3 +121,4 @@ window.location.reload();  // 会重新从 cloud 全量拉
 | v0.30.0 | trophyImages 跟主 snapshot 一起 → 太大 | 拆独立 endpoint /api/sync/trophy-images |
 | v0.30.14 | SEED_VERSION 没 bump → 现有 user 不下载新题 | 加题必 bump（脚本自动） |
 | v0.31.8 | useTrophyImage 不响应式 → 刷新后新图不显示 | useLiveQuery 替代 useEffect 一次性读 |
+| v0.31.9 | locked tiered trophy 显示 emoji 而非 grayscale AI 图 | TrophyWall 给 tier 加默认 "bronze"（仅 tiered trophies），让 locked 状态预览 bronze 图灰版 |
