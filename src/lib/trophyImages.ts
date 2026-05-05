@@ -209,9 +209,11 @@ const TROPHY_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
 
   // 6 单元闯关印章 — 每个 unit 一个独特视觉主题（数学符号 + 战旗/印章感）
   math_boss_G4B_U1_DECIMAL_ADD_SUB_master: {
+    // v0.31.7：上一版生成出来底部 banner 带英文 "1 CONQUET SEAL" → NO TEXT 违规。
+    // 删除 ribbon banner（AI 一画 banner 就忍不住塞文字），改用纯几何元素。
     motif:
-      "an ornate golden seal stamp with a glowing decimal point at center, crossed plus and minus signs forming an X behind it, ribbon banner draped at the bottom — unit 1 conquest seal",
-    palette: "deep amber seal + warm cream + ruby ribbon + glowing gold decimal",
+      "an embossed circular medallion divided into four quadrants by a glowing decimal point at the very center; top-left quadrant shows a stylized golden plus sign, top-right shows a minus sign, bottom-left shows another plus, bottom-right shows another minus — symmetrical decimal arithmetic seal. NO ribbons, NO banners, NO text panels",
+    palette: "deep amber + warm cream + glowing gold decimal point center",
   },
   math_boss_G4B_U2_TRI_QUAD_master: {
     motif:
