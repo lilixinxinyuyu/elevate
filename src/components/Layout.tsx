@@ -5,6 +5,7 @@ import { ORDERED_SUBJECT_IDS, SUBJECTS } from "../subjects";
 import { mathSubject } from "../subjects/math";
 import { BgGenIndicator } from "./BgGenIndicator";
 import { ensureMascotImage } from "../lib/mascot";
+import { migrateOldTierBadgeKeys } from "../lib/tierBadge";
 
 /**
  * Layout：所有 /:subject/* 子路由共用的壳。
@@ -36,6 +37,8 @@ export function Layout() {
   // 缓存命中就立刻 return，缺失才 fetch image。失败 fallback emoji 不影响主流程。
   useEffect(() => {
     void ensureMascotImage().catch(() => void 0);
+    // v0.30.3 一次性清理 v0.30.2 的旧 _tier_badge_* 键（key 改为 math_tier_*）
+    void migrateOldTierBadgeKeys().catch(() => void 0);
   }, []);
 
   return (
@@ -167,7 +170,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.30.2
+        本地优先 · v0.30.3
       </footer>
     </div>
   );

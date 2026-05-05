@@ -1,19 +1,19 @@
 /**
  * 段位校徽图——hero 卡 + 段位勋章柜共用。
  *
- * 第一次进入 hero 时（每段都触发一次） ensureTierBadgeImage 会去后台生成 + 缓存。
- * 缓存命中：渲染真实 AI 图。未命中：fallback 到 emoji，不阻塞 UI。
+ * v0.30.3 重构：cache key 统一到 `math_tier_${tierId}`（跟 BadgeInventory /
+ * TrophyIcon 同源）。第一次进入 hero 会触发 ensureTrophyImage 生成 + 缓存到
+ * db.trophyImages。命中后 BadgeInventory 也立刻显示同一张图。
  *
- * 入场动画：mount 时跑 `animate-badge-enter`，scale 从 0.55→1.08→1（弹性回正）
- * + 微旋转。hover：scale-110 + ring-glow + 7°小摆动。
- *
- * 注：动画类只跑一次（key={tierId}），切换段位时重新挂载 → 重新跑动画。
+ * 入场：mount 时 animate-badge-enter（弹性缩放 + 微旋转）。
+ * hover：scale-110 + 描边发光 + 7° 摆动（interactive=true 时）。
+ * 切换段位：key={tierId} 重新挂载 → 重新跑入场动画（升级视觉冲击）。
  */
 
 import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
-import { ensureTierBadgeImage } from "../lib/tierBadge";
+import { ensureTierBadgeImage, tierBadgeImageKey } from "../lib/tierBadge";
 
 interface Props {
   /** 段位 id：school / district / city / province / country */
@@ -28,6 +28,8 @@ interface Props {
   className?: string;
   /** 透传给 img 的 alt */
   alt?: string;
+  /** 形状：默认 circle；hero 大块 badge 想要圆角矩形可以传 "rounded" */
+  shape?: "circle" | "rounded";
 }
 
 export function TierBadgeImg({
@@ -37,10 +39,11 @@ export function TierBadgeImg({
   interactive = false,
   className = "",
   alt,
+  shape = "circle",
 }: Props) {
-  // useLiveQuery：缓存写入后自动刷新组件。trophyImages 表里 _tier_badge_<id> 一行
+  // useLiveQuery：缓存写入后自动刷新组件
   const cached = useLiveQuery(
-    () => db.trophyImages.get(`_tier_badge_${tierId}`),
+    () => db.trophyImages.get(tierBadgeImageKey(tierId)),
     [tierId],
   );
   const [isHovering, setIsHovering] = useState(false);
@@ -52,8 +55,10 @@ export function TierBadgeImg({
 
   const src = cached?.imageDataUrl ?? null;
 
+  const radiusClass = shape === "circle" ? "rounded-full" : "rounded-2xl";
   const wrapClass = [
-    "inline-flex items-center justify-center rounded-full overflow-hidden shrink-0",
+    "inline-flex items-center justify-center overflow-hidden shrink-0",
+    radiusClass,
     interactive ? "transition-all duration-300" : "",
     interactive
       ? "ring-1 ring-white/15 hover:ring-2 hover:ring-white/40 hover:shadow-glow"
@@ -63,7 +68,7 @@ export function TierBadgeImg({
     className,
   ].filter(Boolean).join(" ");
 
-  // 用 key={tierId} 让切换段位时重新挂载，重新跑动画
+  // key={tierId} 让切换段位时重新挂载 → 重跑入场动画
   return (
     <span
       key={tierId}
@@ -87,11 +92,11 @@ export function TierBadgeImg({
           draggable={false}
         />
       ) : (
-        // fallback：emoji。约 size*0.7 字号让它在圆里居中合适
+        // fallback：emoji。size*0.55 字号让它在大的 badge 框里也居中合适
         <span
           aria-hidden="true"
           className="leading-none select-none"
-          style={{ fontSize: Math.round(size * 0.7) }}
+          style={{ fontSize: Math.round(size * (size > 60 ? 0.45 : 0.65)) }}
         >
           {fallbackEmoji}
         </span>

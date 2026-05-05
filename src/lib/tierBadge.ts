@@ -1,113 +1,83 @@
 /**
- * 段位校徽图——5 段每一段一张专属徽章图。
+ * 段位校徽图——统一入口（Hero + BadgeInventory + 任何用到段位徽章的地方共用一张）。
  *
- * 形象：
- *   - school   小学校徽（书本 + 太阳 + 草 + 蓝色调，温馨童趣）
- *   - district 区级徽章（成都府南河水波 + 翠竹，绿色调）
- *   - city     市级徽章（武侯祠飞檐 + 大熊猫 + 茶器，紫色调）
- *   - province 省级徽章（憨态熊猫抱竹 + 山峦，琥珀金色调）
- *   - country  国家级徽章（凤凰展翅 + 长城云海 + 星辰，红金色调）
+ * v0.30.3 重构：之前自己写了一套 `_tier_badge_${id}` key，跟旧有的
+ * BadgeInventory 用的 `math_tier_${id}` 完全分开 —— 同一段位有 2 张图。
+ * 现在统一到 BadgeInventory 的 key 体系上：
+ *   - cache key:        `math_tier_${tierId}`
+ *   - prompt builder:   trophyImages.ts 里 `buildTierBadgePrompt` (复用)
+ *   - 触发生成:          ensureTrophyImage(meta) (trophyImages.ts)
  *
- * 缓存策略复用 db.trophyImages（trophyId 加 `_tier_badge_` 前缀）。
- * 第一次摸到立即生成；缓存命中直接 return。失败 fallback 到 emoji。
- *
- * 风格基线：圆形浮雕徽章 / 金属包边 / 适度发光。**严禁文字、数字、字母、Logo**。
+ * 这样 hero 触发的生成立刻在 BadgeInventory 也显示，不用重复生成。
  */
 
 import { db } from "../db/dexie";
-import { generateImage } from "./tutor";
+import { ensureTrophyImage, type TrophyMeta } from "./trophyImages";
+import { TIERS } from "../core/tiers";
 
-const NEG_PROMPT =
-  "**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO LOGOS, NO SIGNATURES, NO WATERMARKS, NO STAMPS, NO TYPOGRAPHY, NO CALLIGRAPHY, NO STROKES OF ANY GLYPH SHAPE.**";
+/** 把 tierId 转成 TrophyMeta，统一塞给 ensureTrophyImage（走 buildTierBadgePrompt） */
+function tierMeta(tierId: string): TrophyMeta {
+  const tier = TIERS.find((t) => t.id === tierId);
+  return {
+    id: `math_tier_${tierId}`,
+    subjectId: "math",
+    name: tier?.badgeName ?? "段位徽章",
+    icon: tier?.badgeIcon ?? "🏅",
+    description: tier?.badgeDesc ?? "",
+    rare: true,
+  };
+}
 
-const STYLE_BASE =
-  "clean centered round metallic emblem, polished embossed relief, soft inner glow, premium app icon quality, render only the badge centered on transparent or solid contrasting background, vibrant but tasteful palette, Apple Fitness award level finish, hyperrealistic detail, no text whatsoever";
-
-/**
- * 5 段位的专属 prompt。每条都是手工调过的"图像主体描述 + 调色 + 风格"。
- */
-const TIER_BADGE_PROMPTS: Record<string, string> = {
-  school:
-    "A cute primary-school crest: a glowing pastel blue and cream circular medal with embossed open book and tiny rising sun in the center, four young green leaves around the rim, sparkles. Childlike, warm, friendly. Palette: sky blue + cream + soft amber + leaf green. " +
-    STYLE_BASE,
-  district:
-    "An emerald-green regional emblem: a polished circular medal with stylized river ripples in the center wrapping around a slender bamboo stalk, surrounded by a thin gold rim. Refined, calm, growing. Palette: deep emerald + jade + soft gold. " +
-    STYLE_BASE,
-  city:
-    "A violet city-scale emblem: a circular polished medal with a tiny bonsai-like panda silhouette beside an upward-curving traditional Chinese eave (Wuhou Shrine inspired), a teacup glow at the bottom rim. Mystical, refined. Palette: deep violet + fuchsia accents + brushed silver. " +
-    STYLE_BASE,
-  province:
-    "An amber-gold provincial emblem: a polished circular medal showing a chubby panda hugging green bamboo with stylized misty Sichuan mountains behind, surrounded by a thick gold rim with tiny stars. Heroic, warm. Palette: amber + honey gold + jade green. " +
-    STYLE_BASE,
-  country:
-    "A national-level emblem: a polished round medal with a golden phoenix in flight over abstract Great Wall layers and starburst, deep ruby + gold rim. Legendary, regal. Palette: ruby red + radiant gold + ivory highlights. " +
-    STYLE_BASE,
-};
-
-const PREFIX = "_tier_badge_";
-
-/**
- * 取段位校徽图：缓存命中直接返回，缺失就生成 + 持久化。
- *
- * 失败返回 null（调用方 fallback 到 emoji）。**不抛异常**，让 hero 不崩。
- */
+/** 取段位校徽图：缓存命中直接用，缺失就走 ensureTrophyImage 生成 + 持久化 */
 export async function ensureTierBadgeImage(tierId: string): Promise<string | null> {
-  const id = `${PREFIX}${tierId}`;
-  const cached = await db.trophyImages.get(id);
-  if (cached?.imageDataUrl) return cached.imageDataUrl;
-
-  const prompt = TIER_BADGE_PROMPTS[tierId];
-  if (!prompt) return null;
-  const fullPrompt = `${prompt}\n\n${NEG_PROMPT}`;
   try {
-    const r = await generateImage({ prompt: fullPrompt, size: "512*512", n: 1 });
-    const url = r.urls[0];
-    if (!url) throw new Error("generateImage returned 0 urls");
-    const blob = await (await fetch(url)).blob();
-    const dataUrl = await blobToDataUrl(blob);
-    await db.trophyImages.put({
-      trophyId: id,
-      subjectId: "math",
-      imageDataUrl: dataUrl,
-      sourceUrl: url,
-      prompt: fullPrompt,
-      model: r.model,
-      generatedAt: Date.now(),
-      isLottery: false,
-    });
-    return dataUrl;
+    const r = await ensureTrophyImage(tierMeta(tierId));
+    return r.imageDataUrl;
   } catch (e) {
     console.warn(`[tierBadge] ${tierId} generation failed`, e);
     return null;
   }
 }
 
-/**
- * 后台批量补 5 段位的图——admin 提供"重新生成所有段位徽章"的入口。
- * 顺序串行（图像生成本来就慢，不并发免得撞 quota）。
- */
+/** 后台批量补 5 段位的图。串行避免撞 quota */
 export async function ensureAllTierBadgeImages(): Promise<Record<string, string | null>> {
   const out: Record<string, string | null> = {};
-  for (const id of Object.keys(TIER_BADGE_PROMPTS)) {
-    out[id] = await ensureTierBadgeImage(id);
+  for (const tier of TIERS) {
+    out[tier.id] = await ensureTierBadgeImage(tier.id);
   }
   return out;
 }
 
 /** 重新生成单个段位徽章（admin 不喜欢这次的可以重抽） */
 export async function regenerateTierBadge(tierId: string): Promise<string | null> {
-  await db.trophyImages.delete(`${PREFIX}${tierId}`);
+  await db.trophyImages.delete(`math_tier_${tierId}`);
   return ensureTierBadgeImage(tierId);
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("FileReader result not string"));
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+/**
+ * v0.30.3 一次性清理：删掉 v0.30.2 生成的 `_tier_badge_*` 旧 key 的图（如有）。
+ * 它们用了不同 prompt，跟 BadgeInventory 不一致，一次性清掉让两边对齐。
+ *
+ * 调用一次（用 meta key 标记跑过）就 return。
+ */
+export async function migrateOldTierBadgeKeys(): Promise<{ deleted: number }> {
+  const ACK_KEY = "tierBadge::oldKeyMigration::v0303";
+  const ack = await db.meta.get(ACK_KEY);
+  if (ack?.value === true) return { deleted: 0 };
+  let deleted = 0;
+  for (const tier of TIERS) {
+    const oldId = `_tier_badge_${tier.id}`;
+    const row = await db.trophyImages.get(oldId);
+    if (row) {
+      await db.trophyImages.delete(oldId);
+      deleted += 1;
+    }
+  }
+  await db.meta.put({ key: ACK_KEY, value: true });
+  return { deleted };
+}
+
+/** 给定 tierId 拿当前 cache 的 dataUrl（同步——不触发生成；用于已知有缓存的场景） */
+export function tierBadgeImageKey(tierId: string): string {
+  return `math_tier_${tierId}`;
 }
