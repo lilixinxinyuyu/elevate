@@ -158,6 +158,95 @@ describe("computeAbilityDiagnostic (composite for admin)", () => {
     expect(a.raw.weightedMastery).toBeLessThanOrEqual(65);
     expect(a.raw.rawWeightedMastery).toBeGreaterThanOrEqual(90);
   });
+
+  // v0.30.12: volume 重写为 skill coverage（防姊妹题刷分）
+  describe("volume = skill coverage v0.30.12", () => {
+    it("1 skill 100 道独立答对 → coverage 仅 5 分（强反 farm）", () => {
+      const attempts: Attempt[] = [];
+      for (let i = 0; i < 100; i++) {
+        attempts.push(mkAttempt({
+          isCorrect: true,
+          skillId: "decimal_meaning_place",
+          questionId: `unique_q_${i}`, // 100 个 unique question ID
+        }));
+      }
+      const a = computeAbilityDiagnostic(attempts, [], null, NOW);
+      expect(a.raw.skillCoverageScore).toBe(5); // 1 skill × min(5, 100) = 5
+      expect(a.components.volume).toBe(5);
+    });
+
+    it("30 skill × 5 道独立答对 → coverage 满分 150", () => {
+      const attempts: Attempt[] = [];
+      for (let s = 0; s < 32; s++) {
+        for (let q = 0; q < 5; q++) {
+          attempts.push(mkAttempt({
+            isCorrect: true,
+            skillId: `skill_${s}`,
+            questionId: `s${s}_q${q}`,
+          }));
+        }
+      }
+      const a = computeAbilityDiagnostic(attempts, [], null, NOW);
+      // 32 skill × 5 = 160 → cap 150
+      expect(a.raw.skillCoverageScore).toBe(160);
+      expect(a.components.volume).toBe(150);
+    });
+
+    it("30 skill × 1 道独立答对 → coverage 30 分（有广度但浅）", () => {
+      const attempts: Attempt[] = [];
+      for (let s = 0; s < 30; s++) {
+        attempts.push(mkAttempt({
+          isCorrect: true,
+          skillId: `skill_${s}`,
+          questionId: `s${s}_q0`,
+        }));
+      }
+      const a = computeAbilityDiagnostic(attempts, [], null, NOW);
+      expect(a.raw.skillCoverageScore).toBe(30);
+      expect(a.components.volume).toBe(30);
+    });
+
+    it("错答不算入 coverage（只 unique correct 才算）", () => {
+      const attempts: Attempt[] = [];
+      for (let i = 0; i < 30; i++) {
+        attempts.push(mkAttempt({
+          isCorrect: false,
+          skillId: "decimal_meaning_place",
+          questionId: `wrong_${i}`,
+        }));
+      }
+      const a = computeAbilityDiagnostic(attempts, [], null, NOW);
+      expect(a.raw.skillCoverageScore).toBe(0);
+      expect(a.components.volume).toBe(0);
+    });
+
+    it("同一道题答对多次只算 1 道（去重 questionId）", () => {
+      const attempts: Attempt[] = [];
+      for (let i = 0; i < 50; i++) {
+        attempts.push(mkAttempt({
+          isCorrect: true,
+          skillId: "decimal_meaning_place",
+          questionId: "same_question",
+        }));
+      }
+      const a = computeAbilityDiagnostic(attempts, [], null, NOW);
+      expect(a.raw.uniqueQuestionsCorrect).toBe(1);
+      expect(a.raw.skillCoverageScore).toBe(1);
+    });
+  });
+
+  // v0.30.12: 准确率把 tutor-correct 算 0.5（防讲题刷高准确率）
+  it("tutor-correct 在 7 天准确率里只算 0.5", () => {
+    const attempts: Attempt[] = [
+      mkAttempt({ isCorrect: true, daysAgo: 1 }),
+      mkAttempt({ isCorrect: true, daysAgo: 1, usedTutor: true }),
+      mkAttempt({ isCorrect: true, daysAgo: 1, usedTutor: true }),
+      mkAttempt({ isCorrect: false, daysAgo: 1 }),
+    ];
+    const a = computeAbilityDiagnostic(attempts, [], null, NOW);
+    // (1 + 0.5 + 0.5) / 4 = 0.5
+    expect(a.raw.accuracy7d).toBeCloseTo(0.5, 5);
+  });
 });
 
 describe("TIERS (XP scale)", () => {

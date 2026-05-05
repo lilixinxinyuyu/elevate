@@ -28,6 +28,12 @@ export interface ScoreInput {
    *     即"自己想通了再做对"——还是给 base XP（独立学习），但没 combo/速度。
    */
   attemptOrdinal?: 1 | 2;
+  /**
+   * v0.30.12: 本 skill 历史已答对题数（含本次之前的所有 correct attempt）。
+   * 用于 siblingDecayMultiplier 防"姊妹题刷分"。
+   * 不传时 default 0（=学习期，全分）。
+   */
+  skillCorrectCount?: number;
 }
 
 export interface ScoreDelta {
@@ -68,6 +74,36 @@ export function repeatDecayMultiplier(priorCorrectCount: number): number {
   if (priorCorrectCount < 0) return 1.0;
   if (priorCorrectCount >= REPEAT_DECAY.length) return 0;
   return REPEAT_DECAY[priorCorrectCount] ?? 0;
+}
+
+/**
+ * v0.30.12: skill-sibling 衰减——防"姊妹题刷分"。
+ *
+ * 同一 skill 累计已答对 N 题（不同 question_id 但同 skill+难度+题型本质相同）后，
+ * 再做"姊妹题"的 XP 递减：
+ *   0-7   → 1.0  学习期，给满分
+ *   8-14  → 0.7  巩固期
+ *   15-22 → 0.4  熟练期
+ *   23+   → 0.2  深度饱和（已经掌握，再刷不加多少分）
+ *
+ * 跟 repeatDecay（同一题 ID 衰减）叠加：repeatDecay × siblingDecay
+ *
+ * 注：这里只看同 skillId 的历史 correct count（不细到难度/题型），简化实现。
+ * 难度差异通过 difficultyMul 在 base 公式里已经体现。
+ */
+export const SIBLING_DECAY: Array<{ upTo: number; mul: number }> = [
+  { upTo: 7, mul: 1.0 },
+  { upTo: 14, mul: 0.7 },
+  { upTo: 22, mul: 0.4 },
+  { upTo: Infinity, mul: 0.2 },
+];
+
+export function siblingDecayMultiplier(skillCorrectCount: number): number {
+  if (skillCorrectCount <= 0) return 1.0;
+  for (const { upTo, mul } of SIBLING_DECAY) {
+    if (skillCorrectCount <= upTo) return mul;
+  }
+  return 0.2;
 }
 
 /**
@@ -135,11 +171,17 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
   // 重做递减：只对答对的题应用（错答本来就只拿 0.2× base 极少分，不再扣）
   const repeatDecay = isCorrect ? repeatDecayMultiplier(input.priorCorrectCount ?? 0) : 1.0;
 
+  // v0.30.12: skill-sibling 衰减 —— 同 skill 累计 correct 太多了再刷"姊妹题"也降权
+  // 跟 repeatDecay 叠加：repeatDecay × siblingDecay
+  const siblingDecay = isCorrect
+    ? siblingDecayMultiplier(input.skillCorrectCount ?? 0)
+    : 1.0;
+
   // 新知识点首次答对：固定 +5 XP（不受 decay 影响）。tutor-assisted 不算"学到了"
   const newSkillBonus = (isCorrect && input.isNewSkill && !tutorAssisted) ? NEW_SKILL_BONUS : 0;
 
   // 答错保持原 1 分下限；答对走 decay 后允许为 0（5+ 次纯刷不给分）
-  const decayed = raw * comboMul * repeatDecay;
+  const decayed = raw * comboMul * repeatDecay * siblingDecay;
   const totalRaw = decayed + newSkillBonus;
   const total = isCorrect
     ? Math.max(0, Math.round(totalRaw))

@@ -191,11 +191,11 @@ export function TierCard({
                 subTone={t.theme.subTextColor}
               />
               <AbilityMini
-                label="题量"
-                title="本学期总答题数"
+                label="覆盖"
+                title={`覆盖广度（每 skill 最多贡献 5 道独立答对，最大 150）。\n反"姊妹题刷分"：1 skill 100 道也只 5 分；30 skill 各 5 道 = 150 满分。`}
                 value={ability.components.volume}
                 max={150}
-                rawDisplay={`${ability.raw.totalAttempts} 题`}
+                rawDisplay={`${ability.raw.skillCoverageScore} 分 · ${ability.raw.uniqueQuestionsCorrect} 独立答对`}
                 tone={t.theme.textColor}
                 subTone={t.theme.subTextColor}
               />

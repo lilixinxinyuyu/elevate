@@ -3,6 +3,51 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.30.12 — 2026-05-05 · 防刷分三层护栏 + 60 道 U1-U4 + Trophy 文字 bug 修
+
+**痛点**：用户观察到 Selena 已经在"姊妹题刷分"——同 skill 同难度不同 question_id 来回刷。
+旧 scoring 只对同一题 ID 衰减，不同题就给满分；Elo 慢慢爬；能力诊断"题量"
+log(totalAttempts) 也是被刷上限 87%。
+
+**3 层护栏全部上线**：
+
+1. **`siblingDecayMultiplier` (XP 维度)** — 同 skill 历史 correct 数：
+   0-7 满分 / 8-14 7折 / 15-22 4折 / 23+ 2折（永远 0.2，留少量鼓励）。
+   跟 `repeatDecay`（同题 ID）叠乘——双层衰减。
+
+2. **`ELO_DOMINANT_DELTA = 300` (Mastery 维度)** — 学生 Elo > 题目 Elo + 300 时，
+   答对完全不涨 Elo（之前自然衰减仍允许 +4-7 慢爬）；答错仍正常降。
+
+3. **能力诊断"题量"→"覆盖广度"** — 旧 log(totalAttempts) → 新 sum across skills
+   of min(5, uniqueCorrectInSkill) 封顶 150。1 skill 100 道只 5 分；30 skill ×
+   5 道才满分。tutor-correct 在 7 天准确率里也只算 0.5 跟 mastery 一致。
+
+**G4B U1-U4 必考 skill 补强 60 道**（src/content/aiGenG4B_U14_Pack.ts）：
+- 11 个必考 skill 缺口 49 道，浏览器自动跑 /api/generate/questions 4 并发
+- 9 skill 全部达标；2 skill（decimal_mul_mix / decimal_work_total）LLM 反复
+  超时（应用题复杂），先空着，后续 admin 手补
+- 60/68 入库（8 个 dups），D2:18 / D3:8 / D4:34
+
+**Trophy 文字 bug 大修**：
+- 之前 commemorative prompt 用「${t.name}」 → AI 把 "第一步"/"期中加冕" 等中
+  文名当 TEXT 渲染进图（4/4 全失败！）
+- v0.30.12 加 COMMEMORATIVE_MOTIF_SPEC 4 个纯英文视觉描述，删 t.name 引用
+- 4 张 commemorative 重生成全验：完全无中文 ✅
+
+**测试**：132 → 138 pass（+6 ability test、+5 sibling test、+7 elo cap test、+5 unitUnlock 已有）
+
+---
+
+## v0.30.11 — 2026-05-05 · subrank_up + 五角星放胖 + 钻档动画 + 全 trophy 重做
+
+- subrank_up 勋章（daily counter）：每升小段 +1
+- commemorative 五角星 inner radius 18.6% → 30%（AI 图可见 50% → 75%）
+- 钻档 3 层叠加动画（shimmer + shimmerPulse + shimmerSweep）
+- buildTrophyPrompt v2 强制 fill canvas 98%+，删 8% 边距
+- 浏览器跑 wan2.7-image-pro 重做 77 张 trophy 图（74 一次过 + 3 retry 都成）
+
+---
+
 ## v0.30.10 — 2026-05-05 · 学期进度自动解锁 + 期中/期末勋章
 
 **学期进度自动解锁排期**（`src/db/unitUnlock.ts`）：

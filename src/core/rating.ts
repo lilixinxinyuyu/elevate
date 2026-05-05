@@ -175,6 +175,23 @@ export function computeRating(
 }
 
 // ============ 能力诊断（给家长 admin 用，0-1000 综合分）============
+//
+// v0.30.12 重写：参考 Khan Academy 的 "% skills mastered" + iOS Elevate 的
+// 多游戏覆盖度，把"题量"换成"覆盖广度"——防"姊妹题刷分"虚高。
+//
+// 旧 volume = log10(totalAttempts) × 60 - 50：1000 道全是同 skill 的姊妹题也能
+// 拿 130/150（87%）。Selena 已经接近 1000 题，再练就刷分。
+//
+// 新 volume（components 字段名沿用，避免破坏 sync schema）实际语义是"覆盖广度"：
+//   每个 skill 最多贡献 5 分（按 unique correct 数封顶），
+//   累加所有 skill = min(150, sum)。
+//
+// 后果：
+//   - 1 skill 30 道 unique 正确  →  5/150  = 3%  （强烈反 farm）
+//   - 30 skills × 5 unique 正确  →  150/150 = 100%（覆盖完美）
+//   - 30 skills × 1 unique 正确  →  30/150  = 20% （有广度但浅）
+//
+// 跟之前比，sister-question 刷分基本被堵死。学习健康度反而更准。
 
 export interface AbilityDiagnostic {
   /** 综合能力分 0-1000（独立于 XP 的"质量"指标） */
@@ -190,18 +207,25 @@ export interface AbilityDiagnostic {
     streak: number;
     cumulativeDays: number;
     totalAttempts: number;
+    /** v0.30.12: 总 unique 答对题数（去重 questionId）。给家长展示用，比 totalAttempts 诚实 */
+    uniqueQuestionsCorrect: number;
+    /** v0.30.12: 覆盖广度积分 = sum across skills of min(5, uniqueCorrectInSkill). 0-150 */
+    skillCoverageScore: number;
   };
 }
 
 const ACC_BASE = 0.5;
 const ACC_MAX = 250;
-const ACC_WARMUP = 100;
 const MASTERY_MAX = 400;
 const MASTERY_MULT = 4;
 const MASTERY_BASE_CAP = 40;
 const UNIQUE_Q_PER_LEVEL = 5;
 const CONT_MAX = 200;
 const VOL_MAX = 150;
+/** v0.30.12: 单 skill 对覆盖度的最大贡献（unique correct 数封顶）—— 反"姊妹题刷分"的核心 */
+const SKILL_COVERAGE_CAP_PER_SKILL = 5;
+/** v0.30.12: warmup 用 unique correct 数（不是 totalAttempts），防刷量充满 warmup */
+const ACC_WARMUP_UNIQUE = 30;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -216,15 +240,27 @@ export function computeAbilityDiagnostic(
   const filteredAttempts = term ? filterByTerm(attempts, term) : attempts;
   const filteredMastery = term ? filterByTerm(mastery, term) : mastery;
 
+  // v0.30.12: 准确率算 effective correct（tutor-correct 0.5 半信半疑），
+  // 跟 mastery weighted accuracy 一致，防"用 tutor 刷高准确率"
   const cutoff7d = now - 7 * 24 * 60 * 60 * 1000;
   const recent = filteredAttempts.filter((a) => a.createdAt >= cutoff7d);
-  const acc7d = recent.length === 0 ? 0 : recent.filter((a) => a.isCorrect).length / recent.length;
+  let recentEffectiveCorrect = 0;
+  for (const a of recent) {
+    if (!a.isCorrect) continue;
+    recentEffectiveCorrect += a.usedTutor ? 0.5 : 1;
+  }
+  const acc7d = recent.length === 0 ? 0 : recentEffectiveCorrect / recent.length;
 
-  // 独立题数封顶 mastery
+  // 独立题数封顶 mastery + 计 unique correct per skill（v0.30.12 给 coverage 用）
   const uniqueQByskill = new Map<string, Set<string>>();
+  const uniqueCorrectByskill = new Map<string, Set<string>>();
   for (const a of filteredAttempts) {
     if (!uniqueQByskill.has(a.skillId)) uniqueQByskill.set(a.skillId, new Set());
     uniqueQByskill.get(a.skillId)!.add(a.questionId);
+    if (a.isCorrect) {
+      if (!uniqueCorrectByskill.has(a.skillId)) uniqueCorrectByskill.set(a.skillId, new Set());
+      uniqueCorrectByskill.get(a.skillId)!.add(a.questionId);
+    }
   }
   let totalW = 0, weightedSum = 0, rawSum = 0, skillCount = 0;
   for (const m of filteredMastery) {
@@ -258,11 +294,23 @@ export function computeAbilityDiagnostic(
   }
 
   const totalAttempts = filteredAttempts.length;
-  const warmup = Math.min(1, totalAttempts / ACC_WARMUP);
+
+  // v0.30.12: warmup 用 unique correct 数，防"刷量充满 warmup"
+  let uniqueQuestionsCorrect = 0;
+  uniqueCorrectByskill.forEach((s) => (uniqueQuestionsCorrect += s.size));
+  const warmup = Math.min(1, uniqueQuestionsCorrect / ACC_WARMUP_UNIQUE);
+
   const accComp = clamp(((acc7d - ACC_BASE) / (1 - ACC_BASE)) * ACC_MAX * warmup, 0, ACC_MAX);
   const masComp = clamp(weightedMastery * breadth * MASTERY_MULT, 0, MASTERY_MAX);
   const contComp = clamp(streak * 5 + cumDays * 1.5, 0, CONT_MAX);
-  const volComp = clamp(Math.log10(totalAttempts + 1) * 60 - 50, 0, VOL_MAX);
+
+  // v0.30.12: volume 重写为 skillCoverage = sum across skills of min(5, uniqueCorrect)
+  // 题量刷分被堵死：1 skill 100 道也只贡献 5 分；30 skill 各 5 道 = 150 满分。
+  let skillCoverageScore = 0;
+  uniqueCorrectByskill.forEach((s) => {
+    skillCoverageScore += Math.min(SKILL_COVERAGE_CAP_PER_SKILL, s.size);
+  });
+  const volComp = clamp(skillCoverageScore, 0, VOL_MAX);
 
   let avgUniq = 0;
   if (uniqueQByskill.size > 0) {
@@ -284,6 +332,8 @@ export function computeAbilityDiagnostic(
       streak,
       cumulativeDays: cumDays,
       totalAttempts,
+      uniqueQuestionsCorrect,
+      skillCoverageScore,
     },
   };
 }

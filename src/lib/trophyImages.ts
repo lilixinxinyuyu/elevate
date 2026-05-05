@@ -243,24 +243,57 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
  *  - 配色仍多彩，但可加金色高光（不是 tier 锁死的金）
  *  - 强调"独一无二""值得永久珍藏"的氛围
  */
+/**
+ * v0.30.12: 4 个 commemorative trophy 的纯英文视觉 motif（不带中文名！）。
+ *
+ * 之前 prompt 直接说「${t.name}」概念的卡通图标 → AI 把 "第一步"/"期中加冕"
+ * 等中文名当 TEXT 渲染进图里（4/4 全失败）。fix：完全不提中文名，用纯视觉
+ * 描述告诉 AI 该画什么。
+ */
+const COMMEMORATIVE_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
+  math_first_step: {
+    motif:
+      "a small glowing footprint on a path of starlight, with a single bright guiding star above, surrounded by tiny sparkles — symbolizing the very first step of a learning journey",
+    palette: "warm sunrise pink + soft cream + gold star highlight",
+  },
+  math_midterm_done: {
+    motif:
+      "a regal golden laurel wreath crown floating above a curled scroll with golden seal, soft sun rays radiating outward, ribbon banners on either side — symbolizing successful completion of midterm exams",
+    palette: "rich gold laurel + cream scroll + deep ruby ribbon + warm honey backdrop",
+  },
+  math_final_done: {
+    motif:
+      "a tall ornate golden victory cup with elegant handles, rising rays of light behind it, two flowing ribbon banners on either side, sparkling stars around — symbolizing triumphant final exam completion",
+    palette: "polished gold cup + ivory ribbons + amber light rays",
+  },
+  math_new_semester: {
+    motif:
+      "a small wooden sailboat with full sails, sailing on gentle waves, a bright sunrise behind it, with a flying open book transforming into the sail — symbolizing setting sail on a new academic year",
+    palette: "deep ocean blue + warm sunrise gold + cream sail + leaf green",
+  },
+};
+
 function buildCommemorativePrompt(t: TrophyMeta): string {
-  const desc = t.description ? `主题：「${t.description}」。` : "";
+  const spec = COMMEMORATIVE_MOTIF_SPEC[t.id];
+  const motif =
+    spec?.motif ?? `a ceremonial heirloom medal motif representing achievement and celebration`;
+  const palette = spec?.palette ?? "rich 2-3 color harmonious palette + gold or silver highlights";
+
   return [
-    `高级纪念奖章 commemorative medallion，**六角星形 (six-pointed star)**，主体居中放大。`,
-    // v0.30.11: 强制填满 canvas
-    `**The six-pointed star medallion fills the entire frame edge-to-edge — the outer star tips touch all four sides of the square canvas with at most 1-2 pixel margin.** No empty padding around the medal.`,
-    `这是一枚**传家宝级别 (heirloom)** 的纪念勋章 —— 比普通成就勋章更精致、更有仪式感、更值得珍藏。`,
-    `主体：「${t.name}」概念的卡通图标，**主体填满星形内部 85%+**，配合**月桂枝 / 棕榈叶 / 缎带 / 星芒**等仪式性装饰元素围绕主体（不要写文字）。`,
-    desc,
-    `**配色：2-3 种主色调和谐多彩搭配**，与「${t.name}」主题相关，可加金色或银色高光做奖章质感。`,
-    `示例方向（任选灵感）：金 + 深紫 + 樱花粉 / 银 + 翡翠绿 + 金 / 玫瑰金 + 香槟 + 暖白。`,
-    `**质感关键**：厚重金属奖章浮雕感 (3D embossed metal medallion)，比普通勋章更深的浮雕、更精细的边缘细节、更明显的光影立体感。`,
-    `**外缘**：1-2px 极细金属环线沿星形外缘，紧贴 canvas 边，不要装饰围圈。`,
-    `星形内部背景：深紫到近黑径向渐变。星形外部：直接是空（不画任何东西）。`,
-    `禁止出现：任何文字、字母、数字、签名、水印。`,
-    `风格：精致 3D 浮雕 + 柔光内发光 + 仪式感，4 年级女生喜欢但不幼稚，让人有"想永远收藏"的冲动。`,
-    // v0.30.11: 改尺寸描述强制 98%+
-    `Output: 512×512 square, the six-pointed star medallion occupies 98%+ of the canvas (1-2 pixel margin only), strictly centered.`,
+    `Premium 3D rendered heirloom commemorative medallion, **six-pointed star shape**, treasure-class quality.`,
+    `**The six-pointed star medallion fills the entire frame edge-to-edge — the outer star tips touch all four sides of the square canvas with at most 1-2 pixel margin.** No empty padding.`,
+    `This is a heirloom-class commemorative medal — more refined and ceremonial than ordinary achievement medals.`,
+    // v0.30.12 关键修复：纯英文 motif，**完全不提任何中文名**
+    `Subject (occupies 85%+ of star interior, strictly centered): ${motif}.`,
+    `Surrounding decorative elements: laurel branches / palm leaves / ribbons / star sparkles framing the central motif tastefully — NEVER as text or letters.`,
+    `Signature palette: ${palette}.`,
+    `Surface: heavy 3D embossed metal medallion finish, deeper relief, refined edge details, dramatic light-and-shadow.`,
+    `Outer rim: 1-2px polished metallic edge along the star outline, exactly at canvas edge — NO decorative wreath bands.`,
+    `Inside the star: deep violet to near-black radial gradient. Outside the star: nothing visible.`,
+    // v0.30.12: 多重反 text 嘱托
+    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO HANZI, NO KANJI, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO TYPOGRAPHY, NO CALLIGRAPHY, NO INSCRIPTIONS** — the medal must be ENTIRELY pictorial. Any glyph-like marks must be replaced by pure decorative shapes (sparkles, stars, ribbons, leaves).`,
+    `Style: refined 3D embossed + soft inner glow + ceremonial dignity, suitable for a 4th-grade girl to treasure forever — magical but not childish.`,
+    `Output: 512×512 square, six-pointed star medallion 占 98%+ canvas (1-2px 边距), 严格居中。`,
   ].join(" ");
 }
 

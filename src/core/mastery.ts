@@ -82,6 +82,16 @@ export function questionEloByDifficulty(difficulty: number | undefined | null): 
 // ───────────────── Elo 更新 ─────────────────
 
 /**
+ * v0.30.12: Elo "hard cap" —— 学生 Elo 比题目 Elo 高 ELO_DOMINANT_DELTA 时，
+ * 答对不再涨 Elo（已经溜熟了，重复练就不再奖励）；答错仍正常降。
+ * 防"刷低难度题让 Elo 缓慢爬升"。
+ *
+ * 实测：当 studentElo - questionElo > 300，expectedP > 0.85，actual=1 时
+ * 单次 Elo 增量 < 4。但 100 次累计仍然能涨 30+ Elo。强行截断更彻底。
+ */
+const ELO_DOMINANT_DELTA = 300;
+
+/**
  * 用一次 attempt 更新学生 Elo。返回新 Elo（不修改原状态）。
  *
  *   expectedP = 1 / (1 + 10^((题目Elo - 学生Elo) / 400))
@@ -92,6 +102,9 @@ export function questionEloByDifficulty(difficulty: number | undefined | null): 
  *
  * v0.30.7: 第三参数支持数字（usedTutor）—— actual 0.5 表示 tutor-assisted 答对，
  * 半信半疑，让 Elo 涨幅减半。等价于 boolean true → 1 / boolean false → 0。
+ *
+ * v0.30.12: 学生 Elo > 题目 Elo + 300 且答对时强行不涨 Elo（防低难度刷分）。
+ * 错答 + 中性 outcome (0.5) 仍正常计算（错题该罚的还要罚）。
  */
 export function updateStudentElo(
   oldElo: number,
@@ -100,6 +113,10 @@ export function updateStudentElo(
 ): number {
   const expected = 1 / (1 + Math.pow(10, (questionElo - oldElo) / 400));
   const actual = typeof outcome === "number" ? outcome : (outcome ? 1 : 0);
+  // v0.30.12: dominant cap —— 学生显著强过题目 + 答对，不涨 Elo
+  if (actual >= 1 && (oldElo - questionElo) > ELO_DOMINANT_DELTA) {
+    return oldElo;
+  }
   return oldElo + K_FACTOR * (actual - expected);
 }
 

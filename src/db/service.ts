@@ -215,13 +215,18 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
         .count()
     : 0;
 
-  // 新知识点首次答对：之前从来没有答对过该 skill 的任何一道题
-  const isNewSkill = isCorrect
-    ? (await db.attempts
+  // v0.30.12: 同 skill 历史 correct 总数（用于 sibling decay 防"姊妹题刷分"）
+  // - 一次 query 拿到 skill 全部 correct count
+  // - 仅 isCorrect=true 时计算（错答不需要这个数据）
+  const skillCorrectCount = isCorrect
+    ? await db.attempts
         .where("studentId").equals(studentId)
         .filter((a) => a.skillId === question.skill_id && a.isCorrect)
-        .count()) === 0
-    : false;
+        .count()
+    : 0;
+
+  // 新知识点首次答对：之前从来没有答对过该 skill 的任何一道题
+  const isNewSkill = isCorrect && skillCorrectCount === 0;
 
   const delta = scoreAttempt({
     question,
@@ -235,6 +240,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     isNewSkill,
     usedTutor,
     attemptOrdinal,
+    skillCorrectCount, // v0.30.12: 防"姊妹题刷分"
   });
 
   const priorMastery = await db.mastery.get(masteryId(studentId, question.skill_id));

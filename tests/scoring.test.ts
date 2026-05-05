@@ -187,12 +187,55 @@ describe("scoring", () => {
     });
 
     it("tutor-assisted 重复刷题被 repeatDecay 进一步削减（防刷讲题）", () => {
-      // 第 1 次 tutor-correct: 0.7 × decay 1.0 = 0.7×base
-      // 第 5 次 tutor-correct: 0.7 × decay 0 = 0
+      // 第 1 次 tutor-correct: 0.7 × decay 1.0 = 0.7×base （v0.30.9 改 0.5）
+      // 第 5 次 tutor-correct: 0.5 × decay 0 = 0
       const first = scoreAttempt({ ...baseInput, usedTutor: true, priorCorrectCount: 0 });
       const fifth = scoreAttempt({ ...baseInput, usedTutor: true, priorCorrectCount: 4 });
       expect(first.total).toBeGreaterThan(fifth.total);
       expect(fifth.total).toBe(0);
+    });
+  });
+
+  // v0.30.12: 姊妹题刷分护栏
+  describe("v0.30.12 sibling decay (防姊妹题刷分)", () => {
+    const baseInput = {
+      question: baseQ,
+      isCorrect: true as const,
+      hintsOpened: 0,
+      elapsedSeconds: 30,
+      isReview: false,
+      comboAfter: 1,
+    };
+
+    it("学习期 (skillCorrectCount 0-7) 拿满 sibling 倍率", () => {
+      const r1 = scoreAttempt({ ...baseInput, skillCorrectCount: 0 });
+      const r7 = scoreAttempt({ ...baseInput, skillCorrectCount: 7 });
+      expect(r1.total).toBe(r7.total); // 都是 1.0×
+    });
+
+    it("巩固期 (8-14) sibling 倍率 0.7，比学习期低", () => {
+      const learn = scoreAttempt({ ...baseInput, skillCorrectCount: 5 });
+      const consolidate = scoreAttempt({ ...baseInput, skillCorrectCount: 10 });
+      expect(consolidate.total).toBeLessThan(learn.total);
+    });
+
+    it("熟练期 (15-22) sibling 倍率 0.4，更低", () => {
+      const consolidate = scoreAttempt({ ...baseInput, skillCorrectCount: 10 });
+      const proficient = scoreAttempt({ ...baseInput, skillCorrectCount: 18 });
+      expect(proficient.total).toBeLessThan(consolidate.total);
+    });
+
+    it("深度饱和期 (23+) sibling 倍率 0.2，最低（仍非零给练手奖励）", () => {
+      const proficient = scoreAttempt({ ...baseInput, skillCorrectCount: 20 });
+      const saturated = scoreAttempt({ ...baseInput, skillCorrectCount: 50 });
+      expect(saturated.total).toBeLessThan(proficient.total);
+      expect(saturated.total).toBeGreaterThan(0); // 不归零，给最低 0.2 鼓励
+    });
+
+    it("错答时 sibling decay 不生效（错答本来就只 0.2× base）", () => {
+      const r0 = scoreAttempt({ ...baseInput, isCorrect: false, skillCorrectCount: 0 });
+      const r50 = scoreAttempt({ ...baseInput, isCorrect: false, skillCorrectCount: 50 });
+      expect(r0.total).toBe(r50.total);
     });
   });
 });
