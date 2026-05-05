@@ -35,6 +35,16 @@ export interface AttemptResult {
   hintsOpened: number;
   elapsedSeconds: number;
   correctAnswerDisplay: string;
+  /**
+   * v0.30.7: 这次答题前是否打开过"小进讲题"。仅 retry 后的 2nd 提交可能为 true。
+   * 1st 提交永远 false（讲题入口在 1st 错答之后才出现）。
+   */
+  usedTutor?: boolean;
+  /**
+   * v0.30.7: 同一道题的第几次提交（1=直接 / 2=1st 错答之后的重做）。
+   * 决定 combo / 速度奖励 / mistake stage / mastery Elo 倍率。
+   */
+  attemptOrdinal?: 1 | 2;
 }
 
 export interface GameShellProps {
@@ -105,10 +115,15 @@ export function GameShell(props: GameShellProps) {
   // ROI 改进 #1：第一次错时不立刻提交，给一次行内重做机会（考试模式禁用）
   const [retryStage, setRetryStage] = useState<"none" | "showing_hint">("none");
   const [panelKey, setPanelKey] = useState(0); // 改这个值能让 TemplatePanel 整体重置
+  // v0.30.7: 这一题里有没有打开过"小进讲题"（在 1st 错答和 2nd 提交之间）
+  const [showedTutorInRetry, setShowedTutorInRetry] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const activeResetKeyRef = useRef(resetKey);
   const submitInFlightRef = useRef(false);
   const finishedResetKeyRef = useRef<string | null>(null);
+  // v0.30.7: 这一题是否经历过 retry 流程（1st 错答后又进了 RetryHintPanel）
+  // 比 hintsOpened ≥ 1 更可靠（用户用了 hint 但没错也不算 retry）
+  const wasRetriedRef = useRef(false);
   activeResetKeyRef.current = resetKey;
 
   // reset on question change
@@ -121,8 +136,10 @@ export function GameShell(props: GameShellProps) {
     setFloaters([]);
     setRetryStage("none");
     setPanelKey(0);
+    setShowedTutorInRetry(false); // v0.30.7
     submitInFlightRef.current = false;
     finishedResetKeyRef.current = null;
+    wasRetriedRef.current = false;
   }, [resetKey]);
 
   const hints = question.hints ?? [];
@@ -156,33 +173,56 @@ export function GameShell(props: GameShellProps) {
   }, [hints, hintsOpened, triggerFx]);
 
   const handleFinish = useCallback(
-    async (r: Omit<AttemptResult, "hintsOpened" | "elapsedSeconds" | "correctAnswerDisplay">) => {
+    async (r: Omit<AttemptResult, "hintsOpened" | "elapsedSeconds" | "correctAnswerDisplay" | "usedTutor" | "attemptOrdinal">) => {
       if (activeResetKeyRef.current !== resetKey) return;
       if (submitInFlightRef.current || finishedResetKeyRef.current === resetKey || submitting || feedback) return;
 
-      // ROI 改进 #1：第一次答错且非考试模式 → 不入库，进入"行内重做"阶段
-      // - 显示步骤提示 + "再做一次" 按钮
-      // - 第二次提交才真的入库（无论对错都最终化）
-      // 考试模式下跳过这个分支，错就是错，立即入库。
+      // v0.30.7：1st 错答 — **静默入库为 ordinal=1 错答**（保留错题、扣 mastery、reset combo），
+      // 然后进入 retry 阶段让用户讲题/重做。考试模式跳过这个分支，错就是错。
+      // 跟 v0.30.6 之前的区别：之前是 return 不入库，现在是 record + 进 retry 不显示 feedback。
       if (!r.isCorrect && !examMode && retryStage === "none") {
         sfx.wrong();
         setShake(true);
         window.setTimeout(() => setShake(false), 450);
+
+        // 静默入库 1st-wrong（不 setFeedback，UI 不锁住，转入 retryHint）
+        submitInFlightRef.current = true;
+        const elapsed = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+        try {
+          await onSubmit({
+            ...r,
+            hintsOpened,
+            elapsedSeconds: elapsed,
+            correctAnswerDisplay: describeAnswer(question),
+            usedTutor: false,
+            attemptOrdinal: 1,
+          });
+        } finally {
+          submitInFlightRef.current = false;
+        }
+
         setRetryStage("showing_hint");
-        return; // 不调 onSubmit，等用户点"再做一次"
+        return; // 不 setFeedback，让 RetryHintPanel 显示
       }
 
       submitInFlightRef.current = true;
       setSubmitting(true);
       try {
         const elapsed = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+        // v0.30.7：判定 attemptOrdinal —— 用 wasRetriedRef（在 handleRetry 里 set true）
+        // 比 hintsOpened≥1 启发更可靠（用户用 hint 但没错也算第一次提交）
+        const ordinal: 1 | 2 = wasRetriedRef.current && !examMode ? 2 : 1;
         const res = await onSubmit({
           ...r,
           hintsOpened,
           elapsedSeconds: elapsed,
           correctAnswerDisplay: describeAnswer(question),
+          usedTutor: showedTutorInRetry,
+          attemptOrdinal: ordinal,
         });
-        const { tier: speedTier } = speedBonus(elapsed, question.estimated_time_seconds, r.isCorrect);
+        const { tier: speedTier } = ordinal === 2
+          ? { tier: "on_time" as const } // 2nd 不奖速度
+          : speedBonus(elapsed, question.estimated_time_seconds, r.isCorrect);
         setFeedback({
           isCorrect: r.isCorrect,
           partialCorrect: r.partialCorrect,
@@ -207,7 +247,7 @@ export function GameShell(props: GameShellProps) {
         setSubmitting(false);
       }
     },
-    [submitting, feedback, resetKey, startedAt, hintsOpened, onSubmit, question, examMode, retryStage],
+    [submitting, feedback, resetKey, startedAt, hintsOpened, onSubmit, question, examMode, retryStage, showedTutorInRetry],
   );
 
   // 用户点击"再做一次"时调用：清掉提示状态，强制 panel 重新挂载
@@ -217,6 +257,8 @@ export function GameShell(props: GameShellProps) {
     setHintsOpened((n) => Math.max(n, 1));
     setStartedAt(Date.now());
     setPanelKey((k) => k + 1);
+    // v0.30.7: 标记本题"经过 retry"，下次提交走 attemptOrdinal=2
+    wasRetriedRef.current = true;
   }, []);
 
   const onPickFeedback = useCallback((kind: "correct" | "wrong") => {
@@ -313,6 +355,7 @@ export function GameShell(props: GameShellProps) {
             question={question}
             onRetry={handleRetry}
             onSkip={onNext}
+            onTutorOpened={() => setShowedTutorInRetry(true)}
           />
         )}
 
@@ -597,10 +640,16 @@ function RetryHintPanel({
   question,
   onRetry,
   onSkip,
+  onTutorOpened,
 }: {
   question: Question;
   onRetry: () => void;
   onSkip: () => void;
+  /**
+   * v0.30.7: 用户点了"让小进讲一讲"时调用，让父级把 showedTutorInRetry 置 true。
+   * 之后的 2nd 提交会带 usedTutor=true，触发 0.7× XP / 不增 combo / Elo 半计。
+   */
+  onTutorOpened?: () => void;
 }) {
   const [showTutor, setShowTutor] = useState(false);
   const stemHint = "再仔细读一遍题目——题里的关键词、单位、问什么都看清楚。";
@@ -618,7 +667,10 @@ function RetryHintPanel({
             <button
               type="button"
               className="btn-primary text-sm py-2 px-4"
-              onClick={() => setShowTutor(true)}
+              onClick={() => {
+                setShowTutor(true);
+                onTutorOpened?.();
+              }}
             >
               👩‍🏫 让小进讲一讲
             </button>
@@ -638,7 +690,7 @@ function RetryHintPanel({
             </button>
           </div>
           <div className="text-[11px] text-amber-200/60 mt-2">
-            点"让小进讲一讲"会引导你想答案而不是直接告诉你。第二次还错才算错题。
+            刚才这次错答已经记下啦——讲完题再做对，XP 会少一些（独立想出来的更值钱）。
           </div>
         </div>
       </div>

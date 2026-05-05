@@ -85,18 +85,21 @@ export function questionEloByDifficulty(difficulty: number | undefined | null): 
  * 用一次 attempt 更新学生 Elo。返回新 Elo（不修改原状态）。
  *
  *   expectedP = 1 / (1 + 10^((题目Elo - 学生Elo) / 400))
- *   Elo += K × (实际胜负 - expectedP)
+ *   Elo += K × (actual - expectedP)
  *
  * 答对一道难题（expectedP 低）涨得多；答对一道简单题（expectedP 高）几乎不涨。
  * 答错一道简单题（expectedP 高）跌得多；答错难题（expectedP 低）几乎不跌。
+ *
+ * v0.30.7: 第三参数支持数字（usedTutor）—— actual 0.5 表示 tutor-assisted 答对，
+ * 半信半疑，让 Elo 涨幅减半。等价于 boolean true → 1 / boolean false → 0。
  */
 export function updateStudentElo(
   oldElo: number,
   questionElo: number,
-  isCorrect: boolean,
+  outcome: boolean | number,
 ): number {
   const expected = 1 / (1 + Math.pow(10, (questionElo - oldElo) / 400));
-  const actual = isCorrect ? 1 : 0;
+  const actual = typeof outcome === "number" ? outcome : (outcome ? 1 : 0);
   return oldElo + K_FACTOR * (actual - expected);
 }
 
@@ -148,6 +151,7 @@ export function computeMasteryScore(
   }
 
   // 1. 加权命中率（time × difficulty）
+  // v0.30.7: tutor-assisted 答对在分子里只算 0.5 —— 跟"独立答对"区分开
   let wCorrect = 0;
   let wTotal = 0;
   for (const r of recent) {
@@ -156,7 +160,9 @@ export function computeMasteryScore(
     const diffW = 0.7 + 0.16 * Math.max(0, Math.min(5, r.difficulty)); // 1=0.86, 5=1.5
     const w = timeW * diffW;
     wTotal += w;
-    if (r.correct) wCorrect += w;
+    if (r.correct) {
+      wCorrect += r.usedTutor ? w * TUTOR_ASSISTED_ELO_ACTUAL : w;
+    }
   }
   const weightedAccuracy = wTotal > 0 ? wCorrect / wTotal : 0;
 
@@ -207,10 +213,21 @@ export function computeMasteryScore(
 
 // ───────────────── 增量更新接口（service.ts 用）─────────────────
 
+/** v0.30.7: tutor-assisted 答对在 Elo 更新里的 actual 值（0.5 = 半信半疑，比独立答对 1 弱、比错答 0 强）*/
+export const TUTOR_ASSISTED_ELO_ACTUAL = 0.5;
+
 export interface MasteryAttemptInput {
   questionId: string;
   difficulty: number;
   isCorrect: boolean;
+  /**
+   * v0.30.7: 这次答对是不是 tutor-assisted（讲题之后才对）？
+   * 仅 isCorrect=true 时生效：
+   *   - Elo 用 0.5 当 actual（涨幅减半）
+   *   - recent 窗口里也标 usedTutor，weighted accuracy 算 0.5 而不是 1
+   *   - 不让"刷讲题"刷到 Elo / 熟练度
+   */
+  usedTutor?: boolean;
   /** 答题时间戳（默认 now） */
   ts?: number;
 }
@@ -249,7 +266,12 @@ export function applyAttempt(
   const ts = attempt.ts ?? now;
   const questionElo = questionEloByDifficulty(attempt.difficulty);
   const oldElo = prior?.studentElo ?? STUDENT_ELO_BASE;
-  const newElo = updateStudentElo(oldElo, questionElo, attempt.isCorrect);
+  // v0.30.7: tutor-assisted 答对走 actual=0.5 半信半疑 Elo 更新
+  const eloOutcome: boolean | number =
+    attempt.isCorrect && attempt.usedTutor
+      ? TUTOR_ASSISTED_ELO_ACTUAL
+      : attempt.isCorrect;
+  const newElo = updateStudentElo(oldElo, questionElo, eloOutcome);
 
   const oldRecent = prior?.recent ?? [];
   const newRecent = [
@@ -259,6 +281,7 @@ export function applyAttempt(
       correct: attempt.isCorrect,
       difficulty: attempt.difficulty,
       questionId: attempt.questionId,
+      ...(attempt.isCorrect && attempt.usedTutor ? { usedTutor: true } : {}),
     },
   ].slice(-RECENT_WINDOW_MAX);
 

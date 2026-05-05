@@ -141,4 +141,58 @@ describe("scoring", () => {
       expect(sum / single).toBeCloseTo(1.8, 1);
     });
   });
+
+  // v0.30.7: tutor-assisted 答对 / 2nd attempt 的计分规则
+  describe("v0.30.7 tutor-assisted + attemptOrdinal", () => {
+    const baseInput = {
+      question: baseQ,
+      isCorrect: true as const,
+      hintsOpened: 0,
+      elapsedSeconds: 30,
+      isReview: false,
+      comboAfter: 5,
+    };
+
+    it("tutor-assisted 答对 = 0.7 base，无 combo 倍率，无速度奖励", () => {
+      const independent = scoreAttempt({ ...baseInput });
+      const tutorCorrect = scoreAttempt({ ...baseInput, usedTutor: true });
+      expect(tutorCorrect.total).toBeLessThan(independent.total);
+      expect(tutorCorrect.comboMul).toBe(1);
+      expect(tutorCorrect.timeBonus).toBe(0);
+    });
+
+    it("tutor-assisted 不享受新 skill 奖励（防讲题刷新 skill 解锁）", () => {
+      const r = scoreAttempt({ ...baseInput, usedTutor: true, isNewSkill: true });
+      expect(r.newSkillBonus).toBe(0);
+    });
+
+    it("attemptOrdinal=2 (自己重做) 不享受 combo / 速度奖励", () => {
+      const ordinal1 = scoreAttempt({ ...baseInput });
+      const ordinal2 = scoreAttempt({ ...baseInput, attemptOrdinal: 2 });
+      expect(ordinal2.comboMul).toBe(1);
+      expect(ordinal2.timeBonus).toBe(0);
+      expect(ordinal2.total).toBeLessThan(ordinal1.total);
+    });
+
+    it("attemptOrdinal=2 + usedTutor (讲题后做对) 比 ordinal=2 alone 还少", () => {
+      const selfRetry = scoreAttempt({ ...baseInput, attemptOrdinal: 2, usedTutor: false });
+      const tutorRetry = scoreAttempt({ ...baseInput, attemptOrdinal: 2, usedTutor: true });
+      expect(tutorRetry.total).toBeLessThan(selfRetry.total);
+    });
+
+    it("错答时 usedTutor 不影响计分（错就是错）", () => {
+      const wrongTutor = scoreAttempt({ ...baseInput, isCorrect: false, usedTutor: true });
+      const wrongNoTutor = scoreAttempt({ ...baseInput, isCorrect: false, usedTutor: false });
+      expect(wrongTutor.total).toBe(wrongNoTutor.total);
+    });
+
+    it("tutor-assisted 重复刷题被 repeatDecay 进一步削减（防刷讲题）", () => {
+      // 第 1 次 tutor-correct: 0.7 × decay 1.0 = 0.7×base
+      // 第 5 次 tutor-correct: 0.7 × decay 0 = 0
+      const first = scoreAttempt({ ...baseInput, usedTutor: true, priorCorrectCount: 0 });
+      const fifth = scoreAttempt({ ...baseInput, usedTutor: true, priorCorrectCount: 4 });
+      expect(first.total).toBeGreaterThan(fifth.total);
+      expect(fifth.total).toBe(0);
+    });
+  });
 });

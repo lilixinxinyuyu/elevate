@@ -13,6 +13,21 @@ export interface ScoreInput {
   priorCorrectCount?: number;
   /** 是否是该 skill 的首次答对（学到新知识点 +5 XP） */
   isNewSkill?: boolean;
+  /**
+   * v0.30.7: 这次答题前是否打开过"小进讲题"。
+   * usedTutor + isCorrect → tutor-assisted 答对：基础分 ×0.7、无 combo 倍率、
+   * 无速度奖励、无新 skill 奖励、无复习奖励。本质上"借助讲解才答对"，
+   * 不能跟独立答对等价计 XP。
+   */
+  usedTutor?: boolean;
+  /**
+   * v0.30.7: 同一道题在本 session 里第几次作答（1 / 2）。
+   * - 1: 第一次作答（正常加成）
+   * - 2: 1st 错答之后的重做提交（无 combo/无速度奖励，因为已经有了"先错"的事实）
+   * 注：对 isCorrect=true & attemptOrdinal=2 但 usedTutor=false 的情况——
+   *     即"自己想通了再做对"——还是给 base XP（独立学习），但没 combo/速度。
+   */
+  attemptOrdinal?: 1 | 2;
 }
 
 export interface ScoreDelta {
@@ -80,25 +95,45 @@ export function speedBonus(elapsedSeconds: number, estimatedSeconds: number, isC
   return { bonus: -1, tier: "slow" };
 }
 
+/** v0.30.7: tutor-assisted correct 的 base 分倍率（70%） */
+export const TUTOR_ASSISTED_FACTOR = 0.7;
+
 export function scoreAttempt(input: ScoreInput): ScoreDelta {
   const { question, isCorrect, hintsOpened, elapsedSeconds, isReview, multiStepAllStepsCorrect, comboAfter } = input;
+  const usedTutor = !!input.usedTutor;
+  const isSecondAttempt = (input.attemptOrdinal ?? 1) === 2;
+
+  // v0.30.7：tutor-assisted 答对 = "借助讲解才答对"，所有奖励降权
+  const tutorAssisted = isCorrect && usedTutor;
+  // 不享受 combo/速度奖励的 case：1) 2nd 提交（已有"先错"事实）2) tutor-assisted（防御性，
+  // 实际上 usedTutor=true 永远跟 ordinal=2 一起出现，但留个 belt-and-suspenders）
+  const noBonusAttempt = isSecondAttempt || tutorAssisted;
+
   const base = 10;
   const difficultyMul = 1 + (question.difficulty - 1) * 0.2;
-  const correctFactor = isCorrect ? 1 : input.partialCorrect ? 0.5 : 0.2;
-  // v0.28.1：阶梯速度奖励（替换原 +2 一档）
-  const { bonus: timeBonus } = speedBonus(elapsedSeconds, question.estimated_time_seconds, isCorrect);
+  const correctFactor = isCorrect
+    ? (tutorAssisted ? TUTOR_ASSISTED_FACTOR : 1)
+    : (input.partialCorrect ? 0.5 : 0.2);
+  // 速度奖励：仅 1st 答对独享
+  const { bonus: timeBonus } = noBonusAttempt
+    ? { bonus: 0 }
+    : speedBonus(elapsedSeconds, question.estimated_time_seconds, isCorrect);
   const hintPenalty = -hintsOpened;
-  const stepBonus = multiStepAllStepsCorrect ? 3 : 0;
-  const reviewBonus = isReview && isCorrect ? 2 : 0;
-  const comboMul = isCorrect ? comboMultiplier(comboAfter) : 1;
+  // multi-step + review + new-skill 奖励都属于"真功夫"加成，tutor-assisted 不给
+  const stepBonus = (multiStepAllStepsCorrect && !tutorAssisted) ? 3 : 0;
+  const reviewBonus = (isReview && isCorrect && !tutorAssisted) ? 2 : 0;
+  // combo 倍率：tutor-assisted 或 2nd 提交都不享受
+  const comboMul = (isCorrect && !noBonusAttempt && !tutorAssisted)
+    ? comboMultiplier(comboAfter)
+    : 1;
 
   const raw = base * difficultyMul * correctFactor + timeBonus + hintPenalty + stepBonus + reviewBonus;
 
   // 重做递减：只对答对的题应用（错答本来就只拿 0.2× base 极少分，不再扣）
   const repeatDecay = isCorrect ? repeatDecayMultiplier(input.priorCorrectCount ?? 0) : 1.0;
 
-  // 新知识点首次答对：固定 +5 XP（不受 decay 影响）
-  const newSkillBonus = isCorrect && input.isNewSkill ? NEW_SKILL_BONUS : 0;
+  // 新知识点首次答对：固定 +5 XP（不受 decay 影响）。tutor-assisted 不算"学到了"
+  const newSkillBonus = (isCorrect && input.isNewSkill && !tutorAssisted) ? NEW_SKILL_BONUS : 0;
 
   // 答错保持原 1 分下限；答对走 decay 后允许为 0（5+ 次纯刷不给分）
   const decayed = raw * comboMul * repeatDecay;
@@ -111,7 +146,7 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
   const share = Math.max(1, Math.round(total / abilities.length));
   const byAbility: Partial<Record<AbilityId, number>> = {};
   for (const a of abilities) byAbility[a] = share;
-  if (isReview && isCorrect) byAbility.habit = (byAbility.habit ?? 0) + 1;
+  if (isReview && isCorrect && !tutorAssisted) byAbility.habit = (byAbility.habit ?? 0) + 1;
 
   return { total, byAbility, base, hintPenalty, comboMul, timeBonus, repeatDecay, newSkillBonus };
 }

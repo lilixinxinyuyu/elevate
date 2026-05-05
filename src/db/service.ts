@@ -137,6 +137,21 @@ export interface SubmitAttemptInput {
   hintsOpened: number;
   elapsedSeconds: number;
   comboBeforeAttempt: number;
+  /**
+   * v0.30.7: 这次答题前是否打开过"小进讲题"。
+   * usedTutor + isCorrect → 计 XP 70%、不增 combo、Elo 半计、weighted accuracy 半计、
+   * 不解锁 mistake stage（防"讲一下就算复习通关"）
+   */
+  usedTutor?: boolean;
+  /**
+   * v0.30.7: 这是同一道题在本 session 的第几次提交。
+   * - 1: 第一次（含直接答对、直接答错、答错后会进 retry 阶段都先记 ordinal=1）
+   * - 2: 1st 错答之后的重做提交
+   *
+   * combo 只在 ordinal=1 && correct && !usedTutor 时 +1（"独立连续答对"才算 combo）。
+   * mistake stage 只在 ordinal=1 时变化（避免 1st-wrong 后 2nd-correct 立即把 mistake 推进）。
+   */
+  attemptOrdinal?: 1 | 2;
 }
 
 export interface AttemptOutcome {
@@ -161,13 +176,28 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     studentId, session, question, userAnswer,
     isCorrect, partialCorrect, matchedErrorTags, hintsOpened, elapsedSeconds, comboBeforeAttempt,
   } = input;
+  const usedTutor = !!input.usedTutor;
+  const attemptOrdinal: 1 | 2 = input.attemptOrdinal ?? 1;
+  const isFirstAttempt = attemptOrdinal === 1;
 
   const existingMistake = await db.mistakes
     .where({ studentId, questionId: question.question_id })
     .first();
   const isReview = !!existingMistake && !existingMistake.resolved;
 
-  const comboAfter = isCorrect ? comboBeforeAttempt + 1 : 0;
+  // v0.30.7: combo 只在"第一次独立答对"时 +1（"独立连续答对"勋章语义）
+  // - 第一次答错 → combo reset（current behavior）
+  // - 第二次提交（不管对错、不管 tutor）→ combo 不增也不会再 reset
+  // - tutor-assisted 答对 → 不增 combo
+  let comboAfter: number;
+  if (isCorrect && isFirstAttempt && !usedTutor) {
+    comboAfter = comboBeforeAttempt + 1;
+  } else if (!isCorrect && isFirstAttempt) {
+    comboAfter = 0;
+  } else {
+    // 2nd 提交 — combo 沿用（已经在 1st-wrong 时 reset 到 0 了）
+    comboAfter = comboBeforeAttempt;
+  }
 
   // 重复递减：之前答对过这道题的次数
   const priorCorrectCount = isCorrect
@@ -195,11 +225,14 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     comboAfter,
     priorCorrectCount,
     isNewSkill,
+    usedTutor,
+    attemptOrdinal,
   });
 
   const priorMastery = await db.mastery.get(masteryId(studentId, question.skill_id));
 
   // v0.28 新算法：用 applyAttempt() 增量更新（内部跑 Elo + 滚动窗口 + Fragility）
+  // v0.30.7: usedTutor 透传，tutor-assisted 答对 Elo actual=0.5
   const masteryNow = Date.now();
   const masteryUpdate = applyAttempt(
     priorMastery,
@@ -207,6 +240,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
       questionId: question.question_id,
       difficulty: question.difficulty,
       isCorrect,
+      usedTutor,
       ts: masteryNow,
     },
     masteryNow,
@@ -231,6 +265,8 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     masteryDelta,
     isReview,
     comboAtEnd: comboAfter,
+    usedTutor: usedTutor || undefined,
+    attemptOrdinal,
     createdAt: Date.now(),
   };
 
@@ -270,12 +306,18 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
         await db.mistakes.put(m);
       }
     } else if (existingMistake) {
-      const newStage = advanceStageOnSuccess(existingMistake.stage);
-      if (newStage >= REVIEW_INTERVAL_DAYS.length) {
-        existingMistake.resolved = true;
-      } else {
-        existingMistake.stage = newStage;
-        existingMistake.nextReviewAt = nextReviewAt(newStage);
+      // v0.30.7：保护 mistake stage —— 第二次提交（同 session 立即重做）不应推进
+      // mistake review，那是"刷一道讲一下就算掌握"的漏洞。仅 1st-attempt 答对才算
+      // 真正"复习成功 → 推进 stage"。tutor-assisted 答对也不推进（半信半疑）。
+      const shouldAdvance = isFirstAttempt && !usedTutor;
+      if (shouldAdvance) {
+        const newStage = advanceStageOnSuccess(existingMistake.stage);
+        if (newStage >= REVIEW_INTERVAL_DAYS.length) {
+          existingMistake.resolved = true;
+        } else {
+          existingMistake.stage = newStage;
+          existingMistake.nextReviewAt = nextReviewAt(newStage);
+        }
       }
       existingMistake.lastAttemptAt = Date.now();
       await db.mistakes.put(existingMistake);
@@ -448,9 +490,36 @@ export async function finalizeSession(
   const session = await db.sessions.get(sessionId);
   if (!session) throw new Error("会话不存在");
   const attempts = await db.attempts.where({ sessionId }).toArray();
-  const total = attempts.length;
-  const correct = attempts.filter((a) => a.isCorrect).length;
+
+  // v0.30.7：按 questionId 去重，让"total / correct"反映"题数"而不是"提交次数"。
+  // 一道题可能有 2 个 attempt（1st 错 + 2nd 对）—— 这种 total 算 1 道，correct 算 1 道，
+  // 同时 tutorAssistedCount/firstTryCorrectCount 给家长看"水分"。
+  const byQuestion = new Map<string, typeof attempts>();
+  for (const a of attempts) {
+    const list = byQuestion.get(a.questionId) ?? [];
+    list.push(a);
+    byQuestion.set(a.questionId, list);
+  }
+  // 每个 question 的最终 outcome：以最后一次提交为准
+  type QOutcome = { isCorrect: boolean; usedTutor: boolean; firstTryCorrect: boolean };
+  const perQuestion: QOutcome[] = [];
+  for (const list of byQuestion.values()) {
+    list.sort((a, b) => (a.attemptOrdinal ?? 1) - (b.attemptOrdinal ?? 1));
+    const last = list[list.length - 1]!;
+    const first = list[0]!;
+    perQuestion.push({
+      isCorrect: last.isCorrect,
+      usedTutor: !!last.usedTutor,
+      firstTryCorrect: first.isCorrect && (first.attemptOrdinal ?? 1) === 1,
+    });
+  }
+  const total = perQuestion.length;
+  const correct = perQuestion.filter((q) => q.isCorrect).length;
   const accuracy = total === 0 ? 0 : correct / total;
+  // tutor-assisted correct：最终对的题里，最后一次提交带 usedTutor=true 的
+  const tutorAssistedCount = perQuestion.filter((q) => q.isCorrect && q.usedTutor).length;
+  // 第一次就答对（独立答对）：最纯净的"会"指标
+  const firstTryCorrectCount = perQuestion.filter((q) => q.firstTryCorrect).length;
   const totalPoints = attempts.reduce((s, a) => s + a.scoreDelta.total, 0);
 
   const abilityPoints: SessionSummary["abilityPoints"] = {};
@@ -584,6 +653,8 @@ export async function finalizeSession(
     ratingBefore: prevRating?.score,
     ratingAfter: rating.score,
     tierUpgrade,
+    tutorAssistedCount,
+    firstTryCorrectCount,
   };
 
   session.finishedAt = Date.now();

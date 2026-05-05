@@ -130,6 +130,9 @@ export function TrainPage() {
         hintsOpened: result.hintsOpened,
         elapsedSeconds: result.elapsedSeconds,
         comboBeforeAttempt: combo,
+        // v0.30.7: tutor-assisted + ordinal 透传给 service.submitAttempt
+        usedTutor: result.usedTutor,
+        attemptOrdinal: result.attemptOrdinal,
       });
       setState((s) =>
         s.status === "running"
@@ -374,6 +377,30 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
         <div className="mt-1 text-slate-300 text-sm">
           答对 {summary.correct} / {summary.total}，正确率 {Math.round(summary.accuracy * 100)}%
         </div>
+        {/* v0.30.7: 区分"独立答对"和"讲题后答对"，避免统计撒谎 */}
+        {(summary.firstTryCorrectCount != null || (summary.tutorAssistedCount ?? 0) > 0) && (
+          <div className="mt-1.5 text-xs text-slate-400 inline-flex items-center gap-2 flex-wrap justify-center">
+            {summary.firstTryCorrectCount != null && (
+              <span>
+                <span className="text-emerald-300 font-display font-bold">
+                  {summary.firstTryCorrectCount}
+                </span>{" "}
+                道一遍就对
+              </span>
+            )}
+            {(summary.tutorAssistedCount ?? 0) > 0 && (
+              <>
+                <span className="opacity-30">·</span>
+                <span>
+                  <span className="text-amber-300 font-display font-bold">
+                    {summary.tutorAssistedCount}
+                  </span>{" "}
+                  道讲题后才对
+                </span>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {!chestOpened ? (

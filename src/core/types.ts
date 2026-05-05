@@ -346,6 +346,16 @@ export interface SessionSummary {
   ratingAfter?: number;
   /** 跨段升档：第一次进入更高段位时填，触发解锁动画 */
   tierUpgrade?: { fromTierId: string; toTierId: string };
+  /**
+   * v0.30.7: 本次 session 里"用了讲题才做对"的题数（独立答对的不算）。
+   * 让家长看到"虽然全对，其中 X 道用了讲题"，避免统计撒谎。
+   */
+  tutorAssistedCount?: number;
+  /**
+   * v0.30.7: 第一次就答对的题数（最纯净的"会"指标）。
+   * 跟 tutorAssistedCount 相加 ≤ correct（中间还可能有"自己重做对"）。
+   */
+  firstTryCorrectCount?: number;
 }
 
 export interface Attempt {
@@ -367,6 +377,18 @@ export interface Attempt {
   masteryDelta: number;
   isReview: boolean;
   comboAtEnd: number;
+  /**
+   * v0.30.7: 这次答题前是否打开过"小进讲题"（在 1st 错答之后、2nd 提交之前）。
+   * - true + isCorrect=true → tutor-assisted 答对，XP×0.7、不增 combo、不奖速度、
+   *   mastery 半计；本质上"借助讲解才答对"，不算独立掌握
+   */
+  usedTutor?: boolean;
+  /**
+   * v0.30.7: 同一道题在本 session 里第几次作答。
+   * - 1 = 第一次作答（正常计分 + 全部加成）
+   * - 2 = 1st 错答之后的重做提交（无论对错都不增 combo、不奖速度；usedTutor 进一步降权）
+   */
+  attemptOrdinal?: 1 | 2;
   createdAt: number;
 }
 
@@ -383,6 +405,12 @@ export interface MasteryRecentEntry {
   difficulty: number;
   /** 题目 id（用于多样性去重） */
   questionId: string;
+  /**
+   * v0.30.7: 这次是 tutor-assisted 答对吗？
+   * 计 weighted accuracy 时 tutor-correct 只算 0.5（不全算"真会"）；
+   * Elo 更新里也按 0.5 当 actual 用，避免独立答错却被 tutor 救一下就涨 elo。
+   */
+  usedTutor?: boolean;
 }
 
 export interface MasteryScore {
