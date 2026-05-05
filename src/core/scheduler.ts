@@ -769,3 +769,46 @@ function diversifyOrder(questions: Question[], rng: () => number): Question[] {
 export function skillOf(skillId: string) {
   return SKILL_BY_ID.get(skillId);
 }
+
+/**
+ * v0.30.8: 找一道"同型同难度的平行题"，给 1st 错答后的"换个题再做"流程用。
+ *
+ * 为什么需要：直接重做同一题相当于"我刚看了答案再做"——对学生不公平地容易（数字背了），
+ * 也无法检验真理解。换成"同 skill + 同 game_type + 同 difficulty"的另一道题，
+ * 强迫学生迁移概念到新情境，才是对"是不是真学会"的真实测试。
+ *
+ * 选题策略：
+ *  1) Hard filter: skill_id / game_type / difficulty / term / subjectId 全相等
+ *  2) 排除：原题、本 session 已经做过的、本 session 还要做的（避免提前消费）
+ *  3) 排序：用户没见过的（attemptCounts undefined or 0）→ 见的最少的（少次数优先）
+ *  4) Tie-break：随机（用 rng 或 Math.random）— 别每次都同一道
+ *
+ * 没找到候选 → 返回 null，调用方应 fallback 到原题重做。
+ */
+export function findParallelQuestion(
+  original: Question,
+  pool: Question[],
+  excludeIds: Set<string>,
+  attemptCounts?: Map<string, number>,
+  rng: () => number = Math.random,
+): Question | null {
+  const candidates = pool.filter(
+    (q) =>
+      q.question_id !== original.question_id &&
+      !excludeIds.has(q.question_id) &&
+      q.skill_id === original.skill_id &&
+      q.game_type === original.game_type &&
+      q.difficulty === original.difficulty &&
+      (q.subjectId ?? "math") === (original.subjectId ?? "math") &&
+      q.term === original.term,
+  );
+  if (candidates.length === 0) return null;
+  // 见的次数 → groupBy
+  const counted = candidates.map((q) => ({
+    q,
+    seen: attemptCounts?.get(q.question_id) ?? 0,
+    rand: rng(),
+  }));
+  counted.sort((a, b) => (a.seen - b.seen) || (a.rand - b.rand));
+  return counted[0]?.q ?? null;
+}

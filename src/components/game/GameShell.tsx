@@ -53,7 +53,14 @@ export interface GameShellProps {
   total: number;
   xp: number;
   combo: number;
-  onSubmit: (result: AttemptResult) => Promise<{
+  /**
+   * v0.30.8: onSubmit 第二参数 — 这次提交针对的是哪道题？
+   * 默认 = props.question（首次答题、或没有变式题的同题重做）
+   * 提供 = displayedQuestion（变式题：1st 错答后换的同型同难度新题）
+   * Train.tsx 的 handleSubmit 用这个参数定 submitAttempt 的 question；
+   * 不提供时 fallback 到 props.question。
+   */
+  onSubmit: (result: AttemptResult, currentQuestion?: Question) => Promise<{
     points: number;
     repeatDecay?: number;
     newSkillBonus?: number;
@@ -70,6 +77,13 @@ export interface GameShellProps {
   countdownEnabled: boolean;
   /** 考试模拟模式：禁用提示、不允许 retry。 */
   examMode?: boolean;
+  /**
+   * v0.30.8: 1st 错答后异步搜一道同型同难度变式题给重做用。
+   * 返回 null → fallback 到原题重做（向后兼容老行为）。
+   * GameShell 在 1st 错答静默入库后立刻调用，等 RetryHintPanel 期间结果就绪；
+   * 用户点"再做一次"时直接 swap displayedQuestion 到变式题。
+   */
+  onRequestVariant?: (original: Question) => Promise<Question | null>;
 }
 
 /** 每个子模板实现这个接口 */
@@ -90,8 +104,14 @@ export interface TriggerFx {
 }
 
 export function GameShell(props: GameShellProps) {
-  const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled, examMode } = props;
+  const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled, examMode, onRequestVariant } = props;
   const resetKey = `${question.question_id}:${index}`;
+  // v0.30.8: 当前在 TemplatePanel 里"渲染并接受答题"的题
+  // - 默认 = props.question（原题）
+  // - 1st 错答后，若拿到变式题就 swap 成变式题
+  // - tutor / RetryHintPanel 始终使用原题，让讲解针对错的那题
+  const [displayedQuestion, setDisplayedQuestion] = useState<Question>(question);
+  const variantRef = useRef<Question | null>(null);
   const [starterDone, setStarterDone] = useState(!showStarter);
   const [hintsOpened, setHintsOpened] = useState(0);
   const [startedAt, setStartedAt] = useState(() => Date.now());
@@ -137,10 +157,12 @@ export function GameShell(props: GameShellProps) {
     setRetryStage("none");
     setPanelKey(0);
     setShowedTutorInRetry(false); // v0.30.7
+    setDisplayedQuestion(question); // v0.30.8: 新题进来重置渲染
+    variantRef.current = null;
     submitInFlightRef.current = false;
     finishedResetKeyRef.current = null;
     wasRetriedRef.current = false;
-  }, [resetKey]);
+  }, [resetKey, question]);
 
   const hints = question.hints ?? [];
   const estimatedSec = question.estimated_time_seconds;
@@ -185,20 +207,36 @@ export function GameShell(props: GameShellProps) {
         setShake(true);
         window.setTimeout(() => setShake(false), 450);
 
-        // 静默入库 1st-wrong（不 setFeedback，UI 不锁住，转入 retryHint）
+        // 静默入库 1st-wrong（针对原题 props.question，不是 displayedQuestion）
         submitInFlightRef.current = true;
         const elapsed = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
         try {
-          await onSubmit({
-            ...r,
-            hintsOpened,
-            elapsedSeconds: elapsed,
-            correctAnswerDisplay: describeAnswer(question),
-            usedTutor: false,
-            attemptOrdinal: 1,
-          });
+          await onSubmit(
+            {
+              ...r,
+              hintsOpened,
+              elapsedSeconds: elapsed,
+              correctAnswerDisplay: describeAnswer(question),
+              usedTutor: false,
+              attemptOrdinal: 1,
+            },
+            question, // 显式传原题（防止以后 displayedQuestion 提前 swap 出 bug）
+          );
         } finally {
           submitInFlightRef.current = false;
+        }
+
+        // v0.30.8: 异步预取变式题（同型同难度）。RetryHintPanel 期间 ~30s 用户在
+        // 读 hint / 看 tutor 讲解，足够 pool 查询完成（< 100ms）。用户点"再做一次"
+        // 时直接 swap displayedQuestion，再做一道新题。pool 没找到就 fallback 原题重做。
+        if (onRequestVariant) {
+          void onRequestVariant(question)
+            .then((v) => {
+              variantRef.current = v;
+            })
+            .catch(() => {
+              variantRef.current = null;
+            });
         }
 
         setRetryStage("showing_hint");
@@ -211,23 +249,30 @@ export function GameShell(props: GameShellProps) {
         const elapsed = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
         // v0.30.7：判定 attemptOrdinal —— 用 wasRetriedRef（在 handleRetry 里 set true）
         // 比 hintsOpened≥1 启发更可靠（用户用 hint 但没错也算第一次提交）
-        const ordinal: 1 | 2 = wasRetriedRef.current && !examMode ? 2 : 1;
-        const res = await onSubmit({
-          ...r,
-          hintsOpened,
-          elapsedSeconds: elapsed,
-          correctAnswerDisplay: describeAnswer(question),
-          usedTutor: showedTutorInRetry,
-          attemptOrdinal: ordinal,
-        });
-        const { tier: speedTier } = ordinal === 2
-          ? { tier: "on_time" as const } // 2nd 不奖速度
-          : speedBonus(elapsed, question.estimated_time_seconds, r.isCorrect);
+        // v0.30.8：如果 displayedQuestion 是变式题（不同于原题），ordinal=1 因为对变式题来说
+        //         这是第一次作答；scoring 仍然通过 usedTutor 来抑制 combo/速度奖励。
+        //         如果 displayedQuestion === 原题（pool 没找到变式 fallback），ordinal=2 同前。
+        const isVariant = displayedQuestion.question_id !== question.question_id;
+        const ordinal: 1 | 2 = wasRetriedRef.current && !examMode && !isVariant ? 2 : 1;
+        const res = await onSubmit(
+          {
+            ...r,
+            hintsOpened,
+            elapsedSeconds: elapsed,
+            correctAnswerDisplay: describeAnswer(displayedQuestion),
+            usedTutor: showedTutorInRetry,
+            attemptOrdinal: ordinal,
+          },
+          displayedQuestion,
+        );
+        const speedTier = (wasRetriedRef.current && !examMode)
+          ? ("on_time" as const) // 2nd 不奖速度（无论变式还是原题）
+          : speedBonus(elapsed, displayedQuestion.estimated_time_seconds, r.isCorrect).tier;
         setFeedback({
           isCorrect: r.isCorrect,
           partialCorrect: r.partialCorrect,
-          correctAnswerDisplay: describeAnswer(question),
-          userAnswerDisplay: describeUserAnswer(question, r.answer),
+          correctAnswerDisplay: describeAnswer(displayedQuestion),
+          userAnswerDisplay: describeUserAnswer(displayedQuestion, r.answer),
           points: res.points,
           repeatDecay: res.repeatDecay,
           newSkillBonus: res.newSkillBonus,
@@ -247,7 +292,7 @@ export function GameShell(props: GameShellProps) {
         setSubmitting(false);
       }
     },
-    [submitting, feedback, resetKey, startedAt, hintsOpened, onSubmit, question, examMode, retryStage, showedTutorInRetry],
+    [submitting, feedback, resetKey, startedAt, hintsOpened, onSubmit, question, examMode, retryStage, showedTutorInRetry, displayedQuestion, onRequestVariant],
   );
 
   // 用户点击"再做一次"时调用：清掉提示状态，强制 panel 重新挂载
@@ -259,6 +304,12 @@ export function GameShell(props: GameShellProps) {
     setPanelKey((k) => k + 1);
     // v0.30.7: 标记本题"经过 retry"，下次提交走 attemptOrdinal=2
     wasRetriedRef.current = true;
+    // v0.30.8: 如果 1st 错答异步预取的变式题就绪，swap displayedQuestion 到变式题
+    // 用户接下来作答的是新题（同型同难度），不是刚看过的原题
+    if (variantRef.current) {
+      setDisplayedQuestion(variantRef.current);
+      // 不清空 variantRef.current 让 isVariant 判定能在 handleFinish 里用
+    }
   }, []);
 
   const onPickFeedback = useCallback((kind: "correct" | "wrong") => {
@@ -268,9 +319,12 @@ export function GameShell(props: GameShellProps) {
     }
   }, []);
 
-  const templateId = resolveTemplate(question);
+  // v0.30.8: TemplatePanel 渲染 displayedQuestion（变式题 swap 后会变），
+  // resolveTemplate 也基于 displayedQuestion（虽然变式题 game_type 同原题，
+  // 这里防御性以 displayedQuestion 为准）
+  const templateId = resolveTemplate(displayedQuestion);
   const common: TemplateRenderProps = {
-    question,
+    question: displayedQuestion,
     hintsOpened,
     openHint,
     onFinish: handleFinish,
@@ -690,7 +744,8 @@ function RetryHintPanel({
             </button>
           </div>
           <div className="text-[11px] text-amber-200/60 mt-2">
-            刚才这次错答已经记下啦——讲完题再做对，XP 会少一些（独立想出来的更值钱）。
+            刚才这次错答已经记下啦——再做时会换一道同型同难度的<strong>新题</strong>，
+            考验是不是真学会了，不是只把刚刚那道题的数字背下来。
           </div>
         </div>
       </div>

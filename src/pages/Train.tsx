@@ -9,6 +9,7 @@ import { RewardChest } from "../components/game/RewardChest";
 import { sfx } from "../lib/sfx";
 import { ABILITY_LABELS } from "../core/types";
 import { levelFromXp } from "../core/scoring";
+import { findParallelQuestion } from "../core/scheduler";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { pushToCloud } from "../db/cloudSync";
@@ -116,13 +117,19 @@ export function TrainPage() {
   }, [initKey, effectiveMode, freshParam, selectedSkillIds]);
 
   const handleSubmit = useCallback(
-    async (result: AttemptResult) => {
+    // v0.30.8: 第二参数 currentQuestion = GameShell 当前真实在答的题
+    //   - 默认 = state.questions[index]（原题）
+    //   - 1st 错答 retry 后变式题 = 不同的 questionId
+    // 用 currentQuestion 优先决定提交给 submitAttempt 的 question，避免
+    // "学生在变式题上答对，记账却记到了原题"的 bug。
+    async (result: AttemptResult, currentQuestion?: Question) => {
       if (state.status !== "running") return { points: 0 };
       const { session, studentId, combo, questions, index } = state;
+      const submittedQuestion = currentQuestion ?? questions[index]!;
       const outcome = await submitAttempt({
         studentId,
         session,
-        question: questions[index]!,
+        question: submittedQuestion,
         userAnswer: result.answer,
         isCorrect: result.isCorrect,
         partialCorrect: result.partialCorrect,
@@ -146,6 +153,47 @@ export function TrainPage() {
         newSkillBonus: outcome.newSkillBonus,
         errorPattern: outcome.errorPattern,
       };
+    },
+    [state],
+  );
+
+  /**
+   * v0.30.8: 1st 错答后帮 GameShell 找一道"同型同难度"的变式题给重做用。
+   *
+   * 数据源：
+   *   - 主池：当前 session 已加载 + db.questions 全表
+   *   - 排除：原题、本 session 已经做过的、本 session 还要做的（防提前消费 + 防剧透）
+   *   - 优先：用户没见过的（attemptCounts undefined or 0）→ 见的最少的
+   *
+   * 没找到 → 返回 null → GameShell 退化成"原题重做"（向后兼容）
+   * 异步执行（DB query 调用），但通常 < 100ms（题库 ~900 道）
+   */
+  const handleRequestVariant = useCallback(
+    async (original: Question): Promise<Question | null> => {
+      if (state.status !== "running") return null;
+      try {
+        const { studentId, session, questions: sessionQs } = state;
+        const allQs = await db.questions.toArray();
+        // 已经在本 session 做过的（attempts 表查 sessionId）
+        const sessionAttempts = await db.attempts.where({ sessionId: session.id }).toArray();
+        const attemptedInSession = new Set(sessionAttempts.map((a) => a.questionId));
+        // 本 session 还在排队的题（防止提前消费打乱节奏）
+        const sessionPlannedIds = new Set(sessionQs.map((q) => q.question_id));
+        const exclude = new Set<string>([
+          ...attemptedInSession,
+          ...sessionPlannedIds,
+        ]);
+        // 全用户历史 attempt 计数（少见的题优先）
+        const allAttempts = await db.attempts.where({ studentId }).toArray();
+        const attemptCounts = new Map<string, number>();
+        for (const a of allAttempts) {
+          attemptCounts.set(a.questionId, (attemptCounts.get(a.questionId) ?? 0) + 1);
+        }
+        return findParallelQuestion(original, allQs, exclude, attemptCounts);
+      } catch (e) {
+        console.warn("[handleRequestVariant] failed", e);
+        return null;
+      }
     },
     [state],
   );
@@ -231,6 +279,7 @@ export function TrainPage() {
       showStarter={state.index === 0}
       countdownEnabled={true}
       examMode={effectiveMode === "mock_exam"}
+      onRequestVariant={handleRequestVariant}
     />
   );
 }

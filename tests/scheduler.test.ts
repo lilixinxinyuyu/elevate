@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildDailySession } from "../src/core/scheduler";
+import { buildDailySession, findParallelQuestion } from "../src/core/scheduler";
 import { SEED_QUESTIONS } from "../src/content/questions";
-import type { Attempt, MasteryScore, MistakeReview } from "../src/core/types";
+import type { Attempt, MasteryScore, MistakeReview, Question } from "../src/core/types";
 
 describe("scheduler", () => {
   it("normal 模式选出一批题、不连续同 skill 超过 2 题", () => {
@@ -230,5 +230,78 @@ describe("scheduler", () => {
       attempts: [],
     });
     expect(plan.poolStarved).toBe(true);
+  });
+});
+
+// v0.30.8：变式题查找（1st 错答后的"换个同型同难度的题"流程用）
+describe("findParallelQuestion v0.30.8", () => {
+  // 取一道实际 G4B 题做基准
+  const original = SEED_QUESTIONS.find(
+    (q) => q.skill_id === "decimal_unit_conversion" && q.difficulty === 2,
+  )!;
+  const pool = SEED_QUESTIONS;
+
+  it("找到的变式题：同 skill / 同 game_type / 同 difficulty / 不同 question_id", () => {
+    const v = findParallelQuestion(original, pool, new Set());
+    expect(v).not.toBeNull();
+    expect(v!.question_id).not.toBe(original.question_id);
+    expect(v!.skill_id).toBe(original.skill_id);
+    expect(v!.game_type).toBe(original.game_type);
+    expect(v!.difficulty).toBe(original.difficulty);
+    expect(v!.term).toBe(original.term);
+  });
+
+  it("excludeIds 里的题不被选 —— 全部 exclude 时返回 null", () => {
+    const allCandidates: Question[] = pool.filter(
+      (q) =>
+        q.question_id !== original.question_id &&
+        q.skill_id === original.skill_id &&
+        q.game_type === original.game_type &&
+        q.difficulty === original.difficulty,
+    );
+    expect(allCandidates.length).toBeGreaterThan(0);
+    const exclude = new Set(allCandidates.map((q) => q.question_id));
+    const v = findParallelQuestion(original, pool, exclude);
+    expect(v).toBeNull();
+  });
+
+  it("没有候选时返回 null（孤立 skill）", () => {
+    const lonely: Question = {
+      ...original,
+      question_id: "FAKE_LONELY",
+      skill_id: "skill_that_does_not_exist_xyz",
+    };
+    const v = findParallelQuestion(lonely, pool, new Set());
+    expect(v).toBeNull();
+  });
+
+  it("优先返回用户没见过的题（attemptCounts 0 优先于 > 0）", () => {
+    const allCandidates = pool.filter(
+      (q) =>
+        q.question_id !== original.question_id &&
+        q.skill_id === original.skill_id &&
+        q.game_type === original.game_type &&
+        q.difficulty === original.difficulty,
+    );
+    if (allCandidates.length < 2) return;
+    const targetId = allCandidates[0]!.question_id;
+    const seenLot = new Map<string, number>();
+    for (const c of allCandidates) {
+      if (c.question_id !== targetId) seenLot.set(c.question_id, 5);
+    }
+    const v = findParallelQuestion(original, pool, new Set(), seenLot, () => 0);
+    expect(v?.question_id).toBe(targetId);
+  });
+
+  it("不跨 term —— 上册题不会被选作下册题的变式", () => {
+    const upperBook = SEED_QUESTIONS.find((q) => q.term === "上册");
+    if (!upperBook) return;
+    const lowerFake: Question = {
+      ...upperBook,
+      term: "下册",
+      question_id: "FAKE_LOWER",
+    };
+    const v = findParallelQuestion(lowerFake, [upperBook], new Set());
+    expect(v).toBeNull();
   });
 });
