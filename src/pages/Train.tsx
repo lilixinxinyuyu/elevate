@@ -56,8 +56,8 @@ export function TrainPage() {
 
   // 唯一标识本次"想要的训练"——只有 URL 真的改变才重新建会话；HMR / 重渲染都不会重置。
   const initKey = useMemo(
-    () => `${effectiveMode}::${selectedSkillIds?.join(",") ?? ""}::${freshParam ?? ""}`,
-    [effectiveMode, selectedSkillIds, freshParam],
+    () => `${effectiveMode}::${selectedSkillIds?.join(",") ?? ""}::${params.get("unitId") ?? ""}::${freshParam ?? ""}`,
+    [effectiveMode, selectedSkillIds, freshParam, params],
   );
   const lastInitKeyRef = useRef<string>("__none__");
 
@@ -89,6 +89,7 @@ export function TrainPage() {
           mode: effectiveMode,
           selectedSkillIds,
           fresh: freshParam != null,
+          unitId: params.get("unitId") ?? undefined,
         });
         if (lastInitKeyRef.current !== myKey) return;
         if (questions.length === 0) {

@@ -3,6 +3,44 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.1 — 2026-05-05 · 校园探险世界观 + 闯关 gate + 今日 3 环
+
+讨论后定下整体游戏化方向：**校园探险世界观** + **段位升级** + **gate 解锁**。
+
+### 命名重命名（feature flag on 时生效）
+- 自由练 → **专项练**；技能地图 → **技能树**
+- 大题营 → **闯关**（nav 短词）/ **大题闯关**（landing H1）
+- 口算 → **闪电口算**
+
+### 移动底部 nav 压到 5 项
+首页 / 闪电口算 / 今日挑战 / 闯关 / 错题复活；
+专项练 + 技能树 改 `desktopOnly` + 进首页 CTA。
+
+### 今日 3 环（Hero 底部）
+新组件 `src/components/TodayRings.tsx`：
+1. ⚡ 闪电口算 — 今日 ≥ 1 局即闭环
+2. 🎯 今日挑战 — 已做题数 / 15
+3. 🏆 今日重点（动态）— 闯关解锁接近 / 错题到期 / 考试倒计 / "今日满分"
+
+### 闯关 gate 解锁
+重写 `src/pages/BigProblems.tsx`：
+- 每单元 skill 平均 ≥ 75 才解锁本单元闯关
+- 锁着时显示进度条 + 展开看哪几个 skill 该刷
+- 期末大闯关：6 印章齐 + G4B 全 skill 平均 ≥ 70 才开
+- URL 加 `unitId` 参数 → scheduler `buildBigProblems` 按单元过滤大题
+
+### 闯关勋章 + 通关连胜（11 枚新）
+新 TrophyCategory `boss`：
+- 6 单元印章（boss_G4B_U1..U6_master）
+- boss_first_pass / boss_no_hint / boss_win_streak_5 / 10 / boss_final_master
+- finalizeSession 里 mode=big_problems + accuracy ≥ 0.8 触发；失败重置连胜
+
+### 1-9 × 11-19 速算 fluency 模块（"19 内速算"）
+经典天才口算，p50 ≤ 2.5s + ≥ 92% + ≥ 80 题 = 通关。
+
+### 完美一日 / 完美一周 / 生日 / 画图大师 trophy 注册
+4 枚 def 注册到 catalog（实际触发逻辑后续 sprint）。
+
 ## v0.31.0 — 2026-05-05 · Phase 2 起步：4 个 axis 全部上线
 
 ### Axis 4 · 加 skill 一条龙 CLI 脚本（基建）

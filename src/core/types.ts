@@ -350,6 +350,8 @@ export interface DailySession {
   plannedMinutes: number;
   questionIds: string[];
   selectedSkillIds?: string[];
+  /** v0.31.1：big_problems 闯关模式锁定的单元（用于通关时颁发对应印章） */
+  unitId?: string;
   startedAt?: number;
   finishedAt?: number;
   summary?: SessionSummary;
@@ -522,7 +524,9 @@ export type TrophyCategory =
   | "milestone"
   | "ability"
   | "skill"
-  | "commemorative";
+  | "commemorative"
+  /** Phase 2 Axis 1：闯关相关勋章（单元印章 / 零提示通关 / 连胜 / 期末大闯关） */
+  | "boss";
 
 /** 进阶勋章 4 等级（仅 milestone / ability / skill 用）。daily / commemorative 不打 tier。 */
 export type TrophyTier = "bronze" | "silver" | "gold" | "platinum";

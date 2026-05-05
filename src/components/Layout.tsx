@@ -165,14 +165,17 @@ export function Layout() {
         <Outlet />
       </main>
 
-      {/* 移动端底部导航 */}
+      {/* 移动端底部导航 — v0.31.1：压到 5 项最多（首页/闪电口算/今日挑战/闯关/
+          错题复活），desktopOnly 项目 (专项练/技能树) 在 Home CTA 卡片里访问。 */}
       <nav className="sm:hidden sticky bottom-0 z-20 bg-ink-900/90 border-t border-ink-700/70 backdrop-blur-md">
         <div
           className="grid text-xs"
-          style={{ gridTemplateColumns: `repeat(${items.filter((i) => !i.subtle).length}, minmax(0, 1fr))` }}
+          style={{
+            gridTemplateColumns: `repeat(${items.filter((i) => !i.subtle && !i.desktopOnly).length}, minmax(0, 1fr))`,
+          }}
         >
           {items
-            .filter((i) => !i.subtle)
+            .filter((i) => !i.subtle && !i.desktopOnly)
             .map((it) => {
               const path = it.to ? `/${subject.id}/${it.to}` : `/${subject.id}`;
               return (
@@ -192,7 +195,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.31.0
+        本地优先 · v0.31.1
       </footer>
 
       {/* v0.30.10: 自动解锁的单元庆祝（一次弹一个，关掉再弹下一个）*/}

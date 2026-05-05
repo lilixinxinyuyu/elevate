@@ -29,7 +29,7 @@ export interface TrophyMeta {
   /** 是否是 rare（单次成就），rare 才走盲盒抽奖 */
   rare?: boolean;
   /** v0.29: 勋章分类（影响 AI 图风格） */
-  category?: "daily" | "milestone" | "ability" | "skill" | "commemorative";
+  category?: "daily" | "milestone" | "ability" | "skill" | "commemorative" | "boss";
   /** v0.29: tier-leveled 勋章在哪个等级（影响 AI 图底色） */
   tier?: "bronze" | "silver" | "gold" | "platinum";
 }

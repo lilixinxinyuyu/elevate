@@ -13,6 +13,8 @@ export interface BuildSessionInput {
   mistakes: MistakeReview[];
   attempts: Attempt[];
   selectedSkillIds?: string[];
+  /** v0.31.1：big_problems 模式专用 — 限定到某个单元的大题（点 G4B U1 闯关时） */
+  unitId?: string;
   now?: number;
   rng?: () => number;
   rngSeed?: string;
@@ -740,7 +742,11 @@ function buildBigProblems(input: InternalInput): DailySessionPlan {
     Array.isArray(q.subquestions) &&
     q.subquestions.length > 0;
 
-  const baseCandidates = input.pool.filter(isBigProblem);
+  // v0.31.1：如果指定了 unitId（比如点 G4B U1 闯关），过滤到该单元
+  const unitFilter = input.unitId
+    ? (q: Question) => q.unit_id === input.unitId
+    : () => true;
+  const baseCandidates = input.pool.filter((q) => isBigProblem(q) && unitFilter(q));
 
   // 排除最近做过的题
   const fresh = baseCandidates.filter(

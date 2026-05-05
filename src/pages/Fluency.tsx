@@ -43,11 +43,11 @@ export function FluencyPage() {
     <div className="space-y-6">
       <header>
         <div className="flex items-baseline justify-between">
-          <h1 className="font-display font-bold text-2xl text-brand">口算训练营</h1>
+          <h1 className="font-display font-bold text-2xl text-brand">闪电口算</h1>
           <span className="text-xs text-slate-400">不进 XP · 独立速度雷达</span>
         </div>
         <p className="text-sm text-slate-300 mt-1">
-          每天 60 秒挑战，提速 + 提准。Phase 2 · 跨单元基础功。
+          60 秒冲刺，刷速度 + 刷准确。跨单元的"基本功"，跟主线不冲突。
         </p>
       </header>
 

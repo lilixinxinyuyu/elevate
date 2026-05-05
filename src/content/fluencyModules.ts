@@ -85,6 +85,36 @@ const mulTable9: FluencyModule = {
 };
 
 // ---------------------------------------------------------------------------
+// 模块：1-9 × 11-19 速算（"19 内速算"——经典天才口算训练）
+//
+// 心算技巧：a × (10+x) = 10a + ax → "拆开加"。
+// 例 7 × 13 = 70 + 7×3 = 91。
+// ---------------------------------------------------------------------------
+
+const mulTable19: FluencyModule = {
+  id: "mul_table_19",
+  name: "19 内速算",
+  shortLabel: "×19",
+  description: "1-9 × 11-19 共 81 题。心算口诀：拆十进位（如 7×13=70+21=91）。",
+  category: "multiplication",
+  grades: [4, 5, 6],
+  themeColor: "from-fuchsia-500 to-rose-500",
+  icon: "✖️",
+  generate: (): FluencyProblem => {
+    const a = 1 + Math.floor(Math.random() * 9); // 1-9
+    const b = 11 + Math.floor(Math.random() * 9); // 11-19
+    return {
+      key: `${a}x${b}`,
+      stem: `${a} × ${b}`,
+      correctAnswer: a * b,
+      distractors: distractorsForMul(a, b),
+    };
+  },
+  // 比 9×9 难 → 阈值放宽
+  masteryThreshold: { p50LatencyMs: 2500, accuracy: 0.92, minAttempts: 80 },
+};
+
+// ---------------------------------------------------------------------------
 // 模块：5×5 乘法口诀（G3 起步）
 // ---------------------------------------------------------------------------
 
@@ -217,6 +247,7 @@ const addSubSimplify100: FluencyModule = {
 export const FLUENCY_MODULES: FluencyModule[] = [
   mulTable5,
   mulTable9,
+  mulTable19,
   addWithin20,
   subWithin20,
   addSubSimplify100,

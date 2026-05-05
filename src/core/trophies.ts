@@ -465,6 +465,151 @@ export const TROPHIES: TrophyDef[] = [
     tier: (ctx) => ctx.attempts.filter((a) => a.isCorrect && a.skillId === "decimal_price_quantity").length,
     tieredThresholds: tiers(5, 15, 50, 150, " 道"),
   },
+
+  // ============================================
+  //  ⚔️ boss — 闯关勋章（Phase 2 Axis 1）
+  //  这些勋章不在 checkAndAwardTrophies 主循环里发——发放逻辑在 service.ts
+  //  finalizeSession 里专门处理 big_problems mode。这里只是注册 def 供 UI 渲染。
+  //  check 全 false（永远不在主 awarder 里返 true，避免重复发）。
+  // ============================================
+  {
+    id: "boss_first_pass",
+    name: "首次闯关",
+    description: "第一次通过任意单元闯关。",
+    icon: "🎖️",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_no_hint",
+    name: "零提示通关",
+    description: "整场闯关不开任何 hint 通过。",
+    icon: "🧠",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_win_streak_5",
+    name: "闯关连胜 5",
+    description: "连续 5 次通过闯关不失败。",
+    icon: "🔥",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_win_streak_10",
+    name: "闯关连胜 10",
+    description: "连续 10 次通过闯关不失败。",
+    icon: "💥",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_G4B_U1_DECIMAL_ADD_SUB_master",
+    name: "U1 印章 · 小数加减",
+    description: "通过 G4B U1 单元闯关获得。",
+    icon: "🥇",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_G4B_U2_TRI_QUAD_master",
+    name: "U2 印章 · 三角形",
+    description: "通过 G4B U2 单元闯关获得。",
+    icon: "🥇",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_G4B_U3_DECIMAL_MULTIPLY_master",
+    name: "U3 印章 · 小数乘法",
+    description: "通过 G4B U3 单元闯关获得。",
+    icon: "🥇",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_G4B_U4_OBSERVE_OBJECTS_master",
+    name: "U4 印章 · 观察物体",
+    description: "通过 G4B U4 单元闯关获得。",
+    icon: "🥇",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_G4B_U5_EQUATIONS_master",
+    name: "U5 印章 · 方程",
+    description: "通过 G4B U5 单元闯关获得。",
+    icon: "🥇",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_G4B_U6_DATA_master",
+    name: "U6 印章 · 平均数",
+    description: "通过 G4B U6 单元闯关获得。",
+    icon: "🥇",
+    category: "boss",
+    check: () => false,
+  },
+  {
+    id: "boss_final_master",
+    name: "期末大闯关",
+    description: "通过 G4B 期末大闯关 — 6 印章齐 + 全 skill 平均 ≥ 70。",
+    icon: "👑",
+    category: "boss",
+    check: () => false,
+  },
+
+  // ============================================
+  //  🌟 streak — 跨 ring 打卡（完美一日 / 完美一周）
+  //  用 daily 类别，让它在"日常成就"区出现。
+  //  发放逻辑：每天结算时 / 每周日结算时（service.ts 里检查），不走 awarder 主循环。
+  // ============================================
+  {
+    id: "perfect_day",
+    name: "完美一日",
+    description: "单日 3 环全闭：完成闪电口算 + 今日挑战 + 今日重点。",
+    icon: "🌟",
+    category: "milestone",
+    tier: (ctx) => Math.max(0, (ctx as { perfectDays?: number }).perfectDays ?? 0),
+    tieredThresholds: tiers(1, 7, 30, 100, " 日"),
+  },
+  {
+    id: "perfect_week",
+    name: "完美一周",
+    description: "连续 7 天 3 环全闭。",
+    icon: "🔥",
+    category: "milestone",
+    tier: (ctx) => Math.max(0, (ctx as { perfectWeeks?: number }).perfectWeeks ?? 0),
+    tieredThresholds: tiers(1, 4, 12, 52, " 周"),
+  },
+
+  // ============================================
+  //  🎂 special — 节日 / 生日勋章
+  // ============================================
+  {
+    id: "birthday_2026",
+    name: "生日快乐 2026",
+    description: "Selena 生日当天解锁。",
+    icon: "🎂",
+    category: "commemorative",
+    check: () => false, // 后续手动颁发
+  },
+
+  // ============================================
+  //  🎨 canvas — 画图大师（Phase 2 Axis 2）
+  // ============================================
+  {
+    id: "canvas_master",
+    name: "画图大师",
+    description: "答对点子图画图题数。铜 3 / 银 10 / 金 30 / 钻 100。",
+    icon: "🎨",
+    category: "skill",
+    tier: (ctx) =>
+      ctx.attempts.filter((a) => a.isCorrect && a.questionId.startsWith("DOT_")).length,
+    tieredThresholds: tiers(3, 10, 30, 100, " 道"),
+  },
 ];
 
 // ============================================================

@@ -2,6 +2,10 @@ import { Link } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { todayKey } from "../lib/date";
+import { TodayRings, type TodayRingsInput } from "../components/TodayRings";
+import { SKILLS } from "../content/skills";
+import { UNITS } from "../content/units";
+import { isPhase2Live } from "../lib/featureFlags";
 import {
   checkPoolHealth,
   computeCurrentRating,
@@ -33,6 +37,76 @@ function localDayKey(ts: number): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+/** v0.31.1：根据当前数据决定 TodayRings 的 3 环输入（含动态焦点环）*/
+function buildTodayRingsInput(args: {
+  todayCount: number;
+  challengeTarget: number;
+  mastery: { skillId: string; score: number }[];
+  mistakes: { resolved: boolean; nextReviewAt: number; questionId: string }[];
+  streak: number;
+  ratingAccuracy?: number;
+  trophyIds: Set<string>;
+}): TodayRingsInput {
+  const now = Date.now();
+  const challengeDone = args.todayCount >= args.challengeTarget;
+  // 闪电口算今日次数 — 暂时无法从 attempts 读（在 fluencyAttempts 里），用占位 0
+  // (后续若需要可通过 db.fluencyAttempts.where(...) 查；为不阻塞首屏渲染暂时保守 0)
+  const fluencyTodayCount = 0;
+
+  const dueMistakes = args.mistakes.filter(
+    (m) => !m.resolved && m.nextReviewAt <= now,
+  ).length;
+
+  // 优先级 1：哪个 unit 距闯关解锁最近（gap ≤ 15 算"接近"）
+  const G4B_GATE = 75;
+  const masteryById = new Map(args.mastery.map((m) => [m.skillId, m.score]));
+  const g4bUnits = UNITS.filter((u) => u.term === "下册").sort(
+    (a, b) => a.orderIndex - b.orderIndex,
+  );
+  const closestBoss = g4bUnits
+    .map((u) => {
+      const skills = SKILLS.filter((sk) => sk.unitId === u.id);
+      const scores = skills.map((sk) => masteryById.get(sk.id) ?? 0);
+      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      const beaten = args.trophyIds.has(`boss_${u.id}_master`);
+      return { unitName: u.name, avg: Math.round(avg), beaten };
+    })
+    .filter((u) => !u.beaten && u.avg < G4B_GATE)
+    .sort((a, b) => b.avg - a.avg)[0]; // 取距 75 最近的（avg 最高的未通关）
+
+  // 优先级 2：今日错题到期
+  // 优先级 3：考试倒计
+  // 优先级 4：3 环全闭
+  let focus: TodayRingsInput["focus"];
+  const phase2 = isPhase2Live();
+  const exam = currentExam();
+  const examDays = daysUntil(exam.date);
+
+  if (phase2 && closestBoss && (G4B_GATE - closestBoss.avg) <= 15) {
+    focus = {
+      kind: "boss_close",
+      unitName: closestBoss.unitName,
+      gap: G4B_GATE - closestBoss.avg,
+      targetGate: G4B_GATE,
+    };
+  } else if (dueMistakes > 0) {
+    focus = { kind: "mistakes_due", count: dueMistakes };
+  } else if (examDays >= 0 && examDays <= 14) {
+    focus = { kind: "exam_countdown", examName: exam.name, days: examDays };
+  } else if (challengeDone && fluencyTodayCount >= 1) {
+    focus = { kind: "all_done" };
+  } else {
+    focus = { kind: "idle" };
+  }
+
+  return {
+    fluencyTodayCount,
+    challengeTodayCount: args.todayCount,
+    challengeTarget: args.challengeTarget,
+    focus,
+  };
 }
 
 export function HomePage() {
@@ -222,42 +296,69 @@ export function HomePage() {
         </section>
       )}
 
-      {/* 副信息 chips + 开始按钮 */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="chip bg-amber-500/20 text-amber-200 border border-amber-400/30">
-          🔥 {streak} 天连续
-        </span>
-        <span className="chip bg-violet-500/20 text-violet-100 border border-violet-400/30">
-          今日已做 {todayAttempts.length}
-        </span>
-        {rating && rating.raw.totalAttempts > 0 && (
-          <span className="chip bg-cyan-500/20 text-cyan-100 border border-cyan-400/30" title="本学期答题正确率">
-            🎯 {Math.round(rating.raw.accuracy * 100)}% 准
-          </span>
-        )}
-        {(() => {
-          const exam = currentExam();
-          const days = daysUntil(exam.date);
-          if (days < 0) return null;
-          const tone =
-            exam.tone === "rose"
-              ? "bg-rose-500/20 text-rose-100 border-rose-400/40"
-              : "bg-cyan-500/20 text-cyan-100 border-cyan-400/40";
-          const text =
-            days === 0 ? `📅 今天就是${exam.name}！冲！`
-            : days === 1 ? `📅 明天${exam.name}`
-            : `📅 距${exam.name}还有 ${days} 天`;
-          return (
-            <span className={`chip border ${tone}`} title={`${exam.name}：${exam.dateKey}`}>
-              {text}
+      {/* v0.31.1：今日 3 环（取代之前的 chip 行）*/}
+      {isPhase2Live() ? (
+        <div className="space-y-3">
+          <TodayRings {...buildTodayRingsInput({
+            todayCount: todayAttempts.length,
+            challengeTarget: 15,
+            mastery: mastery ?? [],
+            mistakes: mistakes ?? [],
+            streak,
+            ratingAccuracy: rating?.raw.accuracy,
+            trophyIds: new Set((trophies ?? []).map((t) => t.trophyId)),
+          })} />
+          <div className="flex items-center gap-3 text-xs text-slate-400">
+            <span className="chip bg-amber-500/15 text-amber-200 border border-amber-400/25 text-[11px]">
+              🔥 {streak} 天连续
             </span>
-          );
-        })()}
-        {/* fresh=Date.now() 让每次点击都按最新 mastery 重新组合一套题（不复用旧 session） */}
-        <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary ml-auto text-base px-5 py-2.5">
-          ▶ 开始今日挑战
-        </Link>
-      </div>
+            {rating && rating.raw.totalAttempts > 0 && (
+              <span className="chip bg-cyan-500/15 text-cyan-100 border border-cyan-400/25 text-[11px]">
+                🎯 累计 {Math.round(rating.raw.accuracy * 100)}% 准
+              </span>
+            )}
+            <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary ml-auto text-sm px-4 py-2">
+              ▶ 开始今日挑战
+            </Link>
+          </div>
+        </div>
+      ) : (
+        // Phase 2 关闭时保持原 chip 行（不动 v0.30.x 行为）
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="chip bg-amber-500/20 text-amber-200 border border-amber-400/30">
+            🔥 {streak} 天连续
+          </span>
+          <span className="chip bg-violet-500/20 text-violet-100 border border-violet-400/30">
+            今日已做 {todayAttempts.length}
+          </span>
+          {rating && rating.raw.totalAttempts > 0 && (
+            <span className="chip bg-cyan-500/20 text-cyan-100 border border-cyan-400/30" title="本学期答题正确率">
+              🎯 {Math.round(rating.raw.accuracy * 100)}% 准
+            </span>
+          )}
+          {(() => {
+            const exam = currentExam();
+            const days = daysUntil(exam.date);
+            if (days < 0) return null;
+            const tone =
+              exam.tone === "rose"
+                ? "bg-rose-500/20 text-rose-100 border-rose-400/40"
+                : "bg-cyan-500/20 text-cyan-100 border-cyan-400/40";
+            const text =
+              days === 0 ? `📅 今天就是${exam.name}！冲！`
+              : days === 1 ? `📅 明天${exam.name}`
+              : `📅 距${exam.name}还有 ${days} 天`;
+            return (
+              <span className={`chip border ${tone}`} title={`${exam.name}：${exam.dateKey}`}>
+                {text}
+              </span>
+            );
+          })()}
+          <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary ml-auto text-base px-5 py-2.5">
+            ▶ 开始今日挑战
+          </Link>
+        </div>
+      )}
 
       {/* ROI #1：红旗 skill 提示（连错 3+ 次） */}
       {struggleSkills.length > 0 && (
@@ -320,8 +421,13 @@ export function HomePage() {
         })()}
         <Link to="/math/free-practice" className="card hover:bg-ink-700/60 transition-colors">
           <div className="text-xl">🎯</div>
-          <div className="font-display font-bold mt-2">自由练</div>
+          <div className="font-display font-bold mt-2">专项练</div>
           <div className="text-xs text-slate-400 mt-1">挑几个技能多刷一刷</div>
+        </Link>
+        <Link to="/math/skills" className="card hover:bg-ink-700/60 transition-colors">
+          <div className="text-xl">🌳</div>
+          <div className="font-display font-bold mt-2">技能树</div>
+          <div className="text-xs text-slate-400 mt-1">看看每个 skill 熟练度</div>
         </Link>
         <Link to="/math/mistakes" className="card hover:bg-ink-700/60 transition-colors">
           <div className="text-xl">🪄</div>

@@ -38,6 +38,8 @@ export interface SessionOptions {
   selectedSkillIds?: string[];
   /** 即便今天已有相同 mode 的 session，也强制新建一组 */
   fresh?: boolean;
+  /** v0.31.1：big_problems 模式可指定单元（点 G4B U1 闯关 → 只选该单元的大题） */
+  unitId?: string;
 }
 
 export async function getOrCreateSession(
@@ -93,7 +95,8 @@ export async function getOrCreateSession(
     mistakes,
     attempts,
     selectedSkillIds: opts.selectedSkillIds,
-    rngSeed: `${studentId}:${mode}:${term}:${dateKey}:${Date.now()}:${Math.random()}`,
+    unitId: opts.unitId,
+    rngSeed: `${studentId}:${mode}:${term}:${dateKey}:${opts.unitId ?? ""}:${Date.now()}:${Math.random()}`,
   });
   const session: DailySession = {
     id: uid("s-"),
@@ -105,6 +108,7 @@ export async function getOrCreateSession(
     plannedMinutes: student.dailyLimitMin,
     questionIds: plan.questionIds,
     selectedSkillIds: opts.selectedSkillIds,
+    unitId: opts.unitId,
     startedAt: Date.now(),
   };
   await db.sessions.put(session);
@@ -604,6 +608,68 @@ export async function finalizeSession(
         meta: award.tier ? { tier: award.tier } : undefined,
       };
       await db.trophies.put(t);
+    }
+  }
+
+  // v0.31.1：闯关印章 + 闯关相关勋章。
+  //   通过条件：mode=big_problems + 5/5 中 ≥ 4 道对（accuracy ≥ 0.8）
+  //   单元印章: trophyId = boss_<unitId>_master
+  //   零提示通关: 整场没开过 hint
+  //   闯关首通: 首次任意通过任意单元
+  //   闯关连胜: meta:bossWinStreak 累计，>= 5 拿
+  //   期末大闯关: session.final=1 + 通过 → boss_final_master
+  if (session.mode === "big_problems") {
+    const passed = total > 0 && correct >= Math.ceil(total * 0.8);
+    if (passed) {
+      const noHints = attempts.every((a) => (a.hintsOpened ?? 0) === 0);
+      const trophiesToAdd: { id: string; meta?: Record<string, unknown> }[] = [];
+
+      // 单元印章
+      if (session.unitId) {
+        const bossId = `boss_${session.unitId}_master`;
+        if (!trophies.some((t) => t.trophyId === bossId)) {
+          trophiesToAdd.push({ id: bossId });
+        }
+      }
+      // 闯关首通
+      if (!trophies.some((t) => t.trophyId === "boss_first_pass")) {
+        trophiesToAdd.push({ id: "boss_first_pass" });
+      }
+      // 零提示通关
+      if (noHints && !trophies.some((t) => t.trophyId === "boss_no_hint")) {
+        trophiesToAdd.push({ id: "boss_no_hint" });
+      }
+      // 闯关连胜（meta key 累加）
+      const streakRow = await db.meta.get("bossWinStreak::math::" + studentId);
+      const streak = ((streakRow?.value as number | undefined) ?? 0) + 1;
+      await db.meta.put({ key: "bossWinStreak::math::" + studentId, value: streak });
+      if (streak >= 5 && !trophies.some((t) => t.trophyId === "boss_win_streak_5")) {
+        trophiesToAdd.push({ id: "boss_win_streak_5" });
+      }
+      if (streak >= 10 && !trophies.some((t) => t.trophyId === "boss_win_streak_10")) {
+        trophiesToAdd.push({ id: "boss_win_streak_10" });
+      }
+
+      for (const x of trophiesToAdd) {
+        await db.trophies.put({
+          id: uid("t-"),
+          studentId,
+          subjectId: "math",
+          trophyId: x.id,
+          unlockedAt: Date.now(),
+          meta: x.meta,
+        });
+        // 也加进 newTrophyAwards 让 SessionSummary UI 弹出
+        newTrophyAwards.push({
+          trophyId: x.id,
+          count: 1,
+          newTotalCount: 1,
+          isRare: true,
+        });
+      }
+    } else {
+      // 失败重置连胜
+      await db.meta.put({ key: "bossWinStreak::math::" + studentId, value: 0 });
     }
   }
 

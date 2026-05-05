@@ -42,6 +42,9 @@ export interface SubjectNavItem {
   exact?: boolean;
   /** 暗色弱化（管理之类） */
   subtle?: boolean;
+  /** v0.31.1：仅桌面 nav 显示，移动端底部 nav 不放（避免 5+ 项挤）。
+   * Home 页加 CTA 卡片让移动端访问。*/
+  desktopOnly?: boolean;
 }
 
 export interface SubjectAbilityDef {

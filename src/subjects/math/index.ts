@@ -34,20 +34,33 @@ const MATH_ABILITIES: SubjectAbilityDef[] = [
   { id: "habit", label: "坚持力" },
 ];
 
-// Phase 2 Axis 3：feature flag on 时插入"口算"tab，否则保持原 6 项不变。
-// nav 是个 getter 而不是常量——保证 isPhase2Live() 切换 localStorage 后下次刷新生效。
+// Phase 2 Axis 3：feature flag on 时插入"闪电口算"+"闯关"，否则保持原 5 项主 + 2
+// subtle 不变。
+//
+// v0.31.1 命名重置（校园探险世界观）：
+//   - "自由练" → "专项练"（实际就是挑薄弱 skill 集训）
+//   - "技能地图" → "技能树"
+//   - "口算" → "闪电口算"
+//   - "大题营" → "闯关"（landing 大标题"大题闯关"，nav 用短的"闯关"）
+//
+// 移动底部 nav 压到 5 项（非 desktopOnly + 非 subtle）：
+//   首页 / 闪电口算 / 今日挑战 / 闯关 / 错题复活
+// 桌面 nav 全显示。专项练 + 技能树 移到首页 CTA 卡片让移动端可达。
 function buildMathNavItems(): SubjectNavItem[] {
   const base: SubjectNavItem[] = [
     { to: "", label: "首页", exact: true },
-    { to: "train", label: "今日挑战" },
-    { to: "free-practice", label: "自由练" },
-    { to: "skills", label: "技能地图" },
-    { to: "mistakes", label: "错题复活" },
   ];
   if (isPhase2Live()) {
-    base.push({ to: "fluency", label: "口算" });
-    base.push({ to: "big-problems", label: "大题营" });
+    base.push({ to: "fluency", label: "闪电口算" });
   }
+  base.push({ to: "train", label: "今日挑战" });
+  if (isPhase2Live()) {
+    base.push({ to: "big-problems", label: "闯关" });
+  }
+  // 这两个移动端不显示（首页 CTA 接走），桌面正常显示
+  base.push({ to: "free-practice", label: "专项练", desktopOnly: true });
+  base.push({ to: "skills", label: "技能树", desktopOnly: true });
+  base.push({ to: "mistakes", label: "错题复活" });
   base.push({ to: "report", label: "周报", subtle: true });
   base.push({ to: "admin", label: "管理", subtle: true });
   return base;

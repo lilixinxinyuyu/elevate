@@ -64,6 +64,8 @@ const SHAPE_CLIP: Record<TrophyCategory, string> = {
   // 五个内点在 54/-18/270/198 度对偶角。
   commemorative:
     "polygon(50% 0%, 67.6% 25.7%, 97.5% 34.5%, 78.5% 59.3%, 79.4% 90.5%, 50% 80%, 20.6% 90.5%, 21.5% 59.3%, 2.5% 34.5%, 32.4% 25.7%)",
+  // Phase 2 boss：方形 shield 风格（接近 skill 但顶部更平 + 加了"V" notch）
+  boss: "polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%)",
 };
 
 /**
@@ -82,6 +84,7 @@ const CATEGORY_COLOR: Record<TrophyCategory, string> = {
   ability: "linear-gradient(135deg, #60a5fa, #1d4ed8)", // blue
   skill: "linear-gradient(135deg, #c084fc, #6d28d9)", // violet
   commemorative: "transparent", // AI 图本身多彩，不需要染色
+  boss: "linear-gradient(135deg, #fb923c, #c2410c)", // orange — 闯关战斗感
 };
 
 /** category 配色的"暗一点版本"，用于 emoji 兜底时的内底（避免太刺眼） */
@@ -91,6 +94,7 @@ const CATEGORY_BG: Record<TrophyCategory, string> = {
   ability: "linear-gradient(135deg, rgba(96,165,250,0.20), rgba(29,78,216,0.10), rgba(0,0,0,0.55))",
   skill: "linear-gradient(135deg, rgba(192,132,252,0.20), rgba(109,40,217,0.10), rgba(0,0,0,0.55))",
   commemorative: "linear-gradient(135deg, rgba(251,191,36,0.20), rgba(0,0,0,0.55))",
+  boss: "linear-gradient(135deg, rgba(251,146,60,0.25), rgba(194,65,12,0.12), rgba(0,0,0,0.55))",
 };
 
 interface TierStyle {
