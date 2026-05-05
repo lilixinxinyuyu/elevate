@@ -202,9 +202,10 @@ export function TierCard({
         </div>
       </div>
 
-      {/* 能力诊断（折叠 row：label + 分数 + ▾。删了内联 bar 避免起止不齐） */}
+      {/* 能力诊断（折叠 row：label + 分数 + ▾。删了内联 bar 避免起止不齐）
+          v0.31.5：去掉 border-t 分割线（视觉噪音）。用纯垂直间距区分。 */}
       {ability && ability.raw.totalAttempts > 0 && (
-        <div className="relative mt-3 pt-3 border-t border-white/10">
+        <div className="relative mt-4">
           <button
             type="button"
             onClick={() => setAbilityOpen((v) => !v)}
