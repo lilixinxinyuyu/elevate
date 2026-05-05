@@ -4,6 +4,7 @@ import { MUST_BIG_PACK } from "./mustBigPack";
 import { GAP_FILL_PACK_G4B } from "./gapFillPackG4B";
 import { GAP_FILL_PACK_G4B_V2 } from "./gapFillPackG4B_v2";
 import { GAP_FILL_PACK_G4B_V3 } from "./gapFillPackG4B_v3";
+import { AI_GEN_G4B_PACK } from "./aiGenG4BPack";
 
 const base = {
   version: 1 as const,
@@ -2626,4 +2627,5 @@ export const SEED_QUESTIONS: Question[] = [
   ...GAP_FILL_PACK_G4B,
   ...GAP_FILL_PACK_G4B_V2,
   ...GAP_FILL_PACK_G4B_V3,
+  ...AI_GEN_G4B_PACK,
 ];

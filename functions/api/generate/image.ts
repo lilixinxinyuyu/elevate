@@ -1,7 +1,7 @@
 import {
   checkAuth,
   corsHeaders,
-  getChatProviders,
+  getImageProviders,
   getImageModelsFor,
   jsonResponse,
   type AiProviderContext,
@@ -284,7 +284,7 @@ async function pollTask(
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const fail = checkAuth(request, env);
   if (fail) return fail;
-  const providers = getChatProviders(env);
+  const providers = getImageProviders(env);
   if (providers.length === 0) {
     return jsonResponse({ ok: false, error: "image_gen_not_configured" }, 503);
   }

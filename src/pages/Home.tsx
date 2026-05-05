@@ -18,7 +18,8 @@ import { TierCard } from "../components/TierCard";
 import { TrophyWall } from "../components/TrophyWall";
 import { BadgeInventory } from "../components/BadgeInventory";
 import { UnlockCelebration } from "../components/UnlockCelebration";
-import type { RatingResult } from "../core/rating";
+import type { RatingResult, AbilityDiagnostic } from "../core/rating";
+import { computeAbilityDiagnostic } from "../core/rating";
 import type { Term } from "../core/types";
 import { useEffect, useState } from "react";
 import { ackMigrationNotice, getMigrationNoticeUnacked } from "../db/seed";
@@ -54,6 +55,7 @@ export function HomePage() {
   );
 
   const [rating, setRating] = useState<RatingResult | null>(null);
+  const [ability, setAbility] = useState<AbilityDiagnostic | null>(null);
   const [unlockedTiers, setUnlockedTiers] = useState<string[]>(["school"]);
   const [equippedTierId, setEquippedTierId] = useState<string>("school");
   const [term, setTerm] = useState<Term>("下册");
@@ -86,6 +88,11 @@ export function HomePage() {
       if (cancelled) return;
       setRating(r);
 
+      // 能力诊断（与 XP 不同：0-1000 综合分，反映学习"质量"）
+      // 用最新的 attempts/mastery 重算；hero 底部展示
+      const ab = computeAbilityDiagnostic(attempts ?? [], mastery ?? [], term);
+      if (!cancelled) setAbility(ab);
+
       // 解锁段位（按当前 term）
       const prevUnlocked = await getUnlockedTiers(student.id, term);
       const currentIdx = tierIndex(r.tier.id);
@@ -116,7 +123,7 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [student?.id, attempts?.length, term]);
+  }, [student?.id, attempts?.length, mastery?.length, term]);
 
   const handleEquip = async (tierId: string) => {
     if (!student) return;
@@ -199,9 +206,14 @@ export function HomePage() {
         ))}
       </div>
 
-      {/* Hero：综合分 + 段位 + 佩戴的勋章 */}
+      {/* Hero：综合分 + 段位 + 佩戴的勋章 + 能力诊断（v0.30.2） */}
       {rating ? (
-        <TierCard studentName={student.name} rating={rating} equippedBadge={equippedBadge} />
+        <TierCard
+          studentName={student.name}
+          rating={rating}
+          equippedBadge={equippedBadge}
+          ability={ability}
+        />
       ) : (
         <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/30 via-fuchsia-600/20 to-pink-600/30 border border-violet-400/20 p-6">
           <div className="text-sm text-violet-200">你好 {student.name} 👋</div>

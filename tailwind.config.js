@@ -93,6 +93,23 @@ export default {
           "0%": { transform: "rotate(0deg)" },
           "100%": { transform: "rotate(360deg)" },
         },
+        // v0.30.2 hero 校徽进场：fade in + slight scale + tiny rotate
+        badgeEnter: {
+          "0%": { transform: "scale(0.55) rotate(-12deg)", opacity: "0" },
+          "60%": { transform: "scale(1.08) rotate(4deg)", opacity: "1" },
+          "100%": { transform: "scale(1) rotate(0deg)", opacity: "1" },
+        },
+        // hover 时绕轴轻摆，做"被吹气"的小动作
+        badgeHoverWiggle: {
+          "0%,100%": { transform: "rotate(0deg) scale(1.08)" },
+          "30%": { transform: "rotate(-6deg) scale(1.12)" },
+          "70%": { transform: "rotate(6deg) scale(1.12)" },
+        },
+        // hero score 进场：从下方滑入 + fade
+        scoreSlideIn: {
+          "0%": { transform: "translateY(14px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
       },
       animation: {
         shake: "shake 0.45s ease-in-out",
@@ -109,6 +126,9 @@ export default {
         sparkle: "sparkle 1.2s ease-in-out infinite",
         // 钻档：4 秒 1 圈，让全息光晕缓慢转动（不要太快免得分散注意力）
         shimmer: "shimmer 4s linear infinite",
+        "badge-enter": "badgeEnter 720ms cubic-bezier(0.34,1.56,0.64,1) both",
+        "badge-wiggle": "badgeHoverWiggle 0.7s ease-in-out",
+        "score-slide-in": "scoreSlideIn 480ms cubic-bezier(0.16,1,0.3,1) both",
       },
     },
   },

@@ -37,15 +37,43 @@ export interface AiProviderContext {
 /**
  * 选 chat 模型用的 provider 列表（按优先级）。
  *
- * v0.30.1 反转：用户已付费 token-plan 订阅，**token-plan 优先用满**，
- * DashScope (Free Tier，只有 qwen-plus 能用且较慢) 当兜底。
+ * v0.30.2：分流——
+ *   - chat（出题、判题）：DashScope 优先（qwen-plus 实测 15-25s，token-plan 上的
+ *     deepseek/glm/MiniMax/qwen3.6-plus 经常 25s+ 超时，把整个 30s 墙钟用光）。
+ *   - image（勋章/校徽）：token-plan 优先（wan2.7-image-pro 比 wanx2.1-turbo 强很多，
+ *     而且图片生成 60s 异步轮询，timeout 不是关键约束）。
  *
- * 历史：Round 6.8 曾把 DashScope 设为 primary 因为 token-plan 上的 deepseek/
- * glm/MiniMax/qwen3.6-plus 经常 25s+ 超时。但 DashScope Free Tier 限额经常打到
- * AllocationQuota，且 token-plan 不用就浪费订阅费。所以反过来：先打 token-plan，
- * 失败再 fallback 到 DashScope。
+ * 这个函数给 chat 用。image 走 getImageProviders。
  */
 export function getChatProviders(env: Env): AiProviderContext[] {
+  const providers: AiProviderContext[] = [];
+  if (env.DASHSCOPE_API_KEY) {
+    providers.push({
+      baseUrl: "https://dashscope-intl.aliyuncs.com",
+      apiKey: env.DASHSCOPE_API_KEY,
+      label: "dashscope-intl",
+    });
+  }
+  if (env.TOKEN_PLAN_API_KEY) {
+    providers.push({
+      baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com",
+      apiKey: env.TOKEN_PLAN_API_KEY,
+      label: "token-plan",
+    });
+  }
+  return providers;
+}
+
+/**
+ * 选 image 模型用的 provider 列表。
+ *
+ * **token-plan 优先**：用户已付费订阅，且 wan2.7-image-pro / qwen-image-2.0-pro
+ * 比 DashScope Free Tier 的 wanx2.1-turbo 质感强太多（勋章/校徽 36s vs 8s 但
+ * 更值）。token-plan 不可用 fallback 到 DashScope。
+ *
+ * image.ts 内部应该直接调这个，**不**复用 getChatProviders。
+ */
+export function getImageProviders(env: Env): AiProviderContext[] {
   const providers: AiProviderContext[] = [];
   if (env.TOKEN_PLAN_API_KEY) {
     providers.push({
