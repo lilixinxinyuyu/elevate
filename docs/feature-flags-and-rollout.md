@@ -94,6 +94,11 @@ flag on：`TodayRings` 同心 3 环（闪电口算 / 今日挑战 / 今日重点
 3. Claude 跑 `VITE_PHASE2_LIVE=true npm run build` 重新构建
 4. 部署 → 所有用户默认开
 
+### ✅ 已 flip — v0.31.10 (2026-05-06)
+期中考 5/6 当天 flip。所有用户访问 `https://selena-elevate.pages.dev/math`
+直接看到完整 Phase 2 nav（首页 / 闪电口算 / 今日挑战 / 闯关 / 错题复活）+ 3 环 Hero。
+URL `?phase2=on` 不再需要。`?phase2=off` 仍可用于本地关闭（localStorage 优先级仍在）。
+
 ## 加新 flag-gated 功能 checklist
 
 ### Nav 加项
