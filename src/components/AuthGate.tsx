@@ -15,6 +15,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
 
+  // v0.31.3：toast 化 hint —— 4 秒后自动消失，不再常驻右上角占视觉位置
+  useEffect(() => {
+    if (!hint) return;
+    const t = window.setTimeout(() => setHint(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [hint]);
+
   useEffect(() => {
     (async () => {
       const stored = getStoredPassword();

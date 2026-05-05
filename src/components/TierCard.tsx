@@ -31,6 +31,11 @@ export function TierCard({
   const t = rating.tier;
   const [abilityOpen, setAbilityOpen] = useState(false);
 
+  // v0.31.3：距下一段位 ≤ 200 XP = "即将升段"——这是 Selena 此刻最强动机点。
+  // 之前埋成小灰字，现在 pulse 进度条 + 上方 chip 高亮显示。
+  const tierUpImminent =
+    rating.subRank >= 4 && rating.nextTier && rating.deltaToNext > 0 && rating.deltaToNext <= 200;
+
   const nextHint = (() => {
     if (rating.subRank < 4) {
       return (
@@ -88,11 +93,17 @@ export function TierCard({
             </div>
           </div>
 
-          {/* 进度条 + 下个目标 */}
+          {/* 进度条 + 下个目标。即将升段时进度条 pulse + 上方红字 chip 紧迫提示 */}
           <div>
+            {tierUpImminent && rating.nextTier && (
+              <div className="mb-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-[11px] font-bold text-amber-100 animate-pulse-bar">
+                <span>🔥</span>
+                <span>仅剩 <span className="tabular-nums">{rating.deltaToNext}</span> XP 升 {rating.nextTier.badgeIcon} {rating.nextTier.name}</span>
+              </div>
+            )}
             <div className="h-1.5 rounded-full bg-black/25 overflow-hidden ring-1 ring-white/5">
               <div
-                className="h-full bg-gradient-to-r from-amber-300 via-pink-300 to-violet-300 shadow-glow-amber transition-all duration-700"
+                className={`h-full bg-gradient-to-r from-amber-300 via-pink-300 to-violet-300 shadow-glow-amber transition-all duration-700 ${tierUpImminent ? "animate-pulse-bar" : ""}`}
                 style={{ width: `${Math.round(rating.progressInTier * 100)}%` }}
               />
             </div>

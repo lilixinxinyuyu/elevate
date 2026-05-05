@@ -72,32 +72,41 @@ export function TodayRings(input: TodayRingsInput) {
             <Link
               key={r.id}
               to={r.to}
-              className={`group flex items-center gap-2 rounded-xl px-2.5 py-2 transition-colors ${
+              // v0.31.3：未完成的 chip 视觉权重更高（让 Selena 注意到剩下的事）
+              //   - 已完成：低饱和 + 极弱 ✓ 提示
+              //   - 未完成：染主色淡背景 + 实心左色条 + 更亮文字
+              className={`group flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors ${
                 r.done
-                  ? "bg-white/[0.06] hover:bg-white/[0.10]"
-                  : "bg-ink-800/40 hover:bg-white/[0.06]"
+                  ? "bg-white/[0.03] hover:bg-white/[0.06]"
+                  : "hover:bg-white/[0.05]"
               }`}
               style={{
-                borderLeft: `3px solid ${r.done ? r.hue : "transparent"}`,
+                borderLeft: `3px solid ${r.hue}`,
+                background: r.done
+                  ? undefined
+                  : `linear-gradient(90deg, ${r.hue}1F, transparent 70%)`,
               }}
             >
               <div
-                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] shrink-0"
                 style={{
-                  background: `linear-gradient(135deg, ${r.hue}, ${r.hue2})`,
+                  background: r.done
+                    ? `${r.hue}30`
+                    : `linear-gradient(135deg, ${r.hue}, ${r.hue2})`,
+                  color: r.done ? r.hue : "#fff",
                 }}
               >
-                {r.done ? "✓" : ""}
+                {r.done ? "✓" : r.icon}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-slate-100 truncate">
-                  {r.icon} {r.shortLabel}
+                <div className={`text-xs font-bold truncate ${r.done ? "text-slate-400" : "text-slate-100"}`}>
+                  {r.shortLabel}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate">
+                <div className={`text-[10px] truncate ${r.done ? "text-slate-500" : "text-slate-300"}`}>
                   {r.statusText}
                 </div>
               </div>
-              <div className="text-slate-500 text-xs shrink-0 group-hover:text-slate-300 transition-colors">
+              <div className={`text-xs shrink-0 group-hover:text-slate-200 transition-colors ${r.done ? "text-slate-600" : "text-slate-400"}`}>
                 →
               </div>
             </Link>
@@ -147,16 +156,21 @@ function ConcentricRings({ rings, allDone }: { rings: RingSpec[]; allDone: boole
         {rings.map((r, i) => {
           const radius = radii[i] ?? 50;
           const c = 2 * Math.PI * radius;
-          const offset = c * (1 - Math.max(0.02, r.progress)); // 至少留 2% 露弧度
+          // v0.31.3：min progress 提到 6%，让"还没开始"的环也露出明显弧度，
+          // 否则 cyan 外环新用户根本意识不到第三环存在
+          const offset = c * (1 - Math.max(0.06, r.progress));
+          // v0.31.3：底圈染主色（10% 透明度）让每环都有"自己的颜色识别"，
+          // 不再统一暗灰——视觉上 3 环始终可辨认
           return (
             <g key={r.id}>
-              {/* 底圆（暗）*/}
+              {/* 底圆（染主色弱光）*/}
               <circle
                 cx={cx}
                 cy={cy}
                 r={radius}
                 fill="none"
-                stroke="rgba(255,255,255,0.07)"
+                stroke={r.hue}
+                strokeOpacity={0.18}
                 strokeWidth={stroke}
               />
               {/* 进度弧 */}
@@ -172,6 +186,9 @@ function ConcentricRings({ rings, allDone }: { rings: RingSpec[]; allDone: boole
                 strokeDashoffset={offset}
                 transform={`rotate(-90 ${cx} ${cy})`}
                 className="transition-[stroke-dashoffset] duration-700"
+                // v0.31.3：未完成的环饱和度更高更夺目；完成的环略降一档（不抢戏，
+                // 视觉重心移到剩下未完成的环）
+                opacity={r.done ? 0.85 : 1}
               />
             </g>
           );
@@ -229,8 +246,9 @@ function buildRings(input: TodayRingsInput, phase2: boolean): RingSpec[] {
       1,
       input.challengeTodayCount / Math.max(1, input.challengeTarget),
     ),
+    // v0.31.3：完成时不再露累计 N 题（404 题这种数字反而像 bug）—— 简化为 "今日完成 ✓"
     statusText: challengeDone
-      ? `已完成 ${input.challengeTodayCount} 题 ✓`
+      ? `今日完成 ✓`
       : `${input.challengeTodayCount} / ${input.challengeTarget} 题`,
     to: "/math/train",
     // violet
