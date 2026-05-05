@@ -5,10 +5,16 @@ import { SEED_QUESTIONS } from "../content/questions";
 import { validateQuestion } from "../core/validateQuestion";
 import type { Question, StudentProfile } from "../core/types";
 
-// v0.28.3 (SEED_VERSION 20)：重写 7 道用 "输 N" 指令式说法的题（"0.30 和 0.3，
-// 相等输 0" 这类令人困惑的句式）改成自然中文 "答 N" / 直接问数字。同时补 8 道
-// decimal_compare 高质量题。bump version 让现有设备重新导入更新过的 stem。
-const SEED_VERSION = 20;
+// v0.30.14 (SEED_VERSION 21)：v0.30.12 加了 aiGenG4B_U14_Pack（60 道 G4B U1-U4
+// 弱 skill 题）进 SEED_QUESTIONS，但忘了 bump SEED_VERSION，导致已有 IndexedDB
+// 的现有设备 ensureSeeded() early-return，新题永远进不来。现在 bump 到 21 让
+// 现有设备重新跑一遍 bulkPut，60 道新题 upsert 进库。
+// 同时 v0.30.14 加 orphan-mistakes cleanup：清掉 questionId 已不存在的错题记录
+// （之前 admin 删题没同步删 mistake 行，导致错题列表大量 [题目已移除]）。
+//
+// 历史：v0.28.3 (SEED_VERSION 20)：重写 7 道用 "输 N" 指令式说法的题改成自然
+// 中文 "答 N"，同时补 8 道 decimal_compare 高质量题。
+const SEED_VERSION = 21;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
@@ -121,6 +127,45 @@ function stampMathSubject<T extends Record<string, unknown>>(rows: T[]): T[] {
   return rows.map((r) => ({ ...r, subjectId: r.subjectId ?? "math" }));
 }
 
+/**
+ * v0.30.14：清掉 questionId 已不存在于 questions 表的孤儿 mistake 行。
+ *
+ * 背景：admin 清理 / seed 改版时把题删了，但 mistakes 表里的 questionId 还引用
+ * 着旧 ID（如 G4B_dmmix_1, Q_ang_2, G4A_lc_1 等）。错题复活页面渲染时找不到
+ * 题，统一显示 "[题目已移除]"。Selena 的实际数据：112 mistakes / 62 orphan
+ * (56 unresolved) → 错题复活页几乎全废。
+ *
+ * 安全性：
+ *   - 只删 questionId 不在 questions 表的 mistakes 行，已有题的全保留
+ *   - 跨设备同步：mistakes 表本身就 sync，删了不会再回来
+ *   - 跑完用 meta:orphanMistakesCleanedAt 标记，不重复跑
+ *
+ * 跑在 SEED_VERSION 提升后或 ensureSeeded 即将 return 之前 — 反正
+ * questions 表那时已经是 source of truth。
+ */
+const ORPHAN_MISTAKES_CLEANED_KEY = "orphanMistakesCleanedAt";
+async function cleanupOrphanMistakes(): Promise<void> {
+  try {
+    const meta = await db.meta.get(ORPHAN_MISTAKES_CLEANED_KEY);
+    if (meta?.value) return; // 已经做过
+
+    const allQids = (await db.questions.toCollection().primaryKeys()) as string[];
+    const qidSet = new Set(allQids);
+    const allMistakes = await db.mistakes.toArray();
+    const orphanIds = allMistakes
+      .filter((m) => !qidSet.has(m.questionId))
+      .map((m) => m.id);
+
+    if (orphanIds.length > 0) {
+      await db.mistakes.bulkDelete(orphanIds);
+      console.log(`[orphanMistakes] cleaned ${orphanIds.length} mistake row(s) with missing question`);
+    }
+    await db.meta.put({ key: ORPHAN_MISTAKES_CLEANED_KEY, value: Date.now() });
+  } catch (e) {
+    console.warn("[cleanupOrphanMistakes] failed:", e);
+  }
+}
+
 export async function ensureSeeded(): Promise<void> {
   const existing = await db.meta.get(SEED_KEY);
   const hasQuestions = await db.questions.count();
@@ -153,6 +198,8 @@ export async function ensureSeeded(): Promise<void> {
     migrateAttemptScoresV7().catch((e) => console.warn("[migrate v7] failed:", e));
     // v19 一次性补 stamp（即使 seed 没动也跑）
     void backfillMissingSubjectIds().catch(() => {});
+    // v0.30.14 一次性清孤儿 mistake（也在已最新分支跑）
+    void cleanupOrphanMistakes();
     return;
   }
 
@@ -210,6 +257,10 @@ export async function ensureSeeded(): Promise<void> {
 
   // v19: backfill subjectId
   void backfillMissingSubjectIds().catch(() => {});
+
+  // v0.30.14: 清孤儿 mistake（在 seed bulkPut 之后跑，让新加进来的题
+  // 能 "救活" 一些旧 mistake 行）
+  void cleanupOrphanMistakes();
 }
 
 /**

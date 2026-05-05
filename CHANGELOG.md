@@ -3,6 +3,30 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.30.14 — 2026-05-05 · SEED_VERSION 补 bump + 错题孤儿清理
+
+**用户报告**："拉了云端最新的，admin 题量还是没有变化（v0.30.12 的 60 道新题没下来）"。
+
+**根因**：v0.30.12 把 `aiGenG4B_U14_Pack` 加进 `SEED_QUESTIONS` 数组，但忘了
+bump `SEED_VERSION`（停在 v0.28.3 的 20）。`ensureSeeded()` 看到本地 meta
+`seedVersion === 20` 直接 early-return，新题永远进不来 — 现有用户全部漏发，
+只有清缓存或新设备才能拿到。
+
+**修复**：
+- `src/db/seed.ts` `SEED_VERSION` 20 → 21，强制现有设备重跑 bulkPut（idempotent）。
+- 顺手加 `cleanupOrphanMistakes()` 一次性 migration：清掉 `mistakes` 表里
+  `questionId` 已不存在于 `questions` 表的孤儿记录。
+  - Selena 实际：112 mistakes 里 62 道孤儿（56 unresolved），错题复活页几乎
+    全显示 `[题目已移除]`。
+  - 来源是历史 admin 清理 / seed 改版时把题删了，但没同步删 mistake 行。
+  - 由 `meta:orphanMistakesCleanedAt` flag 防重跑，跨设备 sync 自然带过去。
+
+**Visual review 一并 audit**（生产 https://selena-elevate.pages.dev）：
+- 首页 Hero / 段位勋章柜 / 奖杯柜：✅ 视觉无回归
+- Train / Skills / 自由练 / 错题复活 / Admin：✅ 路由 + 渲染都正常
+- 题量统计页：✅ 显示正确（修复 SEED_VERSION 后会再涨 ~60 道）
+- F3-F4（G4A skill 题量=0、G4B U5/U6 必考题量不足）：列入期中后待办，本次不动
+
 ## v0.30.12 — 2026-05-05 · 防刷分三层护栏 + 60 道 U1-U4 + Trophy 文字 bug 修
 
 **痛点**：用户观察到 Selena 已经在"姊妹题刷分"——同 skill 同难度不同 question_id 来回刷。
