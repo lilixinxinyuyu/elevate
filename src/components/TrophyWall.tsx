@@ -106,7 +106,7 @@ function TrophyCell({ def, trophies, ctx }: TrophyCellProps) {
             subjectId="math"
             emoji={def.icon ?? "🏆"}
             size="lg"
-            tier={cur ?? undefined}
+            tier={cur ?? (def.tieredThresholds ? "bronze" : undefined)}
             category={def.category}
             glow={cur === "gold" || cur === "platinum"}
             unlocked={unlocked}
