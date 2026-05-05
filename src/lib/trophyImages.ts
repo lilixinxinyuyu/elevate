@@ -329,13 +329,23 @@ function buildTierBadgePrompt(t: TrophyMeta): string {
  * 之前直接 readAsDataURL(blob) 把 AI 返回的原始 PNG 整张存进 IDB —— 实测每张
  * ~7 MB，2 张就 14 MB，导致 cloudSync 上传 14 MB JSON 给 Cloudflare 直接 500。
  *
- * 现在通过 canvas 重绘 + JPEG 压缩：
- *   - 目标尺寸 256×256（UI 最大显示尺寸 lg=80px / xl=128px，256 足够清晰）
- *   - 输出 JPEG quality=0.85（PNG 没必要——勋章图没有透明）
- *   - 实测每张 ~30-60 KB，30 张总 ~1-2 MB，sync push 轻松通过
+ * 现在通过 canvas 重绘 + JPEG 压缩。**v0.30.6**：分两档：
+ *   - "default" 256×256 q=0.85 （普通 trophy，最大显示 lg=80 / xl=128，~30-60KB）
+ *   - "large"   512×512 q=0.92 （tier badge / mascot，hero 显示 210px × retina = 420，~80-150KB）
+ *
+ * 走 "large" 档的判断：trophyId 形如 `math_tier_*` / `chinese_tier_*` / `_mascot_*`
  */
-const COMPRESS_TARGET_PX = 256;
-const COMPRESS_JPEG_QUALITY = 0.85;
+const COMPRESS_TARGET_PX_DEFAULT = 256;
+const COMPRESS_TARGET_PX_LARGE = 512;
+const COMPRESS_JPEG_QUALITY_DEFAULT = 0.85;
+const COMPRESS_JPEG_QUALITY_LARGE = 0.92;
+
+function shouldUseLargeCompression(trophyId: string): boolean {
+  return (
+    /^(math|chinese)_tier_/.test(trophyId) ||
+    /^_mascot_/.test(trophyId)
+  );
+}
 
 async function blobToImage(blob: Blob): Promise<HTMLImageElement> {
   const url = URL.createObjectURL(blob);
@@ -352,35 +362,39 @@ async function blobToImage(blob: Blob): Promise<HTMLImageElement> {
 }
 
 /** Canvas 重绘 + JPEG 压缩。返回 data URL。 */
-async function compressBlobToDataUrl(blob: Blob): Promise<string> {
+async function compressBlobToDataUrl(
+  blob: Blob,
+  opts: { large?: boolean } = {},
+): Promise<string> {
+  const targetPx = opts.large ? COMPRESS_TARGET_PX_LARGE : COMPRESS_TARGET_PX_DEFAULT;
+  const quality = opts.large ? COMPRESS_JPEG_QUALITY_LARGE : COMPRESS_JPEG_QUALITY_DEFAULT;
   const img = await blobToImage(blob);
   const canvas = document.createElement("canvas");
-  canvas.width = COMPRESS_TARGET_PX;
-  canvas.height = COMPRESS_TARGET_PX;
+  canvas.width = targetPx;
+  canvas.height = targetPx;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas 2d context unavailable");
-  // 黑底（与 prompt 要求"深色背景"一致；JPEG 不支持透明）
+  // 黑底（JPEG 不支持透明，留个底色避免空白边缘）
   ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, COMPRESS_TARGET_PX, COMPRESS_TARGET_PX);
+  ctx.fillRect(0, 0, targetPx, targetPx);
   // 等比缩放居中绘制
-  const scale = Math.min(
-    COMPRESS_TARGET_PX / img.width,
-    COMPRESS_TARGET_PX / img.height,
-  );
+  const scale = Math.min(targetPx / img.width, targetPx / img.height);
   const w = img.width * scale;
   const h = img.height * scale;
-  const dx = (COMPRESS_TARGET_PX - w) / 2;
-  const dy = (COMPRESS_TARGET_PX - h) / 2;
+  const dx = (targetPx - w) / 2;
+  const dy = (targetPx - h) / 2;
   ctx.drawImage(img, dx, dy, w, h);
-  return canvas.toDataURL("image/jpeg", COMPRESS_JPEG_QUALITY);
+  return canvas.toDataURL("image/jpeg", quality);
 }
 
-/** 把任意 URL 下载、压缩成 base64 data URL（持久化到 IndexedDB） */
-async function fetchAsDataUrl(url: string): Promise<string> {
+/** 把任意 URL 下载、压缩成 base64 data URL（持久化到 IndexedDB）。trophyId 决定压缩档位 */
+async function fetchAsDataUrl(url: string, trophyId?: string): Promise<string> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`fetch image failed: ${r.status}`);
   const blob = await r.blob();
-  return await compressBlobToDataUrl(blob);
+  return await compressBlobToDataUrl(blob, {
+    large: trophyId ? shouldUseLargeCompression(trophyId) : false,
+  });
 }
 
 /**
@@ -496,8 +510,8 @@ export async function ensureTrophyImage(
   });
   const url = r.urls[0];
   if (!url) throw new Error("generateImage returned 0 urls");
-  // 立刻下载成 base64 (URL 24h 过期)
-  const dataUrl = await fetchAsDataUrl(url);
+  // 立刻下载成 base64 (URL 24h 过期)。trophyId 决定压缩档位（tier badge 走 512）
+  const dataUrl = await fetchAsDataUrl(url, t.id);
   const row: TrophyImageRow = {
     trophyId: t.id,
     subjectId: t.subjectId,
