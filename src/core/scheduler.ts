@@ -174,6 +174,24 @@ export function buildDailySession(input: BuildSessionInput): DailySessionPlan {
     });
   }
 
+  if (input.mode === "big_problems") {
+    // Phase 2 Axis 1：大题营 — 只挑 D3-D4 + 含 subquestions 的多步应用题。
+    // 5 道一组，不限时；XP/Elo 走主算分（这是真实 skill 题，不是 fluency 那种基本功）。
+    return buildBigProblems({
+      ...input,
+      now,
+      rng,
+      targetCount: 5,
+      pool: approvedPool,
+      recentCorrectIds,
+      recentSeenCount,
+      recentWrongCooldownIds,
+      masteredQuestionIds,
+      masteryMap,
+      dueMistakes,
+    });
+  }
+
   return buildNormal({
     ...input,
     now,
@@ -699,6 +717,87 @@ function buildMockExam(input: InternalInput): DailySessionPlan {
     breakdown: G4B_UNIT_IDS.map((u) => ({
       bucket: u, count: finalList.filter((q) => q.unit_id === u).length,
     })),
+  };
+}
+
+/**
+ * Phase 2 Axis 1：大题营。
+ *
+ * 只挑 D3-D4 + 含 subquestions 的多步应用题。每场 5 道，不限时。
+ * XP / Elo 走主算分（这是真实 skill 题，跟 Train 同一池），跟 fluency 不同 ——
+ * 区别只在 UI（5 道一组、不计时）。
+ *
+ * 选题策略：
+ *   1. 先过滤 D3-D4 + subquestions.length > 0
+ *   2. 排除 30 天内做对的 + 1 天内错的（沿用 Train 的 cooldown）
+ *   3. 按 skill 多样性（同 skill 最多 1 道，5 道至少 5 个 skill）
+ *   4. 不够 5 道时降级到 D3-D4 不含 subquestions 的题（"题量警告"）
+ */
+function buildBigProblems(input: InternalInput): DailySessionPlan {
+  const isBigProblem = (q: Question) =>
+    q.difficulty >= 3 &&
+    q.difficulty <= 4 &&
+    Array.isArray(q.subquestions) &&
+    q.subquestions.length > 0;
+
+  const baseCandidates = input.pool.filter(isBigProblem);
+
+  // 排除最近做过的题
+  const fresh = baseCandidates.filter(
+    (q) =>
+      !input.recentCorrectIds.has(q.question_id) &&
+      !input.recentWrongCooldownIds.has(q.question_id),
+  );
+
+  const target = Math.max(3, Math.min(5, input.targetCount));
+
+  // skill 多样性：先打乱，每个 skill 至多 1 道
+  const shuffled = [...fresh].sort(() => input.rng() - 0.5);
+  const perSkill = new Set<string>();
+  const picked: Question[] = [];
+  for (const q of shuffled) {
+    if (perSkill.has(q.skill_id)) continue;
+    picked.push(q);
+    perSkill.add(q.skill_id);
+    if (picked.length >= target) break;
+  }
+
+  // 还不够：放宽 skill 多样性约束
+  if (picked.length < target) {
+    for (const q of shuffled) {
+      if (picked.includes(q)) continue;
+      picked.push(q);
+      if (picked.length >= target) break;
+    }
+  }
+
+  // 仍不够：降级到 D3-D4 但没 subquestions 的（依旧是"硬题"）
+  if (picked.length < target) {
+    const fallback = input.pool.filter(
+      (q) =>
+        q.difficulty >= 3 &&
+        q.difficulty <= 4 &&
+        !picked.includes(q) &&
+        !input.recentCorrectIds.has(q.question_id) &&
+        !input.recentWrongCooldownIds.has(q.question_id),
+    );
+    for (const q of fallback.sort(() => input.rng() - 0.5)) {
+      picked.push(q);
+      if (picked.length >= target) break;
+    }
+  }
+
+  const poolStarved = picked.length < target;
+  const finalList = picked.slice(0, target);
+
+  return {
+    mode: input.mode,
+    dateKey: input.dateKey,
+    plannedMinutes: input.targetMinutes,
+    questionIds: finalList.map((q) => q.question_id),
+    focusSkills: Array.from(new Set(finalList.map((q) => q.skill_id))),
+    breakdown: [{ bucket: "big_problems", count: finalList.length }],
+    poolStarved,
   };
 }
 

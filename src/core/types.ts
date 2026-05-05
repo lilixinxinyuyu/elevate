@@ -60,7 +60,7 @@ export type QuestionFormat =
 
 export type CognitiveLevel = "recall" | "procedural" | "application" | "reasoning";
 
-export type SessionMode = "normal" | "final_sprint" | "midterm" | "weak_skill" | "review" | "free" | "skill" | "mock_exam";
+export type SessionMode = "normal" | "final_sprint" | "midterm" | "weak_skill" | "review" | "free" | "skill" | "mock_exam" | "big_problems";
 
 export type GameTemplate =
   | "speed_match"

@@ -46,6 +46,7 @@ function buildMathNavItems(): SubjectNavItem[] {
   ];
   if (isPhase2Live()) {
     base.push({ to: "fluency", label: "口算" });
+    base.push({ to: "big-problems", label: "大题营" });
   }
   base.push({ to: "report", label: "周报", subtle: true });
   base.push({ to: "admin", label: "管理", subtle: true });

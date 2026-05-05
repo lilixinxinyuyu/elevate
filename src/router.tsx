@@ -15,6 +15,7 @@ import { ChinesePickerPage } from "./pages/chinese/ChinesePicker";
 import { ChineseAdminPage } from "./pages/chinese/ChineseAdmin";
 import { FluencyPage } from "./pages/Fluency";
 import { FluencySessionPage } from "./pages/FluencySession";
+import { BigProblemsPage } from "./pages/BigProblems";
 import { useSubject } from "./subjects/context";
 import { isPhase2Live } from "./lib/featureFlags";
 
@@ -102,6 +103,8 @@ export const router = createBrowserRouter([
       // Phase 2 Axis 3：Fluency 口算训练营。feature flag off 期间走 ComingSoon。
       { path: "fluency", element: <Phase2Route><FluencyPage /></Phase2Route> },
       { path: "fluency/:moduleId", element: <Phase2Route><FluencySessionPage /></Phase2Route> },
+      // Phase 2 Axis 1：大题营 landing。Train 内部用 ?mode=big_problems 直接跑。
+      { path: "big-problems", element: <Phase2Route><BigProblemsPage /></Phase2Route> },
       { path: "admin", element: <AdminRoute /> },
       { path: "*", element: <ComingSoonPage /> },
     ],

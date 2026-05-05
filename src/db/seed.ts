@@ -96,6 +96,13 @@ async function backfillDeletedQuestionIdsFromSeed(): Promise<void> {
   const localKeys = (await db.questions.toCollection().primaryKeys()) as string[];
   const localSet = new Set(localKeys);
 
+  // v0.31.0 修：localSet 完全空意味着是新装设备/preview 环境，不是"删过题"——
+  // 这种情况下不应该把整个 SEED 都打成"已删除"。直接 stamp 一下标记跳过。
+  if (localSet.size === 0) {
+    await db.meta.put({ key: DELETED_BACKFILL_KEY, value: Date.now() });
+    return;
+  }
+
   const seedIdsMissing: string[] = [];
   for (const q of SEED_QUESTIONS) {
     if (q.question_id && !localSet.has(q.question_id)) {

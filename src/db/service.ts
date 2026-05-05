@@ -124,6 +124,8 @@ function filterQuestionsByTerm(
   term: Term,
 ): Question[] {
   if (mode === "midterm" || mode === "final_sprint" || mode === "mock_exam") return qs;
+  // big_problems：跨学期挑硬题，不按学期过滤（D3-D4 大题哪个学期来都行）
+  if (mode === "big_problems") return qs;
   if (term === "综合复习") return qs;
   return qs.filter((q) => UNIT_TERM.get(q.unit_id) === term);
 }
