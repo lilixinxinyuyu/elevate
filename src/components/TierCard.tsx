@@ -54,61 +54,60 @@ export function TierCard({
 
   return (
     <section
-      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${t.theme.fromColor} ${t.theme.toColor} border ${t.theme.borderColor} px-6 py-6`}
+      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${t.theme.fromColor} ${t.theme.toColor} border ${t.theme.borderColor} px-5 py-4 sm:px-6 sm:py-5`}
     >
       {/* ambient 光晕 — 给"宝物展示柜"感 */}
       <div className="absolute -right-16 -top-20 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
       <div className="absolute -left-16 -bottom-20 w-72 h-72 rounded-full bg-white/[0.06] blur-3xl pointer-events-none" />
 
-      <div className="relative flex flex-col sm:flex-row gap-6 sm:gap-8">
-        {/* 左：成长块（greeting 顶 + XP/进度/提示 底，左右底部对齐） */}
-        <div className="flex-1 min-w-0 flex flex-col justify-between gap-6">
-          <div className={`text-sm ${t.theme.subTextColor}`}>你好 {studentName} 👋</div>
+      {/* v0.31.2：紧凑化 — 高度 -30%。XP 大数从 7xl 降到 5xl，徽章从 210→150，
+         gap/padding 收紧。视觉重量让位给下面 3 环 + CTA。 */}
+      <div className="relative flex flex-row gap-4 sm:gap-5 items-center">
+        {/* 左：成长块 */}
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
+          <div className={`text-xs sm:text-sm ${t.theme.subTextColor}`}>你好 {studentName} 👋</div>
 
-          <div className="flex flex-col gap-4">
-            {/* XP 数字 — hero scale */}
-            <div className="animate-score-slide-in">
-              <div className="flex items-baseline gap-2">
-                <div
-                  className={`font-display font-bold text-[56px] sm:text-7xl ${t.theme.textColor} drop-shadow-glow tabular-nums leading-[0.95]`}
-                >
-                  {rating.score.toLocaleString()}
-                </div>
-                <div className={`text-sm sm:text-base ${t.theme.subTextColor}`}>XP</div>
+          {/* XP 数字 — 紧凑 hero scale */}
+          <div className="animate-score-slide-in">
+            <div className="flex items-baseline gap-1.5">
+              <div
+                className={`font-display font-bold text-4xl sm:text-5xl ${t.theme.textColor} drop-shadow-glow tabular-nums leading-[0.95]`}
+              >
+                {rating.score.toLocaleString()}
               </div>
-
-              {/* 星级 + 超过 X%（成就刻度配对） */}
-              <div className={`mt-2 flex items-center gap-2 text-sm ${t.theme.subTextColor}`}>
-                <span className="text-amber-300 text-base tracking-tighter leading-none">
-                  {rating.subRankStars}
-                </span>
-                <span className="opacity-50">·</span>
-                <span>超过 <span className={`font-display font-bold ${t.theme.textColor}`}>{rating.percentSurpassed}%</span> 的同年级</span>
-              </div>
+              <div className={`text-xs sm:text-sm ${t.theme.subTextColor}`}>XP</div>
             </div>
 
-            {/* 进度条 + 下个目标 */}
-            <div>
-              <div className="h-2 rounded-full bg-black/25 overflow-hidden ring-1 ring-white/5">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-300 via-pink-300 to-violet-300 shadow-glow-amber transition-all duration-700"
-                  style={{ width: `${Math.round(rating.progressInTier * 100)}%` }}
-                />
-              </div>
-              <div className={`mt-2 text-xs ${t.theme.subTextColor}`}>{nextHint}</div>
+            {/* 星级 + 超过 X%（合并到 XP 同行下方） */}
+            <div className={`mt-1.5 flex items-center gap-1.5 text-xs ${t.theme.subTextColor}`}>
+              <span className="text-amber-300 text-sm tracking-tighter leading-none">
+                {rating.subRankStars}
+              </span>
+              <span className="opacity-50">·</span>
+              <span>超过 <span className={`font-display font-bold ${t.theme.textColor}`}>{rating.percentSurpassed}%</span></span>
             </div>
+          </div>
+
+          {/* 进度条 + 下个目标 */}
+          <div>
+            <div className="h-1.5 rounded-full bg-black/25 overflow-hidden ring-1 ring-white/5">
+              <div
+                className="h-full bg-gradient-to-r from-amber-300 via-pink-300 to-violet-300 shadow-glow-amber transition-all duration-700"
+                style={{ width: `${Math.round(rating.progressInTier * 100)}%` }}
+              />
+            </div>
+            <div className={`mt-1.5 text-[11px] ${t.theme.subTextColor}`}>{nextHint}</div>
           </div>
         </div>
 
-        {/* 右：身份块（BIG 校徽 + 段位名）— 居中对齐左列 */}
+        {/* 右：身份块（紧凑徽章 + 段位名） */}
         <div
-          className="self-center sm:self-stretch shrink-0 flex flex-col items-center justify-center gap-4"
+          className="shrink-0 flex flex-col items-center justify-center gap-2"
           title={equippedBadge.badgeDesc}
         >
-          {/* 校徽座：径向白光晕作底，让校徽像"放在玻璃罩里"。删了 CSS ring 让 AI 银 rim 独占 */}
           <div className="relative">
             <div
-              className="absolute inset-0 -m-4 rounded-full blur-2xl opacity-40 pointer-events-none"
+              className="absolute inset-0 -m-3 rounded-full blur-2xl opacity-40 pointer-events-none"
               style={{
                 background:
                   "radial-gradient(circle, rgba(255,255,255,0.5), rgba(255,255,255,0) 65%)",
@@ -117,17 +116,17 @@ export function TierCard({
             <TierBadgeImg
               tierId={equippedBadge.id}
               fallbackEmoji={equippedBadge.badgeIcon}
-              size={210}
+              size={120}
               interactive
               shape="circle"
               alt={equippedBadge.badgeName}
-              className="relative shadow-glow"
+              className="relative shadow-glow sm:!w-[150px] sm:!h-[150px]"
             />
           </div>
           <div className="text-center">
-            <div className={`text-xl font-display font-bold ${t.theme.textColor} leading-tight`}>
+            <div className={`text-sm sm:text-base font-display font-bold ${t.theme.textColor} leading-tight`}>
               {t.name}
-              <span className="ml-1.5 text-base">{rating.subRankRoman}</span>
+              <span className="ml-1 text-xs">{rating.subRankRoman}</span>
             </div>
           </div>
         </div>
@@ -135,7 +134,7 @@ export function TierCard({
 
       {/* 能力诊断（折叠 row：label + 分数 + ▾。删了内联 bar 避免起止不齐） */}
       {ability && ability.raw.totalAttempts > 0 && (
-        <div className="relative mt-6 pt-4 border-t border-white/10">
+        <div className="relative mt-3 pt-3 border-t border-white/10">
           <button
             type="button"
             onClick={() => setAbilityOpen((v) => !v)}

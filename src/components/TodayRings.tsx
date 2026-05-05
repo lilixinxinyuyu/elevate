@@ -1,56 +1,47 @@
 /**
- * TodayRings — Phase 2 v0.31.1 Hero 底部"今日 3 环"。
+ * TodayRings — Phase 2 v0.31.2 重写：Apple Watch 同心 3 环。
  *
- * 取代之前 Hero 底部 4 个 chip（10 天连续 / 今日已做 / 76% 准 / 距期中 X 天），
- * 给 Selena 一个明确的"今天该做什么"指南。
+ * 之前 v0.31.1 用 3 张并排卡片，丢失了"环"的视觉冲击力。Apple Watch 的核心
+ * 是 **3 个同心圆叠在一起** —— 一眼看 3 环全圆 = 完美。
  *
- * 3 环：
- *   1. ⚡ 闪电口算 — 今日是否做过 ≥ 1 局 60s 速算
- *   2. 🎯 今日挑战 — 今日已做题数 / 15 道（≥ 15 完成）
- *   3. 🏆 今日重点 — 动态切换：
- *        优先 1: 距下一个闯关解锁还差多少分（关锁着且接近时显示）
- *        优先 2: 今日错题到期 N 道
- *        优先 3: 距期中 / 期末倒计天数
- *        优先 4: 已 3 环全闭（"今日满分 ✓"）
+ * 设计：
+ *   - 大 SVG 同心 3 环（200×200 桌面 / 160×160 移动）
+ *   - 每环不同半径 + 不同主色，按统一 12px stroke 画
+ *   - 中心：动态——3 环全闭 → ✨✓ + sparkle；未闭 → 已闭 X/3 大字
+ *   - 下方 3 个 legend chip：点哪个跳哪个模式
  *
- * 视觉：3 列横排 SVG 圆环 + 标签，移动端可压缩到 48px 圆。
- * 每环可点 → 跳到对应模式。
+ * 调色板（v0.31.2 视觉统一）：
+ *   - 外环 闪电口算：cyan-300 → cyan-500
+ *   - 中环 今日挑战：violet-400 → violet-600
+ *   - 内环 今日重点：amber-300 → amber-500（和段位徽章金色呼应）
  *
- * 关键约束（吸取上次 Hero 改造经验）：
- *   - 不破坏现有 Hero 主结构（XP 大数 + 段位徽章）
- *   - 整合进 chip 行的位置（Home.tsx 调用方负责删除原 chip 行）
- *   - 4-base grid 节奏一致
+ * Phase 2 doc: docs/phase2-plan.md (Axis 3) + 设计师 3 视角 critique 修复 #2
  */
 
 import { Link } from "react-router-dom";
 import { isPhase2Live } from "../lib/featureFlags";
 
-interface RingData {
+interface RingSpec {
   id: "fluency" | "challenge" | "focus";
   icon: string;
-  label: string;
-  /** 进度比例 0-1 */
+  shortLabel: string;
+  longLabel: string;
+  /** 进度 0-1 */
   progress: number;
-  /** 中央显示的状态文字（≤ 5 字符） */
-  centerText: string;
-  /** 副标签（小字） */
-  subtext: string;
-  /** 点击跳转 URL */
+  /** chip 上显示的状态文字 */
+  statusText: string;
   to: string;
-  /** 环颜色 */
-  color: string;
-  /** 是否完成（决定环饱和度 + 选中样式） */
+  /** 主色 hex（gradient 起点） */
+  hue: string;
+  /** gradient 终点 */
+  hue2: string;
   done: boolean;
 }
 
 export interface TodayRingsInput {
-  /** 闪电口算今日 session 数 */
   fluencyTodayCount: number;
-  /** 今日挑战已做题数 */
   challengeTodayCount: number;
-  /** 今日挑战目标题数 */
   challengeTarget: number;
-  /** 今日重点 ring 上下文 */
   focus:
     | { kind: "boss_close"; unitName: string; gap: number; targetGate: number }
     | { kind: "mistakes_due"; count: number }
@@ -61,94 +52,260 @@ export interface TodayRingsInput {
 
 export function TodayRings(input: TodayRingsInput) {
   const phase2 = isPhase2Live();
-
-  const fluency: RingData = {
-    id: "fluency",
-    icon: "⚡",
-    label: "闪电口算",
-    progress: Math.min(1, input.fluencyTodayCount / 1), // 1 局即满
-    centerText: input.fluencyTodayCount >= 1 ? "✓" : "0/1",
-    subtext: input.fluencyTodayCount >= 1 ? "今日已练" : "60s 速算",
-    to: phase2 ? "/math/fluency" : "/math",
-    color: "from-cyan-400 to-sky-400",
-    done: input.fluencyTodayCount >= 1,
-  };
-
-  const challenge: RingData = {
-    id: "challenge",
-    icon: "🎯",
-    label: "今日挑战",
-    progress: Math.min(1, input.challengeTodayCount / Math.max(1, input.challengeTarget)),
-    centerText:
-      input.challengeTodayCount >= input.challengeTarget
-        ? "✓"
-        : `${input.challengeTodayCount}/${input.challengeTarget}`,
-    subtext:
-      input.challengeTodayCount >= input.challengeTarget ? "今日完成" : "目标 15 题",
-    to: "/math/train",
-    color: "from-violet-400 to-fuchsia-400",
-    done: input.challengeTodayCount >= input.challengeTarget,
-  };
-
-  const focus = focusRing(input.focus, phase2);
+  const rings = buildRings(input, phase2);
+  const closedCount = rings.filter((r) => r.done).length;
+  const allDone = closedCount === 3;
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-3">
-      <RingCard ring={fluency} />
-      <RingCard ring={challenge} />
-      <RingCard ring={focus} />
+    <div className="rounded-3xl border border-ink-700/40 bg-ink-900/30 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display font-bold text-sm text-slate-200">今日打卡</h3>
+        <span className="text-xs text-slate-400 tabular-nums">{closedCount} / 3</span>
+      </div>
+      <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+        {/* 同心环 SVG */}
+        <ConcentricRings rings={rings} allDone={allDone} />
+
+        {/* Legend 3 chips（点这里跳） */}
+        <div className="flex-1 w-full grid grid-cols-3 sm:grid-cols-1 gap-2">
+          {rings.map((r) => (
+            <Link
+              key={r.id}
+              to={r.to}
+              className={`group flex items-center gap-2 rounded-xl px-2.5 py-2 transition-colors ${
+                r.done
+                  ? "bg-white/[0.06] hover:bg-white/[0.10]"
+                  : "bg-ink-800/40 hover:bg-white/[0.06]"
+              }`}
+              style={{
+                borderLeft: `3px solid ${r.done ? r.hue : "transparent"}`,
+              }}
+            >
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
+                style={{
+                  background: `linear-gradient(135deg, ${r.hue}, ${r.hue2})`,
+                }}
+              >
+                {r.done ? "✓" : ""}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-slate-100 truncate">
+                  {r.icon} {r.shortLabel}
+                </div>
+                <div className="text-[10px] text-slate-400 truncate">
+                  {r.statusText}
+                </div>
+              </div>
+              <div className="text-slate-500 text-xs shrink-0 group-hover:text-slate-300 transition-colors">
+                →
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function focusRing(f: TodayRingsInput["focus"], phase2: bool): RingData {
+function ConcentricRings({ rings, allDone }: { rings: RingSpec[]; allDone: boolean }) {
+  // 200x200 桌面，移动端 CSS 缩到 160
+  const size = 200;
+  const cx = size / 2;
+  const cy = size / 2;
+  const stroke = 14;
+  const gap = 4;
+
+  // 三层半径：外大内小，中心留 ~28px 给文字
+  const radii = [
+    cx - stroke / 2 - 4, // 外环 r ≈ 89
+    cx - stroke - gap - stroke / 2 - 4, // 中环 r ≈ 71
+    cx - 2 * (stroke + gap) - stroke / 2 - 4, // 内环 r ≈ 53
+  ];
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        className="w-[160px] h-[160px] sm:w-[200px] sm:h-[200px] block"
+      >
+        <defs>
+          {rings.map((r) => (
+            <linearGradient
+              key={r.id}
+              id={`tr-${r.id}`}
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <stop offset="0%" stopColor={r.hue} />
+              <stop offset="100%" stopColor={r.hue2} />
+            </linearGradient>
+          ))}
+        </defs>
+        {rings.map((r, i) => {
+          const radius = radii[i] ?? 50;
+          const c = 2 * Math.PI * radius;
+          const offset = c * (1 - Math.max(0.02, r.progress)); // 至少留 2% 露弧度
+          return (
+            <g key={r.id}>
+              {/* 底圆（暗）*/}
+              <circle
+                cx={cx}
+                cy={cy}
+                r={radius}
+                fill="none"
+                stroke="rgba(255,255,255,0.07)"
+                strokeWidth={stroke}
+              />
+              {/* 进度弧 */}
+              <circle
+                cx={cx}
+                cy={cy}
+                r={radius}
+                fill="none"
+                stroke={`url(#tr-${r.id})`}
+                strokeWidth={stroke}
+                strokeLinecap="round"
+                strokeDasharray={c}
+                strokeDashoffset={offset}
+                transform={`rotate(-90 ${cx} ${cy})`}
+                className="transition-[stroke-dashoffset] duration-700"
+              />
+            </g>
+          );
+        })}
+      </svg>
+      {/* 中心数字 */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+        {allDone ? (
+          <>
+            <div className="text-3xl sm:text-4xl">🎉</div>
+            <div className="text-[11px] sm:text-xs text-amber-200 font-bold mt-0.5">
+              今日满分
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="font-display font-bold text-2xl sm:text-3xl text-slate-100 leading-none tabular-nums">
+              {rings.filter((r) => r.done).length}
+              <span className="text-slate-400 text-base sm:text-lg">/3</span>
+            </div>
+            <div className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
+              环已闭
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function buildRings(input: TodayRingsInput, phase2: boolean): RingSpec[] {
+  const fluencyDone = input.fluencyTodayCount >= 1;
+  const challengeDone = input.challengeTodayCount >= input.challengeTarget;
+
+  const fluency: RingSpec = {
+    id: "fluency",
+    icon: "⚡",
+    shortLabel: "闪电口算",
+    longLabel: "闪电口算",
+    progress: Math.min(1, input.fluencyTodayCount / 1),
+    statusText: fluencyDone ? "今日已练" : "60s 速算 · 今日还没",
+    to: phase2 ? "/math/fluency" : "/math",
+    // cyan
+    hue: "#22d3ee",
+    hue2: "#0891b2",
+    done: fluencyDone,
+  };
+
+  const challenge: RingSpec = {
+    id: "challenge",
+    icon: "🎯",
+    shortLabel: "今日挑战",
+    longLabel: "今日挑战",
+    progress: Math.min(
+      1,
+      input.challengeTodayCount / Math.max(1, input.challengeTarget),
+    ),
+    statusText: challengeDone
+      ? `已完成 ${input.challengeTodayCount} 题 ✓`
+      : `${input.challengeTodayCount} / ${input.challengeTarget} 题`,
+    to: "/math/train",
+    // violet
+    hue: "#a78bfa",
+    hue2: "#7c3aed",
+    done: challengeDone,
+  };
+
+  const focus = buildFocus(input.focus, phase2);
+  return [fluency, challenge, focus];
+}
+
+function buildFocus(
+  f: TodayRingsInput["focus"],
+  phase2: boolean,
+): RingSpec {
+  // amber 主色（呼应段位徽章）
+  const amber1 = "#fcd34d";
+  const amber2 = "#d97706";
   switch (f.kind) {
     case "boss_close":
       return {
         id: "focus",
-        icon: "🏆",
-        label: "解锁闯关",
-        progress: Math.max(0, Math.min(1, 1 - f.gap / f.targetGate)),
-        centerText: `差${f.gap}`,
-        subtext: f.unitName,
+        icon: "⚔️",
+        shortLabel: "解锁闯关",
+        longLabel: "解锁闯关",
+        progress: Math.max(0, Math.min(0.85, 1 - f.gap / f.targetGate)),
+        statusText: `${f.unitName} · 距开战差 ${f.gap}`,
         to: phase2 ? "/math/big-problems" : "/math/skills",
-        color: "from-amber-400 to-orange-400",
+        hue: amber1,
+        hue2: amber2,
         done: false,
       };
     case "mistakes_due":
       return {
         id: "focus",
         icon: "🪄",
-        label: "错题复活",
-        progress: f.count > 0 ? 0 : 1,
-        centerText: f.count > 0 ? `${f.count}` : "✓",
-        subtext: f.count > 0 ? "今日到期" : "已复活",
+        shortLabel: "错题复活",
+        longLabel: "错题复活",
+        progress: f.count > 0 ? 0.1 : 1,
+        statusText: f.count > 0 ? `今日到期 ${f.count} 道` : "今日已清",
         to: "/math/mistakes",
-        color: "from-rose-400 to-pink-400",
+        hue: amber1,
+        hue2: amber2,
         done: f.count === 0,
       };
     case "exam_countdown":
       return {
         id: "focus",
         icon: "📅",
-        label: f.examName,
-        progress: 0.5,
-        centerText: `${f.days}天`,
-        subtext: f.days === 0 ? "就是今天！" : f.days === 1 ? "明天考试" : "倒计中",
+        shortLabel: f.examName,
+        longLabel: `${f.examName}倒计`,
+        progress: f.days <= 1 ? 0.95 : f.days <= 7 ? 0.6 : 0.3,
+        statusText:
+          f.days === 0
+            ? "就是今天！"
+            : f.days === 1
+              ? "明天考试"
+              : `还有 ${f.days} 天`,
         to: "/math/train",
-        color: "from-emerald-400 to-teal-400",
+        hue: amber1,
+        hue2: amber2,
         done: false,
       };
     case "all_done":
       return {
         id: "focus",
         icon: "🌟",
-        label: "今日满分",
+        shortLabel: "今日满分",
+        longLabel: "今日满分",
         progress: 1,
-        centerText: "✓",
-        subtext: "三环已闭",
+        statusText: "三环已闭，明天再来",
         to: "/math",
-        color: "from-amber-400 to-yellow-300",
+        hue: amber1,
+        hue2: amber2,
         done: true,
       };
     case "idle":
@@ -156,82 +313,14 @@ function focusRing(f: TodayRingsInput["focus"], phase2: bool): RingData {
       return {
         id: "focus",
         icon: "✨",
-        label: "今日打卡",
-        progress: 0,
-        centerText: "—",
-        subtext: "随时来",
+        shortLabel: "今日打卡",
+        longLabel: "今日打卡",
+        progress: 0.05,
+        statusText: "随时来 · 无紧急任务",
         to: "/math",
-        color: "from-slate-500 to-slate-400",
+        hue: amber1,
+        hue2: amber2,
         done: false,
       };
   }
-}
-
-// 用 alias type 避免 IIFE 写法，TS 才能 infer
-type bool = boolean;
-
-function RingCard({ ring }: { ring: RingData }) {
-  const size = 64;
-  const stroke = 6;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const offset = c * (1 - ring.progress);
-
-  return (
-    <Link
-      to={ring.to}
-      className={`flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 transition-colors ${
-        ring.done ? "bg-white/[0.06] border border-white/10" : "bg-ink-900/40 border border-ink-700/50 hover:bg-white/[0.04]"
-      }`}
-    >
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
-          className="absolute inset-0"
-        >
-          <defs>
-            <linearGradient id={`ring-grad-${ring.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="currentColor" className={`text-${(ring.color.split(" ")[0] ?? "").replace("from-", "")}`} />
-              <stop offset="100%" stopColor="currentColor" className={`text-${(ring.color.split(" ")[1] ?? "").replace("to-", "")}`} />
-            </linearGradient>
-          </defs>
-          {/* 底圆（暗）*/}
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            fill="none"
-            stroke="rgba(255,255,255,0.08)"
-            strokeWidth={stroke}
-          />
-          {/* 进度弧 */}
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            fill="none"
-            stroke={`url(#ring-grad-${ring.id})`}
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={c}
-            strokeDashoffset={offset}
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            className={`transition-[stroke-dashoffset] duration-700 bg-gradient-to-br ${ring.color}`}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="text-base leading-none">{ring.icon}</div>
-          <div className="text-[10px] tabular-nums text-slate-200 font-bold mt-0.5">
-            {ring.centerText}
-          </div>
-        </div>
-      </div>
-      <div className="text-[11px] text-slate-200 font-bold leading-none text-center">{ring.label}</div>
-      <div className="text-[10px] text-slate-400 leading-none text-center truncate max-w-full px-1">
-        {ring.subtext}
-      </div>
-    </Link>
-  );
 }

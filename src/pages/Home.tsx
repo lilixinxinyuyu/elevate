@@ -296,32 +296,17 @@ export function HomePage() {
         </section>
       )}
 
-      {/* v0.31.1：今日 3 环（取代之前的 chip 行）*/}
+      {/* v0.31.2：今日 3 同心环（取代之前的 chip 行）*/}
       {isPhase2Live() ? (
-        <div className="space-y-3">
-          <TodayRings {...buildTodayRingsInput({
-            todayCount: todayAttempts.length,
-            challengeTarget: 15,
-            mastery: mastery ?? [],
-            mistakes: mistakes ?? [],
-            streak,
-            ratingAccuracy: rating?.raw.accuracy,
-            trophyIds: new Set((trophies ?? []).map((t) => t.trophyId)),
-          })} />
-          <div className="flex items-center gap-3 text-xs text-slate-400">
-            <span className="chip bg-amber-500/15 text-amber-200 border border-amber-400/25 text-[11px]">
-              🔥 {streak} 天连续
-            </span>
-            {rating && rating.raw.totalAttempts > 0 && (
-              <span className="chip bg-cyan-500/15 text-cyan-100 border border-cyan-400/25 text-[11px]">
-                🎯 累计 {Math.round(rating.raw.accuracy * 100)}% 准
-              </span>
-            )}
-            <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary ml-auto text-sm px-4 py-2">
-              ▶ 开始今日挑战
-            </Link>
-          </div>
-        </div>
+        <TodayRings {...buildTodayRingsInput({
+          todayCount: todayAttempts.length,
+          challengeTarget: 15,
+          mastery: mastery ?? [],
+          mistakes: mistakes ?? [],
+          streak,
+          ratingAccuracy: rating?.raw.accuracy,
+          trophyIds: new Set((trophies ?? []).map((t) => t.trophyId)),
+        })} />
       ) : (
         // Phase 2 关闭时保持原 chip 行（不动 v0.30.x 行为）
         <div className="flex flex-wrap items-center gap-2">
@@ -392,7 +377,12 @@ export function HomePage() {
         </section>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {/* v0.31.2 视觉减负：CTA 从 5 张砍到 3 张。
+          - "当前考试冲刺" 横跨全宽（桌面 1/3）作为重点入口
+          - 删 "期末冲刺/期中复习"（跟当前考试冲刺逻辑重复）
+          - 错题复活 → focus ring 已覆盖，但 mobile 需要直接入口 → 保留为副卡片
+          - 专项练 + 技能树 mobile 需要（nav 是 desktopOnly），保留为副卡片 */}
+      <div className="grid grid-cols-3 gap-2.5">
         {(() => {
           const exam = currentExam();
           const days = daysUntil(exam.date);
@@ -404,57 +394,31 @@ export function HomePage() {
           const subCls = isMidterm ? "text-cyan-200/80" : "text-rose-200/80";
           const icon = isMidterm ? "⏰" : "🚀";
           const sub = days < 0
-            ? `${exam.dateKey} · ${exam.hint}`
+            ? `${exam.hint}`
             : days <= 7
-              ? `仅剩 ${days} 天 · ${exam.hint}`
-              : `${exam.dateKey} · ${exam.hint}`;
+              ? `仅剩 ${days} 天`
+              : `${exam.dateKey}`;
           return (
             <Link
               to={`/math/train?mode=${exam.mode}&fresh=${Date.now()}`}
-              className={`card-glow hover:scale-[1.02] transition-transform col-span-2 sm:col-span-1 ${themeCls}`}
+              className={`card-glow hover:scale-[1.02] transition-transform col-span-3 sm:col-span-1 ${themeCls}`}
             >
-              <div className="text-xl">{icon}</div>
-              <div className={`font-display font-bold mt-2 ${titleCls}`}>{exam.name}冲刺</div>
-              <div className={`text-xs ${subCls} mt-1`}>{sub}</div>
+              <div className="text-lg">{icon}</div>
+              <div className={`font-display font-bold mt-1.5 text-sm ${titleCls}`}>{exam.name}冲刺</div>
+              <div className={`text-[11px] ${subCls} mt-0.5`}>{sub}</div>
             </Link>
           );
         })()}
         <Link to="/math/free-practice" className="card hover:bg-ink-700/60 transition-colors">
-          <div className="text-xl">🎯</div>
-          <div className="font-display font-bold mt-2">专项练</div>
-          <div className="text-xs text-slate-400 mt-1">挑几个技能多刷一刷</div>
+          <div className="text-lg">🎯</div>
+          <div className="font-display font-bold mt-1.5 text-sm">专项练</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">挑薄弱 skill 集训</div>
         </Link>
         <Link to="/math/skills" className="card hover:bg-ink-700/60 transition-colors">
-          <div className="text-xl">🌳</div>
-          <div className="font-display font-bold mt-2">技能树</div>
-          <div className="text-xs text-slate-400 mt-1">看看每个 skill 熟练度</div>
+          <div className="text-lg">🌳</div>
+          <div className="font-display font-bold mt-1.5 text-sm">技能树</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">每个 skill 熟练度</div>
         </Link>
-        <Link to="/math/mistakes" className="card hover:bg-ink-700/60 transition-colors">
-          <div className="text-xl">🪄</div>
-          <div className="font-display font-bold mt-2">错题复活</div>
-          <div className="text-xs text-slate-400 mt-1">
-            共 {unresolvedMistakes} 道
-            {dueMistakes > 0 ? <span className="text-amber-300"> · 今日到期 {dueMistakes}</span> : null}
-          </div>
-        </Link>
-        {/* 期中考之前也能进期末模式（家长想提前练就练）；期中考之后这张卡换成期中复习 */}
-        {currentExam().id === "midterm" ? (
-          <Link to={`/math/train?mode=final_sprint&fresh=${Date.now()}`} className="card hover:bg-ink-700/60 transition-colors">
-            <div className="text-xl">🚀</div>
-            <div className="font-display font-bold mt-2">期末冲刺</div>
-            <div className="text-xs text-slate-400 mt-1">
-              {FINAL.dateKey} · 提前打基础
-            </div>
-          </Link>
-        ) : (
-          <Link to={`/math/train?mode=midterm&fresh=${Date.now()}`} className="card hover:bg-ink-700/60 transition-colors">
-            <div className="text-xl">📘</div>
-            <div className="font-display font-bold mt-2">期中复习</div>
-            <div className="text-xs text-slate-400 mt-1">
-              U1-U4 还能再刷
-            </div>
-          </Link>
-        )}
       </div>
 
       {/* ROI #2：每周一次的考试模拟 */}
