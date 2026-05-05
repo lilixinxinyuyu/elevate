@@ -1,7 +1,60 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RatingResult, AbilityDiagnostic } from "../core/rating";
 import type { Tier } from "../core/tiers";
 import { TierBadgeImg } from "./TierBadgeImg";
+
+/**
+ * v0.31.4：XP roll-up 动画 — 进首页时从"上次记录的 XP"滚到当前 XP。
+ *
+ * 方案：localStorage 存最后看到的 XP 数；进 Hero 时读老值 → 动画到新值 →
+ * 写回最新值。每次进首页都"涨给她看"，给 9 岁孩子最强反馈。
+ *
+ * 控制：
+ *   - delta < 0（不可能，但防御）→ 直接显示新值无动画
+ *   - delta > 200（一次性大涨）→ 限速到 1200ms 内完成，避免太长
+ *   - 数字 ease-out（先快后慢）匹配人眼期待
+ */
+function useRollupNumber(target: number, key: string): number {
+  const [display, setDisplay] = useState<number>(() => {
+    if (typeof window === "undefined") return target;
+    const stored = localStorage.getItem(key);
+    const last = stored != null ? Number(stored) : NaN;
+    return Number.isFinite(last) && last <= target ? last : target;
+  });
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem(key);
+    const last = stored != null ? Number(stored) : NaN;
+    const start = Number.isFinite(last) && last <= target ? last : target;
+    const delta = target - start;
+    if (delta <= 0) {
+      setDisplay(target);
+      localStorage.setItem(key, String(target));
+      return;
+    }
+    const duration = Math.min(1200, 350 + delta * 4);
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const v = Math.round(start + delta * eased);
+      setDisplay(v);
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        localStorage.setItem(key, String(target));
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [target, key]);
+
+  return display;
+}
 
 /**
  * Hero 卡 v0.30.6 专业级 polish：
@@ -30,6 +83,8 @@ export function TierCard({
 }) {
   const t = rating.tier;
   const [abilityOpen, setAbilityOpen] = useState(false);
+  // v0.31.4：XP 大数 roll-up（昨日总分 → 今日总分），key 含学期避免学期切换误滚
+  const displayScore = useRollupNumber(rating.score, `tierCard:lastSeenScore:${rating.tier.id}`);
 
   // v0.31.3：距下一段位 ≤ 200 XP = "即将升段"——这是 Selena 此刻最强动机点。
   // 之前埋成小灰字，现在 pulse 进度条 + 上方 chip 高亮显示。
@@ -78,7 +133,7 @@ export function TierCard({
               <div
                 className={`font-display font-bold text-4xl sm:text-5xl ${t.theme.textColor} drop-shadow-glow tabular-nums leading-[0.95]`}
               >
-                {rating.score.toLocaleString()}
+                {displayScore.toLocaleString()}
               </div>
               <div className={`text-xs sm:text-sm ${t.theme.subTextColor}`}>XP</div>
             </div>
@@ -93,21 +148,25 @@ export function TierCard({
             </div>
           </div>
 
-          {/* 进度条 + 下个目标。即将升段时进度条 pulse + 上方红字 chip 紧迫提示 */}
+          {/* 进度条 + 下个目标。即将升段时显示 chip（chip 自己 pulse），
+              进度条静止——避免双重 pulse 视觉冲突。
+              v0.31.4：tierUp chip 显示时 nextHint 小字 hide（同义重复） */}
           <div>
             {tierUpImminent && rating.nextTier && (
-              <div className="mb-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-[11px] font-bold text-amber-100 animate-pulse-bar">
+              <div className="mb-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-[11px] font-bold text-amber-100 animate-pulse-soft">
                 <span>🔥</span>
                 <span>仅剩 <span className="tabular-nums">{rating.deltaToNext}</span> XP 升 {rating.nextTier.badgeIcon} {rating.nextTier.name}</span>
               </div>
             )}
             <div className="h-1.5 rounded-full bg-black/25 overflow-hidden ring-1 ring-white/5">
               <div
-                className={`h-full bg-gradient-to-r from-amber-300 via-pink-300 to-violet-300 shadow-glow-amber transition-all duration-700 ${tierUpImminent ? "animate-pulse-bar" : ""}`}
+                className="h-full bg-gradient-to-r from-amber-300 via-pink-300 to-violet-300 shadow-glow-amber transition-all duration-700"
                 style={{ width: `${Math.round(rating.progressInTier * 100)}%` }}
               />
             </div>
-            <div className={`mt-1.5 text-[11px] ${t.theme.subTextColor}`}>{nextHint}</div>
+            {!tierUpImminent && (
+              <div className={`mt-1.5 text-[11px] ${t.theme.subTextColor}`}>{nextHint}</div>
+            )}
           </div>
         </div>
 

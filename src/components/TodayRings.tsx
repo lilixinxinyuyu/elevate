@@ -19,6 +19,7 @@
  */
 
 import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import { isPhase2Live } from "../lib/featureFlags";
 
 interface RingSpec {
@@ -56,6 +57,29 @@ export function TodayRings(input: TodayRingsInput) {
   const closedCount = rings.filter((r) => r.done).length;
   const allDone = closedCount === 3;
 
+  // v0.31.4：检测哪些环本次刷新刚刚闭合 — 触发 sparkle 庆祝
+  const justClosedRef = useRef<Set<string>>(new Set());
+  const lastDoneSetRef = useRef<Set<string>>(new Set());
+  const [pulseId, setPulseId] = useState<string | null>(null);
+  useEffect(() => {
+    const cur = new Set(rings.filter((r) => r.done).map((r) => r.id));
+    const prev = lastDoneSetRef.current;
+    for (const id of cur) {
+      if (!prev.has(id)) justClosedRef.current.add(id);
+    }
+    lastDoneSetRef.current = cur;
+    // 取第一个新闭合的环触发动画
+    const newly = rings.find((r) => r.done && justClosedRef.current.has(r.id));
+    if (newly) {
+      setPulseId(newly.id);
+      const t = window.setTimeout(() => {
+        setPulseId(null);
+        justClosedRef.current.delete(newly.id);
+      }, 900);
+      return () => window.clearTimeout(t);
+    }
+  }, [rings.map((r) => `${r.id}:${r.done}`).join(",")]);
+
   return (
     <div className="rounded-3xl border border-ink-700/40 bg-ink-900/30 px-4 py-4 sm:px-6 sm:py-5">
       <div className="flex items-center justify-between mb-3">
@@ -64,7 +88,7 @@ export function TodayRings(input: TodayRingsInput) {
       </div>
       <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
         {/* 同心环 SVG */}
-        <ConcentricRings rings={rings} allDone={allDone} />
+        <ConcentricRings rings={rings} allDone={allDone} pulseId={pulseId} />
 
         {/* Legend 3 chips（点这里跳） */}
         <div className="flex-1 w-full grid grid-cols-3 sm:grid-cols-1 gap-2">
@@ -99,14 +123,16 @@ export function TodayRings(input: TodayRingsInput) {
                 {r.done ? "✓" : r.icon}
               </div>
               <div className="flex-1 min-w-0">
-                <div className={`text-xs font-bold truncate ${r.done ? "text-slate-400" : "text-slate-100"}`}>
+                {/* v0.31.4: 完成态 chip 文字从 slate-400/500 提到 slate-200/300，
+                    避免读不清像 bug；用 ✓ 高亮 + 主色 icon 球区分而非靠文字暗化 */}
+                <div className={`text-xs font-bold truncate ${r.done ? "text-slate-200" : "text-slate-100"}`}>
                   {r.shortLabel}
                 </div>
-                <div className={`text-[10px] truncate ${r.done ? "text-slate-500" : "text-slate-300"}`}>
+                <div className={`text-[10px] truncate ${r.done ? "text-slate-300" : "text-slate-300"}`}>
                   {r.statusText}
                 </div>
               </div>
-              <div className={`text-xs shrink-0 group-hover:text-slate-200 transition-colors ${r.done ? "text-slate-600" : "text-slate-400"}`}>
+              <div className={`text-xs shrink-0 group-hover:text-slate-200 transition-colors ${r.done ? "text-slate-500" : "text-slate-400"}`}>
                 →
               </div>
             </Link>
@@ -117,7 +143,15 @@ export function TodayRings(input: TodayRingsInput) {
   );
 }
 
-function ConcentricRings({ rings, allDone }: { rings: RingSpec[]; allDone: boolean }) {
+function ConcentricRings({
+  rings,
+  allDone,
+  pulseId,
+}: {
+  rings: RingSpec[];
+  allDone: boolean;
+  pulseId: string | null;
+}) {
   // 200x200 桌面，移动端 CSS 缩到 160
   const size = 200;
   const cx = size / 2;
@@ -156,9 +190,9 @@ function ConcentricRings({ rings, allDone }: { rings: RingSpec[]; allDone: boole
         {rings.map((r, i) => {
           const radius = radii[i] ?? 50;
           const c = 2 * Math.PI * radius;
-          // v0.31.3：min progress 提到 6%，让"还没开始"的环也露出明显弧度，
-          // 否则 cyan 外环新用户根本意识不到第三环存在
-          const offset = c * (1 - Math.max(0.06, r.progress));
+          // v0.31.4：min progress 提到 9% — 6% 时 round cap 还是看着像"小帽子"。
+          // 同时 cap 改 butt（平直），让短弧不再像断头。
+          const offset = c * (1 - Math.max(0.09, r.progress));
           // v0.31.3：底圈染主色（10% 透明度）让每环都有"自己的颜色识别"，
           // 不再统一暗灰——视觉上 3 环始终可辨认
           return (
@@ -173,7 +207,8 @@ function ConcentricRings({ rings, allDone }: { rings: RingSpec[]; allDone: boole
                 strokeOpacity={0.18}
                 strokeWidth={stroke}
               />
-              {/* 进度弧 */}
+              {/* 进度弧 — v0.31.4：r.progress >= 0.5 才用 round cap，否则用 butt
+                   避免短弧的圆头看起来像断了的小帽子 */}
               <circle
                 cx={cx}
                 cy={cy}
@@ -181,15 +216,36 @@ function ConcentricRings({ rings, allDone }: { rings: RingSpec[]; allDone: boole
                 fill="none"
                 stroke={`url(#tr-${r.id})`}
                 strokeWidth={stroke}
-                strokeLinecap="round"
+                strokeLinecap={r.progress >= 0.5 ? "round" : "butt"}
                 strokeDasharray={c}
                 strokeDashoffset={offset}
                 transform={`rotate(-90 ${cx} ${cy})`}
-                className="transition-[stroke-dashoffset] duration-700"
-                // v0.31.3：未完成的环饱和度更高更夺目；完成的环略降一档（不抢戏，
-                // 视觉重心移到剩下未完成的环）
+                className={`transition-[stroke-dashoffset] duration-700 ${
+                  pulseId === r.id ? "animate-pulse-bar" : ""
+                }`}
                 opacity={r.done ? 0.85 : 1}
               />
+              {/* v0.31.4：环刚闭合时撒 12 颗 sparkle 绕一圈 */}
+              {pulseId === r.id && (
+                <g>
+                  {Array.from({ length: 12 }).map((_, k) => {
+                    const angle = (k / 12) * 2 * Math.PI - Math.PI / 2;
+                    const px = cx + Math.cos(angle) * radius;
+                    const py = cy + Math.sin(angle) * radius;
+                    return (
+                      <circle
+                        key={k}
+                        cx={px}
+                        cy={py}
+                        r={3}
+                        fill={r.hue2}
+                        className="animate-sparkle"
+                        style={{ animationDelay: `${(k / 12) * 0.4}s` }}
+                      />
+                    );
+                  })}
+                </g>
+              )}
             </g>
           );
         })}

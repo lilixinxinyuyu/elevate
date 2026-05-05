@@ -84,6 +84,12 @@ export default {
           "0%,100%": { filter: "brightness(1)" },
           "50%": { filter: "brightness(1.6)" },
         },
+        // v0.31.4：温和的脉动 — 比 pulseBar 慢且弱，给 Hero chip 用，
+        // 避免老游戏感的快速闪烁。2.4s 循环 + 1.18 峰值 = 平稳的"呼吸"。
+        pulseSoft: {
+          "0%,100%": { filter: "brightness(1)", transform: "scale(1)" },
+          "50%": { filter: "brightness(1.18)", transform: "scale(1.015)" },
+        },
         sparkle: {
           "0%,100%": { opacity: "0.2", transform: "scale(0.8)" },
           "50%": { opacity: "1", transform: "scale(1.3)" },
@@ -135,6 +141,7 @@ export default {
         burst: "burst 0.6s ease-out forwards",
         "slide-up": "slideUp 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards",
         "pulse-bar": "pulseBar 0.6s ease-in-out infinite",
+        "pulse-soft": "pulseSoft 2.4s ease-in-out infinite",
         sparkle: "sparkle 1.2s ease-in-out infinite",
         // 钻档：v0.30.11 减速到 8 秒 1 圈（之前 4s 太快会眼花），更"慢慢转动的传家宝"
         shimmer: "shimmer 8s linear infinite",
