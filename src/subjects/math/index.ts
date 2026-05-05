@@ -15,6 +15,7 @@ import { UNITS } from "../../content/units";
 import { SEED_QUESTIONS } from "../../content/questions";
 import { FINAL_SPRINT_G4B } from "../../content/examPriorities";
 import { MIDTERM, FINAL } from "../../core/examDates";
+import { isPhase2Live } from "../../lib/featureFlags";
 import type {
   Subject,
   SubjectAbilityDef,
@@ -33,15 +34,23 @@ const MATH_ABILITIES: SubjectAbilityDef[] = [
   { id: "habit", label: "坚持力" },
 ];
 
-const MATH_NAV_ITEMS: SubjectNavItem[] = [
-  { to: "", label: "首页", exact: true },
-  { to: "train", label: "今日挑战" },
-  { to: "free-practice", label: "自由练" },
-  { to: "skills", label: "技能地图" },
-  { to: "mistakes", label: "错题复活" },
-  { to: "report", label: "周报", subtle: true },
-  { to: "admin", label: "管理", subtle: true },
-];
+// Phase 2 Axis 3：feature flag on 时插入"口算"tab，否则保持原 6 项不变。
+// nav 是个 getter 而不是常量——保证 isPhase2Live() 切换 localStorage 后下次刷新生效。
+function buildMathNavItems(): SubjectNavItem[] {
+  const base: SubjectNavItem[] = [
+    { to: "", label: "首页", exact: true },
+    { to: "train", label: "今日挑战" },
+    { to: "free-practice", label: "自由练" },
+    { to: "skills", label: "技能地图" },
+    { to: "mistakes", label: "错题复活" },
+  ];
+  if (isPhase2Live()) {
+    base.push({ to: "fluency", label: "口算" });
+  }
+  base.push({ to: "report", label: "周报", subtle: true });
+  base.push({ to: "admin", label: "管理", subtle: true });
+  return base;
+}
 
 /**
  * 错题标签字典占位。Phase 2 会把 service.ts 里的 errorTagLabel 表整张搬过来。
@@ -65,7 +74,7 @@ export const mathSubject: Subject = {
   errorTags: MATH_ERROR_TAGS,
   examPriorities: FINAL_SPRINT_G4B,
 
-  navItems: MATH_NAV_ITEMS,
+  navItems: buildMathNavItems(),
 
   examDates: {
     midtermAt: MIDTERM.date.getTime(),

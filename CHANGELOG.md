@@ -3,6 +3,39 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.0 — 2026-05-05 · Phase 2 起步：Axis 4 CLI + Axis 3 Fluency 模式
+
+### Axis 4 · 加 skill 一条龙 CLI 脚本（基建）
+- 新文件 `scripts/add-skill.mjs` — 一条命令 patch 6+ 文件 + 调 AI 出题 + bump SEED_VERSION
+- 安全网：`--dry-run` / `--no-gen` / 不自动 commit，所有改动 stage 给人工审 git diff
+- 使用文档 `scripts/README.md`
+
+### Axis 3 · Fluency 口算训练营（**feature flag 隐藏**）
+**关键约束**：fluency 完全跟主练习题分离 — 不进 XP / 段位 / 主 mastery / 主错题表。
+独立的 attempts / stats 表，独立的勋章柜，独立的雷达。
+
+- 5 个起步模块：5×5 / 9×9 乘法口诀、20 内加减、100 内凑整速算（按 grade 自动开放）
+- 每模块每次 60s × 4 选 1 速算训练；干扰项手工设计贴近常见错误
+- 每 module 双指标通关：准 ≥ X% + 中位反应时 ≤ Y ms（每模块阈值不同）
+- 6 个跨模块 trophy：飞毛腿 30/50、连击 20/30、闪电反应、模块大师
+- 路由 `/math/fluency` + `/math/fluency/:moduleId`
+- DB schema bump v5 → v6：新表 `fluencyAttempts` / `fluencyStats`
+
+### Feature flag 隔离（保护期中）
+- 新文件 `src/lib/featureFlags.ts` — `isPhase2Live()`
+- 三种打开方式：`localStorage.setItem("phase2_live","true")` / `?phase2=on` URL / `VITE_PHASE2_LIVE=true` 构建期
+- Off 时口算 nav 不显示、`/math/fluency` 走 ComingSoon —— Selena 期中前完全看不到半成品
+- 期中考完后翻 flag（或父亲设备先验证）
+
+### 文档
+- `docs/phase2-plan.md` — 4 axis 完整 spec 已 lock
+- `scripts/README.md` — 加 skill 脚本用法
+
+### Phase 2 待办
+- Axis 1 大题营（多步应用题）
+- Axis 2 Canvas 画图题
+- Axis 5 试卷分析（暂停等多模态视觉）
+
 ## v0.30.14 — 2026-05-05 · SEED_VERSION 补 bump + 错题孤儿清理
 
 **用户报告**："拉了云端最新的，admin 题量还是没有变化（v0.30.12 的 60 道新题没下来）"。

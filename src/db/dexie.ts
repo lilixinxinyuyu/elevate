@@ -11,6 +11,7 @@ import type {
   TutorSession,
   UserTrophy,
 } from "../core/types";
+import type { FluencyAttemptRow, FluencyStatsRow } from "../core/fluencyTypes";
 
 /** AI 生成的勋章图缓存（base64 持久化，URL 24h 过期） */
 export interface TrophyImageRow {
@@ -42,6 +43,11 @@ export class HepingDB extends Dexie {
   trophyImages!: Table<TrophyImageRow, string>;
   /** v0.27.0：小进姐姐对话日志，事后分析 Selena 思维轨迹用 */
   tutorSessions!: Table<TutorSession, string>;
+  /** Phase 2 (v0.31.0)：Fluency 口算每道题的 attempt 记录 — 完全独立于
+   * 主 attempts 表，不进 XP / 段位 / 主 mastery */
+  fluencyAttempts!: Table<FluencyAttemptRow, string>;
+  /** Phase 2 (v0.31.0)：Fluency 单 module × 单 student 的累计 stats */
+  fluencyStats!: Table<FluencyStatsRow, string>;
 
   constructor() {
     super("heping-math-trainer");
@@ -210,6 +216,15 @@ export class HepingDB extends Dexie {
           updatedAt: now,
         });
       }
+    });
+
+    // v6 (Phase 2 / v0.31.0)：加 fluency 两张表 — 跟主 attempts/mastery 完全分离。
+    // Fluency 是底层口算训练（9×9、20 内加减、凑整），不进 XP / 段位 / 主错题，
+    // 自己一套 stats 体系。
+    this.version(6).stores({
+      fluencyAttempts:
+        "id, studentId, moduleId, sessionId, problemKey, isCorrect, createdAt",
+      fluencyStats: "id, studentId, moduleId, mastered, masteredAt",
     });
   }
 }

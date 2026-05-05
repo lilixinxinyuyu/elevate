@@ -13,7 +13,10 @@ import { ChineseHomePage } from "./pages/chinese/ChineseHome";
 import { ChineseTrainPage } from "./pages/chinese/ChineseTrain";
 import { ChinesePickerPage } from "./pages/chinese/ChinesePicker";
 import { ChineseAdminPage } from "./pages/chinese/ChineseAdmin";
+import { FluencyPage } from "./pages/Fluency";
+import { FluencySessionPage } from "./pages/FluencySession";
 import { useSubject } from "./subjects/context";
+import { isPhase2Live } from "./lib/featureFlags";
 
 /**
  * SubjectAware：按当前 useSubject().id 分发到 math / chinese 不同的 page 组件。
@@ -49,6 +52,14 @@ function FreePracticeRoute() {
 function MathOnlyRoute({ children }: { children: React.ReactNode }) {
   const subject = useSubject();
   if (subject.id !== "math") return <ComingSoonPage />;
+  return <>{children}</>;
+}
+
+/** Phase 2 路由：feature flag off 时强制 ComingSoon，避免期中前误入。 */
+function Phase2Route({ children }: { children: React.ReactNode }) {
+  const subject = useSubject();
+  if (subject.id !== "math") return <ComingSoonPage />;
+  if (!isPhase2Live()) return <ComingSoonPage />;
   return <>{children}</>;
 }
 
@@ -88,6 +99,9 @@ export const router = createBrowserRouter([
       { path: "skills", element: <MathOnlyRoute><SkillsPage /></MathOnlyRoute> },
       { path: "mistakes", element: <MathOnlyRoute><MistakesPage /></MathOnlyRoute> },
       { path: "report", element: <MathOnlyRoute><ReportPage /></MathOnlyRoute> },
+      // Phase 2 Axis 3：Fluency 口算训练营。feature flag off 期间走 ComingSoon。
+      { path: "fluency", element: <Phase2Route><FluencyPage /></Phase2Route> },
+      { path: "fluency/:moduleId", element: <Phase2Route><FluencySessionPage /></Phase2Route> },
       { path: "admin", element: <AdminRoute /> },
       { path: "*", element: <ComingSoonPage /> },
     ],
