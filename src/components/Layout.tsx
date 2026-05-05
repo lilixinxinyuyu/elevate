@@ -106,17 +106,20 @@ export function Layout() {
               })}
             </nav>
 
-            {/* 学科切换 chip */}
+            {/* 学科切换 chip — v0.30.14: 不再重复显示当前 shortLabel（左上 logo 已经
+                有了），改成中性切换图标，避免视觉冗余但仍保留可点性 */}
             <div className="relative" ref={popoverRef}>
               <button
                 type="button"
                 onClick={() => setChipOpen((v) => !v)}
-                className={`px-2.5 py-1 rounded-full bg-gradient-to-br ${subject.themeColor} text-white text-xs font-bold shadow-glow flex items-center gap-1`}
+                className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-ink-700/60 text-slate-300 text-xs flex items-center gap-1 transition-colors"
                 aria-haspopup="menu"
                 aria-expanded={chipOpen}
+                aria-label="切换学科"
+                title="切换学科"
               >
-                <span>{subject.shortLabel}</span>
-                <span className="opacity-70">▾</span>
+                <span aria-hidden>⇄</span>
+                <span className="opacity-60">▾</span>
               </button>
               {chipOpen && (
                 <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-ink-700/60 bg-ink-900/95 backdrop-blur-md shadow-xl py-1 z-30">

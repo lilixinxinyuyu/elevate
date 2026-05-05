@@ -33,8 +33,14 @@ export function TrophyImagesAdminPanel() {
   } | null>(null);
   const [filter, setFilter] = useState<"all" | "missing" | "math" | "chinese">("missing");
 
-  const cachedCount = cached.size;
-  const missingCount = allTrophies.length - cachedCount;
+  // v0.30.14: 之前直接用 cached.size 当 "已生成数" → 当 trophyImages 里有
+  // orphan row（旧 trophy 改名/删除留下来的）时，cachedCount > allTrophies.length，
+  // missing 算成负数（label "缺 −40"）。改成只算注册过的 trophy。
+  const allTrophyIds = new Set(allTrophies.map((t) => t.id));
+  const cachedRegisteredCount = Array.from(cached.keys()).filter((id) => allTrophyIds.has(id)).length;
+  const orphanCachedCount = cached.size - cachedRegisteredCount;
+  const cachedCount = cachedRegisteredCount;
+  const missingCount = Math.max(0, allTrophies.length - cachedCount);
 
   const filtered = allTrophies.filter((t) => {
     if (filter === "missing") return !cached.has(t.id);
@@ -132,8 +138,18 @@ export function TrophyImagesAdminPanel() {
 
       <div className="text-xs text-slate-400 leading-relaxed">
         用 wan2.7-image-pro 给每个勋章生成专属卡通图（替换 emoji）。已生成{" "}
-        <span className="text-emerald-300">{cachedCount}</span> / {allTrophies.length}，
-        缺 <span className="text-amber-300">{missingCount}</span>。每张 ~20 秒。<br />
+        <span className="text-emerald-300">{cachedCount}</span> / {allTrophies.length}
+        {missingCount > 0 ? (
+          <>，缺 <span className="text-amber-300">{missingCount}</span></>
+        ) : (
+          <span className="text-emerald-300"> · 全部齐了</span>
+        )}
+        {orphanCachedCount > 0 && (
+          <>
+            {" "}· 另有 <span className="text-slate-300">{orphanCachedCount}</span> 张孤儿缓存（旧勋章 ID）
+          </>
+        )}
+        。每张 ~20 秒。<br />
         Round 6 改进：512×512 + sticker 风格 + 圆形遮罩 + 段位勋章 + 彻底禁文字
       </div>
 

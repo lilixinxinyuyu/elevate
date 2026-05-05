@@ -27,6 +27,18 @@ bump `SEED_VERSION`（停在 v0.28.3 的 20）。`ensureSeeded()` 看到本地 m
 - 题量统计页：✅ 显示正确（修复 SEED_VERSION 后会再涨 ~60 道）
 - F3-F4（G4A skill 题量=0、G4B U5/U6 必考题量不足）：列入期中后待办，本次不动
 
+**F5 修：Header 学科 chip 不再跟左上 logo 重复显示 "数"**
+- 旧：右上 chip 显示当前 subject.shortLabel ("数")，左上 logo 也是 "数"，视觉冗余
+- 新：chip 改成中性 ⇄ 图标 + ▾，aria-label="切换学科"，仍保留可点性
+- 文件：`src/components/Layout.tsx`
+
+**F6 修：Trophy 图统计文案 "缺 −40" 负数**
+- 旧：cachedCount = 整张 trophyImages 表的行数（包含历史 orphan trophyId）；当
+  trophyImages 行数 > 注册 trophy 数时 missingCount 算成负数
+- 新：cachedCount 只算注册过的 trophy（intersection with allTrophyIds），
+  另显示 "另有 N 张孤儿缓存（旧勋章 ID）"，missingCount=0 时显示 "全部齐了"
+- 文件：`src/components/TrophyImagesAdminPanel.tsx`
+
 ## v0.30.12 — 2026-05-05 · 防刷分三层护栏 + 60 道 U1-U4 + Trophy 文字 bug 修
 
 **痛点**：用户观察到 Selena 已经在"姊妹题刷分"——同 skill 同难度不同 question_id 来回刷。
