@@ -151,6 +151,7 @@ export const GameTemplateSchema = z.enum([
   "balance_lab",
   "plain_numeric",
   "plain_choice",
+  "dot_grid_draw",
 ]);
 
 export const QuestionSchema = z.object({
@@ -210,6 +211,24 @@ export const QuestionSchema = z.object({
   review_interval_days: z.array(z.number().int().positive()).optional(),
   tags: z.array(z.string()).optional(),
   safety_check: z.record(z.boolean()).optional(),
+  // Phase 2 Axis 2：点子图画图题载荷。
+  dot_grid: z
+    .object({
+      gridWidth: z.number().int().min(2).max(15),
+      gridHeight: z.number().int().min(2).max(15),
+      targetShape: z.enum([
+        "parallelogram",
+        "rectangle",
+        "trapezoid",
+        "isosceles_triangle",
+        "equilateral_triangle",
+        "right_triangle",
+        "any_triangle",
+      ]),
+      targetLabel: z.string().min(1),
+      snapToDots: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export type QuestionInput = z.infer<typeof QuestionSchema>;

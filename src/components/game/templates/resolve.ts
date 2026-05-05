@@ -23,6 +23,8 @@ const FORMAT_MAP: Record<string, GameTemplate> = {
 
 export function resolveTemplate(q: Question): GameTemplate {
   if (q.play_as) return q.play_as;
+  // Phase 2 Axis 2：带 dot_grid spec 的题统一走 dot_grid_draw
+  if (q.dot_grid) return "dot_grid_draw";
   // 有 subquestions 的走 shop_counter
   if (q.subquestions && q.subquestions.length > 0) return "shop_counter";
   const fromFormat = FORMAT_MAP[q.question_format];

@@ -14,7 +14,9 @@ import type { Question, StudentProfile } from "../core/types";
 //
 // 历史：v0.28.3 (SEED_VERSION 20)：重写 7 道用 "输 N" 指令式说法的题改成自然
 // 中文 "答 N"，同时补 8 道 decimal_compare 高质量题。
-const SEED_VERSION = 21;
+// v0.31.0 Phase 2 Axis 2：加 DOT_GRID_DEMO_PACK 5 道点子图画图题，bump 版本让现有
+// 用户也下载到（5/8 道画图题型起步）。
+const SEED_VERSION = 22;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

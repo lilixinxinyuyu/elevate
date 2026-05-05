@@ -25,6 +25,7 @@ import { BalanceLabPanel } from "./templates/BalanceLab";
 import { ChartDetectivePanel } from "./templates/ChartDetective";
 import { CubeViewerPanel } from "./templates/CubeViewer";
 import { TriangleJudgePanel } from "./templates/TriangleJudge";
+import { DotGridDrawPanel } from "./templates/DotGridDraw";
 import { resolveTemplate } from "./templates/resolve";
 
 export interface AttemptResult {
@@ -462,6 +463,8 @@ function pickPanel(id: string): (p: TemplateRenderProps) => JSX.Element {
       return CubeViewerPanel;
     case "triangle_judge":
       return TriangleJudgePanel;
+    case "dot_grid_draw":
+      return DotGridDrawPanel;
     default:
       return PlainNumericPanel;
   }

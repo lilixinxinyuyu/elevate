@@ -3,7 +3,7 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
-## v0.31.0 — 2026-05-05 · Phase 2 起步：Axis 4 CLI + Axis 3 Fluency 模式
+## v0.31.0 — 2026-05-05 · Phase 2 起步：4 个 axis 全部上线
 
 ### Axis 4 · 加 skill 一条龙 CLI 脚本（基建）
 - 新文件 `scripts/add-skill.mjs` — 一条命令 patch 6+ 文件 + 调 AI 出题 + bump SEED_VERSION
@@ -16,25 +16,48 @@
 
 - 5 个起步模块：5×5 / 9×9 乘法口诀、20 内加减、100 内凑整速算（按 grade 自动开放）
 - 每模块每次 60s × 4 选 1 速算训练；干扰项手工设计贴近常见错误
-- 每 module 双指标通关：准 ≥ X% + 中位反应时 ≤ Y ms（每模块阈值不同）
+- 每 module 双指标通关：准 ≥ X% + 中位反应时 ≤ Y ms
 - 6 个跨模块 trophy：飞毛腿 30/50、连击 20/30、闪电反应、模块大师
 - 路由 `/math/fluency` + `/math/fluency/:moduleId`
 - DB schema bump v5 → v6：新表 `fluencyAttempts` / `fluencyStats`
 
+### Axis 1 · 大题营（多步应用题专练）
+**关键约束**：5 道/场 D3-D4 多步题，不限时；XP / Elo / mastery 全走主线
+（这是真实 skill 题，跟 fluency 不同）。
+
+- 新 SessionMode `big_problems` + scheduler `buildBigProblems`
+- D3-D4 + `subquestions.length > 0` 过滤；skill 多样性约束
+- 路由 `/math/big-problems` landing → `/math/train?mode=big_problems`
+- 复用现有 ShopCounter 模板渲染 multi-step 子问题
+
+### Axis 2 · Canvas 真画（点子图画图）
+**关键约束**：直接 SVG 点子图 + 点击格点构造多边形 + 按形状类别判分。
+
+- 新 GameTemplate `dot_grid_draw`
+- 新组件 `DotGridDraw.tsx`：W×H 网格点，点击添加顶点，自动连线，点首点闭合
+- 几何判分：parallelogram / rectangle / trapezoid / isosceles_triangle /
+  equilateral_triangle / right_triangle / any_triangle 7 种目标
+- Question schema 加 `dot_grid` 可选字段 + 5 道 demo 题（DOT_DEMO_*）
+- 后续题型（分图操作 / 三角形分类拖拽）可在 DotGridDraw 框架基础上加
+
 ### Feature flag 隔离（保护期中）
 - 新文件 `src/lib/featureFlags.ts` — `isPhase2Live()`
 - 三种打开方式：`localStorage.setItem("phase2_live","true")` / `?phase2=on` URL / `VITE_PHASE2_LIVE=true` 构建期
-- Off 时口算 nav 不显示、`/math/fluency` 走 ComingSoon —— Selena 期中前完全看不到半成品
-- 期中考完后翻 flag（或父亲设备先验证）
+- Off 时口算 + 大题营 nav 不显示、相关路由走 ComingSoon
+- 期中考完后翻 flag
+
+### 修一个老 bug
+- `src/db/seed.ts`：`backfillDeletedQuestionIdsFromSeed` 在空 DB（preview / 新装）
+  时会把全部 SEED 打成"已删除"。加 `if (localSet.size === 0) return` 守卫。
 
 ### 文档
-- `docs/phase2-plan.md` — 4 axis 完整 spec 已 lock
+- `docs/phase2-plan.md` — 4 axis 完整 spec lock
 - `scripts/README.md` — 加 skill 脚本用法
 
-### Phase 2 待办
-- Axis 1 大题营（多步应用题）
-- Axis 2 Canvas 画图题
-- Axis 5 试卷分析（暂停等多模态视觉）
+### Phase 2 后续
+- Axis 2 加 2/3 种题型（分图 / 三角形分类）
+- Axis 5 试卷分析 — 暂停等多模态视觉
+
 
 ## v0.30.14 — 2026-05-05 · SEED_VERSION 补 bump + 错题孤儿清理
 

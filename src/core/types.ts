@@ -78,7 +78,9 @@ export type GameTemplate =
   | "memory_match"
   | "balance_lab"
   | "plain_numeric"
-  | "plain_choice";
+  | "plain_choice"
+  /** Phase 2 Axis 2：点子图画图 — 点击格点构造多边形 */
+  | "dot_grid_draw";
 
 export interface CurriculumUnit {
   id: string;
@@ -251,6 +253,44 @@ export interface Question {
    * 数学侧不读这些字段，零影响。
    */
   game_data?: ChinesePairMatchData | ChineseSentenceShuffleData | ChinesePoemClozeData;
+
+  /**
+   * Phase 2 Axis 2：点子图画图题载荷。
+   *
+   * 点子图就是网格点阵（W×H），用户点击格点添加顶点，自动连线，闭合后判图形类别。
+   * 判分逻辑见 src/components/game/templates/DotGridDraw.tsx。
+   */
+  dot_grid?: DotGridSpec;
+}
+
+/** Phase 2 Axis 2：点子图画图题规格。 */
+export interface DotGridSpec {
+  /** 格点宽度（含边界点）— 例 6 表示 6×6 = 36 个点 */
+  gridWidth: number;
+  /** 格点高度 */
+  gridHeight: number;
+  /**
+   * 目标形状类型 — 判分时校验：
+   *  - parallelogram: 4 顶点 + 两组对边平行 + 不是矩形
+   *  - rectangle: 4 顶点 + 4 个直角
+   *  - trapezoid: 4 顶点 + 恰好一组对边平行
+   *  - isosceles_triangle: 3 顶点 + 至少两条边等长
+   *  - equilateral_triangle: 3 顶点 + 三条边等长
+   *  - right_triangle: 3 顶点 + 含直角
+   *  - any_triangle: 3 顶点
+   */
+  targetShape:
+    | "parallelogram"
+    | "rectangle"
+    | "trapezoid"
+    | "isosceles_triangle"
+    | "equilateral_triangle"
+    | "right_triangle"
+    | "any_triangle";
+  /** 对学生展示的目标名（"等腰三角形"等） */
+  targetLabel: string;
+  /** 是否要求顶点严格落在格点上（一般 true） */
+  snapToDots?: boolean;
 }
 
 /** 配对题：左右两列 tile，点左边再点右边配成对，全配对完点提交 */
