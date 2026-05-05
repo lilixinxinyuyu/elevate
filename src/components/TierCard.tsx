@@ -191,8 +191,8 @@ export function TierCard({
                 subTone={t.theme.subTextColor}
               />
               <AbilityMini
-                label="覆盖"
-                title={`覆盖广度（每 skill 最多贡献 5 道独立答对，最大 150）。\n反"姊妹题刷分"：1 skill 100 道也只 5 分；30 skill 各 5 道 = 150 满分。`}
+                label="广度"
+                title={`练习广度（每 skill 最多贡献 5 道独立答对，最大 150）。\n反"姊妹题刷分"：1 skill 100 道也只 5 分；30 skill 各 5 道 = 150 满分。\n衡量"练得广不广"，不是"练得多不多"。`}
                 value={ability.components.volume}
                 max={150}
                 rawDisplay={`${ability.raw.skillCoverageScore} 分 · ${ability.raw.uniqueQuestionsCorrect} 独立答对`}

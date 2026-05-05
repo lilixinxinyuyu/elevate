@@ -1183,7 +1183,7 @@ function RatingDiagnostics() {
             <tr><td>准确率（7天）</td><td className="text-right">{Math.round(ability.components.accuracy)}</td><td className="text-right text-slate-400">/ 250</td><td className="text-right">{Math.round(ability.raw.accuracy7d * 100)}%</td></tr>
             <tr><td>熟练度</td><td className="text-right">{Math.round(ability.components.mastery)}</td><td className="text-right text-slate-400">/ 400</td><td className="text-right">eff {Math.round(ability.raw.weightedMastery)}</td></tr>
             <tr><td>持续性</td><td className="text-right">{Math.round(ability.components.continuity)}</td><td className="text-right text-slate-400">/ 200</td><td className="text-right">连{ability.raw.streak}·共{ability.raw.cumulativeDays}天</td></tr>
-            <tr title="v0.30.12: 覆盖广度=每 skill 最多贡献 5 道独立答对，最大 150。强反姊妹题刷分。"><td>覆盖广度</td><td className="text-right">{Math.round(ability.components.volume)}</td><td className="text-right text-slate-400">/ 150</td><td className="text-right">cov {ability.raw.skillCoverageScore} · {ability.raw.uniqueQuestionsCorrect} 独立答对</td></tr>
+            <tr title="v0.30.12: 练习广度=每 skill 最多贡献 5 道独立答对，最大 150。强反姊妹题刷分。"><td>广度</td><td className="text-right">{Math.round(ability.components.volume)}</td><td className="text-right text-slate-400">/ 150</td><td className="text-right">cov {ability.raw.skillCoverageScore} · {ability.raw.uniqueQuestionsCorrect} 独立答对</td></tr>
           </tbody>
         </table>
       </div>
