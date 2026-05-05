@@ -267,37 +267,59 @@ function buildCommemorativePrompt(t: TrophyMeta): string {
 function buildTierBadgePrompt(t: TrophyMeta): string {
   // 抽取 tier id（去掉前缀）
   const rawId = t.id.replace(/^math_/, "").replace(/^chinese_/, "").replace(/^tier_/, "");
-  const tierTheme: Record<string, { motif: string; color: string }> = {
-    school: { motif: "可爱卡通校园建筑（学校大门 + 课本）", color: "天蓝色 + 浅青色，柔和" },
+  const tierTheme: Record<string, { motif: string; rim: string; bg: string }> = {
+    school: {
+      motif:
+        "a friendly stylized primary school crest: an open book at center with a tiny rising sun above, two small green leaves curling around the book, soft pastel sky-blue palette",
+      rim: "polished pale silver with soft blue inner glow",
+      bg: "warm pastel cream-to-sky-blue radial gradient",
+    },
     district: {
-      motif: "锦江区地标 + 春天嫩芽（嫩绿色丝带 + 锦江水波）",
-      color: "翠绿 + 蜜蓝绿，新生感",
+      motif:
+        "an emerald regional emblem: a slender bamboo stalk rising at center wrapped in calm river ripples, tiny new spring buds, refined and uplifting",
+      rim: "polished gold with emerald inner glow",
+      bg: "deep emerald to jade radial gradient",
     },
     city: {
-      motif: "成都熊猫宝宝头像 + 蓉城都市轮廓",
-      color: "紫罗兰 + 紫红，神秘感",
+      motif:
+        "a violet city emblem: a cute panda silhouette beside a stylized traditional Chinese eave (Wuhou Shrine inspired) with a glowing teacup at the bottom, mystic and refined",
+      rim: "brushed silver with violet inner glow",
+      bg: "deep violet to fuchsia radial gradient",
     },
     province: {
-      motif: "金色国宝大熊猫 + 四川山川剪影",
-      color: "金色 + 橘红，辉煌感",
+      motif:
+        "an amber-gold provincial emblem: a chubby panda hugging green bamboo with stylized misty Sichuan mountains behind, small golden stars sprinkled around the rim",
+      rim: "thick polished gold with amber inner glow",
+      bg: "amber to honey-gold radial gradient",
     },
     country: {
       // ⚠️ 不写 "中国地图" / "五星" —— 阿里云图像模型对国家地图和国旗符号有内容
       // 过滤，会返回 InvalidParameter。改用通用的"凤凰 + 山河 + 星辰"传奇意象。
-      motif: "金色凤凰展翅 + 远山云海 + 璀璨星辰光环",
-      color: "深红 + 真金，传奇质感",
+      motif:
+        "a national legendary emblem: a golden phoenix in flight over abstract Great Wall layers and a starburst halo, regal and powerful",
+      rim: "radiant gold with ruby inner glow",
+      bg: "deep ruby to gold radial gradient",
     },
   };
-  const theme = tierTheme[rawId] ?? { motif: t.name, color: "紫红" };
+  const theme = tierTheme[rawId] ?? {
+    motif: t.name,
+    rim: "polished gold",
+    bg: "deep violet radial gradient",
+  };
   return [
-    `Apple Fitness 风格的圆形段位勋章 (rank medal)，简洁高级，居中构图。`,
-    `主体：${theme.motif}，4 年级女生喜欢但不幼稚的精致风格，主体占画面 85%。`,
-    `主色调：${theme.color}。`,
-    `**只有一道极细 (1-2px) 的金属环线作为外缘**，不要装饰围圈、不要花纹光环。`,
-    `背景：纯黑或深深紫，让主体颜色更突出。`,
-    `禁止出现：任何文字、字母、数字、签名、水印。`,
-    `风格：精致 3D 浮雕 + 柔光内发光，像 Apple Fitness 徽章一样高级。`,
-    `画面尺寸：512×512 正方形，主体严格居中，四周留 8% 边距。`,
+    // === 主体描述 ===
+    `A premium Apple Fitness style achievement medal, circular embossed relief, clean centered composition.`,
+    `Subject: ${theme.motif}.`,
+    // === 框架填满（修 v0.30.3 黑边大问题） ===
+    `**The circular medal fills the entire frame edge-to-edge — the rim touches all four sides of the square canvas with at most 1-2 pixel margin.** No visible empty background border, no thick padding, no halo of dark space around the medal.`,
+    `Rim: ${theme.rim}, smooth thin metallic ring 2-3% of the frame width, exactly at the canvas edge.`,
+    // === 内部背景，跟金属环呼应（不要纯黑！） ===
+    `Inside the rim: ${theme.bg}, soft and dimensional, makes the central motif glow naturally. Absolutely **NOT a flat black or near-black background** — the inner color should be saturated and rich.`,
+    `Surface: precise 3D embossed relief, silky inner glow, premium hyperrealistic detail, like the very best Apple Fitness award icons.`,
+    // === 严格禁止 ===
+    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS, NO TYPOGRAPHY, NO CALLIGRAPHY OF ANY KIND.**`,
+    // === 输出尺寸 ===
+    `Output: 512×512 square, the circular medal occupies 98%+ of the canvas with only a 1-2 pixel margin on each side.`,
   ].join(" ");
 }
 
