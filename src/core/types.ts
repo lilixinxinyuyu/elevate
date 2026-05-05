@@ -568,6 +568,8 @@ export interface TrophyCheckContext {
   mastery: MasteryScore[];
   mistakes: MistakeReview[];
   trophies: UserTrophy[];
+  /** v0.31.8: tutor 学习深度勋章用 — 算"问 + 学会"闭环 */
+  tutorSessions?: TutorSession[];
   todayDateKey: string;
 }
 

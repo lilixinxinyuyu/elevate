@@ -588,12 +588,15 @@ export async function finalizeSession(
   const mastery = await db.mastery.where({ studentId }).toArray();
   const mistakes = await db.mistakes.where({ studentId }).toArray();
   const trophies = await db.trophies.where({ studentId }).toArray();
+  // v0.31.8: tutor_companion "小进知音"勋章需要 tutor sessions 算闭环
+  const tutorSessions = await db.tutorSessions.where({ studentId }).toArray();
   const newTrophyAwards = checkAndAwardTrophies({
     studentId,
     attempts: allAttempts,
     mastery,
     mistakes,
     trophies,
+    tutorSessions,
     todayDateKey: todayKey(),
   });
   for (const award of newTrophyAwards) {

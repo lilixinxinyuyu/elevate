@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { generateImage } from "./tutor";
 import type { TrophyImageRow } from "../db/dexie";
@@ -256,6 +257,13 @@ const TROPHY_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
     motif:
       "a stylized artist palette with a small dot grid pattern overlaid, a glowing pencil drawing a triangle shape, soft paint splash background — symbolizing mastery of geometric drawing on dot paper",
     palette: "rose pink palette + cream paper + emerald pencil + violet paint splash",
+  },
+
+  // === Phase 2 v0.31.8 tutor 学习深度勋章 — 小进 + 学习闭环 ===
+  math_tutor_companion: {
+    motif:
+      "a friendly cartoon panda mentor figure (representing the tutor) gently guiding a small glowing lightbulb upward into a constellation of connected stars, an open book floating beside them — symbolizing 'asked + truly understood' learning loop with the tutor",
+    palette: "warm cream panda + golden lightbulb + violet star constellation + rose-gold book accents",
   },
 };
 
@@ -652,46 +660,24 @@ export async function ensureTrophyImage(
 
 /** Hook：组件订阅某个 trophy 的图，cache 命中即给图，否则给 null（用 emoji 兜底） */
 export function useTrophyImage(trophyId: string | undefined): TrophyImageRow | null {
-  const [row, setRow] = useState<TrophyImageRow | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!trophyId) {
-      setRow(null);
-      return;
-    }
-    void (async () => {
-      const r = await db.trophyImages.get(trophyId);
-      if (!cancelled) setRow(r ?? null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [trophyId]);
-
-  return row;
+  // v0.31.8 修关键 sync bug：之前是 useEffect 一次性读，cloud sync 后 IndexedDB
+  // 更新但 React 组件不会 re-render，导致刷新页面后新勋章图死活不显示
+  // （主奖杯柜里的所有 trophy 都中招）。
+  // 改成 useLiveQuery — Dexie 对该行任何写入都触发组件重渲染。
+  // 段位徽章 TierBadgeImg 早就这么干了，主勋章柜 TrophyIcon 漏了一直没修。
+  const cached = useLiveQuery(
+    async () => (trophyId ? await db.trophyImages.get(trophyId) : undefined),
+    [trophyId],
+  );
+  return cached ?? null;
 }
 
-/** Hook：监听整个 trophyImages 表，一旦表更新（put）就重新拉 */
+/** Hook：监听整个 trophyImages 表，一旦表更新（put）就重新拉。
+ * v0.31.8：从 5s polling 改成 useLiveQuery 真响应式 — cloud sync 写入立刻生效，
+ * 不必等 5 秒。 */
 export function useAllTrophyImages(): Map<string, TrophyImageRow> {
-  const [map, setMap] = useState<Map<string, TrophyImageRow>>(new Map());
-
-  useEffect(() => {
-    let cancelled = false;
-    const refresh = async () => {
-      const all = await db.trophyImages.toArray();
-      if (!cancelled) setMap(new Map(all.map((r) => [r.trophyId, r])));
-    };
-    void refresh();
-    // 简单方式：用一个 polling（5 秒间隔），dexie hooks 复杂避免依赖
-    const id = window.setInterval(refresh, 5000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, []);
-
-  return map;
+  const rows = useLiveQuery(() => db.trophyImages.toArray(), []) ?? [];
+  return new Map(rows.map((r) => [r.trophyId, r]));
 }
 
 /**

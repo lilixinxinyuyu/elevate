@@ -182,6 +182,51 @@ function cumulativePracticeDays(attempts: Attempt[]): number {
   return days.size;
 }
 
+/**
+ * v0.31.8 "小进知音"勋章核心算法：
+ * 数 Selena 在多少个 skill 上 "问小进 + 之后真的进步了" 形成完整闭环。
+ *
+ * 一个 skill 算"进步"需要：
+ *   1. 至少有 1 次 tutor session（问过小进）
+ *   2. 第一次 tutor session 之后做的该 skill 题 ≥ 5 道（要有信号）
+ *   3. 之后准确率 - 之前准确率 ≥ 10 个百分点
+ *
+ * 没问过 / 问后题量太少 / 没真进步 → 不计。
+ *
+ * 用 ctx.tutorSessions（如果没传则该 skill 视为 0）。
+ */
+function countSkillsImprovedAfterTutor(ctx: TrophyCheckContext): number {
+  const tutorSessions = ctx.tutorSessions ?? [];
+  if (tutorSessions.length === 0) return 0;
+
+  // skill -> 最早 tutor session timestamp
+  const firstTutorAt = new Map<string, number>();
+  for (const ts of tutorSessions) {
+    if (!ts.skillId) continue;
+    const cur = firstTutorAt.get(ts.skillId);
+    if (cur == null || ts.startedAt < cur) {
+      firstTutorAt.set(ts.skillId, ts.startedAt);
+    }
+  }
+
+  let improved = 0;
+  for (const [skillId, tutorTs] of firstTutorAt) {
+    const skillAttempts = ctx.attempts.filter((a) => a.skillId === skillId);
+    const before = skillAttempts.filter((a) => a.createdAt < tutorTs);
+    const after = skillAttempts.filter((a) => a.createdAt >= tutorTs);
+    if (after.length < 5) continue; // 信号不足
+
+    const beforeAcc =
+      before.length > 0
+        ? before.filter((a) => a.isCorrect).length / before.length
+        : 0;
+    const afterAcc = after.filter((a) => a.isCorrect).length / after.length;
+
+    if (afterAcc - beforeAcc >= 0.10) improved++;
+  }
+  return improved;
+}
+
 // ============================================================
 //  Tier 阈值常量
 // ============================================================
@@ -609,6 +654,24 @@ export const TROPHIES: TrophyDef[] = [
     tier: (ctx) =>
       ctx.attempts.filter((a) => a.isCorrect && a.questionId.startsWith("DOT_")).length,
     tieredThresholds: tiers(3, 10, 30, 100, " 道"),
+  },
+
+  // ============================================
+  //  🎓 tutor — "学习深度" 勋章 (Phase 2 v0.31.8)
+  //
+  //  设计：奖励"问小进 + 真的学会了"，不是"问得多"。
+  //  指标 = 问过小进的 skill 中，问后准确率比问前提升 ≥ 10pp 的 skill 数。
+  //  跟反刷分理念一致（既不奖励"避问"也不奖励"瞎问"，奖励"问完真懂"）。
+  // ============================================
+  {
+    id: "tutor_companion",
+    name: "小进知音",
+    description:
+      "跟小进求助过、之后真的进步的 skill 数（准确率 +10pp 以上）。铜 1 / 银 5 / 金 15 / 钻 30。",
+    icon: "🎓",
+    category: "milestone",
+    tier: (ctx) => countSkillsImprovedAfterTutor(ctx),
+    tieredThresholds: tiers(1, 5, 15, 30, " 个 skill"),
   },
 ];
 
