@@ -149,5 +149,52 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   return jsonResponse({ ok: true, rows, version: Date.now() });
 };
 
+/**
+ * DELETE /api/sync/trophy-images
+ *
+ * Body: { trophyIds: string[] }  // 最多 30 个
+ *
+ * 删 cloud D1 里指定 trophyId 的 row。本地 db.trophyImages 不连带删（调用方自己负责）。
+ * 用途：admin 清理临时 inspect/ dump 行；旧 trophy 重命名时迁移。
+ */
+export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
+  const fail = checkAuth(request, env);
+  if (fail) return fail;
+  await ensureSchema(env.DB);
+
+  let body: { trophyIds?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: "invalid_json" }, 400);
+  }
+  if (!Array.isArray(body.trophyIds) || body.trophyIds.length === 0) {
+    return jsonResponse({ ok: false, error: "missing_trophyIds" }, 400);
+  }
+  if (body.trophyIds.length > 30) {
+    return jsonResponse({ ok: false, error: "batch_too_large" }, 400);
+  }
+
+  const deleted: string[] = [];
+  for (const id of body.trophyIds) {
+    if (typeof id !== "string" || !id) continue;
+    try {
+      const r = await env.DB.prepare(
+        "DELETE FROM trophy_images WHERE user_key = ? AND trophy_id = ?",
+      )
+        .bind(USER_KEY, id)
+        .run();
+      // D1 type doesn't expose .changes; just record attempt as success
+      if (r.success) deleted.push(id);
+    } catch {
+      // skip
+    }
+  }
+  return jsonResponse({ ok: true, deleted });
+};
+
 export const onRequestOptions: PagesFunction<Env> = async () =>
-  new Response(null, { status: 204, headers: corsHeaders });
+  new Response(null, {
+    status: 204,
+    headers: { ...corsHeaders, "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS" },
+  });
