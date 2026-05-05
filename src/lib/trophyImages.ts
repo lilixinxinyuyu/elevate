@@ -112,8 +112,11 @@ const TROPHY_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
     palette: "electric blue energy + amber lightning core",
   },
   math_streak_keeper: {
-    motif: "a tall flame burning steadily with a small glowing heart inside, surrounded by soft warm aura",
-    palette: "warm orange flame + ruby heart + cream glow",
+    // v0.31.6 重写：之前 motif "flame + heart inside" 渲染出来不对题，看着像 valentine
+    // 心，跟"连续打卡"主题脱节。改成 calendar + flame crown 组合，明显是"日"的概念。
+    motif:
+      "a flame-shaped crown floating above a stack of small calendar tiles, each tile marked with a tiny golden checkmark, soft warm sun rays radiating outward — symbolizing kingship over consecutive days of practice",
+    palette: "warm amber flame crown + cream tiles + emerald checkmarks + golden rays",
   },
   math_mastery_climber: {
     motif: "tiered mountain peaks with a small triangular flag planted on the highest summit, soft cloud at base",
@@ -174,6 +177,83 @@ const TROPHY_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
   math_shop_hero: {
     motif: "a cheerful shopping bag with a glowing coin spilling out the top, surrounded by tiny price-tag sparkles",
     palette: "mint green bag + rose gold coin + cream tags",
+  },
+
+  // === Phase 2 boss 印章（11 枚）— "闯关印章" 风格：庄重的玺印 / 战旗 / 王冠
+  // 跟 medal 区分一下，更"印章/勋绩"感。统一用 amber/orange 战斗色调。
+  math_boss_first_pass: {
+    motif:
+      "an ornate golden battle banner planted on a small castle keep, soft sun rays radiating, victorious mood with tiny floating stars — symbolizing the very first conquered challenge",
+    palette: "deep amber + warm crimson banner + cream stars",
+  },
+  math_boss_no_hint: {
+    motif:
+      "a confident cartoon brain wearing a samurai-style headband, eyes closed in deep focus, surrounded by a calm halo of light — symbolizing solo thinking without help",
+    palette: "rich indigo brain + amber headband + soft cream halo",
+  },
+  math_boss_win_streak_5: {
+    motif:
+      "five small golden flags on tiny mountain peaks arranged in a row, connected by a glowing trail, festive bunting feel",
+    palette: "warm amber flags + emerald hills + cream trail",
+  },
+  math_boss_win_streak_10: {
+    motif:
+      "ten golden mini-banners chained together in a wreath-like ring around a bright central star, festival celebration mood",
+    palette: "amber + ruby + cream + bright gold star",
+  },
+  math_boss_final_master: {
+    motif:
+      "a regal jeweled crown floating above an ornate seal, with two crossed scepters behind, bursting sun rays — the ultimate boss conquest emblem",
+    palette: "royal purple + gold crown + ruby jewels + cream scepters",
+  },
+
+  // 6 单元闯关印章 — 每个 unit 一个独特视觉主题（数学符号 + 战旗/印章感）
+  math_boss_G4B_U1_DECIMAL_ADD_SUB_master: {
+    motif:
+      "an ornate golden seal stamp with a glowing decimal point at center, crossed plus and minus signs forming an X behind it, ribbon banner draped at the bottom — unit 1 conquest seal",
+    palette: "deep amber seal + warm cream + ruby ribbon + glowing gold decimal",
+  },
+  math_boss_G4B_U2_TRI_QUAD_master: {
+    motif:
+      "an embossed triangular seal, the triangle frame holding a smaller four-sided shape inside, geometric corners highlighted, small ribbon at the base — unit 2 geometry conquest",
+    palette: "amber triangle + emerald inner shape + cream ribbon",
+  },
+  math_boss_G4B_U3_DECIMAL_MULTIPLY_master: {
+    motif:
+      "a circular seal with a stylized multiplication × symbol at the center, three small decimal points orbiting it as if planets, faint motion trail — unit 3 multiplication conquest",
+    palette: "fiery amber × symbol + ruby decimals + cream backdrop",
+  },
+  math_boss_G4B_U4_OBSERVE_OBJECTS_master: {
+    motif:
+      "an isometric cube floating inside a golden circular frame, with three tiny eye icons positioned at front/top/left to symbolize three viewpoints — unit 4 observation conquest",
+    palette: "warm amber frame + sapphire cube + cream eyes",
+  },
+  math_boss_G4B_U5_EQUATIONS_master: {
+    motif:
+      "a perfectly balanced scale with a glowing X variable on the left tray and an equals sign hovering above the fulcrum, ribbon at base — unit 5 equation conquest",
+    palette: "amber scale + ruby X variable + cream equals + emerald ribbon",
+  },
+  math_boss_G4B_U6_DATA_master: {
+    motif:
+      "an ornate seal frame containing three rising bar chart bars with a horizontal mean line cutting through them, small star at the top of the tallest bar — unit 6 data conquest",
+    palette: "amber frame + sapphire bars + ruby mean line + gold star",
+  },
+
+  // === Phase 2 横切勋章（4 枚）===
+  math_perfect_day: {
+    motif:
+      "three concentric glowing rings (cyan, violet, amber) all completely closed, with a tiny crown floating above and sparkles around — symbolizing a perfect single day where all three goals were achieved",
+    palette: "vibrant cyan + violet + amber rings + gold crown + cream sparkles",
+  },
+  math_perfect_week: {
+    motif:
+      "seven small calendar tiles in a row, each with a glowing checkmark, ringed by a flame trail and a single bright star at the end — symbolizing a perfect 7-day streak",
+    palette: "warm amber flame trail + cream tiles + emerald checkmarks + bright gold star",
+  },
+  math_canvas_master: {
+    motif:
+      "a stylized artist palette with a small dot grid pattern overlaid, a glowing pencil drawing a triangle shape, soft paint splash background — symbolizing mastery of geometric drawing on dot paper",
+    palette: "rose pink palette + cream paper + emerald pencil + violet paint splash",
   },
 };
 
@@ -270,6 +350,11 @@ const COMMEMORATIVE_MOTIF_SPEC: Record<string, { motif: string; palette: string 
     motif:
       "a small wooden sailboat with full sails, sailing on gentle waves, a bright sunrise behind it, with a flying open book transforming into the sail — symbolizing setting sail on a new academic year",
     palette: "deep ocean blue + warm sunrise gold + cream sail + leaf green",
+  },
+  math_birthday_2026: {
+    motif:
+      "a beautifully decorated birthday cake with flickering candles on top, a small floating party hat to one side, ribbon banners and confetti sparkles all around — celebratory and warm, symbolizing a birthday milestone",
+    palette: "soft rose pink frosting + cream cake + warm candle gold + violet ribbons + rainbow confetti",
   },
 };
 
