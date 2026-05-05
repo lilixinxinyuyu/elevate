@@ -6,6 +6,7 @@ import { UNITS } from "../content/units";
 import { SKILLS } from "../content/skills";
 import { masteryColor, masteryLabel } from "../lib/format";
 import { getSelectedTerm, setSelectedTerm } from "../db/service";
+import { getUnlockedUnitIdSet } from "../db/unitUnlock";
 import type { Term } from "../core/types";
 
 export function SkillPickerPage() {
@@ -41,20 +42,40 @@ export function SkillPickerPage() {
     [term],
   );
 
-  // 默认勾选：4 个掌握度最低且有题目的 skill（限当前 term）
+  // v0.30.9: 已解锁单元（学期进度门控）
+  const [unlockedUnits, setUnlockedUnits] = useState<Set<string> | null>(null);
   useEffect(() => {
-    if (!mastery || !questionCounts) return;
+    if (!student) return;
+    getUnlockedUnitIdSet(student.id, term).then(setUnlockedUnits);
+  }, [student?.id, term]);
+
+  // 默认勾选：4 个最需要练的 skill —— v0.30.9 重写
+  // 之前 bug：所有未练过 skill mastery score 都 ?? 50 → 并列 → 按 SKILLS 顺序拿"前 4 个"，
+  //         不是真"最弱 4 个"。于是你看到"有时候选最前面 4 个有时候选最弱"。
+  // 现在显式区分 已尝试 / 未尝试：
+  //   weaknessRank 越大越需要练
+  //   - 已尝试 score=0   → rank=100（最需要练）
+  //   - 未尝试           → rank=50 （没数据，中等优先）
+  //   - 已尝试 score=100 → rank=0  （已经会了，不需要）
+  // 过滤：必须在已解锁的 unit 内、且题库有题
+  useEffect(() => {
+    if (!mastery || !questionCounts || !unlockedUnits) return;
     if (selected.size > 0) return;
     const available = SKILLS.filter(
-      (s) => (questionCounts.get(s.id) ?? 0) > 0 && visibleUnitIds.has(s.unitId),
+      (s) =>
+        (questionCounts.get(s.id) ?? 0) > 0 &&
+        visibleUnitIds.has(s.unitId) &&
+        unlockedUnits.has(s.unitId),
     );
-    const byWeakness = available
-      .map((s) => ({ s, score: masteryMap.get(s.id)?.score ?? 50 }))
-      .sort((a, b) => a.score - b.score)
-      .slice(0, 4)
-      .map((x) => x.s.id);
-    setSelected(new Set(byWeakness));
-  }, [mastery?.length, questionCounts?.size, term]);
+    const ranked = available.map((s) => {
+      const m = masteryMap.get(s.id);
+      const weaknessRank = m ? 100 - m.score : 50;
+      return { s, rank: weaknessRank };
+    });
+    ranked.sort((a, b) => b.rank - a.rank);
+    const picked = ranked.slice(0, 4).map((x) => x.s.id);
+    setSelected(new Set(picked));
+  }, [mastery?.length, questionCounts?.size, term, unlockedUnits?.size]);
 
   if (!student) return <div className="card">加载中…</div>;
 
@@ -100,14 +121,25 @@ export function SkillPickerPage() {
             <h2 className="text-lg font-display font-bold text-slate-200 mb-2">{term}</h2>
             {units.map((u) => {
               const skills = SKILLS.filter((s) => s.unitId === u.id);
+              const unitLocked = unlockedUnits != null && !unlockedUnits.has(u.id);
               return (
-                <div key={u.id} className="card mb-3">
-                  <div className="font-display font-semibold text-slate-100 mb-2">{u.name}</div>
+                <div key={u.id} className={`card mb-3 ${unitLocked ? "opacity-60" : ""}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-display font-semibold text-slate-100">
+                      {u.name}
+                    </div>
+                    {unitLocked && (
+                      <span className="chip text-[10px] bg-slate-700/40 text-slate-300 border border-slate-500/40">
+                        🔒 未解锁
+                      </span>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {skills.map((s) => {
                       const score = masteryMap.get(s.id)?.score ?? 50;
                       const count = questionCounts?.get(s.id) ?? 0;
-                      const disabled = count === 0;
+                      // v0.30.9：locked unit 也禁用
+                      const disabled = count === 0 || unitLocked;
                       const on = selected.has(s.id);
                       return (
                         <button

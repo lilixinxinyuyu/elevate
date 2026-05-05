@@ -1,4 +1,5 @@
 import { db } from "./dexie";
+import { getUnlockedUnitIdSet } from "./unitUnlock";
 import { buildDailySession } from "../core/scheduler";
 import { scoreAttempt, levelFromXp } from "../core/scoring";
 import { applyAttempt, MASTERY_BOUNDS } from "../core/mastery";
@@ -69,7 +70,14 @@ export async function getOrCreateSession(
 
   // 按 term 过滤题库
   const allQuestions = await db.questions.toArray();
-  const pool = filterQuestionsByTerm(allQuestions, mode, term);
+  let pool = filterQuestionsByTerm(allQuestions, mode, term);
+
+  // v0.30.9: 按"学期进度（已解锁单元）"过滤——避免 U5/U6 没学过的题被选进每日挑战。
+  // 期中/期末/模拟考有 hard-coded 单元范围（scheduler 内处理），不再叠加 unlock 过滤。
+  if (mode !== "midterm" && mode !== "final_sprint" && mode !== "mock_exam") {
+    const unlocked = await getUnlockedUnitIdSet(studentId, term);
+    pool = pool.filter((q) => unlocked.has(q.unit_id));
+  }
 
   const mastery = await db.mastery.where({ studentId }).toArray();
   const mistakes = await db.mistakes.where({ studentId }).toArray();

@@ -18,6 +18,7 @@ import { TierCard } from "../components/TierCard";
 import { TrophyWall } from "../components/TrophyWall";
 import { BadgeInventory } from "../components/BadgeInventory";
 import { UnlockCelebration } from "../components/UnlockCelebration";
+import { UnitProgress } from "../components/UnitProgress";
 import type { RatingResult, AbilityDiagnostic } from "../core/rating";
 import { computeAbilityDiagnostic } from "../core/rating";
 import type { Term } from "../core/types";
@@ -419,6 +420,9 @@ export function HomePage() {
             </div>
           </section>
         )}
+
+      {/* v0.30.9: 学期进度（单元解锁面板） */}
+      <UnitProgress studentId={student.id} term={term} />
 
       {/* 段位勋章柜 */}
       <BadgeInventory

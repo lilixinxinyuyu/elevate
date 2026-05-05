@@ -175,13 +175,22 @@ async function countFreshQuestions(args: {
  *
  * 用于多 skill 模式让一次 trigger 跨 skill 出题，整出 30+ 道丰富题型。
  */
-function pickWeakestSkills(args: TriggerArgs, n: number): Skill[] {
+function pickWeakestSkills(
+  args: TriggerArgs,
+  n: number,
+  unlockedUnitIds?: Set<string>,
+): Skill[] {
   const termUnits = args.currentTerm
     ? args.units.filter((u) => u.term === args.currentTerm)
     : args.units;
   const termUnitIds = new Set(termUnits.map((u) => u.id));
   const termSkills = args.skills.filter((s) => termUnitIds.has(s.unitId));
-  const candidates = termSkills.length > 0 ? termSkills : args.skills;
+  // v0.30.9: 只为已解锁的 unit 出题，免得给没学过的 U5/U6 烧 LLM token
+  const unlockedSkills = unlockedUnitIds
+    ? termSkills.filter((s) => unlockedUnitIds.has(s.unitId))
+    : termSkills;
+  const candidates =
+    unlockedSkills.length > 0 ? unlockedSkills : termSkills.length > 0 ? termSkills : args.skills;
 
   let unitFiltered = candidates;
   if (args.preferredUnitId) {
@@ -216,7 +225,11 @@ export async function triggerBackgroundGen(args: TriggerArgs): Promise<void> {
     .toArray();
   const masteryById = new Map(masteryRows.map((m) => [m.skillId, m.score]));
 
-  const candidates = pickWeakestSkills(args, multiCount);
+  // v0.30.9: 只考虑已解锁的 unit
+  const term: "上册" | "下册" = args.currentTerm ?? "下册";
+  const { getUnlockedUnitIdSet } = await import("../db/unitUnlock");
+  const unlockedUnitIds = await getUnlockedUnitIdSet(args.studentId, term);
+  const candidates = pickWeakestSkills(args, multiCount, unlockedUnitIds);
   const sorted = candidates
     .map((s) => ({ s, m: masteryById.get(s.id) ?? 50 }))
     .sort((a, b) => a.m - b.m)

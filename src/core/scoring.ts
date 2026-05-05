@@ -95,8 +95,11 @@ export function speedBonus(elapsedSeconds: number, estimatedSeconds: number, isC
   return { bonus: -1, tier: "slow" };
 }
 
-/** v0.30.7: tutor-assisted correct 的 base 分倍率（70%） */
-export const TUTOR_ASSISTED_FACTOR = 0.7;
+/**
+ * v0.30.9 调整 0.7 → 0.5：用户反馈"宁可分数偏严，错题以后重做还能拿分，
+ * 不希望分数虚高"。tutor-assisted 答对（讲题之后才对的）只给 base 50%。
+ */
+export const TUTOR_ASSISTED_FACTOR = 0.5;
 
 export function scoreAttempt(input: ScoreInput): ScoreDelta {
   const { question, isCorrect, hintsOpened, elapsedSeconds, isReview, multiStepAllStepsCorrect, comboAfter } = input;
