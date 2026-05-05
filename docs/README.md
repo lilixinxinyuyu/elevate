@@ -8,13 +8,22 @@
 
 ## 文档导航
 
+### 系统设计 docs（必读）
 | 文档 | 写给谁 | 何时看 |
 |---|---|---|
-| [Phase 2 plan](phase2-plan.md) | 整体设计 | 加新功能 / 想"接下来做什么" |
-| [Cloud sync](cloud-sync.md) | sync 调试 | 数据"刷新看不到"、跨设备状态不对 |
-| [Dev ops](dev-ops.md) | 开发部署速查 | 跑命令 / 部署 / env 配置 / 常见错误 |
-| [Trophy 图 pipeline](trophy-image-pipeline.md) | trophy AI 图工作流 | 加新勋章 / 重抽现有勋章 |
-| [Phase 2 special trophies](phase2-special-trophies.md) | 旧 trophy 设计稿 | 历史参考 |
+| [Trophy 系统](trophy-system.md) | 勋章数据流 + 渲染链路 | 加新勋章 / debug 显示问题 / locked 状态 |
+| [评分 / 段位 / 反刷分](scoring-and-progression.md) | XP / Tier / Mastery / Anti-farm | 调评分 / 加新激励 / 想破坏 anti-farm 前先读 |
+| [题型 / 游戏模板](game-templates.md) | game_type / play_as / question_format / GameTemplate 分发 | 加新题型 / 题不渲染 / Panel 不显示 |
+| [Cloud sync](cloud-sync.md) | sync 架构 + 调试 | 数据"刷新看不到"、跨设备状态不对 |
+| [Feature flag + rollout](feature-flags-and-rollout.md) | Phase 2 flag + 当前 gated 内容 | 加 flag-gated 功能 / 翻 flag |
+
+### 工作流 docs
+| 文档 | 写给谁 | 何时看 |
+|---|---|---|
+| [Phase 2 plan](phase2-plan.md) | 整体路线图 | 想"接下来做什么"|
+| [Dev ops](dev-ops.md) | 部署速查 | 跑命令 / 部署 / env 配置 / 常见错误 |
+| [Trophy 图 pipeline](trophy-image-pipeline.md) | AI 图生成 → 压缩 → push D1 | 加新勋章图 / 重抽现有 |
+| [Phase 2 special trophies](phase2-special-trophies.md) | 历史 trophy 设计稿 | 历史参考 |
 
 ## 快速链接
 
