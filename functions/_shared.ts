@@ -37,26 +37,28 @@ export interface AiProviderContext {
 /**
  * 选 chat 模型用的 provider 列表（按优先级）。
  *
- * Round 6.8 实测：DashScope/qwen-plus 25s 内能返回；token-plan 上的 deepseek/
- * glm/MiniMax/qwen3.6-plus 都经常 25s+ 超时。**所以 DashScope 优先**，
- * token-plan 当兜底。
+ * v0.30.1 反转：用户已付费 token-plan 订阅，**token-plan 优先用满**，
+ * DashScope (Free Tier，只有 qwen-plus 能用且较慢) 当兜底。
  *
- * 注：token-plan 的某些模型可能也能用，等以后实测再调整。
+ * 历史：Round 6.8 曾把 DashScope 设为 primary 因为 token-plan 上的 deepseek/
+ * glm/MiniMax/qwen3.6-plus 经常 25s+ 超时。但 DashScope Free Tier 限额经常打到
+ * AllocationQuota，且 token-plan 不用就浪费订阅费。所以反过来：先打 token-plan，
+ * 失败再 fallback 到 DashScope。
  */
 export function getChatProviders(env: Env): AiProviderContext[] {
   const providers: AiProviderContext[] = [];
-  if (env.DASHSCOPE_API_KEY) {
-    providers.push({
-      baseUrl: "https://dashscope-intl.aliyuncs.com",
-      apiKey: env.DASHSCOPE_API_KEY,
-      label: "dashscope-intl",
-    });
-  }
   if (env.TOKEN_PLAN_API_KEY) {
     providers.push({
       baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com",
       apiKey: env.TOKEN_PLAN_API_KEY,
       label: "token-plan",
+    });
+  }
+  if (env.DASHSCOPE_API_KEY) {
+    providers.push({
+      baseUrl: "https://dashscope-intl.aliyuncs.com",
+      apiKey: env.DASHSCOPE_API_KEY,
+      label: "dashscope-intl",
     });
   }
   return providers;
