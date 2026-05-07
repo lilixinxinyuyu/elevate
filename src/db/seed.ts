@@ -304,6 +304,76 @@ export async function ensureSeeded(): Promise<void> {
       console.warn("[applyPendingQuestionPatches] failed:", e);
     }
   })();
+
+  // v0.31.35: 一次性 migration —— 修 v0.31.33 那批 fill_blank 重分类后 game_type
+  // 还指向 "plain_choice" 导致 admin 判损坏的题（约 42 道）。
+  // 找有 "format_reclassified" tag + question_format=="fill_blank" + game_type
+  // 仍是 plain_choice/single_choice 等 option-based 的，把 play_as / game_type
+  // 改成 plain_numeric / speed_calc，让 admin 正确识别。
+  void fixFillBlankGameType();
+}
+
+const FILL_BLANK_FIX_KEY = "fillBlankGameTypeFix_v31_35";
+
+async function fixFillBlankGameType(): Promise<void> {
+  try {
+    const meta = await db.meta.get(FILL_BLANK_FIX_KEY);
+    if (meta?.value === true) return; // 已经跑过
+
+    const optionBased = new Set([
+      "plain_choice", "single_choice", "multi_choice",
+      "true_false_swipe", "true_false", "clue_finder", "plain_choice_visual",
+    ]);
+
+    let fixed = 0;
+
+    // 1. 修 db.questions
+    const allQs = await db.questions.toArray();
+    const toUpdate: typeof allQs = [];
+    for (const q of allQs) {
+      const tags = q.tags ?? [];
+      if (!tags.includes("format_reclassified")) continue;
+      if (q.question_format !== "fill_blank") continue;
+      const gt = (q.game_type ?? "") as string;
+      const pa = (q.play_as ?? "") as string;
+      // 任一仍是 option-based 就修
+      if (optionBased.has(gt) || optionBased.has(pa) || !pa) {
+        toUpdate.push({ ...q, play_as: "plain_numeric", game_type: "speed_calc" });
+      }
+    }
+    if (toUpdate.length > 0) {
+      await db.questions.bulkPut(toUpdate);
+      fixed += toUpdate.length;
+    }
+
+    // 2. 修 meta::questionPatches —— 这是跨设备同步的源头，不修这边其他设备一拉就坏
+    const patchesRow = await db.meta.get("questionPatches");
+    if (patchesRow && typeof patchesRow.value === "object" && patchesRow.value !== null) {
+      const map = patchesRow.value as Record<string, { tags?: string[]; question_format?: string; play_as?: string; game_type?: string; [k: string]: unknown }>;
+      let touched = false;
+      for (const [qid, q] of Object.entries(map)) {
+        const tags = q.tags ?? [];
+        if (!tags.includes("format_reclassified")) continue;
+        if (q.question_format !== "fill_blank") continue;
+        const gt = (q.game_type ?? "") as string;
+        const pa = (q.play_as ?? "") as string;
+        if (optionBased.has(gt) || optionBased.has(pa) || !pa) {
+          map[qid] = { ...q, play_as: "plain_numeric", game_type: "speed_calc" };
+          touched = true;
+        }
+      }
+      if (touched) {
+        await db.meta.put({ key: "questionPatches", value: map });
+      }
+    }
+
+    await db.meta.put({ key: FILL_BLANK_FIX_KEY, value: true });
+    if (fixed > 0) {
+      console.log(`[fillBlankGameTypeFix] 修了 ${fixed} 道 fill_blank 题（play_as/game_type）`);
+    }
+  } catch (e) {
+    console.warn("[fillBlankGameTypeFix] failed:", e);
+  }
 }
 
 /**

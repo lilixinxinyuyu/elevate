@@ -32,6 +32,11 @@ interface RequestSimilarOpts {
   difficultyDelta?: number;
   /** 调用上下文：'retry-after-wrong' / 'bump-up' / 'admin-quick'  仅日志用 */
   callerTag?: string;
+  /**
+   * v0.31.35: D5 综合题用 — 显式传额外 skill_id 让 composer 注入这些 skill 的 scope。
+   * 不传时若 difficulty 升到 5 会自动按 unit 内随机挑一个其他 skill。
+   */
+  extraSkillIds?: string[];
 }
 
 function authHeader(): Record<string, string> {
@@ -65,6 +70,22 @@ export async function requestAdaptiveQuestion(
   const targetDifficulty = clampDifficulty(question.difficulty + difficultyDelta);
   const format = question.question_format as QuestionFormat;
 
+  // v0.31.35: D5 题自动挑一个同 unit 的其他 skill 当跨 skill 综合
+  let extraSkillIds = opts.extraSkillIds;
+  if (!extraSkillIds && targetDifficulty === 5) {
+    const sameUnit = await db.questions
+      .where("unit_id")
+      .equals(question.unit_id)
+      .toArray();
+    const otherSkills = Array.from(
+      new Set(sameUnit.map((q) => q.skill_id).filter((sid) => sid && sid !== question.skill_id)),
+    );
+    if (otherSkills.length > 0) {
+      // 随机选 1 个
+      extraSkillIds = [otherSkills[Math.floor(Math.random() * otherSkills.length)]!];
+    }
+  }
+
   const r = await fetch("/api/generate/questions", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -80,6 +101,7 @@ export async function requestAdaptiveQuestion(
       format,
       gameType: question.game_type,
       existingStems: sameSkillStems,
+      extraSkillIds,
       // 把当前这道（错了的）题作为"考点焦点"传过去
       recentMistakeStems: difficultyDelta < 0 ? [question.stem] : [],
       callerTag,

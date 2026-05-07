@@ -72,6 +72,13 @@ interface GenerateRequest {
     | "geometry_operation";
   /** v0.31.34: 调用上下文标签（"admin" / "session-retry" / "session-bump-up"）— 仅日志用 */
   callerTag?: string;
+  /**
+   * v0.31.35: D5 综合题用 — 额外注入这些 skill 的 scope。
+   * 主 skill 仍是 skillId，落库 question.skill_id 也是 skillId。
+   * 例：D5 平均数 + 小数乘法综合题：
+   *   skillId="average_compute", extraSkillIds=["decimal_mul_meaning"]
+   */
+  extraSkillIds?: string[];
 }
 
 /** 单 sub-batch 题数上限。
@@ -347,6 +354,7 @@ function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
     unitName: args.unitName,
     skillId: args.skillId ?? "",
     skillName: args.skillName,
+    extraSkillIds: args.extraSkillIds,
     term: args.term ?? "下册",
     difficulty,
     format: args.format,

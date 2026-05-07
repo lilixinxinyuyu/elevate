@@ -111,8 +111,18 @@ export interface ComposeQuestionInput {
   /** 必填 */
   unitId: string;
   unitName?: string;
+  /** 主 skill_id（落库的 question.skill_id 用这个） */
   skillId: string;
   skillName?: string;
+  /**
+   * v0.31.35: D5 综合题用 — 额外注入这些 skill 的 scope，让模型出题时跨这些
+   * skill 的考点。落库还是用主 skillId（不是 multi-skill 标记）。
+   *
+   * 例：D5 出"小数乘法 + 平均数"综合题：
+   *   skillId="average_compute"（落库主 skill）
+   *   extraSkillIds=["decimal_mul_meaning"]（额外注入小数乘法的 scope）
+   */
+  extraSkillIds?: string[];
   /** 上册 / 下册 */
   term?: "上册" | "下册";
   /** 单道难度（1-5）；如果是范围（"2-4"），调用方先 pick 一个 */
@@ -161,6 +171,7 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
     unitName,
     skillId,
     skillName,
+    extraSkillIds,
     term,
     difficulty,
     format,
@@ -175,16 +186,30 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
   const otherTerm = actualTerm === "上册" ? "下册" : "上册";
 
   const scope = getSkillScope(skillId);
+  // v0.31.35: D5 综合题 — 额外 skill 的 scope，去重防主 skill 重复
+  const extraScopes: { skillId: string; scope: SkillScope }[] = [];
+  for (const sid of extraSkillIds ?? []) {
+    if (sid === skillId) continue;
+    const sc = getSkillScope(sid);
+    if (sc) extraScopes.push({ skillId: sid, scope: sc });
+  }
 
   const lines: string[] = [];
 
   // 1. 任务声明
+  const isComboMode = extraScopes.length > 0;
   lines.push(`# 任务：生成 ${count} 道四年级${actualTerm} ${subjectLabel} 题`);
   lines.push(``);
   lines.push(`- **学科**：${subjectLabel}（${subjectId}）`);
-  lines.push(`- **教材**：北师大版四年级${actualTerm}（不要混入${otherTerm}内容）`);
+  lines.push(`- **教材**：${subjectId === "math" ? "北师大版" : "人教版"}四年级${actualTerm}（不要混入${otherTerm}内容）`);
   lines.push(`- **单元**：${unitName ?? "(不详)"}（${unitId}）`);
-  lines.push(`- **技能点**：${skillName ?? scope?.name ?? "(不详)"}（${skillId}）`);
+  lines.push(`- **主技能点**：${skillName ?? scope?.name ?? "(不详)"}（${skillId}）`);
+  if (isComboMode) {
+    lines.push(`- **综合考查（D${difficulty} 跨 skill 题型）**：还要交叉融合下面这些 skill 的考点：`);
+    for (const e of extraScopes) {
+      lines.push(`  - ${e.scope.name}（${e.skillId}）`);
+    }
+  }
   lines.push(`- **难度**：${difficulty}（按下方难度规范严格控制）`);
   if (format) {
     lines.push(`- **答题格式**：${format}（按下方格式规范填字段）`);
@@ -194,16 +219,34 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
   }
   lines.push(``);
 
-  // 2. Skill scope
+  // 2. Skill scope（主 skill）
   if (scope) {
-    lines.push(`## Skill 教学范围（必读 — 决定不跑题不超纲）`);
+    lines.push(`## 主 Skill 教学范围（必读 — 决定不跑题不超纲）`);
     lines.push(``);
     lines.push(renderSkillScopeBlock(scope, skillId));
   } else {
-    lines.push(`## Skill 教学范围（fallback — scope.json 未登记）`);
+    lines.push(`## 主 Skill 教学范围（fallback — scope.json 未登记）`);
     lines.push(``);
     lines.push(`- skill_name：${skillName ?? skillId}`);
     lines.push(`- 紧扣这个 skill 的考点出题，不要扯其他 skill 的内容`);
+    lines.push(``);
+  }
+
+  // 2.5 D5 综合题：渲染额外 skill 的 scope
+  if (isComboMode) {
+    lines.push(`## 综合考查的额外 Skill（D${difficulty} 题必须把这些考点织进同一道题）`);
+    lines.push(``);
+    for (const { skillId: sid, scope: sc } of extraScopes) {
+      lines.push(renderSkillScopeBlock(sc, sid));
+      lines.push(`---`);
+      lines.push(``);
+    }
+    lines.push(`### 综合题设计要求`);
+    lines.push(``);
+    lines.push(`- 一道题里同时考主 skill 和上面所有额外 skill 的考点（不要分两道）`);
+    lines.push(`- 解题流程明显有"先求 A 再用 A 求 B"的多阶段推理`);
+    lines.push(`- 数据源同一个情境（如同一道购物 / 路程 / 班级题），不要硬拼两个不相关情境`);
+    lines.push(`- 不要让任一 skill 沦为"道具"（每个 skill 都要真考查到）`);
     lines.push(``);
   }
 

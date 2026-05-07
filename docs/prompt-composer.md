@@ -184,12 +184,35 @@ Composer 自动 fallback 到：
 [validate + write db.questions]
 ```
 
+## D5 跨 skill 综合题（v0.31.35）
+
+调用方传 `extraSkillIds: string[]`，composer 把每个额外 skill 的完整 scope 都列出来：
+
+```ts
+composeQuestionUserPrompt({
+  subjectId: "math",
+  skillId: "average_compute",            // 落库主 skill
+  extraSkillIds: ["decimal_speed_distance"],  // 额外考查
+  difficulty: 5,
+  format: "multi_step",
+  ...
+})
+```
+
+Prompt 自动加入：
+- 任务声明里把额外 skill 列出来
+- "## 综合考查的额外 Skill" 段落渲染所有 extraScopes 的完整 scope（同主 skill 同样详细）
+- "### 综合题设计要求" — 一道题、多阶段推理、同一情境、每个 skill 都真考到
+
+`sessionAdaptive.requestHarderQuestion()` 在 difficulty 升到 5 时自动从同 unit
+随机挑一个其他 skill 当 extraSkillId。
+
 ## 升级路径
 
 未来可加（按优先级）：
 
-1. **更多 skill scope** — 把语文 skill 也写进 `prompts/skills/scope.json`
-2. **drag_drop / sort_ladder / geometry_operation 的 format rubric** — 这些目前缺，但用得少
-3. **答题历史驱动**：composer 拿到 student 在该 skill 的最近 N 个 attempt，自动
+1. **答题历史驱动**：composer 拿到 student 在该 skill 的最近 N 个 attempt，自动
    挑一个具体的 sub-error 当作"出题焦点"
-4. **跨 skill 综合题（D5）的 composer**：注入 2-3 个 skill scope，要求题目交叉使用
+2. **C4A 上册 skill scope** — 期末后会用到
+3. **D5 综合题的 extraSkillIds 智能选择** — 当前是同 unit 随机，可改成"按
+   examPriority 高 + 跟主 skill 类型互补"挑选

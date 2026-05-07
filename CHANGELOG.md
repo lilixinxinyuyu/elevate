@@ -3,6 +3,49 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.35 — 2026-05-07 · 修 fill_blank 误标 + Chinese scope + 3 个 format rubric + D5 多 skill
+
+### 修 v0.31.33 残留 bug
+- 之前 fill_blank 重分类后 game_type 仍是 "plain_choice"，admin `needsOptions()` 误判 42 道损坏
+- 修：`questionFormatClassifier.applyReclassification` 转 fill_blank 时同时设
+  `play_as="plain_numeric"` + `game_type="speed_calc"`，路由到 plain_numeric 模板
+- 加 boot-time migration `fixFillBlankGameType()`（idempotent meta key
+  `fillBlankGameTypeFix_v31_35`）扫库 + meta::questionPatches 修已损坏的题
+- **删了 admin UI 里 v0.31.33 加的 `FormatReclassifyPanel`**（一次性任务不该上 UI，
+  原则记录在 docs / memory）
+
+### 新增 prompt 内容（爸爸要求）
+
+**Chinese skill scope（12 个 C4B skill 覆盖）**：
+- C4B_U1: PINYIN / POEM_RECITE / VOCAB / DICTATION（古诗 + 乡村田园）
+- C4B_U2: PINYIN / VOCAB / DICTATION（自然与科技）
+- C4B_U3: PINYIN / RHETORIC（现代诗 + 修辞）
+- C4B_U4: PINYIN / VOCAB / DICTATION（动物名家）
+- 每条含定义 / inScope / outOfScope / 古诗原文 / typicalContexts / commonMistakes / 例题
+
+**3 个 format rubric**（drag_drop / sort_ladder / geometry_operation）：
+- 各自必填字段、设计要求、时间锚定、❌ 禁止清单
+- 与已有 6 个 format rubric 拼齐 9 种 question_format 全覆盖
+
+**D5 综合题 multi-skill scope 注入**：
+- composer 新增 `extraSkillIds: string[]` 参数
+- 拼 prompt 时把每个额外 skill 的 scope 都列出来（去重防主 skill 重复）
+- 加"综合题设计要求"段：一道题、多阶段推理、同一情境、每个 skill 都真考到
+- `sessionAdaptive.requestHarderQuestion()` 自动行为：difficulty 升到 5 时自动从同
+  unit 随机挑一个其他 skill 当 extraSkill
+
+### Build 流程
+
+```
+11 game-type schemas, 50 skill keyword sets, 5 difficulty rubrics, 9 format rubrics, 45 skill scopes
+```
+
+### 设计原则记录（写给以后的 Claude / 项目）
+
+> **一次性任务（数据迁移、批量修复、扫描-and-改）不要做成 admin UI 永久按钮。**
+> 用临时脚本 / haiku 直调 / API endpoint / boot-time migration（带 idempotent meta key）
+> 解决。Admin 是日常工具，不是历史 bug 修复站。
+
 ## v0.31.34 — 2026-05-07 · Prompt 编排器六轴 + 会话内"再出一题"
 
 用户需求：「出题 prompt 应该包含：四年级下册数学相遇问题的定义（避免超纲）+ 已有的难度 3 的相遇问题题目列表（避免重复）+ 难度 3 在系统里的定义（避免难度浮动）+ 选择题的要求（避免太多文字超时）+ 多步骤题的要求（避免每步逻辑不匹配）+ 样题（避免数据结构不正确）。」 → 重写 prompt 系统按这五轴 + 一轴去重 = **六轴模块化 composer**。

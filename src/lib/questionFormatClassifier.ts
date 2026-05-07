@@ -182,6 +182,15 @@ export function applyReclassification(q: Question, r: ReclassifyResult): Questio
   if (r.newAnswer) next.answer = r.newAnswer;
   if (r.dropOptions) next.options = undefined;
   if (r.resetPlayAs) next.play_as = undefined;
+  // v0.31.35: 转成 fill_blank 时强制路由到 plain_numeric 模板：
+  //   - play_as = "plain_numeric"（resolveTemplate 直接读这个，跳过 game_type 映射）
+  //   - 否则旧的 game_type="plain_choice" 会让 admin 判 needsOptions=true → 损坏题
+  if (r.newFormat === "fill_blank") {
+    next.play_as = "plain_numeric";
+    // game_type 保留原值不影响 resolveTemplate（play_as 优先），但 admin 的 needsOptions
+    // 会查 game_type，所以也清干净避免误判
+    next.game_type = "speed_calc";
+  }
   // 给打 tag 方便以后筛
   const tags = new Set(next.tags ?? []);
   tags.add("format_reclassified");
