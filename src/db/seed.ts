@@ -313,51 +313,53 @@ export async function ensureSeeded(): Promise<void> {
   void fixFillBlankGameType();
 }
 
-const FILL_BLANK_FIX_KEY = "fillBlankGameTypeFix_v31_35";
-
+/**
+ * v0.31.37: 不再用 meta key gating + tag 过滤 —— 每次 boot 扫一遍 db.questions，
+ * 任何 fill_blank 题但 play_as/game_type 还指向 option-based 模板的统统修。
+ *
+ * 之前 v0.31.35 加的 `format_reclassified` tag 过滤导致跨设备同步过来没 tag 的题
+ * 修不到（用户看到 42 道仍判损坏）。现在直接按"症状"扫，谁坏修谁，O(n) 就过一遍
+ * 没坏的早 continue。
+ */
 async function fixFillBlankGameType(): Promise<void> {
   try {
-    const meta = await db.meta.get(FILL_BLANK_FIX_KEY);
-    if (meta?.value === true) return; // 已经跑过
-
     const optionBased = new Set([
       "plain_choice", "single_choice", "multi_choice",
       "true_false_swipe", "true_false", "clue_finder", "plain_choice_visual",
     ]);
-
-    let fixed = 0;
+    const isBroken = (fmt: string, pa: string, gt: string): boolean => {
+      if (fmt !== "fill_blank") return false;
+      // play_as 或 game_type 在 option-based 集合里 → 损坏
+      if (optionBased.has(pa)) return true;
+      if (optionBased.has(gt)) return true;
+      return false;
+    };
 
     // 1. 修 db.questions
     const allQs = await db.questions.toArray();
     const toUpdate: typeof allQs = [];
     for (const q of allQs) {
-      const tags = q.tags ?? [];
-      if (!tags.includes("format_reclassified")) continue;
-      if (q.question_format !== "fill_blank") continue;
-      const gt = (q.game_type ?? "") as string;
+      const fmt = (q.question_format ?? "") as string;
       const pa = (q.play_as ?? "") as string;
-      // 任一仍是 option-based 就修
-      if (optionBased.has(gt) || optionBased.has(pa) || !pa) {
+      const gt = (q.game_type ?? "") as string;
+      if (isBroken(fmt, pa, gt)) {
         toUpdate.push({ ...q, play_as: "plain_numeric", game_type: "speed_calc" });
       }
     }
     if (toUpdate.length > 0) {
       await db.questions.bulkPut(toUpdate);
-      fixed += toUpdate.length;
     }
 
-    // 2. 修 meta::questionPatches —— 这是跨设备同步的源头，不修这边其他设备一拉就坏
+    // 2. 修 meta::questionPatches（跨设备同步源头）
     const patchesRow = await db.meta.get("questionPatches");
     if (patchesRow && typeof patchesRow.value === "object" && patchesRow.value !== null) {
-      const map = patchesRow.value as Record<string, { tags?: string[]; question_format?: string; play_as?: string; game_type?: string; [k: string]: unknown }>;
+      const map = patchesRow.value as Record<string, { question_format?: string; play_as?: string; game_type?: string; [k: string]: unknown }>;
       let touched = false;
       for (const [qid, q] of Object.entries(map)) {
-        const tags = q.tags ?? [];
-        if (!tags.includes("format_reclassified")) continue;
-        if (q.question_format !== "fill_blank") continue;
-        const gt = (q.game_type ?? "") as string;
+        const fmt = (q.question_format ?? "") as string;
         const pa = (q.play_as ?? "") as string;
-        if (optionBased.has(gt) || optionBased.has(pa) || !pa) {
+        const gt = (q.game_type ?? "") as string;
+        if (isBroken(fmt, pa, gt)) {
           map[qid] = { ...q, play_as: "plain_numeric", game_type: "speed_calc" };
           touched = true;
         }
@@ -367,9 +369,8 @@ async function fixFillBlankGameType(): Promise<void> {
       }
     }
 
-    await db.meta.put({ key: FILL_BLANK_FIX_KEY, value: true });
-    if (fixed > 0) {
-      console.log(`[fillBlankGameTypeFix] 修了 ${fixed} 道 fill_blank 题（play_as/game_type）`);
+    if (toUpdate.length > 0) {
+      console.log(`[fillBlankGameTypeFix] 修了 ${toUpdate.length} 道 fill_blank 题`);
     }
   } catch (e) {
     console.warn("[fillBlankGameTypeFix] failed:", e);

@@ -3,6 +3,41 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.37 — 2026-05-07 · 真修 fill_blank 题 + 一键 AI 修全部
+
+爸爸：「静态规则检测到 42 道可疑题，这个不是已经修好了吗？...修好题，删除信息就完了」+「一个一个的点太耗费时间了」
+
+### 真修
+
+`fixFillBlankGameType()` 之前要求 `tags.includes("format_reclassified")` 才修，导致跨设备同步过来没 tag 的题修不到（用户看到 42 道仍判损坏 → 实际真坏没修）。
+
+改成按"症状"扫：
+- `question_format === "fill_blank"` AND
+- `play_as` 或 `game_type` 在 `OPTION_BASED_TEMPLATES` 集合里
+
+直接设 `play_as = "plain_numeric"` + `game_type = "speed_calc"`。每次 boot 都跑（O(n) 没坏的早 continue，开销忽略），不再 idempotent meta key gating。
+
+### 删信息
+
+- 删 "⚠️ 静态规则检测到 N 道可疑题..." banner（用户没法 act 上）
+- 删 "损坏" stat box（同理）
+
+题库诊断顶栏现在 3 个 stat box：总题数 / seed / AI 生成。其余的判定全在下方 AI 质检面板里走。
+
+### 一键 AI 修全部
+
+AI 质检结果出来后多一个绿色按钮 **"🔥 一键 AI 修全部 N 道"**：
+- 把所有 `verdict !== "keep"` 的题（delete + borderline）一次性丢给 LLM 修
+- 并发 3（同 judge 的并发上限）
+- 每个修完自动 applyQuestionFix（不弹 modal 逐题确认）
+- 进度条实时显示 `done/total · failed`
+- 失败的不阻塞成功的，跑完汇报
+- 修完的 row 自动从 results 列表移出
+
+### 改动文件
+- `src/db/seed.ts` — 重写 `fixFillBlankGameType`
+- `src/components/QuestionsAdminPanel.tsx` — 删 banner / stat box / 加 bulk fix 按钮 + 进度条 + worker pool
+
 ## v0.31.36 — 2026-05-07 · 整理 admin UI（去重 + 学科隔离）
 
 爸爸反馈：

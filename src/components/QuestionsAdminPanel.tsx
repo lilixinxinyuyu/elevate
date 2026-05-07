@@ -270,16 +270,12 @@ export function QuestionsAdminPanel() {
 
   return (
     <div className="text-sm space-y-3">
-      {/* 顶部统计卡 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {/* 顶部统计卡 — v0.31.37：去掉"损坏"stat box，规则检测的可疑题
+          交给下方 AI 质检判定（更准），不让 admin 看到没法处理的数字 */}
+      <div className="grid grid-cols-3 gap-2">
         <StatBox label="总题数" value={stats.total} />
         <StatBox label="seed" value={stats.seedTotal} tone="emerald" />
         <StatBox label="AI 生成" value={stats.aiGenTotal} tone="violet" />
-        <StatBox
-          label="损坏"
-          value={stats.bad.length}
-          tone={stats.bad.length > 0 ? "rose" : "emerald"}
-        />
       </div>
 
       <div className="text-[11px] text-slate-400 leading-relaxed">
@@ -309,13 +305,6 @@ export function QuestionsAdminPanel() {
           🔄 刷新统计
         </button>
       </div>
-
-      {stats.bad.length > 0 && (
-        <div className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded p-2">
-          ⚠️ 静态规则检测到 {stats.bad.length} 道可疑题（缺字段 / 答案 ID 不对应等）。
-          请用下方 🤖 AI 质检定位 + 用 ✨ AI 修按钮逐条修。
-        </div>
-      )}
 
       {/* 🤖 AI 质检区 */}
       <AiJudgePanel onAfterApply={refresh} />
@@ -473,6 +462,12 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
     original: Question;
     judgment: Judgment;
     fix: FixResult;
+  } | null>(null);
+  // v0.31.37：一键 AI 修全部 — 进度状态
+  const [bulkFix, setBulkFix] = useState<{
+    done: number;
+    total: number;
+    failed: number;
   } | null>(null);
 
   const unitsForSubject = useMemo(
@@ -687,6 +682,76 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
     setFixModal(null);
   }
 
+  /**
+   * v0.31.37: 一键 AI 修全部 verdict !== "keep" 的题。
+   *
+   * - 并发 3（同 batch judge 的并发上限）
+   * - 自动应用每个 fix（不弹 modal）
+   * - 进度条实时更新
+   * - 失败的不阻塞成功的，最后汇报
+   */
+  async function bulkFixAll() {
+    const fixable = results.filter((r) => r.j.verdict !== "keep");
+    if (fixable.length === 0) return;
+    if (
+      !window.confirm(
+        `让 AI 一次性修 ${fixable.length} 道题？\n\n会逐题调 qwen-plus 修题（并发 3），自动应用，不再逐题弹窗确认。\n预计 ~${Math.ceil(fixable.length * 4 / 3)} 秒。\n\n继续吗？`,
+      )
+    )
+      return;
+    setBulkFix({ done: 0, total: fixable.length, failed: 0 });
+    setErrMsg("");
+
+    let nextIdx = 0;
+    const fixedIds: string[] = [];
+    const failures: { qid: string; err: string }[] = [];
+
+    const worker = async (): Promise<void> => {
+      while (nextIdx < fixable.length) {
+        const myIdx = nextIdx++;
+        const { q, j } = fixable[myIdx]!;
+        try {
+          const result = await fixQuestion({
+            question: q,
+            issues: j.issues,
+            reason: j.reason,
+            subjectId: q.subjectId === "chinese" ? "chinese" : "math",
+          });
+          await applyQuestionFix(result.fixed);
+          fixedIds.push(q.question_id);
+        } catch (e) {
+          failures.push({ qid: q.question_id, err: (e as Error).message });
+        } finally {
+          setBulkFix((cur) => {
+            const done = fixedIds.length + failures.length;
+            return cur ? { ...cur, done, failed: failures.length } : cur;
+          });
+        }
+      }
+    };
+
+    await Promise.all([worker(), worker(), worker()]);
+
+    // 把已修好的 row 从 results 移出，selectedToDelete 也清干净
+    const fixedSet = new Set(fixedIds);
+    setResults((prev) => prev.filter((r) => !fixedSet.has(r.q.question_id)));
+    setSelectedToDelete((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) if (!fixedSet.has(id)) next.add(id);
+      return next;
+    });
+    setBulkFix(null);
+    await onAfterApply();
+
+    if (failures.length > 0) {
+      setErrMsg(
+        `修了 ${fixedIds.length} / ${fixable.length}，${failures.length} 失败。第一个失败：${failures[0]!.err.slice(0, 60)}`,
+      );
+    } else {
+      setErrMsg(`✓ 修完 ${fixedIds.length} 道题`);
+    }
+  }
+
   return (
     <details
       className="rounded-lg border border-violet-400/30 bg-violet-500/5 p-3"
@@ -881,10 +946,27 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
           </button>
           {results.length > 0 && (
             <>
+              {/* v0.31.37: 一键 AI 修全部 verdict !== keep —— 主操作放最显眼 */}
+              {(() => {
+                const fixableCount = results.filter((r) => r.j.verdict !== "keep").length;
+                if (fixableCount === 0) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={bulkFixAll}
+                    disabled={running || bulkFix !== null}
+                    className="btn-primary text-xs bg-emerald-500/40 border-emerald-400/50 text-emerald-100"
+                  >
+                    {bulkFix
+                      ? `修题中… ${bulkFix.done}/${bulkFix.total}${bulkFix.failed > 0 ? ` (${bulkFix.failed} 失败)` : ""}`
+                      : `🔥 一键 AI 修全部 ${fixableCount} 道`}
+                  </button>
+                );
+              })()}
               <button
                 type="button"
                 onClick={() => selectAllByVerdict("delete")}
-                disabled={running}
+                disabled={running || bulkFix !== null}
                 className="btn-ghost text-xs border border-rose-400/30 text-rose-200"
               >
                 ✓ 选中所有 delete
@@ -892,7 +974,7 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
               <button
                 type="button"
                 onClick={() => selectAllByVerdict("borderline")}
-                disabled={running}
+                disabled={running || bulkFix !== null}
                 className="btn-ghost text-xs border border-amber-400/30 text-amber-200"
               >
                 ✓ 加选 borderline
@@ -900,7 +982,7 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
               <button
                 type="button"
                 onClick={() => setSelectedToDelete(new Set())}
-                disabled={running}
+                disabled={running || bulkFix !== null}
                 className="btn-ghost text-xs border border-slate-400/30 text-slate-300"
               >
                 清空选择
@@ -909,7 +991,7 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
                 <button
                   type="button"
                   onClick={applyDelete}
-                  disabled={running}
+                  disabled={running || bulkFix !== null}
                   className="btn-primary text-xs bg-rose-500/40 border-rose-400/50 text-rose-100"
                 >
                   🗑 删除选中 {selectedToDelete.size} 道
@@ -918,6 +1000,25 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
             </>
           )}
         </div>
+
+        {/* v0.31.37：一键 AI 修题进度条 */}
+        {bulkFix && (
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[10px] text-emerald-300">
+              <span>🔥 AI 一键修题进行中…</span>
+              <span>
+                {bulkFix.done}/{bulkFix.total}
+                {bulkFix.failed > 0 && ` · ${bulkFix.failed} 失败`}
+              </span>
+            </div>
+            <div className="h-1.5 bg-emerald-900/40 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-400 transition-all"
+                style={{ width: `${(bulkFix.done / bulkFix.total) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* 进度（v0.31.31：可视化进度条 + 详细状态）*/}
         {progress && (
