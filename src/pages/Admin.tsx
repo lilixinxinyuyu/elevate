@@ -15,8 +15,6 @@ import {
   pushToCloud,
 } from "../db/cloudSync";
 import { normalizeJsonText } from "../lib/normalizeJsonText";
-import { isTtsAvailable, speakText } from "../lib/tts";
-import { resetChineseTestData } from "../subjects/chinese/service";
 import { generateAiQuestions, generateImage } from "../lib/tutor";
 import { TrophyImagesAdminPanel } from "../components/TrophyImagesAdminPanel";
 import { QuestionsAdminPanel } from "../components/QuestionsAdminPanel";
@@ -234,160 +232,17 @@ export function AdminPage() {
       </div>
 
       <div className="card">
-        <div className="font-semibold mb-2">TTS 测试（语文听写用）</div>
-        <TtsSmokePanel />
-      </div>
-
-      <div className="card">
-        <div className="font-semibold mb-2">语文测试数据清理</div>
-        <ChineseResetPanel />
-      </div>
-
-      <div className="card">
         <div className="font-semibold mb-2">AI 出题 Prompt 生成器</div>
         <PromptBuilder />
       </div>
+
+      {/* v0.31.36: 语文相关的 TTS 测试 + 语文测试数据清理 已移到 /chinese/admin
+          （那边本来就有 TtsSmokePanel + 重置语文测试数据 cards）。
+          数学 admin 不应该混语文专属功能。 */}
     </div>
   );
 }
 
-function ChineseResetPanel() {
-  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<null | {
-    attempts: number;
-    mastery: number;
-    mistakes: number;
-    trophies: number;
-    metaKeys: number;
-  }>(null);
-
-  const onReset = async () => {
-    if (!student?.id) return;
-    if (
-      !window.confirm(
-        "确定清空语文学科的所有测试数据？\n\n会删：attempts / mastery / mistakes / trophies / 语文 totalXp。\n\n数学数据完全不动。",
-      )
-    )
-      return;
-    setBusy(true);
-    setResult(null);
-    try {
-      const r = await resetChineseTestData(student.id);
-      setResult(r);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="text-sm text-slate-300 space-y-2">
-      <div className="text-xs text-slate-400">
-        清空 chinese 维度的所有学生数据：attempts / mastery / mistakes / trophies + meta::chinese::* key。
-        <br />
-        数学数据 100% 不受影响（按 subjectId 隔离）。
-      </div>
-      <button
-        type="button"
-        onClick={onReset}
-        disabled={busy || !student?.id}
-        className="btn-secondary text-sm border border-rose-400/30 text-rose-200 hover:bg-rose-500/10"
-      >
-        {busy ? "清理中…" : "🧹 清空语文测试数据"}
-      </button>
-      {result && (
-        <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-400/30 rounded p-2">
-          ✓ 已清空：{result.attempts} 个 attempt · {result.mastery} 个 mastery ·{" "}
-          {result.mistakes} 个 mistake · {result.trophies} 枚 trophy ·{" "}
-          {result.metaKeys} 个 meta key
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TtsSmokePanel() {
-  const [status, setStatus] = useState<"idle" | "checking" | "ok" | "missing" | "error">("idle");
-  const [reason, setReason] = useState<string | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [text, setText] = useState("你好，我是小进。今天我们一起练习。");
-
-  useEffect(() => {
-    let cancelled = false;
-    setStatus("checking");
-    isTtsAvailable().then((r) => {
-      if (cancelled) return;
-      if (!r.ok) {
-        setStatus("error");
-        setReason(r.reason ?? "unknown");
-      } else if (!r.configured) {
-        setStatus("missing");
-      } else {
-        setStatus("ok");
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const play = async () => {
-    setPlaying(true);
-    setReason(null);
-    try {
-      await speakText(text);
-    } catch (e) {
-      // TtsError.message 已经包含 status + detail；显示完整方便 debug
-      setReason(e instanceof Error ? e.message : String(e));
-    } finally {
-      setPlaying(false);
-    }
-  };
-
-  return (
-    <div className="text-sm text-slate-300 space-y-3">
-      <div>
-        服务端：
-        {status === "checking" && <span className="text-slate-400">检查中…</span>}
-        {status === "ok" && <span className="text-emerald-300">✓ 已配置 Qwen TTS</span>}
-        {status === "missing" && (
-          <span className="text-amber-300">
-            ⚠ DASHSCOPE_API_KEY 没配。在 Cloudflare Pages → Settings → Environment variables 加上即可。
-          </span>
-        )}
-        {status === "error" && (
-          <span className="text-rose-300">✗ 检查失败：{reason}</span>
-        )}
-      </div>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={2}
-        className="field text-sm w-full"
-        placeholder="要朗读的文本"
-      />
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          className="btn-primary text-sm"
-          disabled={playing || status !== "ok" || !text.trim()}
-          onClick={play}
-        >
-          {playing ? "播放中…" : "▶ 播放"}
-        </button>
-        {status === "missing" && (
-          <span className="text-xs text-slate-500">需要先在 CF 配 API key</span>
-        )}
-        {reason && status !== "missing" && (
-          <span className="text-xs text-rose-300">{reason}</span>
-        )}
-      </div>
-      <div className="text-[11px] text-slate-500">
-        Phase 2 语文听写、拼音卡、古诗朗读会用同一个管道。
-      </div>
-    </div>
-  );
-}
 
 function SkillDiagnosticsPanel() {
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);

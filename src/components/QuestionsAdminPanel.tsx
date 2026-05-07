@@ -198,26 +198,6 @@ export function QuestionsAdminPanel() {
     void refresh();
   }, []);
 
-  const onCleanupBad = async () => {
-    if (!stats || stats.bad.length === 0) return;
-    if (
-      !window.confirm(
-        `将永久删除 ${stats.bad.length} 道损坏的题（缺字段 / 答案不对应等），确定吗？`,
-      )
-    )
-      return;
-    setBusy(true);
-    try {
-      const ids = stats.bad.map((b) => b.q.question_id);
-      // v0.29.4: 记录到 deletedQuestionIds（同步 + 防 seed 复活）
-      await recordDeletedQuestionIds(ids);
-      await refresh();
-      window.alert(`已清理 ${ids.length} 道损坏题`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const onTrimSkill = async (skillId: string, keepN: number) => {
     const all = await db.questions.where("skill_id").equals(skillId).toArray();
     // 优先保留 seed，删多余的 AI gen
@@ -309,18 +289,9 @@ export function QuestionsAdminPanel() {
         重复题干：{stats.duplicateStems} 道（同 stem 出现 2 次以上的多余 row）
       </div>
 
-      {/* 一键操作 */}
+      {/* 一键操作 — v0.31.36：去掉"清理损坏题（规则）"按钮，改用 AI 质检 + AI 修。
+          静态规则式检测残留只剩 stat box 提示，不再单独 UI 列出 */}
       <div className="flex flex-wrap gap-2">
-        {stats.bad.length > 0 && (
-          <button
-            type="button"
-            onClick={onCleanupBad}
-            disabled={busy}
-            className="btn-primary text-sm bg-rose-500/30 border-rose-400/40 text-rose-100"
-          >
-            🗑 清理 {stats.bad.length} 道损坏题（规则）
-          </button>
-        )}
         <button
           type="button"
           onClick={onClearAllAi}
@@ -339,34 +310,15 @@ export function QuestionsAdminPanel() {
         </button>
       </div>
 
+      {stats.bad.length > 0 && (
+        <div className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded p-2">
+          ⚠️ 静态规则检测到 {stats.bad.length} 道可疑题（缺字段 / 答案 ID 不对应等）。
+          请用下方 🤖 AI 质检定位 + 用 ✨ AI 修按钮逐条修。
+        </div>
+      )}
+
       {/* 🤖 AI 质检区 */}
       <AiJudgePanel onAfterApply={refresh} />
-
-      {/* 损坏题样本 */}
-      {stats.bad.length > 0 && (
-        <details className="rounded-lg border border-rose-400/30 bg-rose-500/5 p-2">
-          <summary className="text-rose-200 text-sm cursor-pointer">
-            🚨 损坏题样本 ({stats.bad.length})
-          </summary>
-          <div className="mt-2 space-y-1 text-[11px] max-h-48 overflow-y-auto font-mono">
-            {stats.bad.slice(0, 15).map((b) => (
-              <div key={b.q.question_id} className="border-b border-rose-400/10 pb-1">
-                <span className="text-rose-300">[{b.reason}]</span>{" "}
-                <span className="text-slate-400">
-                  {b.q.skill_id} / {b.q.question_id.slice(-12)}
-                </span>
-                <br />
-                <span className="text-slate-300 truncate inline-block max-w-full">
-                  {b.q.stem?.slice(0, 80) ?? "<no stem>"}
-                </span>
-              </div>
-            ))}
-            {stats.bad.length > 15 && (
-              <div className="text-slate-500">... 还有 {stats.bad.length - 15} 道</div>
-            )}
-          </div>
-        </details>
-      )}
 
       {/* 过滤 */}
       <div className="flex gap-1.5 text-xs flex-wrap">

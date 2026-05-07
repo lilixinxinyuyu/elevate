@@ -3,6 +3,28 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.36 — 2026-05-07 · 整理 admin UI（去重 + 学科隔离）
+
+爸爸反馈：
+1. "🚨 损坏题样本" 静态规则检测面板和 AI 质检功能重复，UI 重复占位
+2. 数学 admin（`/math/admin`）里有两个语文专属卡片，本来就不该混在数学
+
+### 数学 admin 清理（`src/pages/Admin.tsx`）
+- **删** "TTS 测试（语文听写用）" card —— `/chinese/admin` 自带（"🎧 TTS 测试（小进 Cherry 童声）"）
+- **删** "语文测试数据清理" card —— `/chinese/admin` 自带（"🧹 重置语文测试数据"）
+- 同时删了相关的本地组件函数（TtsSmokePanel / ChineseResetPanel）+ 不再用的 import
+
+### 题库诊断面板清理（`src/components/QuestionsAdminPanel.tsx`）
+- **删** "🚨 损坏题样本（N）" details 列表 —— 静态规则检测和 AI 质检功能重叠，AI 质检更准 + 有"✨ AI 修"按钮
+- **删** "🗑 清理 N 道损坏题（规则）" 按钮 —— 同上，rule-based 删除粒度太粗
+- 保留 "损坏" 数字 stat box 作为 fyi
+- 检测到损坏 > 0 时显示一行小提示：「请用下方 🤖 AI 质检定位 + 用 ✨ AI 修按钮逐条修」
+
+### 设计原则（再次强化 v0.31.35 那条）
+- 一次性任务（reclassification migration）→ boot-time + console.log
+- 重复 / 冗余 UI → 删（保留更准的那个）
+- 学科专属功能（语文 TTS / 语文数据重置）→ 只在那个学科的 admin 出现
+
 ## v0.31.35 — 2026-05-07 · 修 fill_blank 误标 + Chinese scope + 3 个 format rubric + D5 多 skill
 
 ### 修 v0.31.33 残留 bug
