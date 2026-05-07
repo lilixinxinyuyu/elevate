@@ -29,6 +29,25 @@ export interface TrophyImageRow {
   isLottery?: boolean;
 }
 
+/** v0.31.22：小进衣柜（mascotWardrobe）— Selena 用装扮卡 AI 生成的造型。 */
+export interface MascotWardrobeRow {
+  id: string;
+  studentId: string;
+  subjectId: string;
+  /** 用户起的名字或自动总结的 */
+  name: string;
+  /** AI 生成时用的 prompt（让 Selena 看到 + 复现） */
+  prompt: string;
+  /** 完整造型图，PNG/JPG blob，~50-200KB（已压缩） */
+  blob: Blob;
+  mime: string;
+  width: number;
+  height: number;
+  /** 当前是否佩戴（同 student 同时只一件 equipped；切换时另一件 equipped=0） */
+  equipped: 0 | 1;
+  createdAt: number;
+}
+
 export class HepingDB extends Dexie {
   students!: Table<StudentProfile, string>;
   units!: Table<CurriculumUnit, string>;
@@ -48,6 +67,8 @@ export class HepingDB extends Dexie {
   fluencyAttempts!: Table<FluencyAttemptRow, string>;
   /** Phase 2 (v0.31.0)：Fluency 单 module × 单 student 的累计 stats */
   fluencyStats!: Table<FluencyStatsRow, string>;
+  /** v0.31.22：小进衣柜 — AI 生成的造型 outfit */
+  mascotWardrobe!: Table<MascotWardrobeRow, string>;
 
   constructor() {
     super("heping-math-trainer");
@@ -225,6 +246,13 @@ export class HepingDB extends Dexie {
       fluencyAttempts:
         "id, studentId, moduleId, sessionId, problemKey, isCorrect, createdAt",
       fluencyStats: "id, studentId, moduleId, mastered, masteredAt",
+    });
+
+    // v7 (v0.31.22)：小进衣柜 — Selena 用"装扮卡"AI 生成的造型 outfit。
+    // 每条 row = 一个完整造型（image blob + prompt + 元数据）。
+    // 卡片余额放 db.meta::wardrobeCards::math::<studentId>，不在表里。
+    this.version(7).stores({
+      mascotWardrobe: "id, studentId, subjectId, equipped, createdAt",
     });
   }
 }

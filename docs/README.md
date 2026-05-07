@@ -14,6 +14,7 @@
 | [Trophy 系统](trophy-system.md) | 勋章数据流 + 渲染链路 | 加新勋章 / debug 显示问题 / locked 状态 |
 | [评分 / 段位 / 反刷分](scoring-and-progression.md) | XP / Tier / Mastery / Anti-farm | 调评分 / 加新激励 / 想破坏 anti-farm 前先读 |
 | [题型 / 游戏模板](game-templates.md) | game_type / play_as / question_format / GameTemplate 分发 | 加新题型 / 题不渲染 / Panel 不显示 |
+| [Prompt composer](prompt-composer.md) | 出题 / 质检 / 修题三端共用的 prompt 编排（六轴：skill / difficulty / format / game-type / 已有题 / 共享规范）| 加新 skill / 调出题质量 / 加难度档位 |
 | [Cloud sync](cloud-sync.md) | sync 架构 + 调试 | 数据"刷新看不到"、跨设备状态不对 |
 | [Feature flag + rollout](feature-flags-and-rollout.md) | Phase 2 flag + 当前 gated 内容 | 加 flag-gated 功能 / 翻 flag |
 

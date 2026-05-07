@@ -9,7 +9,7 @@
  * tier 由 image 本身的金属调 + 外层 CSS ring/glow/角标 共同表达。
  */
 
-import { useTrophyImage } from "../lib/trophyImages";
+import { getCommemorativeShape, useTrophyImage } from "../lib/trophyImages";
 import { trophyImageKey } from "../lib/allTrophies";
 import type { TrophyCategory, TrophyTier } from "../core/types";
 
@@ -50,6 +50,22 @@ const GLOW_PX: Record<NonNullable<TrophyIconProps["size"]>, number> = {
   xl: 14,
 };
 
+/**
+ * 五角星 clip：v0.30.11 调胖款（outer R=50, inner R=30），跟 buildCommemorativePrompt
+ * 默认 "five-pointed star" 严格对应 — AI 画什么形状，clip 切什么形状。
+ */
+const PENTAGRAM_CLIP =
+  "polygon(50% 0%, 67.6% 25.7%, 97.5% 34.5%, 78.5% 59.3%, 79.4% 90.5%, 50% 80%, 20.6% 90.5%, 21.5% 59.3%, 2.5% 34.5%, 32.4% 25.7%)";
+
+/**
+ * 六角星 clip：outer R=50, inner R=37.5（ratio 0.75 "胖星"，跟普通六芒星 ratio 0.577 比凹很浅）。
+ * 12 顶点交替 outer↔inner，从顶部 0° 起顺时针。
+ * v0.31.14：用户反馈"想看到更多徽章画面" → 把内半径从 30 提到 37.5（凹深从 40% 减到 25%）。
+ * 给跨段纪念勋章（破晓登阶 / 蓉城启航 / 天府跃升 / 凤翔九天）用，多一个角 = 视觉权重更重。
+ */
+const HEXAGRAM_CLIP =
+  "polygon(50% 0%, 69% 17.5%, 93.3% 25%, 87.5% 50%, 93.3% 75%, 69% 82.5%, 50% 100%, 31% 82.5%, 6.7% 75%, 12.5% 50%, 6.7% 25%, 31% 17.5%)";
+
 /** 形状：CSS clip-path 完整值（含 polygon(...)）；圆形用空字符串特判 */
 const SHAPE_CLIP: Record<TrophyCategory, string> = {
   daily: "",
@@ -58,12 +74,9 @@ const SHAPE_CLIP: Record<TrophyCategory, string> = {
   ability: "polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)",
   // 真盾形（flat top + 底部尖角）—— skill 用，跟 ability 六边形明显区分
   skill: "polygon(0% 5%, 100% 5%, 100% 55%, 50% 100%, 0% 55%)",
-  // commemorative 五角星 v0.30.11 调胖：之前 inner radius ≈ 18.6%（凹得很深，
-  // AI 图被切剩 ~50%）；现在 inner radius ≈ 30%（凹缓很多，AI 图保留 ~75% 可见面积）。
-  // 用经典五角星几何：outer R=50, inner R=30，五个外尖在 90/-54/342/270/198 度 +
-  // 五个内点在 54/-18/270/198 度对偶角。
-  commemorative:
-    "polygon(50% 0%, 67.6% 25.7%, 97.5% 34.5%, 78.5% 59.3%, 79.4% 90.5%, 50% 80%, 20.6% 90.5%, 21.5% 59.3%, 2.5% 34.5%, 32.4% 25.7%)",
+  // commemorative 默认五角星；运行时被 PENTAGRAM_CLIP / HEXAGRAM_CLIP 双形态替换。
+  // 这里保留 default 是为了 SHAPE_CLIP[category] 在外面用得起来。
+  commemorative: PENTAGRAM_CLIP,
   // Phase 2 boss：方形 shield 风格（接近 skill 但顶部更平 + 加了"V" notch）
   boss: "polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%)",
 };
@@ -114,6 +127,29 @@ interface TierStyle {
    */
   innerGradient: string;
 }
+
+/**
+ * v0.31.12: commemorative 金属外框 + glow。
+ * 跟 PENTAGRAM_CLIP / HEXAGRAM_CLIP 用同一个 polygon → 数学上 100% 对齐。
+ * AI 图改成纯 motif on bg（不画外框），由 CSS 沿 clip 边缘渲染金属边框。
+ *
+ * 双形态调色：
+ *  - pentagram（普通纪念）= 古典暖金，给"奖状级"事件
+ *  - hexagram（跨段纪念）= 多彩鎏金 conic gradient，更隆重，类似钻档动画但不旋转（避免太刺眼）
+ */
+const COMMEMORATIVE_RING: Record<
+  "pentagram" | "hexagram",
+  { ring: string; glowColor: string }
+> = {
+  pentagram: {
+    ring: "linear-gradient(135deg, #fef3c7 0%, #fde68a 30%, #f59e0b 60%, #b45309 100%)",
+    glowColor: "rgba(251, 191, 36, 0.55)",
+  },
+  hexagram: {
+    ring: "conic-gradient(from 0deg, #fde68a, #fb923c, #fde68a, #f9a8d4, #c4b5fd, #fde68a, #d97706, #fde68a)",
+    glowColor: "rgba(251, 146, 60, 0.7)",
+  },
+};
 
 const TIER_STYLE: Record<TrophyTier, TierStyle> = {
   bronze: {
@@ -173,9 +209,22 @@ export function TrophyIcon({
   const sz = SIZE_PX[size];
   const ringPx = RING_PX[size];
   const glowPx = GLOW_PX[size];
-  const clipPath = SHAPE_CLIP[category];
+  // v0.31.11: commemorative 双形态 —— 普通纪念用五角星，跨段纪念用六角星。
+  // 形状从 trophyImages.ts spec 决定（getCommemorativeShape），保证跟 AI prompt 同步。
+  const commemorativeShape =
+    category === "commemorative" ? getCommemorativeShape(fullKey) : null;
+  const clipPath =
+    commemorativeShape === "hexagram"
+      ? HEXAGRAM_CLIP
+      : commemorativeShape === "pentagram"
+        ? PENTAGRAM_CLIP
+        : SHAPE_CLIP[category];
   const isCircle = clipPath === "";
   const tierStyle = unlocked && tier ? TIER_STYLE[tier] : null;
+  // v0.31.12：commemorative 金属外框 —— AI 图不再自画外框，由 CSS 沿 clip-path 边缘渲染
+  // 暖金/鎏金 ring，跟 polygon 共用同一组顶点 → 100% 对齐 + 找回"勋章感"。
+  const commemorativeRing =
+    unlocked && commemorativeShape ? COMMEMORATIVE_RING[commemorativeShape] : null;
 
   const grayClass = unlocked ? "" : "grayscale opacity-40 saturate-50";
 
@@ -185,16 +234,21 @@ export function TrophyIcon({
     : { clipPath };
 
   // 外层 wrapper：tier 环色 + drop-shadow glow + 形状
+  // commemorative 优先用金属外框（普通纪念暖金 / 跨段纪念鎏金），无 tier 时也能有勋章感
+  const outerBg =
+    tierStyle?.ringGradient ?? tierStyle?.ring ?? commemorativeRing?.ring ?? "transparent";
+  const outerGlow = tierStyle?.glowColor ?? commemorativeRing?.glowColor;
   const outerStyle: React.CSSProperties = {
     ...shapeStyle,
-    background: tierStyle?.ringGradient ?? tierStyle?.ring ?? "transparent",
-    filter: tierStyle ? `drop-shadow(0 0 ${glowPx}px ${tierStyle.glowColor})` : undefined,
+    background: outerBg,
+    filter: outerGlow ? `drop-shadow(0 0 ${glowPx}px ${outerGlow})` : undefined,
   };
 
-  // 内层 art：缩进 ringPx 让外环显示出 tier 颜色
+  // 内层 art：缩进 ringPx 让外环金属色露出 1-2px 边
+  const hasFrame = !!tierStyle || !!commemorativeRing;
   const innerStyle: React.CSSProperties = {
     ...shapeStyle,
-    inset: tierStyle ? `${ringPx}px` : 0,
+    inset: hasFrame ? `${ringPx}px` : 0,
   };
 
   return (

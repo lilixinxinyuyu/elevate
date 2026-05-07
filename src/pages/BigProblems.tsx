@@ -18,6 +18,7 @@ import { db } from "../db/dexie";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import type { Question } from "../core/types";
+import { TutorPanel } from "../components/tutor/TutorPanel";
 
 const UNIT_GATE = 75;
 const FINAL_GATE = 70;
@@ -40,6 +41,7 @@ export function BigProblemsPage() {
   const [g4bAvg, setG4bAvg] = useState<number>(0);
   const [allBeaten, setAllBeaten] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [tutorOpen, setTutorOpen] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -121,13 +123,23 @@ export function BigProblemsPage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="font-display font-bold text-2xl text-brand">大题闯关</h1>
-        <p className="text-sm text-slate-300 mt-1">
-          每个单元是一道关卡。基础 skill 刷到{" "}
-          <span className="text-amber-300 font-bold">熟练 ≥ {UNIT_GATE}</span> 解锁该单元闯关；
-          打通 6 关后开启<span className="text-amber-300 font-bold">期末大闯关</span>。
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display font-bold text-2xl text-brand">大题闯关</h1>
+          <p className="text-sm text-slate-300 mt-1">
+            每个单元是一道关卡。基础 skill 刷到{" "}
+            <span className="text-amber-300 font-bold">熟练 ≥ {UNIT_GATE}</span> 解锁该单元闯关；
+            打通 6 关后开启<span className="text-amber-300 font-bold">期末大闯关</span>。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setTutorOpen(true)}
+          className="chip text-[11px] px-2.5 py-1 bg-amber-500/20 border border-amber-400/40 text-amber-100 hover:bg-amber-500/35 transition-colors shrink-0"
+          title="让小进讲讲闯关思路"
+        >
+          👩‍🏫 听小进讲思路
+        </button>
       </header>
 
       {/* 进度概览 */}
@@ -172,6 +184,16 @@ export function BigProblemsPage() {
           <li>XP / Elo / mastery 全部跟主线累计</li>
         </ul>
       </section>
+
+      {tutorOpen && studentId && (
+        <TutorPanel
+          subjectId="math"
+          context="free_chat"
+          studentId={studentId}
+          skillName="大题闯关思路"
+          onClose={() => setTutorOpen(false)}
+        />
+      )}
     </div>
   );
 }

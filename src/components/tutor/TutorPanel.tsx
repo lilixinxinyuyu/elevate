@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MascotAvatar } from "../MascotAvatar";
 import {
   createMicRecorder,
@@ -31,13 +32,123 @@ import {
 import { speakText } from "../../lib/tts";
 import { db } from "../../db/dexie";
 import type { TutorMessage, TutorSession } from "../../core/types";
+import { RealtimeTutor, type RealtimeState } from "../../lib/realtimeTutor";
+import {
+  bindToolsForStudent,
+  currentQuestionToInstructions,
+  gatherSnapshot,
+  snapshotToInstructions,
+} from "../../lib/tutorContext";
+import {
+  awardMascotXp,
+  getEquippedVoice,
+  getMascotState,
+  talentDisplayName,
+  type MascotXpReason,
+} from "../../lib/mascotProgress";
+
+const REALTIME_URL =
+  (import.meta as unknown as { env: { VITE_REALTIME_URL?: string } }).env.VITE_REALTIME_URL ??
+  "wss://selena-tutor-realtime.lilixinxinyuyu.workers.dev";
+
+/** 拼 realtime 模式的 system instructions（snapshot + 上下文 + 已解锁的隐藏技能提示） */
+async function buildRealtimeInstructions(
+  props: TutorPanelProps,
+  unlockedTalents: string[],
+): Promise<string> {
+  const baseSys = `你是 Selena 的数学老师"小进姐姐"，温柔耐心，普通话。
+- 用 60-100 字的简短句，像聊天，不长篇说教
+- 苏格拉底式：先问思路、给小线索，不直接报答案
+- Selena 9 岁四年级，听不懂大人术语，用具体例子
+- 鼓励多于指正
+
+回答策略：
+- 如果她问当前在做的具体题：苏格拉底式问思路 → 一个小线索 → 让她自己算。
+- 如果她问"我最近怎么样"/"我哪个 skill 最弱"等：用下面的学情快照具体回答，不要说"挺好的"。
+- 如果需要更细的数据（"具体哪几道题做错了"等）：调对应 tool 拿数据再答。`;
+
+  // === 隐藏技能 ===
+  const talentLines: string[] = [];
+  if (unlockedTalents.includes("sing_multiplication")) {
+    talentLines.push(
+      `- 隐藏技能：你会"唱乘法口诀"。如果她说"唱乘法口诀"/"唱一段"/"唱给我听"等，
+        用节奏感的方式真把口诀朗读出来（"二二得四，二三得六…"），
+        不要拒绝、不要写谱，就当作 rap 一样读出来。读完问她想接着哪段。`,
+    );
+  }
+  if (unlockedTalents.includes("math_jokes")) {
+    talentLines.push(
+      `- 隐藏技能：你会"讲数学冷笑话"。她说"讲笑话"/"逗我笑"等，讲一个 9 岁能听懂的数学小笑话。`,
+    );
+  }
+  if (unlockedTalents.includes("birthday_song")) {
+    talentLines.push(`- 隐藏技能：生日相关话题时可以唱生日歌。`);
+  }
+  const talentBlock = talentLines.length > 0 ? `\n\n=== 隐藏技能（已解锁，可主动提）===\n${talentLines.join("\n")}` : "";
+
+  let snapshotText = "";
+  let studentId: string | undefined = props.studentId;
+  if (!studentId) {
+    const students = await db.students.toArray();
+    studentId = students[0]?.id;
+  }
+  if (studentId) {
+    try {
+      const students = await db.students.toArray();
+      const student = students.find((s) => s.id === studentId) ?? students[0];
+      if (student) {
+        const snap = await gatherSnapshot(student.id, student.name);
+        snapshotText = "\n\n" + snapshotToInstructions(snap);
+      }
+    } catch {
+      /* 容错：没 snapshot 就空 */
+    }
+  }
+
+  const ctx = props.context ?? "wrong_retry";
+  let scenarioBlock = "";
+  if (props.stem) {
+    // 有具体题
+    scenarioBlock = "\n\n" + currentQuestionToInstructions({
+      stem: props.stem,
+      correctAnswer: props.correctAnswer,
+      studentAnswer: props.studentAnswer,
+      skillName: props.skillName,
+    });
+  } else if (ctx === "skill_help" && props.skillName) {
+    const wrongInfo = props.consecutiveWrong
+      ? `连错了 ${props.consecutiveWrong} 次`
+      : "最近表现不太稳";
+    scenarioBlock = `\n\n=== 现在的场景 ===
+Selena 主动找你来了——她在 "${props.skillName}" 这个 knowledge point 上${wrongInfo}。
+开口先打招呼 + 问她："你觉得 ${props.skillName} 最难的地方是什么？" 让她说一说。
+然后根据她说的，挑一个具体小例子，一起算一遍。
+不要一上来就讲解一长段——要交流。`;
+  } else if (ctx === "review_session") {
+    scenarioBlock = `\n\n=== 现在的场景 ===
+Selena 刚做完一组题。先夸夸她坚持下来了，再问"哪道题想再聊聊？"`;
+  } else {
+    // free_chat
+    scenarioBlock = `\n\n=== 现在的场景 ===
+Selena 主动来找你聊天。打招呼时自然一点，问她"今天想聊数学的哪部分？" 让她带话题。`;
+  }
+  return `${baseSys}${talentBlock}${snapshotText}${scenarioBlock}`;
+}
 
 interface TutorPanelProps {
   subjectId: "math" | "chinese";
-  stem: string;
-  correctAnswer: string;
-  studentAnswer: string;
+  /** 题目相关 — 没有就是"跟小进闲聊/通用辅导"模式 */
+  stem?: string;
+  correctAnswer?: string;
+  studentAnswer?: string;
+  /** skill 相关 — 用于 prompt + 上下文（"她在某某 skill 上连错…"） */
   skillName?: string;
+  /** 弹出 panel 的具体场景，让 prompt 知道为什么打开。
+   *  - "wrong_retry": Selena 答错后让小进讲题（默认 / 老行为）
+   *  - "skill_help": 从 home struggle-skill 区点开（"她在 X skill 上连错 N 次"）
+   *  - "review_session": 一组题做完总结
+   *  - "free_chat": 没具体 context，纯聊天 */
+  context?: "wrong_retry" | "skill_help" | "review_session" | "free_chat";
   /** 当前 Selena 学生 id（用于关联对话日志） */
   studentId?: string;
   /** 触发面板的 attempt id（错题才有） */
@@ -46,6 +157,8 @@ interface TutorPanelProps {
   questionId?: string;
   /** skill id */
   skillId?: string;
+  /** struggle skill 场景：连错次数 */
+  consecutiveWrong?: number;
   onClose: () => void;
 }
 
@@ -66,6 +179,20 @@ function isQuotaError(msg: string): boolean {
   return /FreeTierOnly|AllocationQuota|model.+not.+exist|model.+unavailable/i.test(msg);
 }
 
+/** tool name → 给孩子看的友好名字（"小进在查最近错题…"）*/
+function toolDisplayName(name: string): string {
+  switch (name) {
+    case "get_recent_mistakes":
+      return "你最近的错题";
+    case "get_skill_summary":
+      return "各个 skill 熟练度";
+    case "get_today_progress":
+      return "你今天的练习";
+    default:
+      return name;
+  }
+}
+
 export function TutorPanel(props: TutorPanelProps) {
   const [conversation, setConversation] = useState<ChatMsg[]>([]);
   const [loading, setLoading] = useState<"explain" | "voice" | "follow" | null>(null);
@@ -74,6 +201,37 @@ export function TutorPanel(props: TutorPanelProps) {
   const [recording, setRecording] = useState(false);
   const recorderRef = useRef<MicRecorder | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // ===== Phase 1+2+3: realtime 模式 =====
+  // 默认用 realtime（连 selena-tutor-realtime Worker → dashscope qwen3.5-omni-flash-realtime）。
+  // 失败任意一步（无密码 / WS 握手失败 / 无麦克风权限）都退到老的"文本 explain + push-to-talk voiceAsk"流程。
+  const [realtimeMode, setRealtimeMode] = useState(true);
+  const [realtimeState, setRealtimeState] = useState<RealtimeState>("idle");
+  const [realtimeStreamingText, setRealtimeStreamingText] = useState("");
+  const [activeToolName, setActiveToolName] = useState<string | null>(null);
+  const realtimeRef = useRef<RealtimeTutor | null>(null);
+  // 升级提示：连接后/对话结束后如果新解锁了内容，弹一下
+  const [levelUpToast, setLevelUpToast] = useState<{
+    title: string;
+    detail: string;
+  } | null>(null);
+
+  const showLevelUpToast = (
+    title: string,
+    unlocks?: { voices: string[]; talents: string[]; skins: string[]; unlocks3d: boolean },
+  ) => {
+    const parts: string[] = [];
+    if (unlocks?.voices.length) parts.push(`新音色：${unlocks.voices.join("、")}`);
+    if (unlocks?.talents.length)
+      parts.push(`隐藏技能：${unlocks.talents.map(talentDisplayName).join("、")}`);
+    if (unlocks?.skins.length) parts.push(`Skin：${unlocks.skins.join("、")}`);
+    if (unlocks?.unlocks3d) parts.push("3D 形象（实验性）");
+    setLevelUpToast({
+      title,
+      detail: parts.length > 0 ? parts.join("｜") : "继续聊她还会涨更多！",
+    });
+    setTimeout(() => setLevelUpToast(null), 5000);
+  };
 
   /**
    * 本次面板的对话日志 row id（首次写入 db 时生成，后续每条消息都更新这一行）。
@@ -190,38 +348,274 @@ export function TutorPanel(props: TutorPanelProps) {
     }
   };
 
-  // 进面板：自动拉一段文字讲解 + 朗读
+  // 进面板：先尝试 realtime；失败就 fall back 到文本 explainQuestion
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      setLoading("explain");
+    // v0.31.28: race-mode connect — realtime + 文字 explain 并行起跑，谁先到用谁。
+    // realtime 慢于 REALTIME_TIMEOUT_MS 直接放弃，免得 Selena 等 2 分钟。
+    // 之前的串行逻辑：先 await snapshot/instructions → await tutor.connect()，任何一步
+    // 卡 30s+ 都把整个 panel 锁死。现在 worst-case 用户最多等 ~3s 拿到内容。
+    const REALTIME_TIMEOUT_MS = 3500;
+    /** 已经决定走哪个模式了？避免 race 双方都激活渲染（重复消息）*/
+    let modeDecided: "realtime" | "text" | null = null;
+
+    const renderTextResult = (explanation: string) => {
+      if (cancelled || modeDecided === "realtime") return;
+      const msg: ChatMsg = { role: "assistant", content: explanation, ts: Date.now() };
+      setConversation([msg]);
+      void persistTutorSession([msg]);
+      void safePlayTts(explanation, msg.ts);
+    };
+
+    const fallbackToText = async (reason: string, prefetchedText?: string) => {
+      // 任何已 decided 状态都直接 return，保证 fallback 只执行一次
+      // （avoid double-render if onError + race rejection 双方都进来）
+      if (cancelled || modeDecided !== null) return;
+      console.warn("[tutor] falling back to text mode:", reason);
+      modeDecided = "text";
+      try {
+        realtimeRef.current?.close();
+      } catch {
+        /* */
+      }
+      realtimeRef.current = null;
+      setRealtimeMode(false);
       setError(null);
+      // 已经预取到文字了？直接渲染
+      if (prefetchedText) {
+        renderTextResult(prefetchedText);
+        return;
+      }
+      // skill_help / free_chat 模式无 stem → 不调 explainQuestion，留空让用户输入
+      if (!props.stem) return;
+      setLoading("explain");
       try {
         const r = await explainQuestion({
           subjectId: props.subjectId,
           stem: props.stem,
-          correctAnswer: props.correctAnswer,
-          studentAnswer: props.studentAnswer,
+          correctAnswer: props.correctAnswer ?? "",
+          studentAnswer: props.studentAnswer ?? "",
           skillName: props.skillName,
         });
         if (cancelled) return;
-        const msg: ChatMsg = { role: "assistant", content: r.explanation, ts: Date.now() };
-        setConversation([msg]);
-        void persistTutorSession([msg]);
-        // 自动朗读（但 safe，不会和手动点击叠播）
-        void safePlayTts(r.explanation, msg.ts);
+        renderTextResult(r.explanation);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
       } finally {
         if (!cancelled) setLoading(null);
       }
+    };
+
+    void (async () => {
+      // 没存密码（开发期可能跳过 AuthGate）→ 直接走文本 fallback
+      const pwd = (() => {
+        try {
+          return localStorage.getItem("selena.cloud.pwd");
+        } catch {
+          return null;
+        }
+      })();
+      // realtime 需要密码（Worker 校验）。没密码就走文字。
+      if (!pwd) {
+        void fallbackToText("no_password");
+        return;
+      }
+      // 找 studentId 给 tools 绑学情
+      let studentId = props.studentId;
+      if (!studentId) {
+        const ss = await db.students.toArray();
+        studentId = ss[0]?.id;
+      }
+      if (!studentId) {
+        void fallbackToText("no_student");
+        return;
+      }
+
+      // === 关键：speculatively 同时起 explainQuestion ===
+      // 不 await，放进 promise 里。realtime 赢就丢弃；realtime 慢就拿来用。
+      const textExplainPromise: Promise<string | null> = props.stem
+        ? explainQuestion({
+            subjectId: props.subjectId,
+            stem: props.stem,
+            correctAnswer: props.correctAnswer ?? "",
+            studentAnswer: props.studentAnswer ?? "",
+            skillName: props.skillName,
+          })
+            .then((r) => r.explanation)
+            .catch((e) => {
+              console.warn("[tutor] text explain failed:", e);
+              return null;
+            })
+        : Promise.resolve(null);
+
+      // 拿小进当前等级 + 已解锁技能 + 装备的音色
+      const mascotState = await getMascotState(studentId);
+      const equippedVoice = await getEquippedVoice(studentId);
+
+      let instructions = "";
+      try {
+        instructions = await buildRealtimeInstructions(props, mascotState.unlockedTalents);
+      } catch (e) {
+        void fallbackToText(
+          "instructions_failed: " + (e as Error).message,
+          await textExplainPromise.then((t) => t ?? undefined),
+        );
+        return;
+      }
+      if (cancelled) return;
+
+      const tools = bindToolsForStudent(studentId);
+      const tutor = new RealtimeTutor(
+        {
+          serverUrl: REALTIME_URL,
+          password: pwd,
+          systemPrompt: instructions,
+          voice: equippedVoice,
+          tools,
+        },
+        {
+          onState: (s) => {
+            if (cancelled) return;
+            setRealtimeState(s);
+            // 状态变化时把 thinking/speaking 显示为"加载小气泡"
+            if (s === "thinking") setLoading("voice");
+            else if (s === "speaking" || s === "ready") setLoading(null);
+            if (s !== "tool_calling") setActiveToolName(null);
+          },
+          onUserTranscript: (text) => {
+            if (cancelled) return;
+            const msg: ChatMsg = { role: "user", content: text, via: "voice", ts: Date.now() };
+            setConversation((prev) => {
+              const next = [...prev, msg];
+              void persistTutorSession(next);
+              return next;
+            });
+          },
+          onAssistantTranscriptDelta: (delta) => {
+            if (cancelled) return;
+            setRealtimeStreamingText((t) => t + delta);
+          },
+          onAssistantTurnDone: (fullText) => {
+            if (cancelled) return;
+            const text = fullText.trim();
+            setRealtimeStreamingText("");
+            if (!text) return;
+            const msg: ChatMsg = { role: "assistant", content: text, ts: Date.now() };
+            setConversation((prev) => {
+              const next = [...prev, msg];
+              void persistTutorSession(next);
+              return next;
+            });
+          },
+          onToolCall: (info) => {
+            if (cancelled) return;
+            // 显示"小进在查最近错题…"
+            setActiveToolName(info.error ? null : info.name);
+          },
+          onError: (err) => {
+            if (cancelled) return;
+            console.warn("[tutor realtime]", err);
+            // 致命错误（连不上 / 401 / mic_denied）→ fallback 文字
+            const msg = (err.message ?? "").toLowerCase();
+            if (
+              err.code === "mic_denied" ||
+              msg.includes("ws_open_failed") ||
+              msg.includes("websocket_error") ||
+              msg.includes("worklet_load_failed")
+            ) {
+              void fallbackToText(err.code ?? err.message);
+            } else {
+              setError(err.message);
+            }
+          },
+        },
+      );
+      realtimeRef.current = tutor;
+
+      // === 三方 race ===
+      //  1. realtime ready  → 用 realtime
+      //  2. realtime error  → fallback 文字
+      //  3. timeout 3.5s    → 放弃 realtime，等文字
+      const realtimeP = tutor
+        .connect()
+        .then(() => "realtime_ready" as const)
+        .catch((e) => ({ kind: "realtime_error" as const, error: e as Error }));
+      const timeoutP = new Promise<"timeout">((resolve) =>
+        setTimeout(() => resolve("timeout"), REALTIME_TIMEOUT_MS),
+      );
+
+      const winner = await Promise.race([realtimeP, timeoutP]);
+      if (cancelled) return;
+
+      // 错误或超时 → 都算 realtime 失败，立即 fallback 用文字
+      // （prefetched textExplainPromise 大概率已经回来或快回来）
+      if (winner === "timeout") {
+        const prefetched = await textExplainPromise;
+        await fallbackToText(
+          "realtime_timeout_3500ms",
+          prefetched ?? undefined,
+        );
+        return;
+      }
+      if (typeof winner === "object" && winner.kind === "realtime_error") {
+        const prefetched = await textExplainPromise;
+        await fallbackToText(
+          "realtime_error: " + winner.error.message,
+          prefetched ?? undefined,
+        );
+        return;
+      }
+
+      // realtime 赢了 — 锁定 mode，丢弃 textExplainPromise（它仍会跑完，但结果被忽略）
+      modeDecided = "realtime";
+      // 给小进涨经验：根据 context 不同奖励不同
+      const xpReason: MascotXpReason =
+        props.context === "review_session"
+          ? "session_review"
+          : props.context === "free_chat" || props.context === "skill_help"
+            ? "proactive_chat"
+            : "session_start";
+      void (async () => {
+        // 主奖励
+        const r1 = await awardMascotXp(studentId, xpReason);
+        if (r1.leveledUp && r1.newLevel) {
+          showLevelUpToast(r1.newLevel.title, r1.newUnlocks);
+        }
+        // 当日首聊额外 +15
+        const r2 = await awardMascotXp(studentId, "daily_first");
+        if (r2.leveledUp && r2.newLevel) {
+          showLevelUpToast(r2.newLevel.title, r2.newUnlocks);
+        }
+      })();
     })();
     return () => {
       cancelled = true;
+      try {
+        realtimeRef.current?.close();
+      } catch {
+        /* */
+      }
+      realtimeRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // realtime push-to-talk: mousedown=startRecording / mouseup=stopAndRespond
+  const startRealtimeRec = async () => {
+    try {
+      await realtimeRef.current?.startRecording();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  const stopRealtimeRec = async () => {
+    try {
+      await realtimeRef.current?.stopAndRespond();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   // 自动滚到最新一条
   useEffect(() => {
@@ -253,9 +647,10 @@ export function TutorPanel(props: TutorPanelProps) {
     try {
       const r = await explainQuestion({
         subjectId: props.subjectId,
-        stem: props.stem,
-        correctAnswer: props.correctAnswer,
-        studentAnswer: props.studentAnswer,
+        // 没具体题就拿 skill name 当 stem 兜底，让后端 prompt 有 anchor
+        stem: props.stem ?? (props.skillName ? `（关于 ${props.skillName} 的问题）` : "（自由提问）"),
+        correctAnswer: props.correctAnswer ?? "",
+        studentAnswer: props.studentAnswer ?? "",
         skillName: props.skillName,
         conversation: newConv.map((m) => ({ role: m.role, content: m.content })),
       });
@@ -308,11 +703,11 @@ export function TutorPanel(props: TutorPanelProps) {
         audioBlob: blob,
         mimeType,
         subjectId: props.subjectId,
-        questionContext: {
-          stem: props.stem,
-          correctAnswer: props.correctAnswer,
-          skillName: props.skillName,
-        },
+        questionContext: props.stem
+          ? { stem: props.stem, correctAnswer: props.correctAnswer, skillName: props.skillName }
+          : props.skillName
+            ? { stem: `（关于 ${props.skillName} 的问题）`, skillName: props.skillName }
+            : undefined,
         conversation: conversation.map((m) => ({ role: m.role, content: m.content })),
       });
       const aiMsg: ChatMsg = { role: "assistant", content: r.reply, ts: Date.now() };
@@ -359,12 +754,18 @@ export function TutorPanel(props: TutorPanelProps) {
         ? "bg-amber-500/30 animate-pulse"
         : "";
 
-  // 关闭：清理麦 + 停 audio + 通知父组件
+  // 关闭：清理麦 + 停 audio + 关 realtime + 通知父组件
   const closePanel = () => {
     recorderRef.current?.release();
     recorderRef.current = null;
     audioRef.current?.pause();
     audioRef.current = null;
+    try {
+      realtimeRef.current?.close();
+    } catch {
+      /* */
+    }
+    realtimeRef.current = null;
     props.onClose();
   };
 
@@ -378,7 +779,12 @@ export function TutorPanel(props: TutorPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
+  // v0.31.21：用 Portal 挂到 document.body 逃出 containing block。
+  // 之前 TutorPanel 从 MascotProfile / 各 card-glow 容器里弹出时，被父容器的
+  // backdrop-filter / transform 限制了 fixed inset-0 的边界（CSS 规范：filter
+  // 类属性会创建 containing block for fixed descendants），导致下方页面没被遮罩
+  // 盖到、按钮也被截断。
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4"
       onClick={(e) => {
@@ -396,6 +802,16 @@ export function TutorPanel(props: TutorPanelProps) {
       >
         ×
       </button>
+
+      {/* 小进升级 toast */}
+      {levelUpToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[70] card-glow border-amber-400/60 bg-gradient-to-br from-amber-500/30 to-rose-500/20 px-4 py-3 max-w-sm animate-slide-up shadow-glow-amber">
+          <div className="font-display font-bold text-amber-100 text-sm">
+            ✨ 小进升级 → {levelUpToast.title}
+          </div>
+          <div className="text-xs text-amber-200/90 mt-1">{levelUpToast.detail}</div>
+        </div>
+      )}
 
       {/* 主面板：用 dvh 而不是 vh（dvh 排除 iOS Safari 地址栏，避免顶部被吃掉） */}
       <div
@@ -426,21 +842,36 @@ export function TutorPanel(props: TutorPanelProps) {
 
         {/* 对话区 */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2 min-h-[180px]">
-          {/* 题面提示卡 */}
-          <div className="rounded-lg bg-violet-500/10 border border-violet-400/20 p-2 text-[11px] text-slate-300">
-            <div className="text-slate-400 mb-0.5">题目：</div>
-            <div className="text-slate-200">{props.stem}</div>
-            {props.correctAnswer && (
-              <div className="text-slate-400 mt-1">
-                <span className="hidden">参考答案（小进会引导你想出来，不直接告诉）</span>
+          {/* 题面提示卡 — 仅当有具体题时显示 */}
+          {props.stem && (
+            <div className="rounded-lg bg-violet-500/10 border border-violet-400/20 p-2 text-[11px] text-slate-300">
+              <div className="text-slate-400 mb-0.5">题目：</div>
+              <div className="text-slate-200">{props.stem}</div>
+            </div>
+          )}
+          {/* skill_help 模式：显示她在哪个 skill 上挣扎 */}
+          {!props.stem && props.context === "skill_help" && props.skillName && (
+            <div className="rounded-lg bg-rose-500/10 border border-rose-400/30 p-2 text-[11px] text-rose-200">
+              <div className="text-rose-300/80 mb-0.5">小进要帮你看：</div>
+              <div className="text-rose-100">
+                <span className="font-bold">{props.skillName}</span>
+                {props.consecutiveWrong != null && (
+                  <span className="ml-1 text-rose-200/70">— 最近连错 {props.consecutiveWrong} 次</span>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {conversation.length === 0 && loading === "explain" && (
             <div className="text-sm text-slate-400 flex items-center gap-2">
               <span className="animate-pulse">●</span>
               小进姐姐正在想怎么引导你思考…
+            </div>
+          )}
+          {conversation.length === 0 && !loading && realtimeMode && realtimeState === "ready" && (
+            <div className="text-sm text-slate-400 flex items-center gap-2">
+              <span>👋</span>
+              <span>按住下面的按钮，开口跟小进姐姐说就行。</span>
             </div>
           )}
 
@@ -492,9 +923,30 @@ export function TutorPanel(props: TutorPanelProps) {
               小进姐姐正在想…
             </div>
           )}
-          {loading === "voice" && (
+          {loading === "voice" && !realtimeMode && (
             <div className="text-xs text-slate-400 ml-2 animate-pulse">
               小进姐姐在听你的语音…
+            </div>
+          )}
+
+          {/* realtime: 流式显示 assistant 当前正在说的话（assistant turn done 后会
+              转到正式的 conversation 里，这里清空）*/}
+          {realtimeMode && realtimeStreamingText && (
+            <div className="rounded-xl p-2.5 text-sm leading-relaxed bg-gradient-to-br from-amber-500/10 to-rose-500/10 border border-amber-400/30 text-amber-100 animate-slide-up">
+              <div className="text-[10px] text-amber-300/80 mb-1 flex items-center gap-1">
+                <span>👩‍🏫</span> 小进姐姐说：<span className="text-emerald-300 animate-pulse">🔉</span>
+              </div>
+              <div>{realtimeStreamingText}</div>
+            </div>
+          )}
+          {realtimeMode && activeToolName && (
+            <div className="text-xs text-amber-300/70 ml-2 animate-pulse">
+              🔧 小进在查{toolDisplayName(activeToolName)}…
+            </div>
+          )}
+          {realtimeMode && realtimeState === "connecting" && (
+            <div className="text-xs text-slate-400 ml-2 animate-pulse">
+              连接小进姐姐中…
             </div>
           )}
 
@@ -504,60 +956,72 @@ export function TutorPanel(props: TutorPanelProps) {
             </div>
           )}
 
-          {voiceUnavailable && voiceUnavailableReason && (
+          {/* v0.31.27：realtime 失败 fallback 文字模式时给个温柔提示
+              （以前老 voiceUnavailable 文案"账号无 omni 权限"对孩子太技术了）*/}
+          {!realtimeMode && conversation.length > 0 && (
             <div className="rounded-lg bg-amber-500/10 border border-amber-400/30 text-amber-200 text-xs p-2">
-              ℹ️ {voiceUnavailableReason}
+              💬 这次小进用文字讲。点 🔊 可以听她念出来；想追问就在下面写。
             </div>
           )}
         </div>
 
         {/* 底部操作区 */}
         <div className="p-3 border-t border-ink-700/60 space-y-2">
-          {/* 语音按钮：账号没权限就直接隐藏，剩下文字模式 */}
-          {!voiceUnavailable && (
+          {/* realtime 模式：push-to-talk 直接送到 dashscope，回流式 PCM 自动播 */}
+          {realtimeMode && (
             <div className="flex gap-2 items-center">
               <button
                 type="button"
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onMouseLeave={() => recording && stopRecording()}
+                onMouseDown={startRealtimeRec}
+                onMouseUp={stopRealtimeRec}
+                onMouseLeave={() => realtimeState === "recording" && void stopRealtimeRec()}
                 onTouchStart={(e) => {
                   e.preventDefault();
-                  startRecording();
+                  void startRealtimeRec();
                 }}
                 onTouchEnd={(e) => {
                   e.preventDefault();
-                  stopRecording();
+                  void stopRealtimeRec();
                 }}
-                disabled={loading !== null}
+                disabled={
+                  realtimeState !== "ready" && realtimeState !== "recording"
+                }
                 className={`flex-1 py-2.5 rounded-xl font-semibold text-sm border transition-all select-none ${
-                  recording
+                  realtimeState === "recording"
                     ? "bg-rose-500/30 border-rose-400/60 text-rose-100 scale-105 animate-pulse"
                     : "bg-violet-500/15 border-violet-400/40 text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
                 }`}
               >
-                {recording ? "🎤 松开发送…" : loading === "voice" ? "处理中…" : "🎤 按住说话"}
+                {realtimeState === "recording"
+                  ? "🎤 松开发送…"
+                  : realtimeState === "thinking" || realtimeState === "tool_calling"
+                    ? "处理中…"
+                    : realtimeState === "speaking"
+                      ? "🔉 小进在说…"
+                      : realtimeState === "connecting"
+                        ? "连接中…"
+                        : realtimeState === "ready"
+                          ? "🎤 按住说话（实时）"
+                          : "等待中…"}
               </button>
-              <button
-                type="button"
-                onClick={replayLast}
-                disabled={speakerDisabled}
-                title={
-                  audioStatus.kind === "loading" && audioForLast
-                    ? "正在准备语音…"
-                    : "再听一遍"
-                }
-                className={`px-3 py-2.5 rounded-xl border text-sm transition-all ${speakerClass} ${
-                  speakerDisabled
-                    ? "bg-slate-700/40 border-slate-600/40 text-slate-400 cursor-not-allowed"
-                    : "bg-amber-500/15 border-amber-400/30 text-amber-200 hover:bg-amber-500/25"
-                }`}
-              >
-                {speakerLabel}
-              </button>
+              {(realtimeState === "speaking" || realtimeState === "thinking") && (
+                <button
+                  type="button"
+                  onClick={() => realtimeRef.current?.cancelResponse()}
+                  className="px-3 py-2.5 rounded-xl border text-sm bg-rose-500/15 border-rose-400/30 text-rose-200 hover:bg-rose-500/25"
+                  title="打断小进"
+                >
+                  ⏹
+                </button>
+              )}
             </div>
           )}
-          {voiceUnavailable && lastAssistantMsg && (
+
+          {/* v0.31.27：realtime fallback 后只露文字 + TTS replay。
+              老的"按住说话 → /api/tutor/voice qwen-omni"路径已经全 403（账号无权），
+              点了必然失败、显示一段诡异错误，对孩子是噪音。直接砍掉。
+              旧 startRecording / stopRecording 函数仍在代码里但 UI 不再触发。 */}
+          {!realtimeMode && lastAssistantMsg && (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -605,6 +1069,7 @@ export function TutorPanel(props: TutorPanelProps) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

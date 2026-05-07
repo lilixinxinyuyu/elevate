@@ -33,6 +33,57 @@ export async function getDefaultStudent(): Promise<StudentProfile> {
   return list[0]!;
 }
 
+/**
+ * v0.31.12: 入口被动 trophy 检查。
+ *
+ * 跟 session 结束时的 commit 走同一份 checkAndAwardTrophies 逻辑，但只在
+ * 入口（Layout）触发——用于"已经满足条件但还没做完一局"场景。
+ * 典型用例：
+ *   - 时间触发型 commemorative（新学期/期中/期末/生日）：日期到了即解锁，不必再答题
+ *   - 跨段型 commemorative（破晓登阶）：上次跨段是历史事件，本次进 app 即补发
+ *
+ * 不弹 lottery（lottery 由 Train 结算页负责）；只把记录写进 db.trophies。
+ * 返回新颁发数量，调用方可以决定是否提示。
+ */
+export async function runPassiveTrophyCheck(studentId: string): Promise<string[]> {
+  const [allAttempts, mastery, mistakes, trophies, tutorSessions] = await Promise.all([
+    db.attempts.where({ studentId }).toArray(),
+    db.mastery.where({ studentId }).toArray(),
+    db.mistakes.where({ studentId }).toArray(),
+    db.trophies.where({ studentId }).toArray(),
+    db.tutorSessions.where({ studentId }).toArray(),
+  ]);
+  const awards = checkAndAwardTrophies({
+    studentId,
+    attempts: allAttempts,
+    mastery,
+    mistakes,
+    trophies,
+    tutorSessions,
+    todayDateKey: todayKey(),
+  });
+  // 只补 commemorative 类（时间型 + 跨段型），其他类别按设计应在 session 结束时颁发
+  const commemorativeAwards = awards.filter((aw) => {
+    const def = TROPHIES.find((t) => t.id === aw.trophyId);
+    return def?.category === "commemorative";
+  });
+  for (const aw of commemorativeAwards) {
+    for (let i = 0; i < aw.count; i++) {
+      const t: UserTrophy = {
+        id: uid("t-"),
+        studentId,
+        subjectId: "math",
+        trophyId: aw.trophyId,
+        unlockedAt: Date.now(),
+        meta: aw.tier ? { tier: aw.tier } : undefined,
+      };
+      await db.trophies.put(t);
+    }
+  }
+  // v0.31.13: 返回新颁发的 trophyId 列表（不是 count），让 Layout 用来弹 lottery 庆祝。
+  return commemorativeAwards.map((aw) => aw.trophyId);
+}
+
 export interface SessionOptions {
   mode?: SessionMode;
   selectedSkillIds?: string[];
@@ -745,6 +796,19 @@ export async function finalizeSession(
   session.finishedAt = Date.now();
   session.summary = summary;
   await db.sessions.put(session);
+
+  // v0.31.22：完成一个 session（≥ 5 题，准确率 ≥ 50%）→ 给 1 张装扮卡
+  // 不必考虑成绩：完整把题做完就奖励，让 Selena 想多解锁衣装就多做题。
+  // 太简单 / 没努力的 session（1-4 题或 < 50% 正确）不给，避免刷。
+  if (total >= 5 && accuracy >= 0.5) {
+    try {
+      const { awardWardrobeCard } = await import("../lib/mascotWardrobe");
+      await awardWardrobeCard(studentId, 1);
+    } catch (e) {
+      console.warn("[finalizeSession] award wardrobe card failed:", e);
+    }
+  }
+
   return summary;
 }
 

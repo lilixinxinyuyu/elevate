@@ -882,13 +882,20 @@ export function skillOf(skillId: string) {
  * 也无法检验真理解。换成"同 skill + 同 game_type + 同 difficulty"的另一道题，
  * 强迫学生迁移概念到新情境，才是对"是不是真学会"的真实测试。
  *
- * 选题策略：
- *  1) Hard filter: skill_id / game_type / difficulty / term / subjectId 全相等
- *  2) 排除：原题、本 session 已经做过的、本 session 还要做的（避免提前消费）
- *  3) 排序：用户没见过的（attemptCounts undefined or 0）→ 见的最少的（少次数优先）
- *  4) Tie-break：随机（用 rng 或 Math.random）— 别每次都同一道
+ * v0.31.17 重做：用户最强诉求是"重做永远不能看到刚做过的题"。原版严格匹配
+ * skill+game_type+difficulty+term+subject，候选稀少时返回 null → 重做退化成
+ * "原题再做一遍"——尤其在用了小进讲题后，答案在脑子里 → 原样填上 = 假装会了。
+ * 现在改成阶梯放宽：
+ *   1) 严格 (skill+gt+diff+term+subject)
+ *   2) 放宽 game_type
+ *   3) 放宽 difficulty
+ *   4) 放宽 term
+ *   5) 同学科任意一道未排除的（保底，绝不返 null 让原题复用）
+ * 即使第 5 层兜底，宁可换个 skill 不同难度的题，也比让 Selena 把刚记的答案抄一遍强。
  *
- * 没找到候选 → 返回 null，调用方应 fallback 到原题重做。
+ * 选题策略（每一层）：
+ *  - 排除：原题 + excludeIds（调用方控制：本 session 已答过的 + 可选的 plan 里后续）
+ *  - 排序：见的次数升序（attemptCounts），tie-break 随机
  */
 export function findParallelQuestion(
   original: Question,
@@ -897,23 +904,47 @@ export function findParallelQuestion(
   attemptCounts?: Map<string, number>,
   rng: () => number = Math.random,
 ): Question | null {
-  const candidates = pool.filter(
+  const subj = (original.subjectId ?? "math");
+  const baseFilter = (q: Question) =>
+    q.question_id !== original.question_id &&
+    !excludeIds.has(q.question_id) &&
+    (q.subjectId ?? "math") === subj;
+
+  const tiers: ((q: Question) => boolean)[] = [
+    // tier 1: 严格
     (q) =>
-      q.question_id !== original.question_id &&
-      !excludeIds.has(q.question_id) &&
+      baseFilter(q) &&
       q.skill_id === original.skill_id &&
       q.game_type === original.game_type &&
       q.difficulty === original.difficulty &&
-      (q.subjectId ?? "math") === (original.subjectId ?? "math") &&
       q.term === original.term,
-  );
-  if (candidates.length === 0) return null;
-  // 见的次数 → groupBy
-  const counted = candidates.map((q) => ({
-    q,
-    seen: attemptCounts?.get(q.question_id) ?? 0,
-    rand: rng(),
-  }));
-  counted.sort((a, b) => (a.seen - b.seen) || (a.rand - b.rand));
-  return counted[0]?.q ?? null;
+    // tier 2: 放宽 game_type（同 skill+diff+term）
+    (q) =>
+      baseFilter(q) &&
+      q.skill_id === original.skill_id &&
+      q.difficulty === original.difficulty &&
+      q.term === original.term,
+    // tier 3: 放宽 difficulty（同 skill+term）
+    (q) =>
+      baseFilter(q) &&
+      q.skill_id === original.skill_id &&
+      q.term === original.term,
+    // tier 4: 放宽 term（同 skill）
+    (q) => baseFilter(q) && q.skill_id === original.skill_id,
+    // tier 5: 同学科任意题（保底）
+    (q) => baseFilter(q),
+  ];
+
+  for (const filter of tiers) {
+    const candidates = pool.filter(filter);
+    if (candidates.length === 0) continue;
+    const counted = candidates.map((q) => ({
+      q,
+      seen: attemptCounts?.get(q.question_id) ?? 0,
+      rand: rng(),
+    }));
+    counted.sort((a, b) => (a.seen - b.seen) || (a.rand - b.rand));
+    return counted[0]?.q ?? null;
+  }
+  return null;
 }

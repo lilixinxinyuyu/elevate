@@ -88,7 +88,11 @@ export function LotteryBoxModal({ trophy, onClose, mode = "generate", subtitle }
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const headerLabel = isReveal ? "✨ 等级跃升 ✨" : "✨ 稀有成就解锁 ✨";
+  // v0.31.13: reveal-only 模式下文案按 trophy.category 分流：
+  //   - commemorative（被动解锁的纪念勋章）→ "稀有成就解锁"，跟 generate 模式同 copy
+  //   - 其他（tier 升钻 / 段位升档）→ "等级跃升"
+  const isCommemorativeReveal = isReveal && trophy.category === "commemorative";
+  const headerLabel = isReveal && !isCommemorativeReveal ? "✨ 等级跃升 ✨" : "✨ 稀有成就解锁 ✨";
 
   return (
     <div
@@ -210,7 +214,7 @@ export function LotteryBoxModal({ trophy, onClose, mode = "generate", subtitle }
 
           {phase === "closed" && (
             <div className="text-sm text-amber-200/90 italic">
-              {isReveal ? (
+              {isReveal && !isCommemorativeReveal ? (
                 <>
                   你升到了一个新的等级！<br />
                   <span className="text-xs text-slate-400">点击礼物盒展示你的勋章</span>
@@ -220,7 +224,9 @@ export function LotteryBoxModal({ trophy, onClose, mode = "generate", subtitle }
                   点击礼物盒抽取你的<span className="font-bold text-amber-100">独家专属勋章</span>～
                   <br />
                   <span className="text-xs text-slate-400">
-                    每个稀有成就都会生成一枚独一无二的图案
+                    {isCommemorativeReveal
+                      ? "属于这次成就的专属纪念勋章"
+                      : "每个稀有成就都会生成一枚独一无二的图案"}
                   </span>
                 </>
               )}
@@ -230,10 +236,14 @@ export function LotteryBoxModal({ trophy, onClose, mode = "generate", subtitle }
           {phase === "revealed" && (
             <div className="space-y-3">
               <div className="text-emerald-200 text-sm font-semibold">
-                {isReveal ? "✓ 等级提升！继续保持～" : "✓ 这是属于你的专属勋章！"}
+                {isReveal && !isCommemorativeReveal
+                  ? "✓ 等级提升！继续保持～"
+                  : "✓ 这是属于你的专属勋章！"}
               </div>
               <div className="text-xs text-slate-400">
-                {isReveal ? "已记入勋章墙的等级标志" : "已永久保存到你的勋章墙"}
+                {isReveal && !isCommemorativeReveal
+                  ? "已记入勋章墙的等级标志"
+                  : "已永久保存到你的勋章墙"}
               </div>
               <button
                 type="button"

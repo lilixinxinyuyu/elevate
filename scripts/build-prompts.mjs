@@ -75,10 +75,48 @@ for (const f of gameTypeFiles) {
   questionsSchemas[name] = expandIncludes(raw, `questions/game-types/${f}`);
 }
 
+// v0.31.34: 扫 difficulty/ 下 1.md ... 5.md
+const difficultyDir = join(PROMPTS_DIR, "difficulty");
+const difficultyRubrics = {};
+try {
+  for (const f of readdirSync(difficultyDir).filter((f) => f.endsWith(".md"))) {
+    const name = basename(f, extname(f));
+    difficultyRubrics[name] = readMd(`difficulty/${f}`);
+  }
+} catch {
+  /* 目录不存在就跳过 */
+}
+
+// v0.31.34: 扫 formats/ 下每个 question_format 的 .md
+const formatsDir = join(PROMPTS_DIR, "formats");
+const formatRubrics = {};
+try {
+  for (const f of readdirSync(formatsDir).filter((f) => f.endsWith(".md"))) {
+    const name = basename(f, extname(f));
+    formatRubrics[name] = readMd(`formats/${f}`);
+  }
+} catch {
+  /* 目录不存在就跳过 */
+}
+
+// v0.31.34: 读 skills/scope.json — 每个 skill 的精确教学范围
+let skillScope = {};
+try {
+  skillScope = readJson("skills/scope.json");
+} catch {
+  /* 文件不存在 → 回落到 skill_name + global rubric */
+}
+
 const data = {
   questionsSystem: readMd("questions/system.md"),
   questionsUserTemplate: readMd("questions/user-template.md"),
   questionsSchemas,
+  /** v0.31.34：每个难度的精确定义 */
+  difficultyRubrics,
+  /** v0.31.34：每个 question_format 的具体要求 */
+  formatRubrics,
+  /** v0.31.34：每个 skill 的精确教学范围（in/out scope + key formulas + common mistakes） */
+  skillScope,
   /** 共享质量规范——出题和质检都内联了它，但保留一份原文方便审计 */
   qualityRubric: readMd("quality-rubric.md"),
   qualityJudgeSystem: readMd("quality-judge/system.md"),
@@ -102,6 +140,7 @@ function stripCommentKey(obj) {
 }
 data.skillKeywords = stripCommentKey(data.skillKeywords);
 data.gameTypeBySkill = stripCommentKey(data.gameTypeBySkill);
+data.skillScope = stripCommentKey(data.skillScope);
 
 // 生成 TS 文件内容
 const banner = `/**
@@ -141,5 +180,5 @@ for (const t of targets) {
 }
 
 console.log(
-  `  ${Object.keys(questionsSchemas).length} game-type schemas, ${Object.keys(data.skillKeywords).length} skill keyword sets`,
+  `  ${Object.keys(questionsSchemas).length} game-type schemas, ${Object.keys(data.skillKeywords).length} skill keyword sets, ${Object.keys(difficultyRubrics).length} difficulty rubrics, ${Object.keys(formatRubrics).length} format rubrics, ${Object.keys(data.skillScope).length} skill scopes`,
 );

@@ -3,6 +3,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { todayKey } from "../lib/date";
 import { TodayRings, type TodayRingsInput } from "../components/TodayRings";
+import { TutorPanel } from "../components/tutor/TutorPanel";
+import { MascotProfile } from "../components/MascotProfile";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { isPhase2Live } from "../lib/featureFlags";
@@ -43,6 +45,8 @@ function localDayKey(ts: number): string {
 function buildTodayRingsInput(args: {
   todayCount: number;
   challengeTarget: number;
+  /** v0.31.29：今日闪电口算 session 数（≥1 算闭环） */
+  fluencyTodayCount: number;
   mastery: { skillId: string; score: number }[];
   mistakes: { resolved: boolean; nextReviewAt: number; questionId: string }[];
   streak: number;
@@ -51,9 +55,7 @@ function buildTodayRingsInput(args: {
 }): TodayRingsInput {
   const now = Date.now();
   const challengeDone = args.todayCount >= args.challengeTarget;
-  // 闪电口算今日次数 — 暂时无法从 attempts 读（在 fluencyAttempts 里），用占位 0
-  // (后续若需要可通过 db.fluencyAttempts.where(...) 查；为不阻塞首屏渲染暂时保守 0)
-  const fluencyTodayCount = 0;
+  const fluencyTodayCount = args.fluencyTodayCount;
 
   const dueMistakes = args.mistakes.filter(
     (m) => !m.resolved && m.nextReviewAt <= now,
@@ -115,10 +117,18 @@ export function HomePage() {
     async () => (student ? db.attempts.where({ studentId: student.id }).toArray() : []),
     [student?.id],
   );
-  const mistakes = useLiveQuery(
-    async () => (student ? db.mistakes.where({ studentId: student.id }).toArray() : []),
-    [student?.id],
-  );
+  // v0.31.16: 已经在 Dexie 层 filter 掉 questionId 已不存在的孤儿错题
+  // （否则 focus ring "今日 X 道到期" 会被孤儿撑大）
+  const mistakes = useLiveQuery(async () => {
+    if (!student) return [];
+    const [all, qids] = await Promise.all([
+      db.mistakes.where({ studentId: student.id }).toArray(),
+      db.questions.toCollection().primaryKeys() as Promise<string[]>,
+    ]);
+    const qSet = new Set(qids);
+    // questions 还没 seed（qSet 空）时不要把全部 mistakes 当孤儿过滤掉
+    return qSet.size === 0 ? all : all.filter((m) => qSet.has(m.questionId));
+  }, [student?.id]);
   const trophies = useLiveQuery(
     async () => (student ? db.trophies.where({ studentId: student.id }).toArray() : []),
     [student?.id],
@@ -128,6 +138,22 @@ export function HomePage() {
     async () => (student ? db.mastery.where({ studentId: student.id }).toArray() : []),
     [student?.id],
   );
+  // v0.31.29：今日闪电口算 session 数（用于 3 环之一闭合判定）
+  const fluencyTodayCount = useLiveQuery(async () => {
+    if (!student) return 0;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startMs = startOfToday.getTime();
+    const all = await db.fluencyAttempts
+      .where({ studentId: student.id })
+      .toArray();
+    // 按 sessionId 去重 —— 一个 session 算一次"完成口算"
+    const sessionsToday = new Set<string>();
+    for (const a of all) {
+      if (a.createdAt >= startMs && a.sessionId) sessionsToday.add(a.sessionId);
+    }
+    return sessionsToday.size;
+  }, [student?.id]);
 
   const [rating, setRating] = useState<RatingResult | null>(null);
   const [ability, setAbility] = useState<AbilityDiagnostic | null>(null);
@@ -142,6 +168,8 @@ export function HomePage() {
   const [celebrationToTier, setCelebrationToTier] = useState<string | null>(null);
   const [showMigrationNotice, setShowMigrationNotice] = useState(false);
   const [struggleSkills, setStruggleSkills] = useState<{ skillId: string; skillName: string; consecutiveWrong: number; totalRecent: number }[]>([]);
+  /** 点"让小进帮一下"打开的 panel（针对某个 struggle skill） */
+  const [tutorForSkill, setTutorForSkill] = useState<{ skillId: string; skillName: string; consecutiveWrong: number } | null>(null);
   const [mockExam, setMockExam] = useState<{ available: boolean; daysUntilNext: number; lastAt: number | null } | null>(null);
 
   useEffect(() => {
@@ -299,6 +327,7 @@ export function HomePage() {
       {/* v0.31.2：今日 3 同心环（取代之前的 chip 行）*/}
       {isPhase2Live() ? (
         <TodayRings {...buildTodayRingsInput({
+          fluencyTodayCount: fluencyTodayCount ?? 0,
           todayCount: todayAttempts.length,
           challengeTarget: 15,
           mastery: mastery ?? [],
@@ -345,36 +374,64 @@ export function HomePage() {
         </div>
       )}
 
-      {/* ROI #1：红旗 skill 提示（连错 3+ 次） */}
+      {/* ROI #1：红旗 skill 提示（连错 3+ 次）— v0.31.19 改"让小进帮忙" */}
       {struggleSkills.length > 0 && (
         <section className="card-glow border-rose-400/50 bg-gradient-to-br from-rose-500/15 to-amber-500/10">
           <div className="flex items-start gap-3">
             <div className="text-3xl">🚩</div>
             <div className="flex-1">
               <div className="font-display font-bold text-rose-100 text-base">
-                这些知识点连错了好几次，需要爸妈帮一下
+                这些知识点连错了好几次，让小进帮一下
               </div>
-              <ul className="mt-2 space-y-1 text-sm text-rose-100/90">
+              <ul className="mt-2 space-y-1.5 text-sm text-rose-100/90">
                 {struggleSkills.slice(0, 3).map((s) => (
-                  <li key={s.skillId} className="flex items-center justify-between gap-2">
-                    <Link
-                      to={`/math/train?skillId=${encodeURIComponent(s.skillId)}&fresh=${Date.now()}`}
-                      className="underline decoration-rose-400/50 underline-offset-2 hover:text-white"
+                  <li key={s.skillId} className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <Link
+                        to={`/math/train?skillId=${encodeURIComponent(s.skillId)}&fresh=${Date.now()}`}
+                        className="underline decoration-rose-400/50 underline-offset-2 hover:text-white"
+                      >
+                        {s.skillName}
+                      </Link>
+                      <span className="chip text-[10px] px-2 py-0.5 bg-rose-500/30 border border-rose-400/40 text-rose-100 shrink-0">
+                        连错 {s.consecutiveWrong} 次
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTutorForSkill({
+                          skillId: s.skillId,
+                          skillName: s.skillName,
+                          consecutiveWrong: s.consecutiveWrong,
+                        })
+                      }
+                      className="chip text-[11px] px-2.5 py-1 bg-amber-500/25 border border-amber-400/50 text-amber-100 hover:bg-amber-500/40 transition-colors shrink-0"
                     >
-                      {s.skillName}
-                    </Link>
-                    <span className="chip text-[10px] px-2 py-0.5 bg-rose-500/30 border border-rose-400/40 text-rose-100">
-                      最近连错 {s.consecutiveWrong} 次
-                    </span>
+                      👩‍🏫 找小进讲讲
+                    </button>
                   </li>
                 ))}
               </ul>
               <div className="mt-2 text-xs text-rose-200/70">
-                建议爸妈陪 Selena 看一看这几道，把思路讲透；不是题做不动，是没理解到位。
+                点"找小进讲讲"开口跟小进姐姐说就行——她看得到 Selena 错过哪几道。
               </div>
             </div>
           </div>
         </section>
+      )}
+
+      {/* struggle-skill tutor panel（语音对话） */}
+      {tutorForSkill && student && (
+        <TutorPanel
+          subjectId="math"
+          context="skill_help"
+          studentId={student.id}
+          skillId={tutorForSkill.skillId}
+          skillName={tutorForSkill.skillName}
+          consecutiveWrong={tutorForSkill.consecutiveWrong}
+          onClose={() => setTutorForSkill(null)}
+        />
       )}
 
       {/* v0.31.2 视觉减负：CTA 从 5 张砍到 3 张。
@@ -493,6 +550,9 @@ export function HomePage() {
 
       {/* v0.30.9: 学期进度（单元解锁面板） */}
       <UnitProgress studentId={student.id} term={term} />
+
+      {/* 小进姐姐资料卡：等级 + XP 进度 + 切音色 + 一键找小进聊 */}
+      <MascotProfile studentId={student.id} />
 
       {/* 段位勋章柜 */}
       <BadgeInventory

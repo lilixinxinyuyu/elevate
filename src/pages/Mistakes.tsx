@@ -5,6 +5,7 @@ import { db } from "../db/dexie";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import type { Attempt, Question } from "../core/types";
+import { TutorPanel } from "../components/tutor/TutorPanel";
 
 const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]));
 const UNIT_MAP = new Map(UNITS.map((u) => [u.id, u]));
@@ -22,6 +23,14 @@ export function MistakesPage() {
   );
 
   const [filter, setFilter] = useState<"due" | "unresolved" | "all">("due");
+  const [tutorFor, setTutorFor] = useState<{
+    stem: string;
+    correctAnswer: string;
+    studentAnswer: string;
+    skillName: string;
+    skillId: string;
+    questionId: string;
+  } | null>(null);
 
   if (!student) return <div className="card">加载中…</div>;
   const qmap = new Map((questions ?? []).map((q) => [q.question_id, q]));
@@ -31,15 +40,20 @@ export function MistakesPage() {
     if (!prev || a.createdAt > prev.createdAt) lastAttemptByQ.set(a.questionId, a);
   }
 
-  const filtered = (mistakes ?? []).filter((m) => {
+  // v0.31.16: 渲染层兜底过滤孤儿错题（cloudSync 合并后到 cleanupOrphanMistakes
+  // 跑完之间有短窗口；questions 表还没 seed 完时也有可能命中）。
+  // 计数也只算"有题在"的，避免页头数字跟列表对不上。
+  const liveMistakes = (mistakes ?? []).filter((m) => qmap.has(m.questionId));
+
+  const filtered = liveMistakes.filter((m) => {
     if (filter === "due" && (m.resolved || m.nextReviewAt > Date.now())) return false;
     if (filter === "unresolved" && m.resolved) return false;
     return true;
   });
 
-  const allCount = mistakes?.length ?? 0;
-  const unresolvedCount = (mistakes ?? []).filter((m) => !m.resolved).length;
-  const dueCount = (mistakes ?? []).filter((m) => !m.resolved && m.nextReviewAt <= Date.now()).length;
+  const allCount = liveMistakes.length;
+  const unresolvedCount = liveMistakes.filter((m) => !m.resolved).length;
+  const dueCount = liveMistakes.filter((m) => !m.resolved && m.nextReviewAt <= Date.now()).length;
 
   return (
     <div className="space-y-4">
@@ -99,10 +113,45 @@ export function MistakesPage() {
                     <span className="text-emerald-300">正确答案：{displayAnswer(q)}</span>
                   </div>
                 )}
+                {q && (
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTutorFor({
+                          stem: q.stem,
+                          correctAnswer: displayAnswer(q),
+                          studentAnswer: last ? displayUserAnswer(last.answer) : "",
+                          skillName: skill?.name ?? q.skill_id,
+                          skillId: q.skill_id,
+                          questionId: q.question_id,
+                        })
+                      }
+                      className="chip text-[11px] px-2.5 py-1 bg-amber-500/20 border border-amber-400/40 text-amber-100 hover:bg-amber-500/35 transition-colors"
+                    >
+                      👩‍🏫 让小进讲讲这道
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+      )}
+
+      {tutorFor && student && (
+        <TutorPanel
+          subjectId="math"
+          context="wrong_retry"
+          studentId={student.id}
+          stem={tutorFor.stem}
+          correctAnswer={tutorFor.correctAnswer}
+          studentAnswer={tutorFor.studentAnswer}
+          skillName={tutorFor.skillName}
+          skillId={tutorFor.skillId}
+          questionId={tutorFor.questionId}
+          onClose={() => setTutorFor(null)}
+        />
       )}
     </div>
   );

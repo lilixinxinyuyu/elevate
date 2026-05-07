@@ -44,7 +44,8 @@ export async function getDeletedQuestionIds(): Promise<Set<string>> {
   return new Set(arr);
 }
 
-/** 添加 IDs 到删除列表。同时立刻从 db.questions 删掉（如果还在） */
+/** 添加 IDs 到删除列表。同时立刻从 db.questions 删掉（如果还在），
+ *  并删掉 db.mistakes 里引用这些题的所有错题行（避免变孤儿） */
 export async function recordDeletedQuestionIds(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const cur = await getDeletedQuestionIds();
@@ -52,6 +53,14 @@ export async function recordDeletedQuestionIds(ids: string[]): Promise<void> {
   await db.meta.put({ key: DELETED_QIDS_KEY, value: Array.from(cur) });
   // 真删掉（如果还在）
   await db.questions.bulkDelete(ids);
+  // v0.31.16: 同步删掉引用这些题的错题行，否则会变孤儿（错题复活页 "[题目已移除]"）
+  const idSet = new Set(ids);
+  const orphanMistakeIds = (await db.mistakes.toArray())
+    .filter((m) => idSet.has(m.questionId))
+    .map((m) => m.id);
+  if (orphanMistakeIds.length > 0) {
+    await db.mistakes.bulkDelete(orphanMistakeIds);
+  }
 }
 
 /** seed/agent pull 用：从一组 questions 里过滤掉已删除的 */
@@ -137,28 +146,29 @@ function stampMathSubject<T extends Record<string, unknown>>(rows: T[]): T[] {
 }
 
 /**
- * v0.30.14：清掉 questionId 已不存在于 questions 表的孤儿 mistake 行。
+ * 清掉 questionId 已不存在于 questions 表的孤儿 mistake 行。
  *
- * 背景：admin 清理 / seed 改版时把题删了，但 mistakes 表里的 questionId 还引用
- * 着旧 ID（如 G4B_dmmix_1, Q_ang_2, G4A_lc_1 等）。错题复活页面渲染时找不到
- * 题，统一显示 "[题目已移除]"。Selena 的实际数据：112 mistakes / 62 orphan
- * (56 unresolved) → 错题复活页几乎全废。
+ * 背景：admin 清理 / seed 改版把题删了，但 mistakes 表里的 questionId 还引用
+ * 着旧 ID。错题复活页面渲染时找不到题，统一显示 "[题目已移除]"。
  *
- * 安全性：
- *   - 只删 questionId 不在 questions 表的 mistakes 行，已有题的全保留
- *   - 跨设备同步：mistakes 表本身就 sync，删了不会再回来
- *   - 跑完用 meta:orphanMistakesCleanedAt 标记，不重复跑
+ * v0.31.16 升级：取消 meta 一次性 gate，改成每次启动 + 每次 pull 后都跑。
+ * 原因：cloudSync.applyPayloadMerged 对 mistakes 走 union-by-id 合并，
+ * 已清掉的孤儿会被云端旧快照重新合回本地（甚至跨设备 ping-pong）。
+ * 一次性 cleanup 只能挡住单次启动，挡不住 pull-merge 把它们再拉回来。
  *
- * 跑在 SEED_VERSION 提升后或 ensureSeeded 即将 return 之前 — 反正
- * questions 表那时已经是 source of truth。
+ * 性能：O(N) 集合差集，Selena ≈ 100 行级别，每次启动跑一次零成本。
+ *
+ * 安全性：只删 questionId 不在 questions 表的 mistakes 行，已有题的全保留。
+ *
+ * @returns 删掉的孤儿数（用于决定要不要 push 回云端）
  */
-const ORPHAN_MISTAKES_CLEANED_KEY = "orphanMistakesCleanedAt";
-async function cleanupOrphanMistakes(): Promise<void> {
+export async function cleanupOrphanMistakes(): Promise<number> {
   try {
-    const meta = await db.meta.get(ORPHAN_MISTAKES_CLEANED_KEY);
-    if (meta?.value) return; // 已经做过
-
     const allQids = (await db.questions.toCollection().primaryKeys()) as string[];
+    if (allQids.length === 0) {
+      // questions 表还没 seed，跳过——否则会把全部 mistakes 当孤儿删掉
+      return 0;
+    }
     const qidSet = new Set(allQids);
     const allMistakes = await db.mistakes.toArray();
     const orphanIds = allMistakes
@@ -169,9 +179,10 @@ async function cleanupOrphanMistakes(): Promise<void> {
       await db.mistakes.bulkDelete(orphanIds);
       console.log(`[orphanMistakes] cleaned ${orphanIds.length} mistake row(s) with missing question`);
     }
-    await db.meta.put({ key: ORPHAN_MISTAKES_CLEANED_KEY, value: Date.now() });
+    return orphanIds.length;
   } catch (e) {
     console.warn("[cleanupOrphanMistakes] failed:", e);
+    return 0;
   }
 }
 
@@ -207,8 +218,19 @@ export async function ensureSeeded(): Promise<void> {
     migrateAttemptScoresV7().catch((e) => console.warn("[migrate v7] failed:", e));
     // v19 一次性补 stamp（即使 seed 没动也跑）
     void backfillMissingSubjectIds().catch(() => {});
-    // v0.30.14 一次性清孤儿 mistake（也在已最新分支跑）
+    // v0.31.16: 每次启动都清孤儿（幂等，O(N)）。
+    // 原因：cloud sync union-merge 会把别处仍存在的孤儿合回来。
     void cleanupOrphanMistakes();
+    // v0.31.32: 应用 admin 用 AI 修过的 question patches（meta::questionPatches，跨设备同步）
+    void (async () => {
+      try {
+        const { applyPendingQuestionPatches } = await import("../lib/qualityJudge");
+        const n = await applyPendingQuestionPatches();
+        if (n > 0) console.log(`[questionPatches] applied ${n} fix(es) from meta`);
+      } catch (e) {
+        console.warn("[applyPendingQuestionPatches] failed:", e);
+      }
+    })();
     return;
   }
 
@@ -270,6 +292,18 @@ export async function ensureSeeded(): Promise<void> {
   // v0.30.14: 清孤儿 mistake（在 seed bulkPut 之后跑，让新加进来的题
   // 能 "救活" 一些旧 mistake 行）
   void cleanupOrphanMistakes();
+
+  // v0.31.32: 应用 admin 用 AI 修过的 question patches —— 必须在 SEED bulkPut 之后跑，
+  // 否则会被 SEED 原版盖回去
+  void (async () => {
+    try {
+      const { applyPendingQuestionPatches } = await import("../lib/qualityJudge");
+      const n = await applyPendingQuestionPatches();
+      if (n > 0) console.log(`[questionPatches] applied ${n} fix(es) from meta`);
+    } catch (e) {
+      console.warn("[applyPendingQuestionPatches] failed:", e);
+    }
+  })();
 }
 
 /**

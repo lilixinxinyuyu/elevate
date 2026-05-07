@@ -6,6 +6,7 @@ import { finalizeSession, getOrCreateSession, getTotalXp, submitAttempt, trophyB
 import type { DailySession, Question, SessionMode, SessionSummary } from "../core/types";
 import { GameShell, type AttemptResult } from "../components/game/GameShell";
 import { RewardChest } from "../components/game/RewardChest";
+import { TutorPanel } from "../components/tutor/TutorPanel";
 import { sfx } from "../lib/sfx";
 import { ABILITY_LABELS } from "../core/types";
 import { levelFromXp } from "../core/scoring";
@@ -175,22 +176,36 @@ export function TrainPage() {
       try {
         const { studentId, session, questions: sessionQs } = state;
         const allQs = await db.questions.toArray();
-        // 已经在本 session 做过的（attempts 表查 sessionId）
+        // 已经在本 session 做过的（attempts 表查 sessionId）—— 必须排除（不重复出题）
         const sessionAttempts = await db.attempts.where({ sessionId: session.id }).toArray();
         const attemptedInSession = new Set(sessionAttempts.map((a) => a.questionId));
-        // 本 session 还在排队的题（防止提前消费打乱节奏）
-        const sessionPlannedIds = new Set(sessionQs.map((q) => q.question_id));
-        const exclude = new Set<string>([
-          ...attemptedInSession,
-          ...sessionPlannedIds,
-        ]);
+        // v0.31.17 取消"排除 sessionPlannedIds"：用户的核心诉求是"重做绝不能看到刚做过的题"，
+        // 这比"保持 session 排队 15 道完整"更重要。如果变式题恰好命中后续 plan 里的题，
+        // 我们把它从 plan 里 splice 掉（防止稍后又被作为正题看到一次）。
+        const plannedSet = new Set(sessionQs.map((q) => q.question_id));
+        const exclude = new Set<string>([...attemptedInSession]);
         // 全用户历史 attempt 计数（少见的题优先）
         const allAttempts = await db.attempts.where({ studentId }).toArray();
         const attemptCounts = new Map<string, number>();
         for (const a of allAttempts) {
           attemptCounts.set(a.questionId, (attemptCounts.get(a.questionId) ?? 0) + 1);
         }
-        return findParallelQuestion(original, allQs, exclude, attemptCounts);
+        const variant = findParallelQuestion(original, allQs, exclude, attemptCounts);
+        // 命中后续 plan 里的题 → 从 questions 数组里 splice 掉，否则后面 handleNext 推到那个 idx
+        // 时会再露脸一次
+        if (variant && plannedSet.has(variant.question_id)) {
+          setState((s) => {
+            if (s.status !== "running") return s;
+            const removeAt = s.questions.findIndex(
+              (q, i) => i > s.index && q.question_id === variant.question_id,
+            );
+            if (removeAt < 0) return s;
+            const newQuestions = s.questions.slice();
+            newQuestions.splice(removeAt, 1);
+            return { ...s, questions: newQuestions };
+          });
+        }
+        return variant;
       } catch (e) {
         console.warn("[handleRequestVariant] failed", e);
         return null;
@@ -290,6 +305,8 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
   const [showTierCelebration, setShowTierCelebration] = useState(
     !!summary.tierUpgrade,
   );
+  // 跟小进总结今天的对话面板
+  const [reviewTutorOpen, setReviewTutorOpen] = useState(false);
   // 🎁 盲盒队列（v0.29.2 重写规则）：
   //
   //   触发条件（什么时候弹盲盒）：
@@ -311,7 +328,11 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
   const [lotteryQueue, setLotteryQueue] = useState<QueueItem[]>(() => {
     const out: QueueItem[] = [];
 
-    // 1. 段位升档优先（最高优先级，队首）
+    // 1. 段位升档（v0.31.11 改）：
+    //    之前 mode="generate" 强制重画 tier_${id} → 出来跟桌上段位徽章一模一样，
+    //    没有"纪念解锁"的感觉。现在改成 reveal-only：弹一个庆祝展示已有的段位徽章，
+    //    真正的"专属纪念勋章"由 enter_${id} commemorative 走"trophy awards"分支
+    //    自然颁发（六角星 + 登阶/跃升 motif），跟段位徽章圆形 emblem 视觉上完全分开。
     if (summary.tierUpgrade) {
       const newTier = tierById(summary.tierUpgrade.toTierId);
       if (newTier) {
@@ -319,12 +340,13 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
           trophy: {
             id: trophyImageKey("math", `tier_${newTier.id}`),
             subjectId: "math",
-            name: `跨入 ${newTier.name}！`,
+            name: `${newTier.name} 段位徽章`,
             icon: newTier.badgeIcon,
             description: newTier.unlockSlogan,
             rare: true,
           },
-          mode: "generate",
+          mode: "reveal-only",
+          subtitle: "你正式佩戴上新段位徽章 ✨",
         });
       }
     }
@@ -549,13 +571,44 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
             </div>
           )}
 
-          <div className="flex gap-3 justify-center pt-2">
+          <div className="flex gap-3 justify-center pt-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setReviewTutorOpen(true)}
+              className="btn-secondary border-amber-400/40 text-amber-100 bg-amber-500/15 hover:bg-amber-500/30"
+            >
+              👩‍🏫 跟小进总结今天
+            </button>
             <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary">再来一把</Link>
             <Link to="/math" className="btn-secondary">回首页</Link>
           </div>
         </div>
       )}
+
+      {reviewTutorOpen && (
+        <SummaryReviewTutor onClose={() => setReviewTutorOpen(false)} />
+      )}
     </div>
+  );
+}
+
+/** 包装：拿 studentId 给 SummaryView 的"跟小进总结"按钮用 */
+function SummaryReviewTutor({ onClose }: { onClose: () => void }) {
+  const [studentId, setStudentId] = useState<string | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const ss = await db.students.toArray();
+      setStudentId(ss[0]?.id ?? null);
+    })();
+  }, []);
+  if (!studentId) return null;
+  return (
+    <TutorPanel
+      subjectId="math"
+      context="review_session"
+      studentId={studentId}
+      onClose={onClose}
+    />
   );
 }
 

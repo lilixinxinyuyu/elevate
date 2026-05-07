@@ -251,27 +251,40 @@ describe("findParallelQuestion v0.30.8", () => {
     expect(v!.term).toBe(original.term);
   });
 
-  it("excludeIds 里的题不被选 —— 全部 exclude 时返回 null", () => {
-    const allCandidates: Question[] = pool.filter(
+  it("excludeIds 里的严格匹配全 exclude 时，会从更宽的候选里挑（v0.31.17：阶梯放宽）", () => {
+    // v0.31.17：之前严格匹配 fail 就返 null，现在阶梯放宽到同 skill / 同学科。
+    // 用户核心诉求是"重做绝不能看到刚做过的题"，宁可换 game_type 也不能给原题。
+    const strictMatches: Question[] = pool.filter(
       (q) =>
         q.question_id !== original.question_id &&
         q.skill_id === original.skill_id &&
         q.game_type === original.game_type &&
         q.difficulty === original.difficulty,
     );
-    expect(allCandidates.length).toBeGreaterThan(0);
-    const exclude = new Set(allCandidates.map((q) => q.question_id));
+    expect(strictMatches.length).toBeGreaterThan(0);
+    const exclude = new Set(strictMatches.map((q) => q.question_id));
     const v = findParallelQuestion(original, pool, exclude);
-    expect(v).toBeNull();
+    // 期望：放宽到同 skill 不同 game_type 或不同 diff 拿到一道——绝不返 null
+    expect(v).not.toBeNull();
+    expect(v!.question_id).not.toBe(original.question_id);
+    expect(exclude.has(v!.question_id)).toBe(false);
   });
 
-  it("没有候选时返回 null（孤立 skill）", () => {
+  it("孤立 skill 时退到同学科任意一题（v0.31.17 保底，避免原题复用）", () => {
     const lonely: Question = {
       ...original,
       question_id: "FAKE_LONELY",
       skill_id: "skill_that_does_not_exist_xyz",
     };
     const v = findParallelQuestion(lonely, pool, new Set());
+    expect(v).not.toBeNull();
+    expect(v!.question_id).not.toBe(lonely.question_id);
+    // 同学科即可（原题是 math，pool 里随便一道 math 都行）
+    expect((v!.subjectId ?? "math")).toBe((lonely.subjectId ?? "math"));
+  });
+
+  it("pool 真的只有原题时返 null（没东西可挑）", () => {
+    const v = findParallelQuestion(original, [original], new Set());
     expect(v).toBeNull();
   });
 
@@ -293,7 +306,9 @@ describe("findParallelQuestion v0.30.8", () => {
     expect(v?.question_id).toBe(targetId);
   });
 
-  it("不跨 term —— 上册题不会被选作下册题的变式", () => {
+  it("v0.31.17：term 不再是硬约束——同 skill 不同 term 也是后备选择", () => {
+    // 用户核心诉求 > 学期边界。如果下册题 retry 时只有上册同 skill 题，就用上册的。
+    // 仍然优先匹配同 term；只在必要时跨 term。
     const upperBook = SEED_QUESTIONS.find((q) => q.term === "上册");
     if (!upperBook) return;
     const lowerFake: Question = {
@@ -302,6 +317,6 @@ describe("findParallelQuestion v0.30.8", () => {
       question_id: "FAKE_LOWER",
     };
     const v = findParallelQuestion(lowerFake, [upperBook], new Set());
-    expect(v).toBeNull();
+    expect(v?.question_id).toBe(upperBook.question_id);
   });
 });

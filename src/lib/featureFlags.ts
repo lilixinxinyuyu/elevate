@@ -1,18 +1,15 @@
 /**
  * Phase 2 feature flag — `PHASE2_LIVE`
  *
- * 控制 Phase 2 三个新模式（Fluency / 大题营 / Canvas 画图）的 UI 入口是否对
- * Selena 可见。代码可以正常 ship 到生产，但入口被这个 flag 罩住直到期中考完。
+ * **v0.31.26 期中考试完，全局默认翻 ON。** 所有 Selena / 爸妈 / 任何设备
+ * 自动看到 Phase 2 内容（闯关 / 闪电口算 / 3 环 / boss 解锁等）。
  *
- * 三种打开方式（任一即开）：
- *   1. localStorage：`localStorage.setItem("phase2_live", "true")` 然后刷新
- *   2. URL 参数：`?phase2=on`（写进 localStorage 后再用上一条机制）
- *   3. 构建期：`VITE_PHASE2_LIVE=true npm run build`
+ * 保留 opt-out 通道（极端情况下回滚用）：
+ *   - URL 参数：`?phase2=off`（写 "false" 进 localStorage 关闭）
+ *   - localStorage：`localStorage.setItem("phase2_live", "false")` 显式关
+ *   - URL `?phase2=on` 把开关重新打开（清掉 false）
  *
- * 为什么这样设计：
- *   - localStorage 给爸爸调试用（一台设备开，不污染 Selena）
- *   - URL 参数给"分享给 Selena 提前体验"用
- *   - VITE 环境变量给"全员 flip"用（期中考完后 push 这次构建）
+ * 之后 v0.32 / v0.33 会把这个 flag 整个删掉，代码不再分 Phase 1/2 路径。
  */
 
 const PHASE2_LS_KEY = "phase2_live";
@@ -24,8 +21,13 @@ function syncFromUrl(): void {
   try {
     const params = new URLSearchParams(window.location.search);
     const v = params.get(PHASE2_URL_PARAM);
-    if (v === "on" || v === "true") localStorage.setItem(PHASE2_LS_KEY, "true");
-    else if (v === "off" || v === "false") localStorage.removeItem(PHASE2_LS_KEY);
+    if (v === "on" || v === "true") {
+      // 重新开 → 清掉 opt-out 标记，恢复默认（true）
+      localStorage.removeItem(PHASE2_LS_KEY);
+    } else if (v === "off" || v === "false") {
+      // opt-out → 显式写 "false"，下次加载也保持关闭
+      localStorage.setItem(PHASE2_LS_KEY, "false");
+    }
   } catch {
     /* SSR / disabled localStorage */
   }
@@ -34,22 +36,15 @@ function syncFromUrl(): void {
 let _synced = false;
 
 export function isPhase2Live(): boolean {
-  // build-time flip：直接环境变量就开（发布期中后构建用）
-  if (
-    typeof import.meta !== "undefined" &&
-    (import.meta as { env?: Record<string, string> }).env?.VITE_PHASE2_LIVE === "true"
-  ) {
-    return true;
-  }
-  // 客户端：URL 参数 + localStorage
-  if (typeof window === "undefined") return false;
+  // v0.31.26 期中后默认 ON。检查 opt-out 通道：仅当显式 "false" 时才关闭。
+  if (typeof window === "undefined") return true;
   if (!_synced) {
     syncFromUrl();
     _synced = true;
   }
   try {
-    return localStorage.getItem(PHASE2_LS_KEY) === "true";
+    return localStorage.getItem(PHASE2_LS_KEY) !== "false";
   } catch {
-    return false;
+    return true;
   }
 }

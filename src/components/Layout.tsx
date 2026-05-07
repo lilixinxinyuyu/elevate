@@ -9,6 +9,11 @@ import { migrateOldTierBadgeKeys } from "../lib/tierBadge";
 import { runScheduledUnlocks, type ScheduledUnlockResult } from "../db/unitUnlock";
 import { UnitUnlockCelebration } from "./UnitUnlockCelebration";
 import { db } from "../db/dexie";
+import { runPassiveTrophyCheck } from "../db/service";
+import { LotteryBoxModal } from "./LotteryBoxModal";
+import { TROPHIES } from "../core/trophies";
+import { trophyImageKey } from "../lib/allTrophies";
+import type { TrophyMeta } from "../lib/trophyImages";
 
 /**
  * Layout：所有 /:subject/* 子路由共用的壳。
@@ -25,6 +30,9 @@ export function Layout() {
   const popoverRef = useRef<HTMLDivElement | null>(null);
   // v0.30.10: 进 layout 时检查"按时间自动解锁"的单元；如果有就排队弹庆祝
   const [pendingUnlockCelebration, setPendingUnlockCelebration] = useState<ScheduledUnlockResult[]>([]);
+  // v0.31.13: 被动 commemorative 解锁的 lottery 队列。
+  // passiveTrophyCheck 返回新颁发 trophyId list → 进 app 后逐枚弹"稀有成就解锁"动画。
+  const [passiveLotteryQueue, setPassiveLotteryQueue] = useState<TrophyMeta[]>([]);
 
   // 点击外部关闭下拉
   useEffect(() => {
@@ -54,8 +62,29 @@ export function Layout() {
         if (newlyUnlocked.length > 0) {
           setPendingUnlockCelebration(newlyUnlocked);
         }
+        // v0.31.12: 被动 trophy 检查 —— 时间型 commemorative（新学期/生日）+ 跨段型
+        // commemorative（破晓登阶）。不必等下次 session 结束即可发。
+        // v0.31.13: 接住返回的 trophyId list，转 TrophyMeta 进 lottery queue 弹庆祝。
+        const newlyAwarded = await runPassiveTrophyCheck(students[0].id);
+        if (newlyAwarded.length > 0) {
+          const metas: TrophyMeta[] = [];
+          for (const tid of newlyAwarded) {
+            const def = TROPHIES.find((t) => t.id === tid);
+            if (!def) continue;
+            metas.push({
+              id: trophyImageKey("math", def.id),
+              subjectId: "math",
+              name: def.name,
+              icon: def.icon ?? "🌟",
+              description: def.description,
+              rare: true,
+              category: def.category,
+            });
+          }
+          if (metas.length > 0) setPassiveLotteryQueue(metas);
+        }
       } catch (e) {
-        console.warn("[Layout] runScheduledUnlocks failed:", e);
+        console.warn("[Layout] runScheduledUnlocks/passiveTrophyCheck failed:", e);
       }
     })();
   }, []);
@@ -195,7 +224,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.31.10
+        本地优先 · v0.31.34
       </footer>
 
       {/* v0.30.10: 自动解锁的单元庆祝（一次弹一个，关掉再弹下一个）*/}
@@ -206,6 +235,18 @@ export function Layout() {
           onClose={() =>
             setPendingUnlockCelebration((qs) => qs.slice(1))
           }
+        />
+      )}
+
+      {/* v0.31.13: 被动 commemorative 解锁的 lottery（新学期/生日/跨段位）。
+          mode="reveal-only" 因为图已 pre-warmed 在 D1，cache 命中直接揭示，不再 force-regen。
+          一次弹一枚，关掉再弹下一枚。*/}
+      {passiveLotteryQueue.length > 0 && (
+        <LotteryBoxModal
+          trophy={passiveLotteryQueue[0]!}
+          mode="reveal-only"
+          subtitle="一份属于你的专属纪念勋章"
+          onClose={() => setPassiveLotteryQueue((q) => q.slice(1))}
         />
       )}
     </div>

@@ -16,6 +16,9 @@ import { ChineseAdminPage } from "./pages/chinese/ChineseAdmin";
 import { FluencyPage } from "./pages/Fluency";
 import { FluencySessionPage } from "./pages/FluencySession";
 import { BigProblemsPage } from "./pages/BigProblems";
+import { VoiceTestPage } from "./pages/VoiceTest";
+import { Mascot3DTestPage } from "./pages/Mascot3DTest";
+import { MascotComparePage } from "./pages/MascotCompare";
 import { useSubject } from "./subjects/context";
 import { isPhase2Live } from "./lib/featureFlags";
 
@@ -105,6 +108,9 @@ export const router = createBrowserRouter([
       { path: "fluency/:moduleId", element: <Phase2Route><FluencySessionPage /></Phase2Route> },
       // Phase 2 Axis 1：大题营 landing。Train 内部用 ?mode=big_problems 直接跑。
       { path: "big-problems", element: <Phase2Route><BigProblemsPage /></Phase2Route> },
+      { path: "voice-test", element: <MathOnlyRoute><VoiceTestPage /></MathOnlyRoute> },
+      { path: "mascot3d", element: <MathOnlyRoute><Mascot3DTestPage /></MathOnlyRoute> },
+      { path: "mascot-compare", element: <MathOnlyRoute><MascotComparePage /></MathOnlyRoute> },
       { path: "admin", element: <AdminRoute /> },
       { path: "*", element: <ComingSoonPage /> },
     ],

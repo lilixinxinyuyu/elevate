@@ -16,11 +16,19 @@ import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { recordDeletedQuestionIds } from "../db/seed";
 import {
+  applyQuestionFix,
+  fixQuestion,
   judgeQuestionsInBatches,
+  type FixResult,
   type Judgment,
   type JudgeProgress,
   type JudgeVerdict,
 } from "../lib/qualityJudge";
+import {
+  applyReclassification,
+  scanForReclassification,
+  type ScanReport,
+} from "../lib/questionFormatClassifier";
 
 interface QStats {
   total: number;
@@ -339,6 +347,9 @@ export function QuestionsAdminPanel() {
       {/* 🤖 AI 质检区 */}
       <AiJudgePanel onAfterApply={refresh} />
 
+      {/* 🏷️ 答题格式重分类（v0.31.33）*/}
+      <FormatReclassifyPanel onAfterApply={refresh} />
+
       {/* 损坏题样本 */}
       {stats.bad.length > 0 && (
         <details className="rounded-lg border border-rose-400/30 bg-rose-500/5 p-2">
@@ -479,11 +490,23 @@ function StatBox({
 //  🤖 AI 质检子面板（v0.28.4）
 // =============================================================
 
-type ScopeKind = "all" | "subject" | "unit" | "skill" | "gameType" | "ai-only";
+type ScopeKind = "all" | "subject" | "unit" | "skill" | "gameType" | "questionFormat" | "ai-only";
 
 interface AiJudgePanelProps {
   onAfterApply: () => void | Promise<void>;
 }
+
+const QUESTION_FORMATS = [
+  "numeric",
+  "numeric_choice",
+  "single_choice",
+  "multi_choice",
+  "multi_step",
+  "fill_blank",
+  "drag_drop",
+  "sort_ladder",
+  "geometry_operation",
+] as const;
 
 function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
   const [scopeKind, setScopeKind] = useState<ScopeKind>("subject");
@@ -491,12 +514,22 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
   const [unitId, setUnitId] = useState<string>("");
   const [skillId, setSkillId] = useState<string>("");
   const [gameType, setGameType] = useState<string>("plain_choice");
-  const [maxSample, setMaxSample] = useState<number>(60);
+  const [questionFormat, setQuestionFormat] = useState<string>("fill_blank");
+  // v0.31.31：去掉 maxSample，改成"匹配多少道就跑多少道"
+  // 但保留一个 hard cap 防误操作（>500 道时弹确认）
+  const [matchingCount, setMatchingCount] = useState<number | null>(null);
   const [progress, setProgress] = useState<JudgeProgress | null>(null);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<{ q: Question; j: Judgment }[]>([]);
   const [errMsg, setErrMsg] = useState<string>("");
   const [selectedToDelete, setSelectedToDelete] = useState<Set<string>>(new Set());
+  // v0.31.32：AI 修题 — pendingFixId 标当前在请求修题的 qid，fixModal 是预览/确认面板
+  const [pendingFixId, setPendingFixId] = useState<string | null>(null);
+  const [fixModal, setFixModal] = useState<{
+    original: Question;
+    judgment: Judgment;
+    fix: FixResult;
+  } | null>(null);
 
   const unitsForSubject = useMemo(
     () =>
@@ -511,7 +544,7 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
     return SKILLS.filter((s) => ids.includes(s.id));
   }, [unitId]);
 
-  // 拉满足 scope 的 questions
+  // 拉满足 scope 的 questions（v0.31.31：不再 cap maxSample，全量交给批处理）
   async function pickScopeQuestions(): Promise<{ qs: Question[]; label: string; filter: string }> {
     const all = await db.questions.toArray();
     let qs = all;
@@ -542,6 +575,11 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
         label = `题型：${gameType}`;
         filter = `scope=gameType;gameType=${gameType}`;
         break;
+      case "questionFormat":
+        qs = qs.filter((q) => q.question_format === questionFormat);
+        label = `题面格式：${questionFormat}`;
+        filter = `scope=questionFormat;questionFormat=${questionFormat}`;
+        break;
       case "ai-only":
         qs = qs.filter(
           (q) => (q.question_id ?? "").startsWith("AI_") || (q.tags ?? []).includes("ai_generated"),
@@ -550,16 +588,32 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
         filter = "scope=ai-only";
         break;
     }
-    // 优先 AI 题（更可能有问题），按 question_id 稳定排序后取前 N
+    // 优先 AI 题（更可能有问题），按 question_id 稳定排序
     qs.sort((a, b) => {
       const aiA = (a.question_id ?? "").startsWith("AI_") ? 0 : 1;
       const aiB = (b.question_id ?? "").startsWith("AI_") ? 0 : 1;
       if (aiA !== aiB) return aiA - aiB;
       return (a.question_id ?? "").localeCompare(b.question_id ?? "");
     });
-    qs = qs.slice(0, maxSample);
     return { qs, label, filter };
   }
+
+  // v0.31.31：scope 一变就预算下匹配多少题，UI 上提前展示给用户
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { qs } = await pickScopeQuestions();
+        if (!cancelled) setMatchingCount(qs.length);
+      } catch {
+        if (!cancelled) setMatchingCount(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeKind, subjectId, unitId, skillId, gameType, questionFormat]);
 
   async function runJudge() {
     if (running) return;
@@ -571,8 +625,17 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
       setErrMsg("没找到符合条件的题");
       return;
     }
+    // v0.31.31：题量大时提示一下时间和成本
+    const batches = Math.ceil(qs.length / 20);
+    if (qs.length > 200) {
+      const estSec = Math.ceil(batches / 3) * 8; // 并发 3，每批约 8s
+      const ok = window.confirm(
+        `匹配到 ${qs.length} 道题，需要跑 ${batches} 批（预计 ${estSec} 秒，会调 qwen-plus）。继续吗？`,
+      );
+      if (!ok) return;
+    }
     setRunning(true);
-    setProgress({ done: 0, total: Math.ceil(qs.length / 20), judgments: new Map(), errors: [] });
+    setProgress({ done: 0, total: batches, judgments: new Map(), errors: [] });
     try {
       const final = await judgeQuestionsInBatches(qs, {
         subjectId,
@@ -637,6 +700,49 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
     setSelectedToDelete(next);
   }
 
+  // v0.31.32：AI 修题流程
+  async function requestFix(q: Question, j: Judgment) {
+    if (pendingFixId) return; // 同时只允许一个修题请求
+    setPendingFixId(q.question_id);
+    setErrMsg("");
+    try {
+      const fix = await fixQuestion({
+        question: q,
+        issues: j.issues,
+        reason: j.reason,
+        subjectId: q.subjectId === "chinese" ? "chinese" : "math",
+      });
+      setFixModal({ original: q, judgment: j, fix });
+    } catch (e) {
+      setErrMsg(`修题失败：${(e as Error).message}`);
+    } finally {
+      setPendingFixId(null);
+    }
+  }
+
+  async function acceptFix() {
+    if (!fixModal) return;
+    try {
+      await applyQuestionFix(fixModal.fix.fixed);
+      // 从 results 里把这条移出（已修不需要再被 review）
+      setResults((prev) => prev.filter((r) => r.q.question_id !== fixModal.original.question_id));
+      // 也从 selectedToDelete 里移出
+      setSelectedToDelete((prev) => {
+        const next = new Set(prev);
+        next.delete(fixModal.original.question_id);
+        return next;
+      });
+      setFixModal(null);
+      await onAfterApply();
+    } catch (e) {
+      setErrMsg(`应用修题失败：${(e as Error).message}`);
+    }
+  }
+
+  function rejectFix() {
+    setFixModal(null);
+  }
+
   return (
     <details
       className="rounded-lg border border-violet-400/30 bg-violet-500/5 p-3"
@@ -649,14 +755,30 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
       <div className="mt-3 space-y-3 text-xs">
         {/* scope 选择 */}
         <div className="space-y-2">
-          <div className="text-slate-400 text-[11px]">选择质检范围（每次最多 {maxSample} 道）：</div>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="text-slate-400 text-[11px]">选择质检范围（自动跑全部匹配题）：</div>
+            {matchingCount !== null && (
+              <div className="text-[11px]">
+                <span className="text-slate-400">匹配</span>{" "}
+                <span className="font-display font-bold text-violet-200">{matchingCount}</span>{" "}
+                <span className="text-slate-400">道</span>
+                {matchingCount > 0 && (
+                  <span className="text-slate-500 ml-1.5">
+                    · {Math.ceil(matchingCount / 20)} 批 · ~
+                    {Math.ceil(Math.ceil(matchingCount / 20) / 3) * 8} 秒
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {(
               [
                 { id: "subject", label: "按学科" },
                 { id: "unit", label: "按单元" },
                 { id: "skill", label: "按 skill" },
-                { id: "gameType", label: "按题型" },
+                { id: "gameType", label: "按题型 (game_type)" },
+                { id: "questionFormat", label: "按答题格式 (fill_blank 等)" },
                 { id: "ai-only", label: "仅 AI 题" },
                 { id: "all", label: "全部" },
               ] as const
@@ -748,7 +870,7 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
             )}
             {scopeKind === "gameType" && (
               <>
-                <label className="text-slate-400">题型</label>
+                <label className="text-slate-400">题型 (game_type)</label>
                 <select
                   className="bg-ink-800/60 border border-ink-700/60 rounded px-2 py-0.5 text-slate-200"
                   value={gameType}
@@ -774,19 +896,23 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
                 </select>
               </>
             )}
-            <label className="text-slate-400">最多</label>
-            <select
-              className="bg-ink-800/60 border border-ink-700/60 rounded px-2 py-0.5 text-slate-200"
-              value={maxSample}
-              onChange={(e) => setMaxSample(Number(e.target.value))}
-              disabled={running}
-            >
-              {[20, 60, 120, 200, 400].map((n) => (
-                <option key={n} value={n}>
-                  {n} 道
-                </option>
-              ))}
-            </select>
+            {scopeKind === "questionFormat" && (
+              <>
+                <label className="text-slate-400">答题格式</label>
+                <select
+                  className="bg-ink-800/60 border border-ink-700/60 rounded px-2 py-0.5 text-slate-200"
+                  value={questionFormat}
+                  onChange={(e) => setQuestionFormat(e.target.value)}
+                  disabled={running}
+                >
+                  {QUESTION_FORMATS.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
           </div>
         </div>
 
@@ -797,12 +923,17 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
             onClick={runJudge}
             disabled={
               running ||
+              !matchingCount ||
               (scopeKind === "unit" && !unitId) ||
               (scopeKind === "skill" && !skillId)
             }
             className="btn-primary text-xs bg-violet-500/30 border-violet-400/40 text-violet-100"
           >
-            {running ? "判定中…" : "开始 AI 质检"}
+            {running
+              ? "判定中…"
+              : matchingCount
+                ? `开始 AI 质检（全部 ${matchingCount} 道）`
+                : "开始 AI 质检"}
           </button>
           {results.length > 0 && (
             <>
@@ -844,14 +975,35 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
           )}
         </div>
 
-        {/* 进度 */}
+        {/* 进度（v0.31.31：可视化进度条 + 详细状态）*/}
         {progress && (
-          <div className="text-[11px] text-slate-400">
-            进度：{progress.done} / {progress.total} 批
-            {progress.judgments.size > 0 && ` · 已判定 ${progress.judgments.size} 道`}
-            {progress.errors.length > 0 && (
-              <span className="text-rose-300"> · 失败 {progress.errors.length} 批</span>
-            )}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-300">
+                {running ? "🔄 判定中" : progress.done >= progress.total ? "✅ 完成" : "⏸ 暂停"}
+                <span className="text-slate-500 ml-2">
+                  {progress.done} / {progress.total} 批
+                  {progress.judgments.size > 0 && ` · ${progress.judgments.size} 道已判`}
+                </span>
+              </span>
+              {progress.errors.length > 0 && (
+                <span className="text-rose-300 text-[10px]">
+                  ⚠ 失败 {progress.errors.length} 批
+                </span>
+              )}
+            </div>
+            <div className="h-1.5 rounded-full bg-black/30 overflow-hidden ring-1 ring-white/5">
+              <div
+                className="h-full bg-gradient-to-r from-violet-400 via-fuchsia-400 to-rose-400 transition-all duration-300"
+                style={{
+                  width: `${
+                    progress.total > 0
+                      ? Math.round((progress.done / progress.total) * 100)
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
           </div>
         )}
 
@@ -891,6 +1043,7 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
                   <th className="px-1.5 py-1 w-8">sev</th>
                   <th className="text-left px-1.5 py-1">stem</th>
                   <th className="text-left px-1.5 py-1">理由 · issues</th>
+                  <th className="px-1.5 py-1 w-16">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -907,6 +1060,8 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
                       : j.verdict === "borderline"
                         ? "text-amber-300"
                         : "text-emerald-300";
+                  const isPendingFix = pendingFixId === q.question_id;
+                  const canFix = j.verdict !== "keep";
                   return (
                     <tr key={q.question_id} className={`border-t border-ink-700/30 ${tone}`}>
                       <td className="px-1.5 py-1 text-center">
@@ -939,6 +1094,19 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
                           </div>
                         )}
                       </td>
+                      <td className="px-1.5 py-1 text-center">
+                        {canFix && (
+                          <button
+                            type="button"
+                            onClick={() => void requestFix(q, j)}
+                            disabled={!!pendingFixId || running}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 border border-violet-400/40 text-violet-100 hover:bg-violet-500/40 disabled:opacity-40"
+                            title="让 AI 帮你把这题修好（不删，保留 question_id）"
+                          >
+                            {isPendingFix ? "修中…" : "✨ AI 修"}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -952,7 +1120,328 @@ function AiJudgePanel({ onAfterApply }: AiJudgePanelProps) {
           </div>
         )}
       </div>
+
+      {/* v0.31.32: AI 修题确认面板 — 显示原题 vs 修过版本的关键字段对比 */}
+      {fixModal && (
+        <FixDiffModal
+          original={fixModal.original}
+          judgment={fixModal.judgment}
+          fix={fixModal.fix}
+          onAccept={acceptFix}
+          onReject={rejectFix}
+        />
+      )}
     </details>
+  );
+}
+
+// =============================================================
+//  🏷️ 答题格式重分类面板（v0.31.33）
+// =============================================================
+
+interface FormatReclassifyPanelProps {
+  onAfterApply: () => void | Promise<void>;
+}
+
+/**
+ * 把误标 question_format 的题（多数是 AI 生成时一律打 single_choice 但实际
+ * 上是"…是多少 X？"型的填空题）批量改回 fill_blank。
+ *
+ * 流程：
+ *   1. 点 "🔍 扫描" → 用 questionFormatClassifier 跑一遍全库
+ *   2. 显示 transition table（"single_choice → fill_blank: 173 道"）
+ *   3. 点 "应用" → 逐条 applyQuestionFix（已修过的版本走 meta::questionPatches 跨设备同步）
+ *
+ * 决策是纯本地 heuristic（不调 LLM），所以扫描很快（毫秒级）。
+ */
+function FormatReclassifyPanel({ onAfterApply }: FormatReclassifyPanelProps) {
+  const [scanning, setScanning] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [report, setReport] = useState<ScanReport | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [errMsg, setErrMsg] = useState("");
+  const [appliedCount, setAppliedCount] = useState(0);
+
+  async function runScan() {
+    setScanning(true);
+    setErrMsg("");
+    setAppliedCount(0);
+    try {
+      const all = await db.questions.toArray();
+      const r = scanForReclassification(all);
+      setReport(r);
+    } catch (e) {
+      setErrMsg(`扫描失败：${(e as Error).message}`);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function applyAll() {
+    if (!report || report.changes === 0) return;
+    if (
+      !window.confirm(
+        `将重打 ${report.changes} 道题的 question_format（带 single_choice → fill_blank 的会同时把答案从 choice 转成 number 并清掉 options）。这会写到 db.questions 和 meta::questionPatches（跨设备同步）。继续吗？`,
+      )
+    ) {
+      return;
+    }
+    setApplying(true);
+    setErrMsg("");
+    setAppliedCount(0);
+    try {
+      let n = 0;
+      for (const { q, r } of report.details) {
+        const fixed = applyReclassification(q, r);
+        await applyQuestionFix(fixed);
+        n += 1;
+        if (n % 20 === 0) setAppliedCount(n);
+      }
+      setAppliedCount(n);
+      await onAfterApply();
+      // 重扫一次让 transition table 清零
+      const all = await db.questions.toArray();
+      setReport(scanForReclassification(all));
+    } catch (e) {
+      setErrMsg(`应用失败：${(e as Error).message}`);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  return (
+    <details className="rounded-lg border border-cyan-400/30 bg-cyan-500/5 p-3">
+      <summary className="text-cyan-200 text-sm cursor-pointer font-semibold">
+        🏷️ 答题格式重分类（修正 fill_blank 误标）
+      </summary>
+      <div className="mt-3 space-y-3 text-xs">
+        <div className="text-slate-400 leading-relaxed">
+          早期 AI 出题一律打 <code className="text-cyan-300">single_choice</code>，但很多其实是
+          "…是多少 X？" 风格的填空题。这个工具用本地启发式规则把它们改回
+          <code className="text-cyan-300"> fill_blank</code>，并把答案从 choice 转成 number
+          （从被选项的文字里抽数字 + 单位）。决策是纯规则，不调 LLM，扫描秒级。
+        </div>
+
+        <div className="flex gap-2 items-center flex-wrap">
+          <button
+            type="button"
+            onClick={runScan}
+            disabled={scanning || applying}
+            className="btn-primary text-xs bg-cyan-500/30 border-cyan-400/40 text-cyan-100"
+          >
+            {scanning ? "扫描中…" : report ? "🔄 重扫" : "🔍 扫描全库"}
+          </button>
+          {report && report.changes > 0 && (
+            <button
+              type="button"
+              onClick={applyAll}
+              disabled={applying}
+              className="btn-primary text-xs bg-emerald-500/30 border-emerald-400/40 text-emerald-100"
+            >
+              {applying
+                ? `应用中… (${appliedCount}/${report.changes})`
+                : `✓ 应用全部 ${report.changes} 条改动`}
+            </button>
+          )}
+        </div>
+
+        {errMsg && (
+          <div className="text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded p-2">
+            {errMsg}
+          </div>
+        )}
+
+        {report && (
+          <>
+            <div className="rounded-lg border border-ink-700/60 bg-ink-800/40 p-2 space-y-1">
+              <div className="text-slate-400">
+                扫了 <span className="text-cyan-200 font-semibold">{report.total}</span> 道题，
+                建议改动 <span className="text-cyan-200 font-semibold">{report.changes}</span> 道
+                {appliedCount > 0 && (
+                  <span className="text-emerald-300 ml-2">（本次已应用 {appliedCount}）</span>
+                )}
+              </div>
+              {report.changes > 0 && (
+                <div className="space-y-0.5 mt-1">
+                  {Object.entries(report.byTransition)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([k, v]) => (
+                      <div key={k} className="flex justify-between border-t border-ink-700/40 pt-0.5">
+                        <span className="text-slate-300 font-mono">{k}</span>
+                        <span className="text-cyan-200 tabular-nums">{v}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {report.changes > 0 && (
+              <div className="rounded-lg border border-ink-700/40 overflow-hidden">
+                <div className="bg-ink-800/50 text-slate-400 text-[10px] uppercase tracking-wider px-2 py-1 flex items-center justify-between">
+                  <span>预览（前 {showAll ? report.changes : Math.min(15, report.changes)} 条）</span>
+                  {report.changes > 15 && (
+                    <button
+                      type="button"
+                      className="text-cyan-300 hover:underline"
+                      onClick={() => setShowAll((v) => !v)}
+                    >
+                      {showAll ? "折叠" : `查看全部 ${report.changes}`}
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-96 overflow-y-auto divide-y divide-ink-700/30">
+                  {report.details.slice(0, showAll ? report.changes : 15).map(({ q, r }) => (
+                    <div key={q.question_id} className="p-2 text-[11px]">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="font-mono text-slate-500">
+                          {q.question_id.slice(-12)}
+                        </span>
+                        <span className="text-rose-300/80 line-through">{q.question_format}</span>
+                        <span className="text-slate-500">→</span>
+                        <span className="text-emerald-300 font-semibold">{r.newFormat}</span>
+                      </div>
+                      <div className="text-slate-300 mb-0.5 line-clamp-2">{q.stem}</div>
+                      <div className="text-slate-500 text-[10px]">{r.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {report.changes === 0 && (
+              <div className="text-emerald-300 bg-emerald-500/10 border border-emerald-400/30 rounded p-2">
+                ✓ 所有题目格式分类都正确，没有需要改动的。
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** AI 修题对比 modal —— 横向对照原题字段 vs 修过版本，让 admin 一眼看懂改了啥 */
+function FixDiffModal({
+  original,
+  judgment,
+  fix,
+  onAccept,
+  onReject,
+}: {
+  original: Question;
+  judgment: Judgment;
+  fix: FixResult;
+  onAccept: () => void | Promise<void>;
+  onReject: () => void;
+}) {
+  const fields: { key: keyof Question; label: string }[] = [
+    { key: "stem", label: "题干" },
+    { key: "options", label: "选项" },
+    { key: "answer", label: "答案" },
+    { key: "solution_steps", label: "解析" },
+    { key: "estimated_time_seconds", label: "估时" },
+    { key: "common_errors", label: "常见错误" },
+    { key: "hints", label: "hints" },
+    { key: "feedback_correct", label: "答对反馈" },
+    { key: "feedback_wrong", label: "答错反馈" },
+    { key: "tags", label: "tags" },
+  ];
+  const renderValue = (v: unknown): string => {
+    if (v == null) return "—";
+    if (typeof v === "string" || typeof v === "number") return String(v);
+    return JSON.stringify(v, null, 2);
+  };
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onReject();
+      }}
+    >
+      <div className="card-glow w-full sm:max-w-3xl bg-ink-900/95 border border-violet-400/40 max-h-[90dvh] overflow-y-auto">
+        <div className="flex items-center justify-between p-3 border-b border-ink-700/60 sticky top-0 bg-ink-900/95">
+          <div>
+            <div className="font-display font-bold text-violet-100">✨ AI 修题预览</div>
+            <div className="text-[10px] text-slate-400 mt-0.5 truncate max-w-md">
+              {original.question_id} · {fix.changesSummary}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onReject}
+            className="text-slate-400 hover:text-slate-200 text-2xl leading-none px-2"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="p-3 space-y-3 text-xs">
+          {/* 判定信息 */}
+          <div className="rounded-lg bg-rose-500/10 border border-rose-400/30 p-2 text-rose-200">
+            <div className="font-semibold">质检判定: {judgment.verdict} (severity {judgment.severity})</div>
+            <div className="mt-0.5">{judgment.reason}</div>
+            {judgment.issues.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {judgment.issues.map((i) => (
+                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-100">
+                    {i}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 字段对照 */}
+          {fields.map(({ key, label }) => {
+            const o = original[key];
+            const n = fix.fixed[key];
+            const changed = JSON.stringify(o) !== JSON.stringify(n);
+            return (
+              <div
+                key={key as string}
+                className={`rounded-lg border p-2 ${
+                  changed
+                    ? "border-amber-400/40 bg-amber-500/5"
+                    : "border-ink-700/40 bg-ink-800/30 opacity-60"
+                }`}
+              >
+                <div className="flex items-baseline justify-between mb-1">
+                  <span className="font-semibold text-slate-200">{label}</span>
+                  {changed && <span className="chip text-[9px] bg-amber-500/30 text-amber-100">已改</span>}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-[10px] text-slate-500 mb-0.5">原</div>
+                    <pre className="text-[11px] whitespace-pre-wrap break-words bg-rose-500/5 border border-rose-400/15 rounded p-1.5 text-rose-100/85 max-h-32 overflow-auto">
+                      {renderValue(o)}
+                    </pre>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500 mb-0.5">修后</div>
+                    <pre className="text-[11px] whitespace-pre-wrap break-words bg-emerald-500/5 border border-emerald-400/15 rounded p-1.5 text-emerald-100/90 max-h-32 overflow-auto">
+                      {renderValue(n)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="sticky bottom-0 bg-ink-900/95 border-t border-ink-700/60 p-3 flex justify-end gap-2">
+          <button type="button" onClick={onReject} className="btn-ghost text-xs">
+            取消（不改）
+          </button>
+          <button
+            type="button"
+            onClick={() => void onAccept()}
+            className="btn-primary text-xs bg-emerald-500/30 border-emerald-400/40 text-emerald-100"
+          >
+            ✓ 应用修改
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -1,0 +1,390 @@
+/**
+ * Prompt 编排器（v0.31.34）
+ *
+ * 把多个轴的 prompt 片段拼成一个针对性强的最终 prompt：
+ *   - skill scope（精确教学范围 + 常见错误 + 例题）
+ *   - difficulty rubric（难度等级定义）
+ *   - format rubric（answer 格式具体要求）
+ *   - game-type schema（前端模板的 JSON 结构样板）
+ *   - existing stems（去重）
+ *   - quality rubric（共享质量规范，已在 system prompt 内联）
+ *
+ * 三个端点都用这套：
+ *   - /api/generate/questions → composeQuestionPrompt
+ *   - /api/agent/judge-questions → composeJudgePrompt
+ *   - /api/agent/fix-question → composeFixPrompt
+ *
+ * 设计原则：
+ *   1. 不附带没用的信息（不传 chinese 时不混 chinese 规则）
+ *   2. skill 没在 scope.json 里的优雅 fallback（用 skill_name + global rubric）
+ *   3. 按 question_format 注入对应规则（不每次都 dump 9 套）
+ *   4. existing stems 截断（避免 prompt 爆长）
+ */
+
+import { PROMPTS } from "./_prompts.generated";
+
+export interface SkillScope {
+  name: string;
+  term?: string;
+  unitId?: string;
+  definition: string;
+  inScope: string[];
+  outOfScope: string[];
+  keyFormulas: string[];
+  typicalContexts: string[];
+  commonMistakes: string[];
+  exampleStems: string[];
+}
+
+/** 安全拿 skill scope。没有就返回 null，调用方走 fallback 路径。 */
+export function getSkillScope(skillId?: string): SkillScope | null {
+  if (!skillId) return null;
+  const scope = (PROMPTS.skillScope as unknown as Record<string, SkillScope | undefined>)[skillId];
+  return scope ?? null;
+}
+
+/** 把 skill scope 渲染成 markdown 段，注入到 user prompt 里。 */
+export function renderSkillScopeBlock(scope: SkillScope, skillId: string): string {
+  const lines: string[] = [];
+  lines.push(`### Skill 范围：${scope.name}（${skillId}）`);
+  lines.push(``);
+  lines.push(`**定义**：${scope.definition}`);
+  lines.push(``);
+  if (scope.inScope.length > 0) {
+    lines.push(`**✅ 范围内（请只出这些方向）**：`);
+    for (const item of scope.inScope) lines.push(`- ${item}`);
+    lines.push(``);
+  }
+  if (scope.outOfScope.length > 0) {
+    lines.push(`**⛔ 超纲 / 跑题（绝对不要出）**：`);
+    for (const item of scope.outOfScope) lines.push(`- ${item}`);
+    lines.push(``);
+  }
+  if (scope.keyFormulas.length > 0) {
+    lines.push(`**🔑 关键公式 / 关系**：`);
+    for (const item of scope.keyFormulas) lines.push(`- ${item}`);
+    lines.push(``);
+  }
+  if (scope.typicalContexts.length > 0) {
+    lines.push(`**🎯 典型情境（优先使用）**：${scope.typicalContexts.join(" / ")}`);
+    lines.push(``);
+  }
+  if (scope.commonMistakes.length > 0) {
+    lines.push(`**🐛 4 年级常见错误（设干扰项时参考）**：`);
+    for (const item of scope.commonMistakes) lines.push(`- ${item}`);
+    lines.push(``);
+  }
+  if (scope.exampleStems.length > 0) {
+    lines.push(`**📋 题干风格样例（**只是风格参考，不要照抄**）**：`);
+    for (const item of scope.exampleStems) lines.push(`- ${item}`);
+    lines.push(``);
+  }
+  return lines.join("\n");
+}
+
+/** 渲染指定难度的 rubric 段。 */
+export function renderDifficultyBlock(difficulty: number | string): string {
+  const d = String(difficulty).match(/^[1-5]$/)?.[0];
+  if (!d) return "";
+  const rubric = (PROMPTS.difficultyRubrics as unknown as Record<string, string | undefined>)[d];
+  if (!rubric) return "";
+  return rubric;
+}
+
+/** 渲染指定 question_format 的 rubric 段。 */
+export function renderFormatBlock(format: string): string {
+  const rubric = (PROMPTS.formatRubrics as unknown as Record<string, string | undefined>)[format];
+  if (!rubric) return "";
+  return rubric;
+}
+
+/** 渲染指定 game-type 的 schema 片段（如 plain_choice / shop_counter / speed_match 等）。 */
+export function renderGameTypeSchema(gameType: string): string {
+  const schema = (PROMPTS.questionsSchemas as unknown as Record<string, string | undefined>)[gameType];
+  if (!schema) return PROMPTS.questionsSchemas.plain_choice;
+  return schema;
+}
+
+export interface ComposeQuestionInput {
+  /** "math" / "chinese" */
+  subjectId: "math" | "chinese";
+  /** 必填 */
+  unitId: string;
+  unitName?: string;
+  skillId: string;
+  skillName?: string;
+  /** 上册 / 下册 */
+  term?: "上册" | "下册";
+  /** 单道难度（1-5）；如果是范围（"2-4"），调用方先 pick 一个 */
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  /** 答题格式 — 显式选择，避免模型按推荐自动选错（如 single_choice 但实际应该 fill_blank） */
+  format?:
+    | "numeric"
+    | "numeric_choice"
+    | "single_choice"
+    | "multi_choice"
+    | "multi_step"
+    | "fill_blank"
+    | "drag_drop"
+    | "sort_ladder"
+    | "geometry_operation";
+  /** 前端模板（决定渲染方式 + schema 片段）。如不传按 game-type-by-skill 自动选。 */
+  gameType?: string;
+  /** 本批要出几道 */
+  count: number;
+  /** 已有题干，用于去重 */
+  existingStems?: string[];
+  /** 最近做错的题（用于"再出一题"场景） */
+  recentMistakeStems?: string[];
+  /** 出题角度种子（不同批次的并发去重） */
+  batchAngle?: string;
+  /** 调用上下文标签（仅日志用） */
+  callerTag?: string;
+}
+
+/**
+ * 组合出 user prompt。
+ *
+ * 输出顺序（重要 → 次要）：
+ *   1. 任务声明（出几道、什么 skill、什么难度）
+ *   2. **Skill scope**（最关键，决定不跑题不超纲）
+ *   3. **Difficulty rubric**（决定难度时间合理）
+ *   4. **Format rubric**（决定 answer 格式正确）
+ *   5. **Game-type schema**（决定 JSON 结构）
+ *   6. existing stems（去重）
+ *   7. recent mistakes（如有，重点考点）
+ */
+export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
+  const {
+    subjectId,
+    unitId,
+    unitName,
+    skillId,
+    skillName,
+    term,
+    difficulty,
+    format,
+    count,
+    existingStems,
+    recentMistakeStems,
+    batchAngle,
+  } = args;
+
+  const subjectLabel = subjectId === "math" ? "数学" : "语文";
+  const actualTerm = term ?? "下册";
+  const otherTerm = actualTerm === "上册" ? "下册" : "上册";
+
+  const scope = getSkillScope(skillId);
+
+  const lines: string[] = [];
+
+  // 1. 任务声明
+  lines.push(`# 任务：生成 ${count} 道四年级${actualTerm} ${subjectLabel} 题`);
+  lines.push(``);
+  lines.push(`- **学科**：${subjectLabel}（${subjectId}）`);
+  lines.push(`- **教材**：北师大版四年级${actualTerm}（不要混入${otherTerm}内容）`);
+  lines.push(`- **单元**：${unitName ?? "(不详)"}（${unitId}）`);
+  lines.push(`- **技能点**：${skillName ?? scope?.name ?? "(不详)"}（${skillId}）`);
+  lines.push(`- **难度**：${difficulty}（按下方难度规范严格控制）`);
+  if (format) {
+    lines.push(`- **答题格式**：${format}（按下方格式规范填字段）`);
+  }
+  if (batchAngle) {
+    lines.push(`- **变化角度**：${batchAngle}（同批次不同情境/不同数字/不同字词）`);
+  }
+  lines.push(``);
+
+  // 2. Skill scope
+  if (scope) {
+    lines.push(`## Skill 教学范围（必读 — 决定不跑题不超纲）`);
+    lines.push(``);
+    lines.push(renderSkillScopeBlock(scope, skillId));
+  } else {
+    lines.push(`## Skill 教学范围（fallback — scope.json 未登记）`);
+    lines.push(``);
+    lines.push(`- skill_name：${skillName ?? skillId}`);
+    lines.push(`- 紧扣这个 skill 的考点出题，不要扯其他 skill 的内容`);
+    lines.push(``);
+  }
+
+  // 3. Difficulty rubric
+  const diffBlock = renderDifficultyBlock(difficulty);
+  if (diffBlock) {
+    lines.push(`## 难度规范（${difficulty}）`);
+    lines.push(``);
+    lines.push(diffBlock);
+    lines.push(``);
+  }
+
+  // 4. Format rubric
+  if (format) {
+    const fmtBlock = renderFormatBlock(format);
+    if (fmtBlock) {
+      lines.push(`## 答题格式规范（${format}）`);
+      lines.push(``);
+      lines.push(fmtBlock);
+      lines.push(``);
+    }
+  }
+
+  // 5. Game-type schema（决定 JSON 结构）
+  const fromSkill = (PROMPTS.gameTypeBySkill as unknown as Record<string, string>)[skillId];
+  const gameType =
+    args.gameType ??
+    fromSkill ??
+    (format === "multi_step"
+      ? "shop_counter"
+      : format === "single_choice"
+        ? "plain_choice"
+        : "plain_choice");
+  lines.push(`## JSON Schema（按 game-type=${gameType} 输出每道题）`);
+  lines.push(``);
+  lines.push(renderGameTypeSchema(gameType));
+  lines.push(``);
+
+  // 6. existing stems
+  if (existingStems && existingStems.length > 0) {
+    lines.push(`## 已有题干（必须避免重复，换情境/换数字/换字词）`);
+    lines.push(``);
+    for (const s of existingStems.slice(0, 12)) {
+      lines.push(`- ${s.slice(0, 60)}`);
+    }
+    lines.push(``);
+  }
+
+  // 7. recent mistakes
+  if (recentMistakeStems && recentMistakeStems.length > 0) {
+    lines.push(`## 最近做错的考点（围绕这些设计同类题 — 巩固训练）`);
+    lines.push(``);
+    for (const s of recentMistakeStems.slice(0, 5)) {
+      lines.push(`- ${s.slice(0, 60)}`);
+    }
+    lines.push(``);
+  }
+
+  // 8. 输出协议
+  lines.push(`## 输出协议`);
+  lines.push(``);
+  lines.push(
+    `输出顶层 \`{ "questions": [...] }\` JSON，**不要**包 markdown 代码块，不要写解释文字。每道题严格按上方 game-type schema 字段输出。`,
+  );
+
+  return lines.join("\n");
+}
+
+export interface ComposeJudgeInput {
+  subjectId: "math" | "chinese";
+  scopeLabel: string;
+  scopeFilter: string;
+  questions: Array<Record<string, unknown>>;
+}
+
+/**
+ * 组合出 judge user prompt。
+ *
+ * 与 generate 不同：judge 不针对单 skill（一批题可能跨 skill），所以不注入 skill scope。
+ * 但每道题里如果指定了 skill_id 且在 scope.json 里有，模型就读得到。
+ *
+ * judge system prompt 已经是固定的（包含 quality-rubric.md），这里只构造 user。
+ */
+export function composeJudgeUserPrompt(args: ComposeJudgeInput): string {
+  const subjectLabel = args.subjectId === "math" ? "数学" : "语文";
+
+  // 把这批题里涉及的 skill 列出来 + 每个对应的 scope（如果有）
+  const skillsTouched = new Set<string>();
+  for (const q of args.questions) {
+    if (typeof q.skill_id === "string") skillsTouched.add(q.skill_id);
+  }
+  const scopesUsed: { skillId: string; scope: SkillScope }[] = [];
+  for (const sid of skillsTouched) {
+    const sc = getSkillScope(sid);
+    if (sc) scopesUsed.push({ skillId: sid, scope: sc });
+  }
+
+  // 简化 question 字段（避免 prompt 爆长）
+  const questionsJsonl = args.questions
+    .map((q) => JSON.stringify(q))
+    .join("\n");
+
+  const lines: string[] = [];
+  lines.push(`# 任务：质检下面 ${args.questions.length} 道${subjectLabel}题`);
+  lines.push(``);
+  lines.push(`- **学科**：${subjectLabel}`);
+  lines.push(`- **范围**：${args.scopeLabel}（${args.scopeFilter}）`);
+  lines.push(``);
+
+  // 把这批题涉及到的 skill scope 都列出来（最多 6 个，避免 prompt 爆）
+  if (scopesUsed.length > 0) {
+    lines.push(`## 这批题涉及的 Skill 教学范围（判定时严格对照）`);
+    lines.push(``);
+    for (const { skillId, scope } of scopesUsed.slice(0, 6)) {
+      lines.push(renderSkillScopeBlock(scope, skillId));
+      lines.push(`---`);
+      lines.push(``);
+    }
+    if (scopesUsed.length > 6) {
+      lines.push(`（还有 ${scopesUsed.length - 6} 个 skill scope 未列出，按通用 quality-rubric 判）`);
+      lines.push(``);
+    }
+  }
+
+  lines.push(`## 题目（每行一道，JSON 简表）`);
+  lines.push(``);
+  lines.push("```json");
+  lines.push(questionsJsonl);
+  lines.push("```");
+  lines.push(``);
+  lines.push(`## 输出要求`);
+  lines.push(``);
+  lines.push(
+    `返回 \`{ "judgments": [...] }\`，每道题一个 judgment（顺序与输入一致），字段见 system 协议。每道题**必须**有一个 judgment。`,
+  );
+
+  return lines.join("\n");
+}
+
+export interface ComposeFixInput {
+  question: Record<string, unknown>;
+  issues: string[];
+  reason: string;
+  subjectId: "math" | "chinese";
+}
+
+/**
+ * 组合出 fix user prompt。带上 skill scope（如果该 skill 在 scope.json 里）让模型在范围内改。
+ */
+export function composeFixUserPrompt(args: ComposeFixInput): string {
+  const skillId =
+    typeof args.question.skill_id === "string" ? args.question.skill_id : undefined;
+  const scope = getSkillScope(skillId);
+
+  const issuesLine =
+    args.issues && args.issues.length > 0 ? args.issues.join(", ") : "（无 issues 标签）";
+
+  const lines: string[] = [];
+  lines.push(`## 原题`);
+  lines.push(``);
+  lines.push("```json");
+  lines.push(JSON.stringify(args.question, null, 2));
+  lines.push("```");
+  lines.push(``);
+  lines.push(`## 质检员的判定`);
+  lines.push(``);
+  lines.push(`- **issues**：${issuesLine}`);
+  lines.push(`- **reason**：${args.reason ?? "（未提供）"}`);
+  lines.push(``);
+
+  if (scope && skillId) {
+    lines.push(`## Skill 教学范围（修题时不能跑出这个范围）`);
+    lines.push(``);
+    lines.push(renderSkillScopeBlock(scope, skillId));
+  }
+
+  lines.push(`## 输出`);
+  lines.push(``);
+  lines.push(
+    `请按系统协议返回 \`{ "fixed": ..., "changesSummary": "..." }\`，**只输出 JSON**。`,
+  );
+
+  return lines.join("\n");
+}

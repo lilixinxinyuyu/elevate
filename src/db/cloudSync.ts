@@ -1,4 +1,5 @@
 import { db } from "./dexie";
+import { cleanupOrphanMistakes } from "./seed";
 
 /**
  * 云同步：把 IndexedDB 全表 dump 成 JSON 上传到 /api/sync；下载时反向写回。
@@ -352,6 +353,8 @@ export async function pushToCloud(): Promise<SyncResult> {
   if (!pwd) return { ok: false, error: "no_password" };
 
   // v0.29.6: pull-merge 防覆盖
+  // v0.31.16: pullFromCloud 内部已经做 cleanupOrphanMistakes，这里 dump 出去
+  // 的快照就不会再带着孤儿错题。
   try {
     await pullFromCloud({ force: true });
   } catch (e) {
@@ -449,6 +452,9 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
     if (data.latest) {
       // v0.26.1：用 merge 而非覆盖。本地新写入永远不会被远程旧快照清掉
       await applyPayloadMerged(data.latest.payload);
+      // v0.31.16: 合并是 union-by-id，云端旧快照里已删的孤儿错题会被合回来。
+      // 立刻清一次（按 questions 表为 source of truth）。幂等，0 孤儿时无副作用。
+      await cleanupOrphanMistakes().catch(() => {/* 不阻塞 sync */});
       setLastPullAt(data.latest.version);
       changed = true;
       version = data.latest.version;

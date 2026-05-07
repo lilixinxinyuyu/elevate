@@ -27,6 +27,7 @@ import { CubeViewerPanel } from "./templates/CubeViewer";
 import { TriangleJudgePanel } from "./templates/TriangleJudge";
 import { DotGridDrawPanel } from "./templates/DotGridDraw";
 import { resolveTemplate } from "./templates/resolve";
+import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAdaptive";
 
 export interface AttemptResult {
   answer: unknown;
@@ -203,7 +204,9 @@ export function GameShell(props: GameShellProps) {
       // v0.30.7：1st 错答 — **静默入库为 ordinal=1 错答**（保留错题、扣 mastery、reset combo），
       // 然后进入 retry 阶段让用户讲题/重做。考试模式跳过这个分支，错就是错。
       // 跟 v0.30.6 之前的区别：之前是 return 不入库，现在是 record + 进 retry 不显示 feedback。
-      if (!r.isCorrect && !examMode && retryStage === "none") {
+      // v0.31.25：加 !wasRetriedRef.current —— 防止 retry 后第二次又错时再走 silent branch
+      // 重新拉变式 + 重新 retry，造成"小进讲的题跟刚做的题对不上"等怪事。
+      if (!r.isCorrect && !examMode && retryStage === "none" && !wasRetriedRef.current) {
         sfx.wrong();
         setShake(true);
         window.setTimeout(() => setShake(false), 450);
@@ -227,17 +230,16 @@ export function GameShell(props: GameShellProps) {
           submitInFlightRef.current = false;
         }
 
-        // v0.30.8: 异步预取变式题（同型同难度）。RetryHintPanel 期间 ~30s 用户在
-        // 读 hint / 看 tutor 讲解，足够 pool 查询完成（< 100ms）。用户点"再做一次"
-        // 时直接 swap displayedQuestion，再做一道新题。pool 没找到就 fallback 原题重做。
+        // v0.31.17：同步等变式题（< 100ms IndexedDB 查询）。原版 fire-and-forget
+        // 异步取，用户秒点"再做一次"时 variantRef 还没 resolve → swap 失败 → 原题再做。
+        // 同步 await 让 retry panel 一显示，variantRef 就 100% 就绪。findParallelQuestion
+        // v0.31.17 已经阶梯放宽，几乎不会返 null（保底返同学科任意一题）。
         if (onRequestVariant) {
-          void onRequestVariant(question)
-            .then((v) => {
-              variantRef.current = v;
-            })
-            .catch(() => {
-              variantRef.current = null;
-            });
+          try {
+            variantRef.current = await onRequestVariant(question);
+          } catch {
+            variantRef.current = null;
+          }
         }
 
         setRetryStage("showing_hint");
@@ -420,7 +422,10 @@ export function GameShell(props: GameShellProps) {
           </div>
         )}
 
-        {feedback && <FeedbackPanel feedback={feedback} question={question} onNext={onNext} />}
+        {/* v0.31.25：传 displayedQuestion 而非原题 — 变式题流程下 Selena 答的是变式题，
+            FeedbackPanel 内的"小进讲一讲"按钮也应该讲她刚答的那道，而不是原题。
+            之前传 props.question 导致 tutor 打开看到的 stem 跟 feedback 显示的答案对不上。 */}
+        {feedback && <FeedbackPanel feedback={feedback} question={displayedQuestion} onNext={onNext} />}
       </div>
 
       <FloatLayer
@@ -558,6 +563,40 @@ function FeedbackPanel({
 }) {
   const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, errorPattern } = feedback;
   const [showTutor, setShowTutor] = useState(false);
+  // v0.31.34：会话内自适应出题
+  const [adaptiveLoading, setAdaptiveLoading] = useState<"retry" | "bump" | null>(null);
+  const [adaptiveErr, setAdaptiveErr] = useState<string>("");
+  const [adaptiveDone, setAdaptiveDone] = useState<"retry" | "bump" | null>(null);
+
+  async function onRetrySimilar() {
+    if (adaptiveLoading) return;
+    setAdaptiveLoading("retry");
+    setAdaptiveErr("");
+    try {
+      const newQs = await requestRetryQuestion(question);
+      console.log(`[adaptive] retry → ${newQs.length} 题入库 (skill=${question.skill_id}, d=${question.difficulty})`);
+      setAdaptiveDone("retry");
+    } catch (e) {
+      setAdaptiveErr(`再出题失败：${(e as Error).message.slice(0, 50)}`);
+    } finally {
+      setAdaptiveLoading(null);
+    }
+  }
+
+  async function onBumpHarder() {
+    if (adaptiveLoading) return;
+    setAdaptiveLoading("bump");
+    setAdaptiveErr("");
+    try {
+      const newQs = await requestHarderQuestion(question);
+      console.log(`[adaptive] bump → ${newQs.length} 题入库 (skill=${question.skill_id}, d=${question.difficulty + 1})`);
+      setAdaptiveDone("bump");
+    } catch (e) {
+      setAdaptiveErr(`加难度失败：${(e as Error).message.slice(0, 50)}`);
+    } finally {
+      setAdaptiveLoading(null);
+    }
+  }
   // 标签：速度档位 / 重做递减 / 新知识点
   const labels: string[] = [];
   // v0.28.1：阶梯速度奖励显示
@@ -648,7 +687,7 @@ function FeedbackPanel({
           )}
         </div>
       )}
-      <div className="flex justify-between items-center gap-2">
+      <div className="flex justify-between items-center gap-2 flex-wrap">
         {/* 错答时弹出"小进姐姐讲一讲"，答对也允许（学更深的解法 / 概念） */}
         <button
           type="button"
@@ -661,10 +700,48 @@ function FeedbackPanel({
         >
           👩‍🏫 让小进讲一讲
         </button>
+
+        {/* v0.31.34: 错答时显示"再出一道类似的"巩固训练 */}
+        {!isCorrect && (
+          <button
+            type="button"
+            onClick={onRetrySimilar}
+            disabled={adaptiveLoading !== null || adaptiveDone === "retry"}
+            className="text-sm px-3 py-2 rounded-xl border border-cyan-400/40 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25 transition-all disabled:opacity-50"
+          >
+            {adaptiveLoading === "retry"
+              ? "出题中…"
+              : adaptiveDone === "retry"
+                ? "✓ 已加入下一题"
+                : "🔄 再出一道类似的"}
+          </button>
+        )}
+
+        {/* v0.31.34: 答对 + 闪电速度时给"加难度"选项 */}
+        {isCorrect && (speedTier === "lightning" || speedTier === "quick") && question.difficulty < 5 && (
+          <button
+            type="button"
+            onClick={onBumpHarder}
+            disabled={adaptiveLoading !== null || adaptiveDone === "bump"}
+            className="text-sm px-3 py-2 rounded-xl border border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100 hover:bg-fuchsia-500/25 transition-all disabled:opacity-50"
+          >
+            {adaptiveLoading === "bump"
+              ? "出题中…"
+              : adaptiveDone === "bump"
+                ? "✓ 难题已加入"
+                : `🚀 来道更难的（D${question.difficulty + 1}）`}
+          </button>
+        )}
+
         <button type="button" className="btn-primary" onClick={onNext}>
           下一题 →
         </button>
       </div>
+      {adaptiveErr && (
+        <div className="text-rose-300 text-xs bg-rose-500/10 border border-rose-400/30 rounded p-2">
+          {adaptiveErr}
+        </div>
+      )}
       {showTutor && (
         <TutorPanel
           subjectId="math"

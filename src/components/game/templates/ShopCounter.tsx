@@ -123,6 +123,21 @@ function buildSubquestions(q: Question): SubQuestion[] {
       unit: q.answer.unit,
     });
   }
+  // v0.31.29：choice-type 答案 — AI 生成的"小数商店"题大量是这种形态。
+  // 之前 fallthrough 到 else 渲染数字 input + value=0，输入永远判错。
+  // 现在直接用 q.options 渲染选择题。
+  if (q.answer.type === "choice" && q.options && q.options.length > 0) {
+    const correctId = q.answer.value;
+    out.push({
+      kind: "choose",
+      prompt: wps?.question ?? "选出正确答案：",
+      options: q.options.map((opt) => ({
+        id: opt.id,
+        text: opt.text,
+        correct: opt.id === correctId,
+      })),
+    });
+  }
   if (out.length === 0) {
     // 最后的兜底
     out.push({

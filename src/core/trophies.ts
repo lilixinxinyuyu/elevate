@@ -21,6 +21,7 @@
 
 import { SKILLS } from "../content/skills";
 import { MIDTERM_DATE, FINAL_DATE } from "./examDates";
+import { termOfSkill } from "./rating";
 import { tierFromScore, tierIndex, subRank } from "./tiers";
 import type {
   AbilityId,
@@ -227,6 +228,32 @@ function countSkillsImprovedAfterTutor(ctx: TrophyCheckContext): number {
   return improved;
 }
 
+/**
+ * 历史最高段位（按学期分桶后取最大）。
+ * - 段位是"每学期一局，纯 XP 累计"，所以同一学期内的 XP 决定该学期峰值段位
+ * - 取所有学期的峰值段位最大值 → 一旦达到就算"曾抵达"
+ * - commemorative 勋章发一次就 done，不会因为下学期重置 XP 又重发
+ */
+function peakTierIndexEverReached(ctx: TrophyCheckContext): number {
+  const totalsByTerm = new Map<string, number>();
+  for (const a of ctx.attempts) {
+    const term = termOfSkill(a.skillId) ?? "_unknown";
+    totalsByTerm.set(term, (totalsByTerm.get(term) ?? 0) + (a.scoreDelta?.total ?? 0));
+  }
+  let peak = -1;
+  for (const score of totalsByTerm.values()) {
+    const idx = tierIndex(tierFromScore(score).id);
+    if (idx > peak) peak = idx;
+  }
+  return peak;
+}
+
+function reachedTier(ctx: TrophyCheckContext, targetTierId: string): boolean {
+  const target = tierIndex(targetTierId);
+  if (target < 0) return false;
+  return peakTierIndexEverReached(ctx) >= target;
+}
+
 // ============================================================
 //  Tier 阈值常量
 // ============================================================
@@ -288,11 +315,52 @@ export const TROPHIES: TrophyDef[] = [
   },
   {
     id: "new_semester",
-    name: "新学年起航",
-    description: "开启新学期的勋章。Phase 2 待实施触发器。",
+    name: "新学期起航",
+    description: "进入下册新学期、第一次答题就解锁。",
     icon: "⛵",
     category: "commemorative",
-    check: () => false,
+    // v0.31.12: 任意一道下册（G4B）skill 的 attempt 即触发。Selena 期中前后必然有。
+    check: (ctx) => ctx.attempts.some((a) => termOfSkill(a.skillId) === "下册"),
+  },
+  // === 段位跨段纪念勋章（v0.31.11）===
+  // 跨段进阶时颁发：和段位徽章是两枚不同的勋章。
+  // 段位徽章 (tier_district 等) = 圆形地标 emblem，永久属于这个段位的"身份"
+  // 跨段纪念 (enter_district 等) = 六角星 commemorative，永远纪念你"第一次抵达"
+  // 检查走 peakTierIndexEverReached → 一旦曾抵达，永久不丢
+  {
+    id: "enter_district",
+    name: "破晓登阶 · 锦江",
+    description: "第一次跨入锦江区段位。属于这次努力的专属纪念勋章。",
+    icon: "🏞️",
+    category: "commemorative",
+    check: (ctx) => reachedTier(ctx, "district"),
+  },
+  {
+    id: "enter_city",
+    name: "蓉城启航 · 成都",
+    description: "第一次跨入成都市段位。属于这次努力的专属纪念勋章。",
+    icon: "🌆",
+    category: "commemorative",
+    check: (ctx) => reachedTier(ctx, "city"),
+    hiddenUntilUnlocked: true,
+  },
+  {
+    id: "enter_province",
+    name: "天府跃升 · 四川",
+    description: "第一次跨入四川省段位。属于这次努力的专属纪念勋章。",
+    icon: "⛰️",
+    category: "commemorative",
+    check: (ctx) => reachedTier(ctx, "province"),
+    hiddenUntilUnlocked: true,
+  },
+  {
+    id: "enter_country",
+    name: "凤翔九天 · 全国",
+    description: "第一次跨入全国段位。传说级专属纪念勋章。",
+    icon: "🦅",
+    category: "commemorative",
+    check: (ctx) => reachedTier(ctx, "country"),
+    hiddenUntilUnlocked: true,
   },
 
   // ============================================
@@ -639,7 +707,8 @@ export const TROPHIES: TrophyDef[] = [
     description: "Selena 生日当天解锁。",
     icon: "🎂",
     category: "commemorative",
-    check: () => false, // 后续手动颁发
+    // Selena 生日 2016-03-13 → 2026 年生日 = 2026-03-13。当天或之后第一次进 app 解锁。
+    check: (ctx) => ctx.todayDateKey >= "2026-03-13",
   },
 
   // ============================================

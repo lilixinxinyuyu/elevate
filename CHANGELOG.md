@@ -3,6 +3,537 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.34 — 2026-05-07 · Prompt 编排器六轴 + 会话内"再出一题"
+
+用户需求：「出题 prompt 应该包含：四年级下册数学相遇问题的定义（避免超纲）+ 已有的难度 3 的相遇问题题目列表（避免重复）+ 难度 3 在系统里的定义（避免难度浮动）+ 选择题的要求（避免太多文字超时）+ 多步骤题的要求（避免每步逻辑不匹配）+ 样题（避免数据结构不正确）。」 → 重写 prompt 系统按这五轴 + 一轴去重 = **六轴模块化 composer**。
+
+### 新增 prompt 文件
+
+| 路径 | 数量 | 说明 |
+|---|---|---|
+| `prompts/skills/scope.json` | 32 个 G4B 核心 skill | 每个 skill 的精确教学范围（definition / inScope / outOfScope / keyFormulas / typicalContexts / commonMistakes / exampleStems） |
+| `prompts/difficulty/{1..5}.md` | 5 | 每个难度的特征 + 时间锚定 + 反例 |
+| `prompts/formats/{numeric,numeric_choice,single_choice,multi_choice,multi_step,fill_blank}.md` | 6 | 每个 question_format 的字段要求 + 设计原则 |
+| `prompts/questions/game-types/{speed_match,vertical_repair,true_false_swipe,dot_grid_draw}.md` | 4 个新 schema | 之前缺的常用模板 schema |
+
+### 新增 composer 模块
+
+`functions/_promptComposer.ts` 暴露：
+- `composeQuestionUserPrompt({ subjectId, skillId, format, difficulty, gameType, count, existingStems, recentMistakeStems, batchAngle })`
+  按六轴拼一个完整的出题 prompt。skill 没在 scope.json 里时优雅 fallback 到 skillName + global rubric。
+- `composeJudgeUserPrompt({ subjectId, scopeLabel, scopeFilter, questions })`
+  把这批题涉及的所有 skill scope 都列出来（最多 6 个），让 judge 严格对照。
+- `composeFixUserPrompt({ question, issues, reason, subjectId })`
+  修题时注入该题 skill 的 scope，防止改完跑题。
+
+### 三个端点全部升级到 composer
+
+- `/api/generate/questions` — 新增 `format` + 单数字 `difficulty` 参数；buildUserPrompt 改用 composer
+- `/api/agent/judge-questions` — buildUserPrompt 改用 composer，自动注入这批题涉及的 skill scope
+- `/api/agent/fix-question` — buildUserPrompt 改用 composer，注入对应 skill scope
+
+### 新模块 `src/lib/sessionAdaptive.ts`
+
+会话内自适应出题：
+- `requestRetryQuestion(question)` — 答错后调 composer 出同 skill / 同 difficulty / 同 format 的 1 道巩固题，写库并标 `session_adaptive` tag
+- `requestHarderQuestion(question)` — 闪电速度后调 composer 出同 skill / +1 difficulty 的 1 道挑战题
+
+### UI 集成（`GameShell.FeedbackPanel`）
+
+- 答错时显示 cyan **"🔄 再出一道类似的"** 按钮（同 skill / 同 difficulty / 同 format）
+- 答对 + 闪电/迅速速度 + difficulty < 5 时显示 fuchsia **"🚀 来道更难的（D{n+1}）"** 按钮
+- 都是即时调 LLM ~10s 出题写库，下一题自然抽到（disabled 防双击）
+
+### Build 流程
+
+`scripts/build-prompts.mjs` 扫多新增的目录：
+```
+11 game-type schemas, 50 skill keyword sets, 5 difficulty rubrics, 6 format rubrics, 32 skill scopes
+```
+
+### 例子：相遇问题 D4 multi_step 的 prompt
+
+总长 ~5000 字符（~1200 token），包含：
+1. 任务声明（数学 / G4B / 相遇问题 / D4 / multi_step）
+2. **Skill scope** — 定义 / 范围 / 超纲项 / 公式 / 情境 / 常见错误 / 例题（约 1500 字符）
+3. **难度 4 rubric** — 多步推理 / 含陷阱 / 60-120 字 / 反例 (约 800 字符)
+4. **multi_step format rubric** — 必填字段 / 3 步推理链一致性 / clue/choose/numeric 各自要求（约 1500 字符）
+5. **shop_counter game-type schema** — 完整 JSON 样板
+6. existing stems 截断列表
+7. 输出协议
+
+每个字符都精确目标化——告别"出语文出数学都行"的混杂 prompt。
+
+### 文档
+
+`docs/prompt-composer.md` 有完整设计 + 使用 + 扩展指南（添加新 skill scope / 新 difficulty / 新 format）。
+
+### 后续可加（目前覆盖不全）
+
+- 语文 skill scope（目前 scope.json 全是数学 G4B）
+- drag_drop / sort_ladder / geometry_operation 的 format rubric（这些用得少）
+- 跨 skill 综合题（D5）的 multi-skill scope 注入
+
+## v0.31.33 — 2026-05-07 · 答题格式重分类（修正 fill_blank 误标）
+
+用户反馈："很多 fill blank 的题没有分类到这个类别，帮我过一下数据库把它们都归类到正确的类别"。
+
+**根因**：早期 AI 出题（aiGenG4BPack / aiGenG4B_U14_Pack 共 213 道）一律打
+`question_format: "single_choice"` + 4 个选项，但其中 70% 实际上是 "…是多少 X？"
+风格的填空题。导致 admin 面板"按答题格式"过滤选 fill_blank 时永远 0 道，没法
+针对填空题做 AI 质检。
+
+**新增模块** `src/lib/questionFormatClassifier.ts`：纯启发式分类器（不调 LLM）
+- `classifyFormat(q)` 决策树：
+  1. 复杂题型（multi_step / drag_drop / sort_ladder / dot_grid / 有 subquestions）→ 不动
+  2. 已是 fill_blank → 不动
+  3. stem 含 `___` / `（  ）` / `□` 填空标记 + 不是概念辨析 → fill_blank
+  4. stem 含 "下面/下列…正确" / "哪一个" / "哪句话…说法" 等概念辨析 → 保持 single_choice
+  5. 自然题 + 末尾 "…是多少 X？" + answer 是 choice 但能从被选项的文字干净抽出
+     "数值 + 单位"（如 "0.158米" → `{value: 0.158, unit: "米"}`）→ fill_blank
+- `extractNumericFromText("0.158米")` → `{value: 0.158, unit: "米"}`
+  - 跳过分数、表达式、纯中文文字（保持 single_choice）
+- `applyReclassification(q, r)` 拷贝并打 tag `format_reclassified`
+- `scanForReclassification(questions)` 整库扫描，按 transition 分组报告
+
+**新增 admin 面板** `🏷️ 答题格式重分类`：
+- 在 AI 质检面板下面，单独折叠 details
+- 点 "🔍 扫描全库" 秒级出报告（毫秒级，不调 API）
+- 显示 transition 表："single_choice → fill_blank: 143"
+- 预览 list（前 15 条）：原 format / 新 format / stem / 转换原因
+- "✓ 应用全部 N 条" 逐条 applyQuestionFix → 写 db.questions + meta::questionPatches
+- 跨设备同步（同 v0.31.32 修题机制）
+
+**Seed 库扫描结果**（SEED_QUESTIONS 共 961 道，去重 946 道；
+Selena 本地 db.questions 实际只剩 ~590 道 = SEED 减去 deletedQuestionIds 里的历史删除）：
+- 估计 100+ 道会被改 single_choice → fill_blank（实际数字以 admin 扫描为准）
+- 全部触发原因都是 "自然题 + 末尾问数字"
+- 验证样本：`一支铅笔长15厘米8毫米，用米作单位是多少米？` → fill_blank（0.158米）
+- 保留样本：`下面对小数 6.047 中'4'的解释，正确的是？` → single_choice 不动
+
+**之后 admin 流程**：
+1. 跑一次 "🏷️ 答题格式重分类" → 应用 → 143 道题改为 fill_blank
+2. 回 "🤖 AI 质检"，scope 选 "按答题格式 / fill_blank" → 真的能扫到 143 道
+3. 出问题的 fill_blank 题用 "✨ AI 修" 修
+
+## v0.31.32 — 2026-05-06 · AI 质检 → 一键 AI 修题（不删，直接改）
+
+用户反馈："删除也不好，改了就好了，删除还要再出题"。同意。
+
+**新增 AI 修题流程**：
+1. 质检结果表每行（verdict ≠ keep 时）多一个 "✨ AI 修" 按钮
+2. 点 → 调 `/api/agent/fix-question` 让 qwen-plus 按 issues + reason 修题
+3. 弹"修题对比"modal：左原 / 右修，每个字段（stem / options / answer / solution_steps /
+   estimated_time_seconds / common_errors / hints / feedback / tags）都有 diff
+4. 改过的字段橙色框标"已改"；没改的灰底 60% 透明度
+5. 确认 → applyQuestionFix 写 db.questions + meta::questionPatches（跨设备同步）
+6. 拒绝 → 关 modal，原题保留
+
+**跨设备同步机制**：
+- 修过的题存进 `meta::questionPatches: Record<qid, Question>`
+- meta 表本身就 cloudSync（v0.27 起的合并策略），跟 deletedQuestionIds 一个原理
+- seed.ts 启动后调用 `applyPendingQuestionPatches()`：把 patches 中的题 upsert 到 db.questions
+- 在两条路径都跑：SEED_VERSION 不变的早 return 分支 + bulkPut 后的常规分支
+- 避免 SEED bulkPut 把修过的题盖回原版
+
+**Endpoint**：`POST /api/agent/fix-question`
+- 输入：单道题 + issues + reason
+- 输出：完整修过 JSON + changesSummary
+- 强制 carry-forward：question_id / unit_id / skill_id / version / grade / term 不允许 LLM 改
+- 自动给 tags 加 "ai_fixed" 标记
+
+**好处**：
+- 不丢 question_id → 该题的 attempts / mistakes / mastery 历史全部继承
+- 不需要重新生成（一道好的应用题 prompt 不容易写）
+- 跨设备一致：admin 这台改了，Selena 那台同步后立刻拿到修过版本
+
+## v0.31.31 — 2026-05-06 · AI 质检面板 UX 优化（去最大数量限制 + 进度条）
+
+旧版每次跑 AI 质检要：
+- 选 scope（按学科/单元/skill/题型/...）
+- 选 "最多 N 道"（20/60/120/200/400）—— 多余的题被砍掉，不能一次扫完
+- 没法按 question_format 过滤（用户提到"填空题都有问题"）
+- 进度只一行小字，看不到剩多少
+
+修了：
+- 砍掉 `maxSample` 选择器 —— 系统按匹配数量自动规划批次（每批 20 道、并发 3）
+- scope 选择变化时实时显示"匹配 N 道 · M 批 · ~K 秒"，开始按钮直接说"开始 AI 质检（全部 N 道）"
+- 加 `按答题格式 (questionFormat)` scope —— 直接选 fill_blank / single_choice 等
+  （之前只能按 game_type 选，对"填空题都有问题"这种场景不灵）
+- 题量 > 200 道时弹确认（怕误操作烧 API）
+- 进度可视化进度条（紫→粉渐变 + 当前批次/已判定数/失败批次）
+
+例：选"填空题"会自动找出全部 fill_blank 题，按数量分批，进度条跑完即出报告，
+不用手动决定"扫多少道"。
+
+## v0.31.30 — 2026-05-06 · 题库全面体检 + 修一道找零算错题
+
+新增 `pnpm audit:questions` 静态题库审计脚本（`scripts/audit-questions.mjs`），
+跑全 961 道题查 7 类问题：
+
+🔴 **Critical**：
+- C1 choice 答案但没 options
+- C2 answer.value 不在任何 option.id 里
+- C3 number 答案 value 不是有限数
+- C4 multistep 答案 steps 为空
+- C5 多个 options 同时标 correct=true
+
+🟡 **Likely-broken**：
+- L1 question_format=single_choice 但 answer.type≠choice
+- L2 应用题简单算式（×、+、−、找零、双品种）算不出 stored 答案
+- L3 options 文本重复
+- L4 元选项 + 应用题主体不匹配
+
+🟢 **Minor**：feedback 缺失 / hint penalty 异常 / 估时偏离
+
+跑完发现 1 道真错题 `AI_G4B_SHOP_002__morz5ozp_1`：
+> 果汁 12.9 元/瓶，薯片 6.5 元/包，买 2 瓶 + 1 包付 40 元，应找回多少？
+
+AI 把最后一步算错：40 − 32.3 = **11.7**（错），正解 7.7。option A 改成 7.7，
+solution_steps 也改了。
+
+修完再跑：**0 critical / 0 likely-broken / 0 minor**。题库当前是干净的。
+
+未来可以在这个脚本上接 LLM (qwen-turbo) 二次语义核验，跑出 application 类
+难度 4-5 题答案是否真的对——目前只静态可证伪的能 catch，纯文字推理的（如
+"小明比小红多 3 元"）暂时靠人工。
+
+## v0.31.29 — 2026-05-06 · 修闪电口算环不闭 + 小数商店选择题判错
+
+### Bug 1：3 环之"闪电口算"永远不闭
+`Home.tsx` 里 `fluencyTodayCount = 0` 是 v0.31.1 的 TODO 占位，从来没改成真实查询。
+所以无论 Selena 今天做了多少道闪电口算，3 环永远显示"还没做"。
+
+修：用 useLiveQuery 查 `db.fluencyAttempts.where({studentId})` 当日的 sessionId
+去重计数，传进 buildTodayRingsInput。≥1 个 session 就算闭环。
+
+### Bug 2：小数商店类题（shop_counter + answer.type=choice）判错
+AI 生成的"周末超市促销 苹果 5.8 元/千克 香蕉 3.2 元/千克 ..."这种 application
+难度题 game_type 是 shop_counter，但 question_format 是 single_choice、
+answer 是 `{type:"choice", value:"A"}` + 4 个 options。
+
+ShopCounter 的 `buildSubquestions` 只处理了 `answer.type === "number"` 分支，
+choice-type 答案 fallthrough 到 else 渲染了数字输入框 + 期望值 0。
+Selena 输入正确数字 24.4 → 跟 0 比 → 永远判错，但 FeedbackPanel 又显示
+"正确答案: A. 24.4"，体验完全分裂。
+
+修：在 buildSubquestions 加 choice 分支，用 q.options 直接渲染 4 选 1 的
+"choose"-kind 子问题，正确选项标记 correct=true。Selena 选 A 就对了。
+
+## v0.31.28 — 2026-05-06 · 小进开口 race 模式（最坏 3.5s 见效果）
+
+**问题**：Selena 设备上 realtime（dashscope WSS via Worker）连接慢得离谱，
+有时要 2 分钟才"ready"。整个流程之前是串行：snapshot → instructions →
+tutor.connect()。任何一步卡住都让 panel 空白等死。
+
+**修法 race 模式**：
+- 一进 panel 就 **同时启动** realtime connect + 文字 explainQuestion
+- 三方 Promise.race：realtime ready / realtime error / 3.5s timeout
+- realtime 在 3.5s 内就绪 → 用 realtime 模式，文字结果丢弃
+- realtime 超时或出错 → 立即用预取的文字结果（大概率已经回来）
+- worst-case 用户最多等 ~3.5s 看到内容（之前 2 分钟）
+
+副作用：text explain 一次请求"白跑"（realtime 赢时结果不用）—— 可以接受，
+比让孩子盯着空 panel 转 30 秒强 100 倍。
+
+`fallbackToText` 加 `modeDecided` 单状态机门，防 onError + race rejection
+双方都进来导致重复渲染消息。
+
+## v0.31.27 — 2026-05-06 · TutorPanel fallback 模式去除诡异老语音按钮
+
+**问题**：Selena 设备上 realtime（dashscope WSS via Worker）连接失败 → fallback
+到老的"文字 explain + push-to-talk voiceAsk"模式。但老的 push-to-talk 调
+`/api/tutor/voice` qwen-omni endpoint，账号 free tier 已知必定 403 FreeTierOnly。
+Selena 一按按钮就报"DashScope 账号当前等级没有开通 omni 语音模型权限"——
+对 9 岁孩子是噪音 UX。
+
+**修法**：
+- 砍掉 fallback 模式下的"按住说话"按钮（点了必失败）
+- 砍掉老 voiceUnavailable 文案（"账号无 omni 权限"太技术）
+- 改成温柔提示："💬 这次小进用文字讲。点 🔊 可以听她念出来；想追问就在下面写。"
+- 保留：自动 explainQuestion 文字讲解 + Cherry TTS 朗读 + 文字追问
+
+旧 startRecording / stopRecording 函数仍在代码里（语义清晰且有引用），
+只是 UI 不再触发。下个版本可以彻底删掉。
+
+**Selena realtime 失败的根因待排**（开 dev console 看 fallback reason；常见：
+WS 握手失败 / 麦克风没权限 / 没存密码）。下一版考虑加 dev-only 错误 chip
+方便排查。
+
+## v0.31.26 — 2026-05-06 · Phase 2 全局翻 ON（期中考完）
+
+按 v0.31.1 起的计划"期中后翻 phase2_live flag"。今天就是期中考试日 ——
+全局打开。所有 Selena / 爸妈 / 任何设备访问就能直接看到 Phase 2 完整菜单：
+闯关 / 闪电口算 / 今日 3 环 / boss 解锁 gate / 校园探险世界观。
+
+`isPhase2Live()` 改成默认 true，仅在 localStorage 显式存了 `"false"` 时才返 false。
+保留 opt-out 通道（万一 prod 出 regression 紧急回滚）：
+- `?phase2=off` URL 参数：写 "false" 进 localStorage，下次加载也关
+- `?phase2=on`：清掉 false 标记，恢复默认 ON
+
+Selena 的设备不再需要任何手动操作 —— 刷新就有 Phase 2 完整体验。
+
+下一版考虑：v0.32 把 isPhase2Live() 这个分支删掉，代码统一只走 Phase 2 路径。
+
+## v0.31.25 — 2026-05-06 · 修小进讲题不一致 bug + Revert 3D 装饰版
+
+### 🚨 严重 bug 修：小进讲解的题跟 Selena 实际做的题对不上
+**根因**：v0.31.17 引入变式题流程后，FeedbackPanel 的"👩‍🏫 让小进讲一讲"按钮
+和 retry 后的 2nd 提交链路有两个对不上的点：
+
+1. `<FeedbackPanel question={question}>` 传的是 `props.question`（**原题**），
+   但 Selena 在 retry 流程里答的是 **变式题**（`displayedQuestion`）。
+   FeedbackPanel 内的 TutorPanel 拿着原题 stem 打开，跟 feedback 显示的"正确答案"
+   完全对不上 → Selena 看到"小进讲了一道根本没在屏幕上出现过的题"。
+   修：改成 `<FeedbackPanel question={displayedQuestion}>`。
+
+2. handleFinish 的 1st-wrong silent-record 分支 gate 只检查 `retryStage === "none"`，
+   没检查 `wasRetriedRef.current`。导致 retry 后第二次再答错时 gate 又满足 →
+   重新走 silent record + 重新拉变式 + 重新进 retry stage。这会让 variantRef 反复
+   重新生成，进一步加剧"题对不上"的混乱。
+   修：gate 加 `&& !wasRetriedRef.current`，确保每道原题最多只触发一次 retry 流程。
+
+### 🔄 Revert：3D 熊猫加回装饰
+v0.31.24 试着按用户字面意思去掉所有装饰物（裸版熊猫），结果用户反馈"好难看"。
+回到 v0.31.22 的有装饰版本：默认粉蝴蝶结、抱着紫色魔法书、4 档 skin 切换帽子
+（蝴蝶结 / 学位帽 / 巫师帽 / 皇冠）、周围飘 π/+/★ 数学符号。
+保留 v0.31.24 留下来的几何细节优化（教泪滴形眼圈、4 根扇形长睫毛、心形粉鼻头、
+∪ 形微笑嘴、面部缝合线）。
+
+## v0.31.24 — 2026-05-06 · 选定 plushie 熊猫为地基，3D 模型重做为裸版
+
+用户在 mascot-compare 对比 5 种风格后，选定 **plushie 毛绒玩偶** 风格
+（紫学位帽 + 紫魔法书 + 长睫毛 + 心形鼻 + 黑眼圈那张）作为小进地基形象。
+
+按用户指示："只用熊猫本体，装饰物以后通过 wardrobe 加" —— 3D 模型剥掉所有
+装饰：去掉学位帽、魔法书、蝴蝶结、巫师帽、皇冠。**只剩裸版熊猫玩偶**。
+未来如果要 3D 装饰，单独在 accessory 层加，不烤进 base。
+
+`src/components/Mascot3D.tsx` 重写：
+- 大头 + 圆耳朵在头顶（更明显外移）
+- 教泪滴形大黑眼圈，向外微倾，外下端有 tip
+- 大亮黑眼睛 + 主高光 + 副高光（眼神闪亮）
+- 4 根扇形长弯睫毛（细 cylinder，根部粗 tip 细）
+- 粉色心形小鼻头（cleft 朝上，正常心形朝向，用 Three.Shape ExtrudeGeometry）
+- ∪ 形微笑嘴（torus 旋转 PI 让 arc 落 -y 半圆），audioLevel 时 scale.y 拉成 O
+- 椭圆粉腮红
+- 圆胖白色身体，黑色短前肢交叉胸前，黑色后脚藏底部
+- 面部 + 身体淡缝合线（plushie 标志细节）
+- 多层柔光打光强调绒毛立体感
+- 4 档 skin prop 仅影响背景光晕颜色，不改变本体（本体永远黑白熊猫）
+
+`BASE_MASCOT_DESCRIPTOR` 同步更新为 plushie 风格描述符 — 所有 wardrobe 衣装变体
+都基于这条 prompt 前缀生成，保证未来所有 AI 生成的造型都"是同一只熊猫换装"。
+
+下一步可能：换 VRM 真模型、3D accessory layer（接 wardrobe）、表情 morph、
+眨眼/挥手 idle 变体。
+
+## v0.31.23 — 2026-05-06 · 小进基础形象对比页（5 种流行熊猫风格并发生成）
+
+新隐藏页 `/math/mascot-compare` —— 把网上流行的 5 种熊猫吉祥物风格做成 prompt 候选，
+并排生成对比，挑出最符合 Selena/家长口味的"地基形象"。一键替换 db.trophyImages
+里的默认 mascot 图，全 UI 立刻换。
+
+5 种风格灵感：
+1. **毛绒玩偶 Plushie**（Jellycat / Build-A-Bear 商业摄影感）
+2. **极简春植 Choonsik**（韩国 Kakao Friends，超简洁治愈）
+3. **圆胖球 Pusheen-panda**（球形身体 + dot 眼睛 + 扁平插画）
+4. **慵懒 Tare Panda**（日式 kawaii 极简，黑白配色）
+5. **Anime 萌系少女**（Sanrio / 原神 chibi，sparkle 高饱和）
+
+实现：
+- `src/lib/mascotStyles.ts`：每种风格独立 prompt + 灵感标签 + tagline
+- `src/pages/MascotCompare.tsx`：5 个 generateImage 请求并发跑，每风格 N 张候选；
+  pending/ok/failed 三态展示；一键"选为基础形象"写进 db.trophyImages
+- 选完会清掉佩戴中的 wardrobe 衣装，让基础形象立刻显示
+- 不消耗装扮卡（基础形象选型不算衣装）
+
+每风格 2 张默认配置 = 10 张候选，30-60 秒拿到对比图。
+
+## v0.31.22 — 2026-05-06 · 母熊猫 plushie 形象 + AI 生成衣柜系统 + 装扮卡
+
+把小进从"通用 AI 老师"重定位为"Selena 的女性熊猫毛绒玩偶 — 学习伙伴"。
+所有未来衣装变体都从这个**地基形象**派生。
+
+### 基础形象（地基）
+- `prompts/mascot/xiaojin.md` 重写：plushie / 毛绒玩偶 / chibi 比例 / 立体光影 /
+  缝线细节 / 商业玩偶摄影风格。彻底脱离"扁平贴纸 cartoon"
+- `BASE_MASCOT_DESCRIPTOR` 在 `src/lib/mascotWardrobe.ts` 集中管理 —— 所有 AI
+  衣装生成都走这条 prompt 前缀，保 Selena 看到的都像"同一只熊猫换装"
+- 3D 形象（`/math/mascot3d`）重画：圆白头 / 椭圆黑眼圈 / 顶部黑耳 + 粉内耳 /
+  长睫毛 / 粉鼻头 / 抱着紫色魔法书 / 默认粉色蝴蝶结。Roughness 0.95 让"绒"感出来
+
+### 装扮卡 currency
+- 完成 ≥ 5 题且正确率 ≥ 50% 的 session → +1 装扮卡（在 `finalizeSession` 里 hook）
+- 存 `db.meta::wardrobeCards::math::<studentId>`，整数
+- 显示在小进资料卡：`🎁 装扮卡：N 张`
+
+### AI 生成衣柜流程
+- 新 dexie v7 表 `mascotWardrobe`（id / studentId / name / prompt / blob / equipped / createdAt）
+- 用户写 prompt → 扣 1 卡 → 调 `qwen-image-2.0-pro` 生成 2 张候选 → 挑 1 存进衣柜
+  - 不喜欢可以全拒（卡花掉，但 prompt 留给下次）
+  - 失败自动退卡
+- 8 个预设 prompt suggestion（红贝雷帽 / 宇航员 / 樱花头饰 / 厨师服…）
+- 衣柜 grid：佩戴中的金边 + ✓ 标记，点切换，× 删除
+
+### MascotAvatar 优先级链
+1. equipped wardrobe item（Selena AI 生成的造型）
+2. db.trophyImages 默认小进（基础形象）
+3. emoji fallback 🐼
+
+只要 Selena 生成 1 个 wardrobe 造型并装备，整个 UI 里所有出现"小进"的地方
+都自动换上新造型 —— Hero / TutorPanel / MascotProfile / BgGen 全套覆盖。
+
+下一步（Phase C 续 / Phase D）：
+- VRM 真模型替换 procedural panda
+- 3D 形象也接入 wardrobe（衣装 morph target）
+- 跨设备 sync wardrobe（图片走独立 endpoint，参考 trophyImages 方案）
+
+## v0.31.21 — 2026-05-06 · 修 TutorPanel 遮挡 + 3D 形象 Phase C MVP
+
+### TutorPanel 从 MascotProfile 弹出时被遮挡 — 修
+根因：`.card-glow` → `.card` 用了 `backdrop-blur-sm`（即 `backdrop-filter`），
+而 backdrop-filter 在多浏览器里会创建 containing block for fixed-position descendants。
+TutorPanel 嵌在 MascotProfile 这个 card 内部弹时，`fixed inset-0` 被锁在父 card 边界里，
+导致下方页面没被遮罩盖到，底部按钮也被截断。
+
+修法：TutorPanel 改用 `createPortal(..., document.body)` —— 直接挂到 body，
+逃出任何父容器的 containing block。同样的修法以后 home struggle / Mistakes /
+Skills tree / BigProblems landing / SummaryView 弹的 panel 全部受益。
+
+### 3D 形象 Phase C MVP — 隐藏调试页 /math/mascot3d
+不进 nav，只直链可达。先用 procedural 几何体（球/胶囊/圆柱）把整条管线走通：
+- `src/components/Mascot3D.tsx`：react-three-fiber 渲染卡通小进 — 头/双马尾/眼/腮红/嘴/上身
+- Idle 动画：呼吸 scale + 头部小幅点头
+- 嘴型同步：`useFrame` 每帧把 audioLevel (0-1) 映射到嘴 scale.y
+- Skin 切换：default / graduation / wizard / legendary 四档（皮肤+衣服+帽子配色）
+- 装饰：π / + / ★ 数学符号悬浮飘动
+- realtime 嘴型：`RealtimeTutor.getCurrentAudioLevel()` 暴露播放音频 RMS（接 AnalyserNode）
+- 麦克风嘴型：直接读 user mic 给嘴动（脱离 realtime 也能测）
+- 250 KB three+R3F+drei 走 React.lazy + Suspense，不进主包
+
+下一步（Phase C 续）：换 VRM 真模型、加表情 morph target、加眨眼/挥手/招手 idle 变体。
+
+### 之前 (Phase A)
+## v0.31.20 — 2026-05-06 · 小进养成系统 Phase A：XP / 等级 / 6 个语音入口 / 唱乘法口诀
+
+把小进姐姐从"工具"变成"伙伴"。Selena 跟她互动越多，等级越高，解锁越多东西。
+
+**新增：小进养成系统（src/lib/mascotProgress.ts）**
+- 独立 XP（不混入 Selena 段位 XP），按互动 reason 计：
+  - 开场对话 +5、当日首聊 +15、用 review 总结 +20、错题复活成功 +25 …
+- 7 级阶梯：实习老师小进 → 校园老师 → 数学小老师 → 数学高手 → 数学大师 → 校园传奇 → 神级老师
+- 升级解锁：音色（Tina/Cindy/Sunny/Serena/Mia/Hana）/ 隐藏技能 / Skin / 3D 形象（Phase C）
+
+**新增：MascotProfile widget（首页）**
+- 展示当前 Lv / XP 进度条 / 距下一级
+- "💬 找小进"按钮 — 任意时刻 free_chat 模式语音对话
+- "🎙️ 切音色" — 已解锁的可点切，没解锁的显示 🔒 Lv N 门槛
+
+**新增：6 个语音对话入口**
+1. 错题复活页 — 每行"👩‍🏫 让小进讲讲这道"按钮（带题干 + 她答 + 正确）
+2. 闯关 Boss landing — 顶部"听小进讲思路"按钮（free_chat）
+3. 今日挑战结算页 — "👩‍🏫 跟小进总结今天"（review_session 模式）
+4. 技能树页 — 每个 skill 行加"👩‍🏫 听小进"按钮（skill_help 模式）
+5. 首页 — MascotProfile 里的"💬 找小进"任意场景调用
+6. 大题闯关每题答对/错后 — 复用现有 FeedbackPanel "让小进讲一讲"按钮（自动走 realtime）
+
+**新增隐藏技能（Lv 8 解锁）：唱乘法口诀**
+- 通过 prompt 注入 instructions：解锁后小进收到 "唱乘法口诀" 类请求会真的用节奏感读出来
+- 不依赖 audio assets，realtime TTS 自带音频流
+
+升级时弹 toast 显示新解锁内容；当日首聊 +15 节流（每天最多一次）。
+
+下一阶段（Phase B）：2D skin 变体（trophyImages pipeline 复用）+ 更多隐藏技能；
+Phase C：ThreeJS VRM 3D 形象（Lv 15 解锁）。
+
+## v0.31.19 — 2026-05-06 · struggle skill 直连小进 + TutorPanel 多场景
+
+之前红旗 skill 提示写"需要爸妈帮一下"——但现在 realtime 小进就能讲清楚，
+何必非得等爸妈在身边。把每条 struggle skill 加了"👩‍🏫 找小进讲讲"按钮，
+点开直接进 realtime 语音对话，prompt 里塞了"她在 X skill 上连错 N 次"
+让小进开口先问她"你觉得最难的地方是什么？"——交流式而不是讲解式。
+
+TutorPanel 接受可选 stem/correctAnswer/studentAnswer + 新 `context` 字段：
+- `wrong_retry`：错答后讲题（默认，老行为）
+- `skill_help`：从 home struggle 区进来，无具体题但有 skill name + 连错次数
+- `review_session`：一组题做完总结（占位，下一轮做）
+- `free_chat`：纯聊天（占位）
+
+instructions 拼接根据 context 走不同分支。
+
+## v0.31.18 — 2026-05-06 · 小进 realtime 语音对话（学情快照 + tool calls）
+
+之前 /api/tutor/voice 走 qwen3-omni Chat Completions endpoint，账号 free tier 全 403。
+重写成 dashscope realtime WebSocket 路径（qwen3.5-omni-flash-realtime），
+实测延时 ~1-2s recording → speaking。
+
+架构：
+- 新 Worker `selena-tutor-realtime`（独立部署，CF Pages Functions 不支持 incoming WS）
+  浏览器 ←(WSS, subprotocol bearer auth)→ Worker ←(WSS, DASHSCOPE_API_KEY)→ dashscope-intl
+- 浏览器端 `src/lib/realtimeTutor.ts`：getUserMedia → AudioWorklet 切 PCM16 24kHz mono
+  → input_audio_buffer.append 流式发；接 response.audio.delta 用 AudioContext 串行拼接播
+- AudioWorklet processor `public/audio/pcm16-encoder-worklet.js`
+
+学情上下文（src/lib/tutorContext.ts）：
+- **Phase 2 快照**：连接时把 Selena 段位 / 7 天正确率 / 最弱 3 skill / 未解决错题数 +
+  3 道代表错题塞进 instructions。她问"我最近怎么样"小进直接答，无 round-trip
+- **Phase 3 tools**：`get_recent_mistakes` / `get_skill_summary` / `get_today_progress`
+  通过 OpenAI realtime function-calling 协议暴露给 AI；AI 自己决定何时调
+  问"具体哪几道题做错了"会触发 get_recent_mistakes 拿题干 + 她答 + 正确答案再答
+
+TutorPanel 集成：
+- 默认走 realtime（连 Worker → 对话）；连不上 / 没麦 / 没密码自动 fallback 到老的
+  文本 explainQuestion 模式（保留兜底，DashScope 抽风/Selena 没装麦也不卡）
+- realtime 模式下 push-to-talk 按钮直接跑 RealtimeTutor，流式字幕显示在对话区
+- 显示 "🔧 小进在查最近错题…" 当 AI 触发 tool call
+
+## v0.31.17 — 2026-05-06 · 变式题彻底不再露相同题（小进讲题后再做也换新）
+
+用户复现：错答后看小进讲解 → 点"再做一次" → 出来的还是同一题。Selena 已经在
+讲解里看到了答案，再做一遍只是把数字抄上去 = 假装会了，没真测出迁移能力。
+
+根因（两条线）：
+1. `findParallelQuestion` 严格匹配 skill+game_type+difficulty+term+subject —
+   候选稀少时返 null，retry 退化成"原题再做"
+2. `handleRequestVariant` 把 `sessionPlannedIds`（当前 session 还在排队的 15 道题）
+   也排进 exclude，对 skill drill 来说 plan 里基本就是同 skill 的全部候选 →
+   严格匹配后 candidate=0 几乎是必然
+3. 变式预取是 fire-and-forget；用户秒点重做时 `variantRef.current` 还没 resolve
+   → handleRetry 看到 null → 不 swap → 原题再做
+
+修法：
+- `findParallelQuestion` 改阶梯放宽：strict → 放宽 game_type → 放宽 difficulty →
+  放宽 term → 同学科任意一题（保底）。pool 真空才返 null。
+- `handleRequestVariant` 拿掉 `sessionPlannedIds` 排除。如果变式恰好命中 plan
+  里后续的题，从 `state.questions` 里 splice 掉，避免后面又作为正题露相同题
+- `GameShell.handleFinish` 改为同步 `await onRequestVariant`（IndexedDB 查 < 100ms
+  无感），保证 RetryHintPanel 一显示 variantRef 就 100% 就绪
+- scheduler 测试更新：原来"全 exclude → null"/"孤立 skill → null"/"不跨 term"
+  这 3 条编码的是旧的严格行为，现在反过来：阶梯放宽就该返非 null
+
+## v0.31.16 — 2026-05-06 · 修孤儿错题反复回来 + Hero 配色跟佩戴勋章走
+
+### 错题复活页 [题目已移除] 反复出现的彻底修法
+v0.30.14 加的 `cleanupOrphanMistakes` 用 `meta:orphanMistakesCleanedAt` 一次性 gate，
+跑完就再也不跑。但 `cloudSync.applyPayloadMerged` 对 mistakes 做 union-by-id 合并 ——
+云端旧快照里仍存在的孤儿错题被合回本地，gate 又挡着不再清，于是孤儿"复活"。
+- 拿掉 meta gate：`cleanupOrphanMistakes` 改成幂等，每次启动都跑（O(N)，零成本）
+- `pullFromCloud` 合并完后立刻再清一次 — 拦住云端 union 把孤儿合回来的窗口
+- `pushToCloud` 内部 pre-pull 也复用同一路径，dump 之前孤儿就被清干净，不再被推回云端
+- `recordDeletedQuestionIds`（admin 删题）同步删掉引用它的 mistake 行，避免新孤儿产生
+- `Mistakes.tsx` + `Home.tsx` 的 mistakes 计数渲染层兜底过滤 `qmap.has(questionId)` —
+  哪怕 sync 合并和 cleanup 之间有一瞬间窗口，UI 也不显示 [题目已移除]
+- `cleanupOrphanMistakes` 加保险：questions 表为空（边界 / 还没 seed）时直接返回 0，
+  不会把全部 mistakes 当孤儿误删
+
+### Hero 区配色跟着佩戴的段位勋章走
+之前 `TierCard` 的背景渐变 / 边框 / 文字色全部 hook 在 `rating.tier.theme` 上 ——
+她戴校徽但实际段位是锦江区时，背景框是绿色（rating），徽章图却是校徽。视觉割裂。
+- `TierCard` 的 `theme` 改成 `equippedBadge.theme`：戴的是哪枚徽章，框就是哪段的色
+- `t.name`（"锦江区 I"）继续用 `rating.tier`，因为这是真实段位进度文字，不该被佩戴覆盖
+- `TierCompact`（结算页等）行为不变，仍按 rating 染色 —— 那里没有"佩戴"概念
+
 ## v0.31.1 — 2026-05-05 · 校园探险世界观 + 闯关 gate + 今日 3 环
 
 讨论后定下整体游戏化方向：**校园探险世界观** + **段位升级** + **gate 解锁**。

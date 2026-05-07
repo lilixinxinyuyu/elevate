@@ -7,6 +7,7 @@ import { masteryColor, masteryLabel } from "../lib/format";
 import { useEffect, useState } from "react";
 import { getSelectedTerm, setSelectedTerm } from "../db/service";
 import type { Term } from "../core/types";
+import { TutorPanel } from "../components/tutor/TutorPanel";
 
 export function SkillsPage() {
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
@@ -22,6 +23,7 @@ export function SkillsPage() {
   });
 
   const [term, setTerm] = useState<Term>("下册");
+  const [tutorSkill, setTutorSkill] = useState<{ id: string; name: string } | null>(null);
   useEffect(() => {
     if (!student) return;
     getSelectedTerm(student.id).then(setTerm);
@@ -42,6 +44,16 @@ export function SkillsPage() {
     <div className="space-y-6">
       <TermSwitcher term={term} onSwitch={handleSwitchTerm} />
       <MasteryLegend />
+      {tutorSkill && student && (
+        <TutorPanel
+          subjectId="math"
+          context="skill_help"
+          studentId={student.id}
+          skillId={tutorSkill.id}
+          skillName={tutorSkill.name}
+          onClose={() => setTutorSkill(null)}
+        />
+      )}
       {visibleTerms.map((term) => {
         const units = UNITS.filter((u) => u.term === term).sort((a, b) => a.orderIndex - b.orderIndex);
         return (
@@ -111,13 +123,23 @@ export function SkillsPage() {
                             {masteryLabel(score)} · {Math.round(score)}
                           </span>
                           {!disabled && (
-                            <Link
-                              to={`/math/train?skillId=${encodeURIComponent(s.id)}&fresh=${Date.now()}`}
-                              className="btn-primary px-3 py-1 text-xs"
-                              title={`单独训练「${s.name}」`}
-                            >
-                              ▶ 练
-                            </Link>
+                            <div className="flex flex-col gap-1.5 shrink-0">
+                              <Link
+                                to={`/math/train?skillId=${encodeURIComponent(s.id)}&fresh=${Date.now()}`}
+                                className="btn-primary px-3 py-1 text-xs"
+                                title={`单独训练「${s.name}」`}
+                              >
+                                ▶ 练
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => setTutorSkill({ id: s.id, name: s.name })}
+                                className="chip text-[10px] px-2 py-0.5 bg-amber-500/15 border border-amber-400/40 text-amber-200 hover:bg-amber-500/30 transition-colors"
+                                title={`让小进讲讲 ${s.name}`}
+                              >
+                                👩‍🏫 听小进
+                              </button>
+                            </div>
                           )}
                         </div>
                       );

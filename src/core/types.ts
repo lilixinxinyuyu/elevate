@@ -560,6 +560,12 @@ export interface TrophyDef {
    * UI 用 (tier(ctx) >= threshold) 决定颁发哪一档。
    */
   tieredThresholds?: TrophyTierThreshold[];
+  /**
+   * v0.31.12: 没解锁就不显示在勋章柜里（隐藏成就）。
+   * 用于"未来段位纪念"——蓉城启航 / 天府跃升 / 凤翔九天，避免提前剧透剩余路线，
+   * 拿到时才"出现 = 解锁"双重惊喜。
+   */
+  hiddenUntilUnlocked?: boolean;
 }
 
 export interface TrophyCheckContext {

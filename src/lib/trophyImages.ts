@@ -294,29 +294,24 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
     spec?.palette ?? "rich 2-3 color signature palette";
   const tierFlavor = t.tier ? TIER_FLAVOR[t.tier] : "Tier finish: classic colorful enamel palette.";
 
+  // v0.31.14: 跟 commemorative Plan B 同款架构 —— AI 不画外圆/外框/金属环。
+  // 理由：ability/skill/boss 的 CSS clip 是六边形 / 盾形 / V-盾，AI 默认画圆形勋章
+  // 会被 clip 切掉圆四角，露出空黑角（用户反馈数据分析师 vs 建模高手不一致）。
+  // 改：motif 占满整张方画布 + 深色径向渐变铺底，CSS clip 切出对应形状边界 + tier ring
+  // 由外层 CSS 提供。这样 AI 输出统一是"场景填充画布"，clip 任何形状都不漏空角。
   return [
-    // 主旨——避开 "Apple Fitness" 品牌词，用描述性语言
-    `Premium 3D rendered luxury award medallion, magical and rich — designed for a 4th-grade girl to treasure and show off proudly.`,
-    // motif（核心）
-    `Subject: ${motif}.`,
-    // v0.30.11 关键修复：勋章必须填满画面，避免渲染出小勋章 + 一圈空白背景的"双边框"看感
-    `**The circular/shaped medal fills the entire frame edge-to-edge — the outer rim touches all four sides of the square canvas with at most 1-2 pixel margin.** No visible empty padding around the medal.`,
-    // 风格细节
-    `Composition: the subject motif occupies ~80% of the medal interior, strictly centered, framed by subtle decorative elements (tiny star sparkles, small ribbon flecks, soft light particles) — never crowded.`,
-    `Surface: glossy enameled medal with deep 3D embossed relief, clear dimensional depth, soft inner glow, polished metallic reflections.`,
+    `Premium 3D rendered luxury award scene illustration, magical and rich — designed for a 4th-grade girl to treasure and show off proudly.`,
+    `Subject (rich illustrated motif, occupies ~75-85% of the canvas, strictly centered, vertically and horizontally balanced): ${motif}.`,
     `Signature palette: ${palette}.`,
-    // Tier 金属调
     tierFlavor,
-    // 风格 — 不再说品牌名
-    `Production style: high-end commemorative medallion, premium tactile feel, the kind of medal a child wants to keep forever and show friends — magical, dreamy, sparkly, slightly playful and cute.`,
-    // 框约束
-    `Outer ring: a refined thin metallic edge that matches the tier finish exactly at the canvas edge — NO heavy decorative wreaths, NO busy frames, NO oversized ribbon banners.`,
-    // 背景 / 大小：v0.30.11 改成 medal 内的 BG，不是 canvas 外的
-    `Inside the medal rim: deep space-purple to near-black radial gradient, helps the medal colors pop dramatically. Outside the rim: there should be NO visible canvas — the medal IS the canvas.`,
-    // 强力反 text 三连
-    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS** — the medal must be ENTIRELY pictorial and graphical, zero typography.`,
-    // v0.30.11: 改尺寸描述，强制 98%+ 占用
-    `Output: 512×512 square, the medallion occupies 98%+ of the canvas (1-2 pixel margin only), strictly centered.`,
+    // 关键：AI 不画外框
+    `**CRITICAL FRAMING INSTRUCTION:** DO NOT draw any circular medal frame, metallic rim, outer border, or shape boundary in this image. The final medal-shape framing will be applied externally by the rendering layer. This image must be a square illustration where the motif sits naturally on a deep gradient background that extends seamlessly to all four canvas edges and corners — the four corners must NOT be empty black space, they should be filled with the motif's atmospheric extension or the deep gradient itself.`,
+    `Background: deep space-purple to near-black radial gradient (the motif glows from the center), the gradient must fill the ENTIRE 512×512 canvas edge-to-edge with NO border, NO rim, NO frame, NO decorative ring of any kind. The four canvas corners are part of the same gradient as the rest — no empty void or black box at the corners.`,
+    `Allowed accents around the motif (NOT at canvas edges): tiny star sparkles, small light particles, motion lines — keep these < 60% radius from center, leaving outer ~40% as clean gradient background that smoothly extends to corners.`,
+    `Surface treatment: glossy 3D embossed relief on the motif itself + soft inner glow + dramatic light-and-shadow, premium tactile feel.`,
+    `Production style: high-end commemorative medallion vibe, magical, dreamy, sparkly, slightly playful and cute — a medal a child wants to keep forever.`,
+    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS** — entirely pictorial, zero typography.`,
+    `Output: 512×512 square, motif strictly centered, gradient background filling all 4 edges AND all 4 corners with no boundary visible.`,
   ].join(" ");
 }
 
@@ -340,7 +335,22 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
  * 等中文名当 TEXT 渲染进图里（4/4 全失败）。fix：完全不提中文名，用纯视觉
  * 描述告诉 AI 该画什么。
  */
-const COMMEMORATIVE_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
+/**
+ * 形状二级 = 视觉等级。
+ * - "pentagram"（五角星）= 单次事件纪念（第一步 / 期中 / 期末 / 新学年 / 生日），
+ *   一个 moment 一枚，标准纪念
+ * - "hexagram"（六角星）= 跨段位长期累积纪念（破晓登阶 / 蓉城启航 / 天府跃升 / 凤翔九天），
+ *   要努力很多天才能拿一枚 → 多一个角，视觉权重更重
+ *
+ * 默认 pentagram；hexagram 在 spec 里显式标。
+ * TrophyIcon 通过 getCommemorativeShape() 拿到 shape 来选 clip-path，跟 prompt 同步。
+ */
+export type CommemorativeShape = "pentagram" | "hexagram";
+
+const COMMEMORATIVE_MOTIF_SPEC: Record<
+  string,
+  { motif: string; palette: string; shape?: CommemorativeShape }
+> = {
   math_first_step: {
     motif:
       "a small glowing footprint on a path of starlight, with a single bright guiding star above, surrounded by tiny sparkles — symbolizing the very first step of a learning journey",
@@ -366,7 +376,51 @@ const COMMEMORATIVE_MOTIF_SPEC: Record<string, { motif: string; palette: string 
       "a beautifully decorated birthday cake with flickering candles on top, a small floating party hat to one side, ribbon banners and confetti sparkles all around — celebratory and warm, symbolizing a birthday milestone",
     palette: "soft rose pink frosting + cream cake + warm candle gold + violet ribbons + rainbow confetti",
   },
+  // === 段位跨段纪念 v0.31.11：六角星 commemorative ===
+  // 跟段位徽章圆形 emblem + 普通五角星纪念都视觉分开。
+  // 主题：登山/登阶/起航/翱翔，捕捉"努力很多天，终于跨段"的瞬间。
+  // 每段调色板呼应该段 tier 主色（district=emerald / city=violet / province=amber / country=ruby）。
+  math_enter_district: {
+    shape: "hexagram",
+    motif:
+      "a heroic young silhouette in dynamic motion mid-stride, climbing a rising spiral of luminous crystal stepping stones that ascend through soft mist, arriving at a glowing dawn arch at the top, golden sparkle footprints trailing behind, three small treasure orbs (gem, scroll, leaf) orbiting the figure — symbolizing reaching a new realm through dedicated effort",
+    palette: "vivid emerald jade + amber dawn gold + deep violet sky + cream sparkles + gold halos",
+  },
+  math_enter_city: {
+    shape: "hexagram",
+    motif:
+      "a heroic silhouette standing triumphantly atop a rising platform overlooking a vast violet cityscape with stylized traditional Chinese eaves and a glowing teacup beacon, banners of accomplishment streaming overhead, fireflies of light spiraling upward — symbolizing arriving at a major capital after a long climb",
+    palette: "deep violet + brushed silver + warm fuchsia + gold light beams + cream banners",
+  },
+  math_enter_province: {
+    shape: "hexagram",
+    motif:
+      "a heroic silhouette astride a soaring stylized cloud trail, sweeping past misty Sichuan mountain peaks with a tiny panda companion below cheering, a brilliant amber sun rising behind everything, golden stars dotting the path of flight — symbolizing soaring above an entire province",
+    palette: "amber to honey gold + emerald mountain mist + warm orange sun + cream stars",
+  },
+  math_enter_country: {
+    shape: "hexagram",
+    motif:
+      "a phoenix-form silhouette in mid-flight rising through cosmic clouds with a glowing comet tail, with abstract layers of mountain ranges and a starburst halo behind, scattering tiny ruby light petals into the sky — symbolizing legendary national-tier ascent",
+    palette: "deep ruby + radiant gold + cosmic violet + cream phoenix glow + scattered ruby petals",
+  },
 };
+
+/**
+ * v0.31.11 暴露给 TrophyIcon：决定 commemorative 用五角星还是六角星 clip-path。
+ * 跟 prompt 必须同步——AI 生成什么形状，CSS 就 clip 什么形状。
+ *
+ * 接受：
+ *   - 带 subject 前缀（"math_enter_district"）→ 直接查
+ *   - 不带前缀（"enter_district"）→ 兜底 math_ 前缀（chinese 没有 commemorative）
+ */
+export function getCommemorativeShape(trophyId: string): CommemorativeShape {
+  const direct = COMMEMORATIVE_MOTIF_SPEC[trophyId];
+  if (direct?.shape) return direct.shape;
+  const withMath = COMMEMORATIVE_MOTIF_SPEC[`math_${trophyId}`];
+  if (withMath?.shape) return withMath.shape;
+  return "pentagram";
+}
 
 function buildCommemorativePrompt(t: TrophyMeta): string {
   const spec = COMMEMORATIVE_MOTIF_SPEC[t.id];
@@ -374,21 +428,27 @@ function buildCommemorativePrompt(t: TrophyMeta): string {
     spec?.motif ?? `a ceremonial heirloom medal motif representing achievement and celebration`;
   const palette = spec?.palette ?? "rich 2-3 color harmonious palette + gold or silver highlights";
 
+  // v0.31.12 关键架构：commemorative 不让 AI 画星形外框，星形完全由前端 CSS clip-path
+  // 切出来（PENTAGRAM_CLIP / HEXAGRAM_CLIP）。AI 只负责画 "里面的图"——丰富的浮雕场景 +
+  // 深色径向渐变背景，铺满 512×512 整张画布。这样数学上 100% 对齐，永远不会再出现
+  // "星图比 frame 大/小、底边没顶满、四角漏色"等问题。
+  //
+  // 取舍：失去 AI 画的"3D 浮雕星形边缘"质感，但换来绝对对齐。框架边缘改由前端 CSS
+  // 添加 ring + glow 表达。整体看上去仍然像奖章，只是边缘锐利度由 CSS 决定。
   return [
-    `Premium 3D rendered heirloom commemorative medallion, **six-pointed star shape**, treasure-class quality.`,
-    `**The six-pointed star medallion fills the entire frame edge-to-edge — the outer star tips touch all four sides of the square canvas with at most 1-2 pixel margin.** No empty padding.`,
-    `This is a heirloom-class commemorative medal — more refined and ceremonial than ordinary achievement medals.`,
-    // v0.30.12 关键修复：纯英文 motif，**完全不提任何中文名**
-    `Subject (occupies 85%+ of star interior, strictly centered): ${motif}.`,
-    `Surrounding decorative elements: laurel branches / palm leaves / ribbons / star sparkles framing the central motif tastefully — NEVER as text or letters.`,
+    `Premium 3D rendered luxury commemorative scene illustration, treasure-class quality, designed for a 4th-grade girl to treasure forever.`,
+    // motif（核心）—— 占满整个画面而不是星形内部
+    `Subject (rich illustrated motif, occupies ~70% of the canvas, strictly centered, vertically and horizontally balanced): ${motif}.`,
+    // 关键：AI 不画星形外框
+    `**CRITICAL FRAMING INSTRUCTION:** DO NOT draw any star outline, medallion frame, metallic rim, or shape boundary in this image. The final star-shape framing will be applied externally by the rendering layer. This image must be a square illustration where the motif sits naturally on a deep gradient background that extends seamlessly to all four canvas edges.`,
+    `Background: deep violet-to-near-black radial gradient (motif glows from the center), the gradient must fill the ENTIRE 512×512 canvas edge-to-edge with no border, no rim, no frame, no decorative ring of any kind. The four canvas corners are just the dark gradient — no embellishment there.`,
+    `Surrounding decorative elements (around the motif, NOT at canvas edges): subtle laurel branches / palm leaves / star sparkles / ribbon flecks tastefully accenting the central motif — keep these at less than 60% of canvas radius from center, leaving the outer ~40% as clean gradient background.`,
     `Signature palette: ${palette}.`,
-    `Surface: heavy 3D embossed metal medallion finish, deeper relief, refined edge details, dramatic light-and-shadow.`,
-    `Outer rim: 1-2px polished metallic edge along the star outline, exactly at canvas edge — NO decorative wreath bands.`,
-    `Inside the star: deep violet to near-black radial gradient. Outside the star: nothing visible.`,
+    `Surface treatment: glossy 3D embossed relief on the motif itself + soft inner glow + dramatic light-and-shadow, premium ceremonial feel.`,
     // v0.30.12: 多重反 text 嘱托
     `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO HANZI, NO KANJI, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO TYPOGRAPHY, NO CALLIGRAPHY, NO INSCRIPTIONS** — the medal must be ENTIRELY pictorial. Any glyph-like marks must be replaced by pure decorative shapes (sparkles, stars, ribbons, leaves).`,
-    `Style: refined 3D embossed + soft inner glow + ceremonial dignity, suitable for a 4th-grade girl to treasure forever — magical but not childish.`,
-    `Output: 512×512 square, six-pointed star medallion 占 98%+ canvas (1-2px 边距), 严格居中。`,
+    `Style: refined 3D embossed + soft inner glow + ceremonial dignity — magical but not childish.`,
+    `Output: 512×512 square, motif strictly centered, gradient background filling all 4 edges with no boundary visible.`,
   ].join(" ");
 }
 
@@ -407,30 +467,41 @@ function buildTierBadgePrompt(t: TrophyMeta): string {
       bg: "warm pastel cream-to-sky-blue radial gradient",
     },
     district: {
+      // v0.31.11: 重做 motif —— 之前是 "竹 + 水波"，被反馈太通用、跟纪念勋章撞。
+      // 现在用成都市花"芙蓉花" + 锦江河"锦缎丝带波" 双重符号 ——
+      // 锦江 = "锦水" = 古代以丝绸织锦命名的河，此处是文化锚点。
+      // 花朵主体 + 锦缎边纹 → 比通用山水更精致、更地标。
       motif:
-        "an emerald regional emblem: a slender bamboo stalk rising at center wrapped in calm river ripples, tiny new spring buds, refined and uplifting",
+        "an exquisite single hibiscus blossom in full bloom at the exact center, petals rendered in luminous jade-emerald with shimmering gold-traced edges and soft pink inner heart, surrounded by elegant concentric brocade silk ribbon wave patterns rippling outward filling the rim space, regional refined emblem",
       rim: "polished gold with emerald inner glow",
-      bg: "deep emerald to jade radial gradient",
+      bg: "deep emerald to jade radial gradient with subtle pink center bloom",
     },
+    // v0.31.11 段位渐进精致：city > district / province > city / country > province
+    // 设计层级（用户明确要求，越往后越想要）：
+    //   school   = 简洁童趣（pastel + 校徽 emblem 单元素）
+    //   district = 精致地标（emerald 芙蓉 + 锦缎 双层）
+    //   city     = 灵动古典（双元素 fuchsia/teal + 鎏金细节）
+    //   province = 宏伟壮阔（守护者 + 多层鎏金边纹 + 12 星宿）
+    //   country  = 传奇尊贵（凤凰 + 七彩翼 + 12 道日芒 + 多层鎏金宝石嵌边）
     city: {
       motif:
-        "a violet city emblem: a cute panda silhouette beside a stylized traditional Chinese eave (Wuhou Shrine inspired) with a glowing teacup at the bottom, mystic and refined",
-      rim: "brushed silver with violet inner glow",
-      bg: "deep violet to fuchsia radial gradient",
+        "a violet-and-fuchsia city emblem of refined elegance: a graceful crane silhouette in flight rising above a stylized traditional Chinese pavilion eave (Wuhou Shrine inspired) with a glowing teacup at its base, framed by a delicate ring of small hibiscus blossoms with four cardinal-direction constellation stars, brushed silver rim accented with thin gilded gold inlay lines, a touch more ornate than the district emblem",
+      rim: "brushed silver with thin gilded gold inlay lines, violet inner glow",
+      bg: "deep violet to fuchsia radial gradient with subtle teacup-glow center",
     },
     province: {
       motif:
-        "an amber-gold provincial emblem: a chubby panda hugging green bamboo with stylized misty Sichuan mountains behind, small golden stars sprinkled around the rim",
-      rim: "thick polished gold with amber inner glow",
-      bg: "amber to honey-gold radial gradient",
+        "a magnificent provincial grandeur emblem: a majestic guardian panda holding a glowing peach blossom branch, seated atop layered misty Sichuan dragon-shaped mountain peaks, with a brilliant golden sunburst halo radiating behind, surrounded by twelve small ornate constellation stars at the rim, multi-layered ornate gilded rim with embossed cloud patterns and tiny embossed bamboo leaves — distinctly more elaborate and richer than the city emblem",
+      rim: "thick multi-layered polished gold with embossed cloud-and-bamboo decorative band, deep amber inner glow",
+      bg: "amber to honey-gold radial gradient with sunburst halo center",
     },
     country: {
       // ⚠️ 不写 "中国地图" / "五星" —— 阿里云图像模型对国家地图和国旗符号有内容
       // 过滤，会返回 InvalidParameter。改用通用的"凤凰 + 山河 + 星辰"传奇意象。
       motif:
-        "a national legendary emblem: a golden phoenix in flight over abstract Great Wall layers and a starburst halo, regal and powerful",
-      rim: "radiant gold with ruby inner glow",
-      bg: "deep ruby to gold radial gradient",
+        "an imperial national legendary treasure-class emblem: a soaring crowned phoenix with iridescent rainbow wings rising from cosmic ruby clouds, surrounded by a brilliant starburst halo with twelve radiating gilded sun rays, layered stylized mountain ranges and a constellation of stars at the rim, multi-tiered ornate gilded rim with intricate jewel inlays (rubies, sapphires, emeralds set into the gold band), the most ornate and majestic emblem in the entire collection — distinctly more grand and treasured than the province emblem",
+      rim: "multi-tiered radiant gold with jewel-encrusted band (rubies + sapphires + emeralds inlaid), ruby and gold inner glow",
+      bg: "deep cosmic ruby to radiant gold radial gradient with phoenix-glow center",
     },
   };
   const theme = tierTheme[rawId] ?? {

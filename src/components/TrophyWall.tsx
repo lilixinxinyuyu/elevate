@@ -241,7 +241,16 @@ export function TrophyWall({
       </div>
 
       {CATEGORY_ORDER.map((cat) => {
-        const defsInCat = TROPHIES.filter((d) => d.category === cat);
+        // v0.31.12: hiddenUntilUnlocked = true 的勋章在没解锁前不显示
+        // （仅对 commemorative 起作用：蓉城启航 / 天府跃升 / 凤翔九天 三枚未来段位纪念）
+        const defsInCat = TROPHIES.filter((d) => {
+          if (d.category !== cat) return false;
+          if (d.hiddenUntilUnlocked) {
+            const unlocked = trophies.some((t) => t.trophyId === d.id);
+            if (!unlocked) return false;
+          }
+          return true;
+        });
         if (defsInCat.length === 0) return null;
         const meta = CATEGORY_LABELS[cat];
         return (

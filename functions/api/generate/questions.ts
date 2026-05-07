@@ -8,6 +8,7 @@ import {
   type Env,
 } from "../../_shared";
 import { PROMPTS } from "../../_prompts.generated";
+import { composeQuestionUserPrompt } from "../../_promptComposer";
 
 /**
  * POST /api/generate/questions
@@ -46,11 +47,31 @@ interface GenerateRequest {
   skillId?: string;
   skillName?: string;
   count?: number;
+  /**
+   * 难度。可以是范围 "2-4" 或单个 "3"。v0.31.34 起优先用单数字，
+   * composer 才能精确注入对应 difficulty rubric。
+   */
   difficulty?: string;
   term?: "上册" | "下册";
   existingStems?: string[];
   recentMistakeStems?: string[];
   gameType?: string;
+  /**
+   * v0.31.34: 显式选定 question_format，让 composer 注入对应 format rubric。
+   * 不传则按 game-type 默认 format。
+   */
+  format?:
+    | "numeric"
+    | "numeric_choice"
+    | "single_choice"
+    | "multi_choice"
+    | "multi_step"
+    | "fill_blank"
+    | "drag_drop"
+    | "sort_ladder"
+    | "geometry_operation";
+  /** v0.31.34: 调用上下文标签（"admin" / "session-retry" / "session-bump-up"）— 仅日志用 */
+  callerTag?: string;
 }
 
 /** 单 sub-batch 题数上限。
@@ -295,73 +316,67 @@ function pickGameTypeSchema(args: GenerateRequest): { gameType: string; schema: 
 }
 
 /**
- * 用 PROMPTS.questionsUserTemplate 模板拼出当前 batch 的 user prompt。
+ * 用 _promptComposer.composeQuestionUserPrompt 拼出当前 batch 的 user prompt。
  *
- * 替换占位符 + 注入 game-type schema + existingStems / recentMistakes。
+ * v0.31.34：从模板字符串替换升级到模块化 composer——
+ *   - 注入 skill scope（精确教学范围 + 公式 + 常见错误）
+ *   - 注入 difficulty rubric（按精确难度）
+ *   - 注入 format rubric（按 question_format）
+ *   - 注入 game-type schema
+ *   - 加 existing stems + recent mistakes（去重 + 巩固）
  */
 function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
   const count = Math.max(1, Math.min(SUB_BATCH_SIZE, args.count ?? SUB_BATCH_SIZE));
   const subjectId = args.subjectId === "math" ? "math" : "chinese";
-  const subjLabel = subjectId === "math" ? "数学" : "语文";
-  const defaultAbility = subjectId === "math" ? "calculation" : "vocabulary";
-  const errorTagExample =
-    subjectId === "math" ? "decimal_point_error" : "wrong_phonics";
-  const term = args.term ?? "下册";
-  const otherTerm = term === "上册" ? "下册" : "上册";
-  const termCode = term === "上册" ? "G4A" : "G4B";
-  const angles = ["A 角度", "B 角度", "C 角度", "D 角度", "E 角度", "F 角度", "G 角度", "H 角度"];
+
+  // 难度：把 "2-4" 这种范围 pick 一个（按 batchIndex 轮询），单数字直接用
+  const difficulty = parseDifficulty(args.difficulty, batchIndex);
+
+  const angles = ["数字换一组", "情境换一种", "提问角度反一下", "增加一个干扰条件", "数字使用小数", "数字使用整数", "数字含 0", "数字相等"];
   const batchAngle = angles[batchIndex % angles.length]!;
 
-  const existingStemsBlock =
-    args.existingStems && args.existingStems.length > 0
-      ? `以下题干已有，请勿重复（换情境换字换数）：\n${args.existingStems
-          .slice(0, 8)
-          .map((s) => `- ${s.slice(0, 30)}`)
-          .join("\n")}`
-      : "";
+  // 自动选 game-type
+  const fromSkill = args.skillId
+    ? (PROMPTS.gameTypeBySkill as Record<string, string>)[args.skillId]
+    : undefined;
+  const gameType = args.gameType ?? fromSkill ?? "plain_choice";
 
-  const recentMistakesBlock =
-    args.recentMistakeStems && args.recentMistakeStems.length > 0
-      ? `围绕这些考点出新题：\n${args.recentMistakeStems
-          .slice(0, 5)
-          .map((s) => `- ${s.slice(0, 30)}`)
-          .join("\n")}`
-      : "";
-
-  const { schema: gameTypeSchema } = pickGameTypeSchema(args);
-
-  const replacements: Record<string, string> = {
-    count: String(count),
-    term,
-    termCode,
-    otherTerm,
+  return composeQuestionUserPrompt({
     subjectId,
-    subjectLabel: subjLabel,
-    unitName: args.unitName ?? "",
     unitId: args.unitId ?? "",
-    skillName: args.skillName ?? "",
+    unitName: args.unitName,
     skillId: args.skillId ?? "",
-    difficulty: args.difficulty ?? "2-4",
-    batchIndex: String(batchIndex),
+    skillName: args.skillName,
+    term: args.term ?? "下册",
+    difficulty,
+    format: args.format,
+    gameType,
+    count,
+    existingStems: args.existingStems,
+    recentMistakeStems: args.recentMistakeStems,
     batchAngle,
-    existingStemsBlock,
-    recentMistakesBlock,
-    gameTypeSchema,
-    defaultAbility,
-    errorTagExample,
-  };
-
-  // 模板替换 + schema 内部也可能有 {{vars}}（题型模板里 ${skillId} 等）
-  const template = PROMPTS.questionsUserTemplate + "\n";
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
-    const v = replacements[key];
-    if (v != null) return v;
-    return `{{${key}}}`;
-  }).replace(/\$\{(\w+)\}/g, (_, key: string) => {
-    // schema 片段里用了 ${var} 占位（来自历史代码风格）
-    const v = replacements[key];
-    return v ?? "";
+    callerTag: args.callerTag,
   });
+}
+
+/**
+ * 解析 difficulty 字段。
+ *   - "3" → 3
+ *   - "2-4" → batchIndex 0 → 2，1 → 3，2 → 4，3 → 2，...
+ *   - undefined → 3（默认中等）
+ */
+function parseDifficulty(raw: string | undefined, batchIndex: number): 1 | 2 | 3 | 4 | 5 {
+  if (!raw) return 3;
+  const single = raw.match(/^([1-5])$/);
+  if (single) return Number(single[1]) as 1 | 2 | 3 | 4 | 5;
+  const range = raw.match(/^([1-5])-([1-5])$/);
+  if (range) {
+    const lo = Number(range[1]);
+    const hi = Number(range[2]);
+    const span = hi - lo + 1;
+    return ((lo + (batchIndex % span)) as 1 | 2 | 3 | 4 | 5);
+  }
+  return 3;
 }
 
 /**

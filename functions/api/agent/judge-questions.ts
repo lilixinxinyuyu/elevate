@@ -45,6 +45,7 @@ import {
   type Env,
 } from "../../_shared";
 import { PROMPTS } from "../../_prompts.generated";
+import { composeJudgeUserPrompt } from "../../_promptComposer";
 
 interface JudgeQuestion {
   question_id: string;
@@ -237,18 +238,13 @@ function buildSystemPrompt(subjectId: string): string {
 
 function buildUserPrompt(args: JudgeRequest): string {
   const subjectId = args.subjectId === "chinese" ? "chinese" : "math";
-  const subjLabel = subjectId === "math" ? "数学" : "语文";
-  const lines = args.questions.map((q) => JSON.stringify(summarizeQuestion(q)));
-  const replacements: Record<string, string> = {
-    count: String(args.questions.length),
+  // v0.31.34：用 composer 组合，能为这批题涉及到的 skill 注入 scope 上下文
+  const summarized = args.questions.map((q) => summarizeQuestion(q));
+  return composeJudgeUserPrompt({
     subjectId,
-    subjectLabel: subjLabel,
     scopeLabel: args.scopeLabel ?? "全部",
     scopeFilter: args.scopeFilter ?? "(none)",
-    questionsJsonl: lines.join("\n"),
-  };
-  return PROMPTS.qualityJudgeUserTemplate.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
-    return replacements[k] ?? `{{${k}}}`;
+    questions: summarized,
   });
 }
 

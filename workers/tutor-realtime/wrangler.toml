@@ -1,0 +1,21 @@
+# Cloudflare Worker：tutor-realtime WebSocket 代理
+#
+# 浏览器 ←(WSS)→ 这个 Worker ←(WSS)→ dashscope-intl realtime endpoint
+# Worker 持有 DASHSCOPE_API_KEY，浏览器只用 APP_PASSWORD 通过 subprotocol/query 鉴权。
+#
+# 为什么单独 Worker：CF Pages Functions 不支持 incoming WebSocket upgrade
+# (WebSocketPair / accept 是 Workers-only)。所以代理放在独立 Worker 里。
+#
+# 部署：
+#   pnpm wrangler deploy --config workers/tutor-realtime/wrangler.toml
+# 配置 secrets：
+#   pnpm wrangler secret put DASHSCOPE_API_KEY --config workers/tutor-realtime/wrangler.toml
+#   pnpm wrangler secret put APP_PASSWORD     --config workers/tutor-realtime/wrangler.toml
+#
+# 部署后 URL 形如 https://selena-tutor-realtime.<account>.workers.dev
+# 把它写到 Pages dashboard 的环境变量 VITE_REALTIME_URL（公开变量，前端能读到）
+
+name = "selena-tutor-realtime"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+# nodejs_compat 不需要 — Workers runtime 自己有 fetch/WebSocket

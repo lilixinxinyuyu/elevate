@@ -82,6 +82,10 @@ export function TierCard({
   ability: AbilityDiagnostic | null;
 }) {
   const t = rating.tier;
+  // v0.31.16：Hero 背景框 / 文字色跟着佩戴的勋章走（用户切徽章 → 框换色）。
+  // rating.tier 仍然决定显示的段位文字（左下"再得 X 升 ★II" / 右下"锦江区 I"），
+  // 这是真实段位进度，不被佩戴影响。
+  const theme = equippedBadge.theme;
   const [abilityOpen, setAbilityOpen] = useState(false);
   // v0.31.4：XP 大数 roll-up（昨日总分 → 今日总分），key 含学期避免学期切换误滚
   const displayScore = useRollupNumber(rating.score, `tierCard:lastSeenScore:${rating.tier.id}`);
@@ -95,15 +99,15 @@ export function TierCard({
     if (rating.subRank < 4) {
       return (
         <>
-          再得 <span className={`font-bold tabular-nums ${t.theme.textColor}`}>{rating.deltaToNextSubRank.toLocaleString()}</span> XP 升 <span className="text-amber-300">★{["I","II","III","IV"][rating.subRank]}</span>
+          再得 <span className={`font-bold tabular-nums ${theme.textColor}`}>{rating.deltaToNextSubRank.toLocaleString()}</span> XP 升 <span className="text-amber-300">★{["I","II","III","IV"][rating.subRank]}</span>
         </>
       );
     }
     if (rating.nextTier) {
       return (
         <>
-          再得 <span className={`font-bold tabular-nums ${t.theme.textColor}`}>{rating.deltaToNext.toLocaleString()}</span> XP 跨入
-          <span className={`ml-1 ${t.theme.textColor} font-display`}>
+          再得 <span className={`font-bold tabular-nums ${theme.textColor}`}>{rating.deltaToNext.toLocaleString()}</span> XP 跨入
+          <span className={`ml-1 ${theme.textColor} font-display`}>
             {rating.nextTier.badgeIcon} {rating.nextTier.name}
           </span>
         </>
@@ -114,7 +118,7 @@ export function TierCard({
 
   return (
     <section
-      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${t.theme.fromColor} ${t.theme.toColor} border ${t.theme.borderColor} px-5 py-4 sm:px-6 sm:py-5`}
+      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${theme.fromColor} ${theme.toColor} border ${theme.borderColor} px-5 py-4 sm:px-6 sm:py-5`}
     >
       {/* ambient 光晕 — 给"宝物展示柜"感 */}
       <div className="absolute -right-16 -top-20 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
@@ -125,26 +129,26 @@ export function TierCard({
       <div className="relative flex flex-row gap-4 sm:gap-5 items-center">
         {/* 左：成长块 */}
         <div className="flex-1 min-w-0 flex flex-col gap-3">
-          <div className={`text-xs sm:text-sm ${t.theme.subTextColor}`}>你好 {studentName} 👋</div>
+          <div className={`text-xs sm:text-sm ${theme.subTextColor}`}>你好 {studentName} 👋</div>
 
           {/* XP 数字 — 紧凑 hero scale */}
           <div className="animate-score-slide-in">
             <div className="flex items-baseline gap-1.5">
               <div
-                className={`font-display font-bold text-4xl sm:text-5xl ${t.theme.textColor} drop-shadow-glow tabular-nums leading-[0.95]`}
+                className={`font-display font-bold text-4xl sm:text-5xl ${theme.textColor} drop-shadow-glow tabular-nums leading-[0.95]`}
               >
                 {displayScore.toLocaleString()}
               </div>
-              <div className={`text-xs sm:text-sm ${t.theme.subTextColor}`}>XP</div>
+              <div className={`text-xs sm:text-sm ${theme.subTextColor}`}>XP</div>
             </div>
 
             {/* 星级 + 超过 X%（合并到 XP 同行下方） */}
-            <div className={`mt-1.5 flex items-center gap-1.5 text-xs ${t.theme.subTextColor}`}>
+            <div className={`mt-1.5 flex items-center gap-1.5 text-xs ${theme.subTextColor}`}>
               <span className="text-amber-300 text-sm tracking-tighter leading-none">
                 {rating.subRankStars}
               </span>
               <span className="opacity-50">·</span>
-              <span>超过 <span className={`font-display font-bold ${t.theme.textColor}`}>{rating.percentSurpassed}%</span></span>
+              <span>超过 <span className={`font-display font-bold ${theme.textColor}`}>{rating.percentSurpassed}%</span></span>
             </div>
           </div>
 
@@ -165,7 +169,7 @@ export function TierCard({
               />
             </div>
             {!tierUpImminent && (
-              <div className={`mt-1.5 text-[11px] ${t.theme.subTextColor}`}>{nextHint}</div>
+              <div className={`mt-1.5 text-[11px] ${theme.subTextColor}`}>{nextHint}</div>
             )}
           </div>
         </div>
@@ -194,7 +198,7 @@ export function TierCard({
             />
           </div>
           <div className="text-center">
-            <div className={`text-sm sm:text-base font-display font-bold ${t.theme.textColor} leading-tight`}>
+            <div className={`text-sm sm:text-base font-display font-bold ${theme.textColor} leading-tight`}>
               {t.name}
               <span className="ml-1 text-xs">{rating.subRankRoman}</span>
             </div>
@@ -213,18 +217,18 @@ export function TierCard({
             aria-expanded={abilityOpen}
           >
             <div className="flex items-baseline gap-3">
-              <span className={`text-[11px] uppercase tracking-widest ${t.theme.subTextColor}`}>
+              <span className={`text-[11px] uppercase tracking-widest ${theme.subTextColor}`}>
                 能力诊断
               </span>
-              <span className={`text-sm tabular-nums ${t.theme.subTextColor}`}>
-                <span className={`font-display font-bold text-base ${t.theme.textColor}`}>
+              <span className={`text-sm tabular-nums ${theme.subTextColor}`}>
+                <span className={`font-display font-bold text-base ${theme.textColor}`}>
                   {ability.score}
                 </span>
                 <span className="ml-1 opacity-70">/ 1000</span>
               </span>
             </div>
             <span
-              className={`text-xs ${t.theme.subTextColor} transition-transform shrink-0 ${abilityOpen ? "rotate-180" : ""}`}
+              className={`text-xs ${theme.subTextColor} transition-transform shrink-0 ${abilityOpen ? "rotate-180" : ""}`}
               aria-hidden="true"
             >
               ▾
@@ -239,8 +243,8 @@ export function TierCard({
                 value={ability.components.accuracy}
                 max={250}
                 rawDisplay={`${Math.round(ability.raw.accuracy7d * 100)}%`}
-                tone={t.theme.textColor}
-                subTone={t.theme.subTextColor}
+                tone={theme.textColor}
+                subTone={theme.subTextColor}
               />
               <AbilityMini
                 label="熟练"
@@ -248,8 +252,8 @@ export function TierCard({
                 value={ability.components.mastery}
                 max={400}
                 rawDisplay={`${Math.round(ability.raw.weightedMastery)} 分`}
-                tone={t.theme.textColor}
-                subTone={t.theme.subTextColor}
+                tone={theme.textColor}
+                subTone={theme.subTextColor}
               />
               <AbilityMini
                 label="坚持"
@@ -257,8 +261,8 @@ export function TierCard({
                 value={ability.components.continuity}
                 max={200}
                 rawDisplay={`连 ${ability.raw.streak} · 共 ${ability.raw.cumulativeDays} 天`}
-                tone={t.theme.textColor}
-                subTone={t.theme.subTextColor}
+                tone={theme.textColor}
+                subTone={theme.subTextColor}
               />
               <AbilityMini
                 label="广度"
@@ -266,8 +270,8 @@ export function TierCard({
                 value={ability.components.volume}
                 max={150}
                 rawDisplay={`${ability.raw.skillCoverageScore} 分 · ${ability.raw.uniqueQuestionsCorrect} 独立答对`}
-                tone={t.theme.textColor}
-                subTone={t.theme.subTextColor}
+                tone={theme.textColor}
+                subTone={theme.subTextColor}
               />
             </div>
           )}
@@ -315,16 +319,17 @@ function AbilityMini({
   );
 }
 
-/** 紧凑版：在结算页 / 其他位置显示分数 + 段位 */
+/** 紧凑版：在结算页 / 其他位置显示分数 + 段位（不带佩戴概念，按 rating tier 染色） */
 export function TierCompact({ rating }: { rating: RatingResult }) {
   const t = rating.tier;
+  const theme = t.theme;
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border ${t.theme.borderColor}`}>
+    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border ${theme.borderColor}`}>
       <span className="text-base">{t.badgeIcon}</span>
-      <span className={`text-sm font-display font-bold ${t.theme.textColor}`}>
+      <span className={`text-sm font-display font-bold ${theme.textColor}`}>
         {rating.score}
       </span>
-      <span className={`text-xs ${t.theme.subTextColor}`}>{t.name}</span>
+      <span className={`text-xs ${theme.subTextColor}`}>{t.name}</span>
     </div>
   );
 }
