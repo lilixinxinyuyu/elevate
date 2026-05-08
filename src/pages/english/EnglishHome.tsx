@@ -1,7 +1,7 @@
 /**
- * 英语首页 (v0.31.39 MVP)
+ * 英语首页 (v0.31.40 重写)
  *
- * 范围：仅作为 vocab 入口；后续可在这里加听力 / 写作 / 阅读卡片。
+ * 顶部 banner + 上下册各自 stats（已掌握/薄弱/未学习）+ 进入 vocab 卡。
  */
 
 import { Link } from "react-router-dom";
@@ -9,13 +9,14 @@ import { useEffect, useState } from "react";
 import { db } from "../../db/dexie";
 import { G4_WORDS } from "../../subjects/english/wordList";
 import {
+  calcOldStyleStats,
   loadVocabProgress,
-  summarizeVocab,
-  type VocabSummary,
+  type OldStyleVocabStats,
+  type VocabProgress,
 } from "../../lib/englishVocabProgress";
 
 export function EnglishHomePage() {
-  const [summary, setSummary] = useState<VocabSummary | null>(null);
+  const [progress, setProgress] = useState<VocabProgress | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,12 +26,17 @@ export function EnglishHomePage() {
       if (!s || cancelled) return;
       const p = await loadVocabProgress(s.id);
       if (cancelled) return;
-      setSummary(summarizeVocab(G4_WORDS, p));
+      setProgress(p);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const upperPool = G4_WORDS.filter((w) => w.semester === "G4A");
+  const lowerPool = G4_WORDS.filter((w) => w.semester === "G4B");
+  const upperStats = progress ? calcOldStyleStats(upperPool, progress) : null;
+  const lowerStats = progress ? calcOldStyleStats(lowerPool, progress) : null;
 
   return (
     <div className="space-y-5">
@@ -49,7 +55,7 @@ export function EnglishHomePage() {
         </div>
       </div>
 
-      {/* 单词练习 */}
+      {/* 单词练习入口 */}
       <Link
         to="/english/vocab"
         className="card-glow bg-gradient-to-br from-cyan-500/15 to-blue-500/10 border-cyan-400/40 hover:scale-[1.01] transition-transform block"
@@ -61,9 +67,7 @@ export function EnglishHomePage() {
               单词记忆 · 加权练习
             </div>
             <div className="text-xs text-slate-300 mt-0.5">
-              {summary
-                ? `已掌握 ${summary.mastered} / ${summary.total} · 错过的会再出现`
-                : `${G4_WORDS.length} 个 G4 单词 · 错过的会再出现`}
+              3 模式：看单词 → 选中文 / 看中文 → 选单词 / 听读音 → 选单词
             </div>
             <div className="text-[11px] text-cyan-300/80 mt-1">
               已自动从老系统迁移之前的进度
@@ -73,46 +77,60 @@ export function EnglishHomePage() {
         </div>
       </Link>
 
-      {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <Stat label="总单词" value={summary.total} tone="violet" />
-          <Stat label="已掌握" value={summary.mastered} tone="emerald" />
-          <Stat label="待巩固" value={summary.shaky} tone="rose" />
-          <Stat label="没见过" value={summary.fresh} tone="amber" />
-        </div>
-      )}
+      {/* 上下册各自统计（老系统口径：已掌握/薄弱/未学习） */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <BookStatsCard label="四年级上册" stats={upperStats} total={upperPool.length} />
+        <BookStatsCard label="四年级下册" stats={lowerStats} total={lowerPool.length} />
+      </div>
 
       <div className="card text-xs text-slate-400 leading-relaxed">
-        💡 路线图：
-        <ul className="list-disc pl-5 mt-1 space-y-0.5">
-          <li>当前：单词中文意思 → 输入英文（含老系统进度迁移）</li>
-          <li>计划：听音选词 / 句子排序 / 完形填空</li>
-          <li>计划：进入"今日挑战"作为一环</li>
-        </ul>
+        💡 玩法：进 "单词" 页面后可切换上/下册和 3 种模式。错过的词会在加权随机中更频繁出现。
       </div>
     </div>
   );
 }
 
-function Stat({
+function BookStatsCard({
   label,
-  value,
-  tone,
+  stats,
+  total,
 }: {
   label: string;
-  value: number;
-  tone: "violet" | "emerald" | "rose" | "amber";
+  stats: OldStyleVocabStats | null;
+  total: number;
 }) {
-  const cls = {
-    violet: "text-violet-300",
-    emerald: "text-emerald-300",
-    rose: "text-rose-300",
-    amber: "text-amber-300",
-  }[tone];
   return (
-    <div className="card text-center">
-      <div className="text-[11px] text-slate-400">{label}</div>
-      <div className={`font-display font-bold text-xl mt-1 ${cls}`}>{value}</div>
+    <div className="card">
+      <div className="text-xs text-slate-400 mb-2">{label}</div>
+      {!stats ? (
+        <div className="text-slate-500 text-sm">— 加载中 —</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <div className="text-[10px] text-slate-400">已掌握</div>
+              <div className="font-display font-bold text-lg text-emerald-300">
+                {stats.mastered}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-400">薄弱</div>
+              <div className="font-display font-bold text-lg text-rose-300">
+                {stats.weak}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-400">未学习</div>
+              <div className="font-display font-bold text-lg text-amber-300">
+                {stats.unknown}
+              </div>
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-500 mt-2 text-center">
+            总 {total} 词 · 已掌握 {Math.round((stats.mastered / total) * 100)}%
+          </div>
+        </>
+      )}
     </div>
   );
 }

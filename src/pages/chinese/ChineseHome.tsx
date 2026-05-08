@@ -150,7 +150,7 @@ export function ChineseHomePage() {
         </div>
       </div>
 
-      {/* v0.31.39：写字表 250 字 — 期末必背，独立加权练习（迁移老数据） */}
+      {/* v0.31.40：写字表 500 字 — 上下册可切换 + 写字 / 辨字双模式 + 错字本（迁移老数据） */}
       <Link
         to="/chinese/char-practice"
         className="card-glow bg-gradient-to-br from-amber-500/15 to-orange-500/10 border-amber-400/40 hover:scale-[1.01] transition-transform block"
@@ -159,10 +159,10 @@ export function ChineseHomePage() {
           <div className="text-3xl">✍️</div>
           <div className="flex-1">
             <div className="font-display font-bold text-amber-100">
-              写字表 250 字 · 加权练习
+              写字表 500 字 · 上下册可切换
             </div>
             <div className="text-xs text-slate-300 mt-0.5">
-              人教版 G4B 全部 250 字 · 拼音 + 词组 + 含义提示 · 错过的字会再出现
+              ✍️ 写字练习 + 🎯 辨字选择 双模式 · 错字本自动收录 · 连击 XP
             </div>
             <div className="text-[11px] text-amber-300/80 mt-1">
               已自动从老系统迁移你之前的进度

@@ -3,6 +3,83 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.40 — 2026-05-08 · 语文 500 字 / 英语 3 模式 · 全部对齐老 HTML 系统
+
+爸爸反馈 v0.31.39 太简化：
+1. 语文统计跟老 chinese/g4_cn.html 对不上：老的"总练习 180 / 正确率 96% / 错字 5"，这版"已掌握 2"完全不同口径
+2. 语文老版本是 500 字（上下册可切），这版只有 250（下册）
+3. 语文老版本有"手写 + 辨字选择"两模式，这版只有写字
+4. 英语老版本有 3 模式（看单词选中文/看中文选单词/听读音选单词）+ 上下册切，这版只有 1 个看中文写英文
+5. 英语统计 47/3/63 跟新版 51/—/64 对不上
+
+### 语文写字表 500 字 — 重写
+
+**数据：500 字（上 250 + 下 250）**
+- `scripts/extract-chinese-chars.mjs` 改成同时抽 g4_cn.html 的 upperWordList + lowerWordList
+- `src/subjects/chinese/charLibrary.ts` 现在 export `G4A_CHARS` (250) / `G4B_CHARS` (250) / `G4_CHARS_ALL` (500)
+
+**双模式（沿用老 HTML）**
+- ✍️ 写字练习：拼音 + 词组提示 + 含义 → 输入字
+- 🎯 辨字选择：拼音 + "请选择正确的生字：<含义>" → 4 选项（同 pinyin 首字母 + 同字表干扰项 + 随机补全），完全沿用 g4_cn.html `generateChooseQuestion` 公式
+
+**统计口径完全对齐老系统（updateStats）**
+- 总练习 = sum(right + wrong) — 总 attempt 次（不是不同字数）
+- 正确率 = sum(right) / 总练习
+- 错字总数 = chars where wrong > right
+- 错字本：把这些字按 (wrong - right) 降序列出，点击单字直接跳到那字单独练
+
+**加权随机沿用老公式**
+- `weight = max(1, wrong*3 + 1 - min(right, 3))`：错过越多权重越高 ×3，对超 3 次后权重不再降
+
+**游戏化**
+- 连击 × 系统：连续答对，每对多 +2 XP（最多 +18）
+- 本次 XP 实时累计 + 飞行 +N XP 浮字
+- 连击 ≥ 2 时显示 🔥 连击 × N
+
+实测迁移后：**总练习 180 / 正确率 96% / 错字总数 5（毫/哩/颇/挣/囊）** — 完美对上爸爸提到的老数据。
+
+### 英语单词 — 重写
+
+**3 模式（沿用老 HTML）**
+- 看单词 → 选中文：英文 + 🔊 → 4 个中文选项
+- 看中文 → 选单词：中文 → 4 个英文选项
+- 🔊 听读音 → 选单词：自动 TTS 朗读 + 可点击重听 → 4 个英文选项
+
+**TTS：Web Speech API**
+- `speakEnglish(text)` 用 SpeechSynthesisUtterance，lang=en-US
+- 优先 Samantha（macOS 清晰女声），fallback 任意 en-US female / 任意 en-US
+
+**上下册切换**
+- 95 (G4A) / 112 (G4B) 各自独立 stats
+
+**统计口径对齐老 updateStatsPanel**
+- 已掌握: correct > wrong * 2
+- 薄弱: wrong > 0 且不满足已掌握
+- 未学习: correct === 0 && wrong === 0
+
+**加权 weight 字段维护沿用老公式**
+- 答对：`weight = max(0.4, weight * 0.75)`
+- 答错：`weight *= 1.6`
+- 新词初始 weight = 1
+
+**焦点提示**
+- 🔴 错题强化（wrong > correct）
+- 🟡 高频巩固（weight > 1）
+- 🟢 基础练习
+
+**游戏化**
+- 同写字表的连击 + XP 系统
+
+### 改动文件
+- `src/subjects/chinese/charLibrary.ts` — 250 → 500 字（G4A + G4B + ALL）
+- `src/lib/chineseCharProgress.ts` — `calcOldStyleStats` 替代 `summarizeProgress`；`charWeightLikeOldSystem` 替代 `charWeight`；新增 `generateChooseQuestion`
+- `src/lib/englishVocabProgress.ts` — `calcOldStyleStats` 老口径 / `weight` 字段维护 / `speakEnglish` TTS / `buildOptions` / `focusBadge`
+- `src/pages/chinese/CharPractice.tsx` — 整页重写：上下册 tabs / 写字+辨字双模式 / 老口径 stats / 错字本 / 连击 XP
+- `src/pages/english/VocabPractice.tsx` — 整页重写：上下册 tabs / 3 模式 / TTS / 老口径 stats / 焦点 / 连击 XP
+- `src/pages/english/EnglishHome.tsx` — 上下册各自 stats card
+- `src/pages/chinese/ChineseHome.tsx` — 卡片文案改成 "500 字"
+- `scripts/extract-chinese-chars.mjs` — 改抽 g4_cn.html
+
 ## v0.31.39 — 2026-05-08 · 语文写字 250 + 英语单词 207（含老数据迁移）
 
 爸爸三个要求：
