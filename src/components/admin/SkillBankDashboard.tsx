@@ -28,6 +28,16 @@ import {
 import { AiGenBatchModal } from "./AiGenBatchModal";
 import { auditQuestion } from "../../lib/questionAuditLite";
 import { recordDeletedQuestionIds } from "../../db/seed";
+import {
+  judgeQuestionsInBatches,
+  fixQuestion,
+  applyQuestionFix,
+  type Judgment,
+} from "../../lib/qualityJudge";
+import { generateAiQuestions } from "../../lib/tutor";
+import { validateQuestion } from "../../core/validateQuestion";
+import { SKILLS } from "../../content/skills";
+import { UNITS } from "../../content/units";
 import type { ExamPriority, Question, Term } from "../../core/types";
 
 type SortKey =
@@ -159,7 +169,7 @@ export function SkillBankDashboard() {
         <Stat label="筛选后 skill" value={summary.skillCount} tone="violet" />
         <Stat label="题数" value={summary.totalQs} />
         <Stat label="AI 生成" value={summary.aiQs} tone="violet" />
-        <Stat label="待修问题题" value={summary.issueQs} tone={summary.issueQs > 0 ? "rose" : "slate"} />
+        <Stat label="待修问题" value={summary.issueQs} tone={summary.issueQs > 0 ? "rose" : "slate"} />
         <Stat label="薄弱 / 缺货" value={`${summary.weakSkills} / ${summary.lowStock}`} tone="amber" />
       </div>
 
@@ -220,12 +230,12 @@ export function SkillBankDashboard() {
         </select>
       </div>
 
-      {/* 表 */}
+      {/* 表 — 移动端最小宽度 720 强制横向滚动，避免列被挤成竖排文字 */}
       <div className="overflow-x-auto rounded-lg border border-white/10">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs min-w-[720px]">
           <thead className="bg-ink-900/70 text-slate-400">
             <tr>
-              <th className="p-2 text-left">
+              <th className="p-2 text-left whitespace-nowrap">
                 <input
                   type="checkbox"
                   checked={selected.size > 0 && selected.size === sortedRows.length}
@@ -234,13 +244,13 @@ export function SkillBankDashboard() {
                   }
                 />
               </th>
-              <th className="p-2 text-left">知识点</th>
-              <th className="p-2 text-left">期末重要度</th>
-              <th className="p-2 text-right">题量</th>
-              <th className="p-2 text-right">AI</th>
-              <th className="p-2 text-right">问题</th>
-              <th className="p-2 text-right">Selena 状况</th>
-              <th className="p-2 text-center w-8"></th>
+              <th className="p-2 text-left whitespace-nowrap">知识点</th>
+              <th className="p-2 text-left whitespace-nowrap">期末重要度</th>
+              <th className="p-2 text-right whitespace-nowrap">题量</th>
+              <th className="p-2 text-right whitespace-nowrap">AI</th>
+              <th className="p-2 text-right whitespace-nowrap">问题</th>
+              <th className="p-2 text-right whitespace-nowrap">Selena 状况</th>
+              <th className="p-2 text-center w-10 whitespace-nowrap"></th>
             </tr>
           </thead>
           <tbody>
@@ -421,12 +431,12 @@ function Row({
         </div>
         <div className="text-[10px] text-slate-500 mt-0.5">{row.unitName}</div>
       </td>
-      <td className="p-2">
+      <td className="p-2 whitespace-nowrap">
         <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] border ${prio.tone}`}>
           {prio.label}
         </span>
       </td>
-      <td className="p-2 text-right tabular-nums text-slate-200">
+      <td className="p-2 text-right tabular-nums text-slate-200 whitespace-nowrap">
         {row.totalCount}
         <div className="text-[10px] text-slate-500">
           seed {row.seedCount}
@@ -514,6 +524,105 @@ function SkillDetailPanel({
   );
   const [busy, setBusy] = useState(false);
   const [showLimit, setShowLimit] = useState(20);
+  // v0.31.56: AI judge / fix / regen 行内集成
+  const [judgments, setJudgments] = useState<Map<string, Judgment>>(new Map());
+  const [judgeProgress, setJudgeProgress] = useState<{ done: number; total: number } | null>(null);
+  const [regenLoadingId, setRegenLoadingId] = useState<string | null>(null);
+  const [fixLoadingId, setFixLoadingId] = useState<string | null>(null);
+
+  const skill = SKILLS.find((s) => s.id === row.skillId);
+  const unit = UNITS.find((u) => u.id === row.unitId);
+
+  const onJudgeAll = async () => {
+    if (skillQuestions.length === 0) return;
+    setJudgeProgress({ done: 0, total: 1 });
+    try {
+      const r = await judgeQuestionsInBatches(skillQuestions, {
+        subjectId: "math",
+        scopeLabel: `skill:${row.skillName}`,
+        scopeFilter: row.skillId,
+        onProgress: (p) =>
+          setJudgeProgress({ done: p.done, total: p.total }),
+      });
+      setJudgments(new Map(r.judgments));
+    } catch (e) {
+      console.warn("[judgeAll] failed:", e);
+      window.alert(`AI 质检失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setJudgeProgress(null);
+    }
+  };
+
+  const onRegenOne = async (q: Question) => {
+    if (!skill || !unit) return;
+    setRegenLoadingId(q.question_id);
+    try {
+      const existingStems = skillQuestions.map((qq) => qq.stem).slice(0, 30);
+      const term = unit.term === "综合复习" ? undefined : unit.term;
+      const r = await generateAiQuestions({
+        subjectId: "math",
+        unitId: unit.id,
+        unitName: unit.name,
+        skillId: skill.id,
+        skillName: skill.name,
+        count: 1,
+        difficulty: String(q.difficulty ?? 3),
+        term,
+        existingStems,
+      });
+      const newQ = r.questions[0];
+      if (!newQ) {
+        window.alert("AI 没返回新题");
+        return;
+      }
+      const v = validateQuestion(newQ);
+      if (!v.ok || !v.question) {
+        window.alert(
+          `生成的题没通过 validate：\n${v.issues.map((i) => `${i.severity}: ${i.path} ${i.message}`).join("\n")}`,
+        );
+        return;
+      }
+      const stamped = {
+        ...v.question,
+        subjectId: "math" as const,
+        status: "approved" as const,
+        tags: Array.from(new Set([...(v.question.tags ?? []), "ai_generated"])),
+      };
+      await db.questions.put(stamped as never);
+      // 提示成功；用户可手动删原题
+      window.alert(`✅ 新题已入库：${stamped.question_id}\n（原题保留，需要的话点 🗑️ 删）`);
+    } catch (e) {
+      window.alert(`重生成失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setRegenLoadingId(null);
+    }
+  };
+
+  const onFixOne = async (q: Question) => {
+    const j = judgments.get(q.question_id);
+    if (!j) return;
+    setFixLoadingId(q.question_id);
+    try {
+      const r = await fixQuestion({
+        question: q,
+        issues: j.issues,
+        reason: j.reason,
+        subjectId: "math",
+      });
+      if (!window.confirm(`AI 修改建议：\n\n${r.changesSummary}\n\n应用？（会覆盖原题内容）`)) return;
+      await applyQuestionFix(r.fixed);
+      // 修后清这题的 judgment（避免显示旧 verdict）
+      setJudgments((prev) => {
+        const m = new Map(prev);
+        m.delete(q.question_id);
+        return m;
+      });
+    } catch (e) {
+      window.alert(`AI 修题失败：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setFixLoadingId(null);
+    }
+  };
 
   const onClearAi = async () => {
     const aiQs = skillQuestions.filter(
@@ -545,24 +654,39 @@ function SkillDetailPanel({
     }
   };
 
+  const judging = judgeProgress !== null;
+
   return (
     <div className="bg-violet-500/[0.04] border-t border-violet-400/30 px-4 py-3 text-xs">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="text-slate-300">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className="text-slate-300 mr-auto">
           <span className="font-display font-bold text-violet-200">{row.skillName}</span>
           <span className="ml-2 text-slate-500">
             · 共 {skillQuestions.length} 道（seed {row.seedCount} · AI {row.aiCount}）
           </span>
+          {judgments.size > 0 && (
+            <span className="ml-2 text-cyan-300/80">· 已质检 {judgments.size}</span>
+          )}
         </div>
-        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => void onJudgeAll()}
+          disabled={busy || judging || skillQuestions.length === 0}
+          className="px-2 py-1 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border border-cyan-400/30 disabled:opacity-50"
+          title="让 LLM 按质量规范判定每道题"
+        >
+          {judging
+            ? `✨ 质检中… ${judgeProgress!.done}/${judgeProgress!.total}`
+            : `✨ AI 质检本 skill`}
+        </button>
         {row.aiCount > 0 && (
           <button
             type="button"
             onClick={() => void onClearAi()}
-            disabled={busy}
+            disabled={busy || judging}
             className="px-2 py-1 rounded-md bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-400/30 disabled:opacity-50"
           >
-            🗑️ 全删此 skill 的 AI 题（{row.aiCount}）
+            🗑️ 全删 AI 题（{row.aiCount}）
           </button>
         )}
         <button
@@ -599,6 +723,18 @@ function SkillDetailPanel({
                   : audit.worstSeverity === "minor"
                     ? "🟡"
                     : "🟢";
+            const judgment = judgments.get(q.question_id);
+            const verdictChip =
+              judgment?.verdict === "delete"
+                ? { label: "AI判删", tone: "bg-rose-500/25 text-rose-200" }
+                : judgment?.verdict === "borderline"
+                  ? { label: "AI判存疑", tone: "bg-amber-500/25 text-amber-200" }
+                  : judgment?.verdict === "keep"
+                    ? { label: "AI判 OK", tone: "bg-emerald-500/20 text-emerald-200" }
+                    : null;
+            const isRegenerating = regenLoadingId === q.question_id;
+            const isFixing = fixLoadingId === q.question_id;
+            const showFix = judgment && (judgment.verdict === "delete" || judgment.verdict === "borderline");
             return (
               <div
                 key={q.question_id}
@@ -633,9 +769,37 @@ function SkillDetailPanel({
                 >
                   {auditIcon}
                 </span>
+                {verdictChip && (
+                  <span
+                    className={`shrink-0 px-1 rounded text-[10px] ${verdictChip.tone}`}
+                    title={`${judgment!.reason}\n\n${judgment!.issues.join("\n")}`}
+                  >
+                    {verdictChip.label}
+                  </span>
+                )}
                 <span className="flex-1 min-w-0 text-slate-300 truncate" title={q.stem}>
                   {q.stem}
                 </span>
+                {showFix && (
+                  <button
+                    type="button"
+                    onClick={() => void onFixOne(q)}
+                    disabled={busy || isFixing}
+                    className="shrink-0 px-1.5 text-amber-300 hover:text-amber-200 disabled:opacity-50"
+                    title={`AI 修一下：\n${judgment!.reason}`}
+                  >
+                    {isFixing ? "⏳" : "🔧"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void onRegenOne(q)}
+                  disabled={busy || isRegenerating || !skill || !unit}
+                  className="shrink-0 px-1.5 text-violet-300 hover:text-violet-200 disabled:opacity-50"
+                  title="生成一道相似题（原题保留）"
+                >
+                  {isRegenerating ? "⏳" : "🔄"}
+                </button>
                 <button
                   type="button"
                   onClick={() => void onDeleteOne(q.question_id)}
