@@ -21,6 +21,7 @@ import {
 } from "../db/service";
 import { tierById, TIERS, tierIndex } from "../core/tiers";
 import { TierCard } from "../components/TierCard";
+import { WeeklyCompareCard } from "../components/WeeklyCompareCard";
 import { TrophyWall } from "../components/TrophyWall";
 import { BadgeInventory } from "../components/BadgeInventory";
 import { UnlockCelebration } from "../components/UnlockCelebration";
@@ -323,6 +324,10 @@ export function HomePage() {
           <div className="mt-2 font-display text-2xl text-white">载入中…</div>
         </section>
       )}
+
+      {/* v0.31.50：本周 vs 上周 — 短周期可见进步，配合"难度加权 XP + 5 段小段位"
+          一起给 Selena 一个"每天都看得到动"的反馈点 */}
+      <WeeklyCompareCard attempts={attempts ?? []} />
 
       {/* v0.31.2：今日 3 同心环（取代之前的 chip 行）*/}
       {isPhase2Live() ? (

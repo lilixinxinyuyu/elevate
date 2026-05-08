@@ -137,6 +137,22 @@ export function speedBonus(elapsedSeconds: number, estimatedSeconds: number, isC
  */
 export const TUTOR_ASSISTED_FACTOR = 0.5;
 
+/**
+ * v0.31.50: 难度加权 XP — 让"做难题"的回报跟付出对齐。
+ *
+ * index = difficulty (1-5)，index 0 占位（difficulty 不会是 0）。
+ *
+ * 设计原则：
+ *  - D1 (1.0×): 启蒙、热身。基准。
+ *  - D2 (1.5×): 标准课内。
+ *  - D3 (3.0×): 略难的课内 / 入门拓展。"动了脑子"。
+ *  - D4 (6.0×): 真正难题。一道顶过去 4 道 D2，给得起。
+ *  - D5 (10.0×): 挑战 / 拓展极限题。罕见但重奖。
+ *
+ * 不追溯：老 attempt 的 XP 已经按旧公式存进 scoreDelta.total，本次只影响新作答。
+ */
+export const DIFFICULTY_WEIGHTS = [0, 1.0, 1.5, 3.0, 6.0, 10.0] as const;
+
 export function scoreAttempt(input: ScoreInput): ScoreDelta {
   const { question, isCorrect, hintsOpened, elapsedSeconds, isReview, multiStepAllStepsCorrect, comboAfter } = input;
   const usedTutor = !!input.usedTutor;
@@ -149,7 +165,13 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
   const noBonusAttempt = isSecondAttempt || tutorAssisted;
 
   const base = 10;
-  const difficultyMul = 1 + (question.difficulty - 1) * 0.2;
+  // v0.31.50: 难度加权放大——之前 D4 只比 D1 多 60%（1.6× vs 1.0×），
+  // Selena 启蒙期题简单 → 现在题难，"努力 5×、回报 1.6×"严重不公平 → 进度感塌陷。
+  // 新公式 D2=1.5× / D3=3× / D4=6× / D5=10×，匹配实际付出。
+  // 不追溯老 attempt，仅对未来生效。
+  const difficultyMul = DIFFICULTY_WEIGHTS[
+    Math.min(DIFFICULTY_WEIGHTS.length - 1, Math.max(1, question.difficulty))
+  ] ?? 1.0;
   const correctFactor = isCorrect
     ? (tutorAssisted ? TUTOR_ASSISTED_FACTOR : 1)
     : (input.partialCorrect ? 0.5 : 0.2);

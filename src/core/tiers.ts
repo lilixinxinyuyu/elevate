@@ -203,26 +203,106 @@ export function tierIndex(id: string): number {
 }
 
 /**
- * 段内小段（★ I/II/III/IV，共 4 档）。
- * 进度 0-25% → I；25-50% → II；50-75% → III；75-100% → IV。
- * 返回 1-4 数字。
+ * 段内小段（v0.31.50：从 4 档扩到 5 档，每档配命名称号）。
+ *
+ * 5 个共用称号（前缀变 / 称号同），渐进荣誉感：
+ *   1. 数学爱好者   — 刚来
+ *   2. 数学课代表   — 站稳了
+ *   3. 数学小达人   — 有声誉
+ *   4. 数学小算神   — 顶尖一档
+ *   5. 数学小状元   — 此段巅峰（每段都有自己的"小状元"）
+ *
+ * 前缀按地理段位走：
+ *   school   → 和平街
+ *   district → 锦江
+ *   city     → 成都
+ *   province → 四川
+ *   country  → 中华
+ *
+ * 序列示例：
+ *   和平街数学爱好者 → … → 和平街数学小状元 → 锦江数学爱好者 → …
+ *   → 中华数学小状元 🏆
+ *
+ * 跨大段时"重新当新人"，前缀提一档 — 类似古代县试中举后到府试，
+ * 文化味道恰到好处，对 10 岁 Selena 也好懂。
+ */
+export const SUB_TIER_NAMES = [
+  "数学爱好者",
+  "数学课代表",
+  "数学小达人",
+  "数学小算神",
+  "数学小状元",
+] as const;
+
+/** 大段位 → 称号前缀 */
+export const TIER_PREFIXES: Record<string, string> = {
+  school: "和平街",
+  district: "锦江",
+  city: "成都",
+  province: "四川",
+  country: "中华",
+};
+
+/**
+ * 段内小段（★ I/II/III/IV/V，共 5 档）。
+ * 进度 0-20% → I；20-40% → II；40-60% → III；60-80% → IV；80-100% → V。
+ * 返回 1-5 数字。
  */
 export function subRank(score: number, tier: Tier): number {
   const p = progressInTier(score, tier);
-  if (p < 0.25) return 1;
-  if (p < 0.5) return 2;
-  if (p < 0.75) return 3;
-  return 4;
+  if (p < 0.2) return 1;
+  if (p < 0.4) return 2;
+  if (p < 0.6) return 3;
+  if (p < 0.8) return 4;
+  return 5;
 }
 
 /** 罗马数字表示 */
 export function subRankRoman(n: number): string {
-  return ["", "I", "II", "III", "IV"][n] ?? `${n}`;
+  return ["", "I", "II", "III", "IV", "V"][n] ?? `${n}`;
 }
 
-/** 星级字符串：实星 + 空星，例如 ★★★☆ */
-export function subRankStars(n: number, total = 4): string {
+/** 星级字符串：实星 + 空星，例如 ★★★☆☆ */
+export function subRankStars(n: number, total = 5): string {
   return "★".repeat(Math.max(0, Math.min(total, n))) + "☆".repeat(Math.max(0, total - n));
+}
+
+/** v0.31.50: 完整的小段位称号 — "锦江数学课代表" */
+export function subTierLabel(tier: Tier, sub: number): string {
+  const prefix = TIER_PREFIXES[tier.id] ?? "";
+  const idx = Math.max(1, Math.min(SUB_TIER_NAMES.length, sub)) - 1;
+  return `${prefix}${SUB_TIER_NAMES[idx]}`;
+}
+
+/**
+ * v0.31.50: 当前小段位的 XP 边界 — 给"短进度条"用。
+ * 返回当前小段位的 [lo, hi)、已进入 into，和单段宽度 size。
+ *
+ * 大段总宽度 / 5 = 单小段宽度。例如 锦江区 12k 宽 / 5 = 每小段 2.4k XP。
+ */
+export function subTierBounds(score: number, tier: Tier, sub: number): {
+  lo: number;
+  hi: number;
+  into: number;
+  size: number;
+  /** 0-1 当前小段内进度 */
+  progress: number;
+} {
+  const tierLo = tier.range[0];
+  const tierHi = tier.range[1];
+  const size = (tierHi - tierLo) / 5;
+  const lo = tierLo + size * (sub - 1);
+  const hi = tierLo + size * sub;
+  const into = Math.max(0, score - lo);
+  const progress = size > 0 ? Math.max(0, Math.min(1, into / size)) : 1;
+  return { lo, hi, into, size, progress };
+}
+
+/** v0.31.50: 距下一小段还差多少 XP（已是本段最后一小段时返回到下一大段的距离） */
+export function deltaToNextSubTier(score: number, tier: Tier): number {
+  const sub = subRank(score, tier);
+  const bounds = subTierBounds(score, tier, sub);
+  return Math.max(0, Math.ceil(bounds.hi - score));
 }
 
 /** 段内全局唯一 ID（"district-3"），便于跨段升档判定时区分小段 */

@@ -279,16 +279,20 @@ describe("TIERS (XP scale)", () => {
     expect(progressInTier(10000, school)).toBe(1);
   });
 
-  it("小段 4 档划分", () => {
-    const school = TIERS[0]!; // 0-10000
-    expect(subRank(0, school)).toBe(1);          // ★I 0-2500
-    expect(subRank(2499, school)).toBe(1);
-    expect(subRank(2500, school)).toBe(2);       // ★II 2500-5000
-    expect(subRank(5000, school)).toBe(3);       // ★III 5000-7500
-    expect(subRank(7500, school)).toBe(4);       // ★IV 7500-10000
+  it("小段 5 档划分（v0.31.50）", () => {
+    const school = TIERS[0]!; // 0-10000，每档 2000 XP
+    expect(subRank(0, school)).toBe(1);          // ★I    0-2000   和平街数学爱好者
+    expect(subRank(1999, school)).toBe(1);
+    expect(subRank(2000, school)).toBe(2);       // ★II   2000-4000  和平街数学课代表
+    expect(subRank(4000, school)).toBe(3);       // ★III  4000-6000  和平街数学小达人
+    expect(subRank(6000, school)).toBe(4);       // ★IV   6000-8000  和平街数学小算神
+    expect(subRank(8000, school)).toBe(5);       // ★V    8000-10000 和平街数学小状元
+    expect(subRank(9999, school)).toBe(5);
 
     expect(subRankRoman(2)).toBe("II");
-    expect(subRankStars(3)).toBe("★★★☆");
+    expect(subRankRoman(5)).toBe("V");
+    expect(subRankStars(3)).toBe("★★★☆☆");
+    expect(subRankStars(5)).toBe("★★★★★");
   });
 
   it("百分位：段内 50→89%，国段 log 渐进 99%", () => {

@@ -33,6 +33,10 @@ import {
   subRank,
   subRankRoman,
   subRankStars,
+  subTierLabel,
+  subTierBounds,
+  SUB_TIER_NAMES,
+  TIER_PREFIXES,
 } from "./tiers";
 
 const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]));
@@ -91,6 +95,16 @@ export interface RatingResult {
   subRankRoman: string;
   subRankStars: string;
   deltaToNextSubRank: number;
+  /** v0.31.50: 完整称号，例如 "锦江数学课代表" */
+  subTierLabel: string;
+  /** v0.31.50: 当前小段位 0-1 进度（短进度条用） */
+  subTierProgress: number;
+  /** v0.31.50: 当前小段位已积累的 XP（例如 480/600 中的 480） */
+  subTierInto: number;
+  /** v0.31.50: 当前小段位总宽度（例如 480/600 中的 600） */
+  subTierSize: number;
+  /** v0.31.50: 下一个小段位的称号；本段顶（V）时是 next 大段的"爱好者"；全国顶时为 null */
+  nextSubTierLabel: string | null;
   term: Term | null;
   /** 给家长 admin 看的辅助指标 */
   raw: {
@@ -144,11 +158,22 @@ export function computeRating(
   const tier = tierFromScore(score);
   const next = nextTier(tier);
   const sub = subRank(score, tier);
-  const tierLo = tier.range[0];
-  const tierHi = tier.range[1];
-  const subSize = (tierHi - tierLo) / 4;
-  const nextSubBoundary = tierLo + subSize * sub;
-  const deltaToNextSubRank = Math.max(0, Math.ceil(nextSubBoundary - score));
+  const bounds = subTierBounds(score, tier, sub);
+  const deltaToNextSubRank = Math.max(0, Math.ceil(bounds.hi - score));
+  const curSubTierLabel = subTierLabel(tier, sub);
+  // 下一个小段位称号：
+  //   - sub 1-4：同段位下一档（"锦江数学小达人"）
+  //   - sub 5（已 V，本段顶）：跨大段，下一段第 1 档（"成都数学爱好者"）
+  //   - 全国 V：null（已封顶）
+  const nextSubTierLabel: string | null = (() => {
+    if (sub < SUB_TIER_NAMES.length) {
+      return subTierLabel(tier, sub + 1);
+    }
+    if (next) {
+      return `${TIER_PREFIXES[next.id] ?? ""}${SUB_TIER_NAMES[0]}`;
+    }
+    return null;
+  })();
 
   return {
     score,
@@ -161,6 +186,11 @@ export function computeRating(
     subRankRoman: subRankRoman(sub),
     subRankStars: subRankStars(sub),
     deltaToNextSubRank,
+    subTierLabel: curSubTierLabel,
+    subTierProgress: bounds.progress,
+    subTierInto: Math.max(0, Math.round(bounds.into)),
+    subTierSize: Math.round(bounds.size),
+    nextSubTierLabel,
     term,
     raw: {
       totalAttempts,

@@ -90,30 +90,40 @@ export function TierCard({
   // v0.31.4：XP 大数 roll-up（昨日总分 → 今日总分），key 含学期避免学期切换误滚
   const displayScore = useRollupNumber(rating.score, `tierCard:lastSeenScore:${rating.tier.id}`);
 
-  // v0.31.3：距下一段位 ≤ 200 XP = "即将升段"——这是 Selena 此刻最强动机点。
-  // 之前埋成小灰字，现在 pulse 进度条 + 上方 chip 高亮显示。
+  // v0.31.50: 即将升大段 = sub V (最后一档) 且 ≤ 200 XP 跨段。
+  // 老版判定 subRank >= 4（4 档系统的最后一档）→ 现在改 subRank === 5。
   const tierUpImminent =
-    rating.subRank >= 4 && rating.nextTier && rating.deltaToNext > 0 && rating.deltaToNext <= 200;
+    rating.subRank >= 5 && rating.nextTier && rating.deltaToNext > 0 && rating.deltaToNext <= 200;
 
+  // v0.31.50: 升小段 hint 用完整称号（"升 锦江数学小达人"），比 "升 ★II" 有荣誉感。
+  // - 还在大段里：升下一小段称号
+  // - 大段顶（V 档）：跨入下一大段第 1 档（"升 成都数学爱好者"）
+  // - 全国 V：已封顶
   const nextHint = (() => {
-    if (rating.subRank < 4) {
+    if (rating.nextSubTierLabel) {
       return (
         <>
-          再得 <span className={`font-bold tabular-nums ${theme.textColor}`}>{rating.deltaToNextSubRank.toLocaleString()}</span> XP 升 <span className="text-amber-300">★{["I","II","III","IV"][rating.subRank]}</span>
-        </>
-      );
-    }
-    if (rating.nextTier) {
-      return (
-        <>
-          再得 <span className={`font-bold tabular-nums ${theme.textColor}`}>{rating.deltaToNext.toLocaleString()}</span> XP 跨入
-          <span className={`ml-1 ${theme.textColor} font-display`}>
-            {rating.nextTier.badgeIcon} {rating.nextTier.name}
+          再得 <span className={`font-bold tabular-nums ${theme.textColor}`}>{rating.deltaToNextSubRank.toLocaleString()}</span> XP 升
+          <span className={`ml-1 ${theme.textColor} font-display font-bold`}>
+            {rating.nextSubTierLabel}
           </span>
         </>
       );
     }
-    return <>🏆 全国段位 · 永远在涨</>;
+    return <>🏆 中华数学小状元 · 永远在涨</>;
+  })();
+
+  // v0.31.50: 小段位徽章装饰层级（角标星已在上面 subRankStars，外框 + 光效在这里）。
+  // 5 档渐进精致，但保持主徽章 SVG 不变 — 只叠光环/外圈。
+  const subPolishClass = (() => {
+    switch (rating.subRank) {
+      case 1: return ""; // 基础
+      case 2: return "ring-1 ring-amber-200/30"; // 微金圈
+      case 3: return "ring-2 ring-amber-300/45 shadow-glow-amber"; // 双圈 + 暖光
+      case 4: return "ring-2 ring-amber-300/70 shadow-glow-amber animate-pulse-soft"; // 强金光 + 微脉冲
+      case 5: return "ring-[3px] ring-amber-300/90 shadow-glow-amber"; // 顶级双层金圈
+      default: return "";
+    }
   })();
 
   return (
@@ -142,8 +152,13 @@ export function TierCard({
               <div className={`text-xs sm:text-sm ${theme.subTextColor}`}>XP</div>
             </div>
 
-            {/* 星级 + 超过 X%（合并到 XP 同行下方） */}
-            <div className={`mt-1.5 flex items-center gap-1.5 text-xs ${theme.subTextColor}`}>
+            {/* v0.31.50: 小段位称号 = 主身份显示（替代过去只显示 ★ 罗马数字），
+                给 Selena 看到的是"锦江数学课代表"这种有荣誉感的头衔。
+                星级跟在称号后面当 grade 标识 */}
+            <div className={`mt-1.5 flex flex-wrap items-center gap-1.5 text-xs ${theme.subTextColor}`}>
+              <span className={`font-display font-bold text-sm ${theme.textColor}`}>
+                {rating.subTierLabel}
+              </span>
               <span className="text-amber-300 text-sm tracking-tighter leading-none">
                 {rating.subRankStars}
               </span>
@@ -152,21 +167,25 @@ export function TierCard({
             </div>
           </div>
 
-          {/* 进度条 + 下个目标。即将升段时显示 chip（chip 自己 pulse），
-              进度条静止——避免双重 pulse 视觉冲突。
-              v0.31.4：tierUp chip 显示时 nextHint 小字 hide（同义重复） */}
+          {/* v0.31.50: 进度条只显示当前小段位（短，2-7 天能爬满）。
+              老版本是整个大段位（10k+ XP，几个月才走完）— 体感太静止。
+              即将跨大段时仍显示 chip（pulse），其他时间安静展示 nextHint。 */}
           <div>
             {tierUpImminent && rating.nextTier && (
               <div className="mb-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-[11px] font-bold text-amber-100 animate-pulse-soft">
                 <span>🔥</span>
-                <span>仅剩 <span className="tabular-nums">{rating.deltaToNext}</span> XP 升 {rating.nextTier.badgeIcon} {rating.nextTier.name}</span>
+                <span>仅剩 <span className="tabular-nums">{rating.deltaToNext}</span> XP 跨入 {rating.nextTier.badgeIcon} {rating.nextTier.name}</span>
               </div>
             )}
             <div className="h-1.5 rounded-full bg-black/25 overflow-hidden ring-1 ring-white/5">
               <div
                 className="h-full bg-gradient-to-r from-amber-300 via-pink-300 to-violet-300 shadow-glow-amber transition-all duration-700"
-                style={{ width: `${Math.round(rating.progressInTier * 100)}%` }}
+                style={{ width: `${Math.round(rating.subTierProgress * 100)}%` }}
               />
+            </div>
+            <div className={`mt-1 flex items-center justify-between gap-2 text-[10px] tabular-nums ${theme.subTextColor}`}>
+              <span>{rating.subTierInto.toLocaleString()} / {rating.subTierSize.toLocaleString()} XP</span>
+              <span className="opacity-70">大段总进度 {Math.round(rating.progressInTier * 100)}%</span>
             </div>
             {!tierUpImminent && (
               <div className={`mt-1.5 text-[11px] ${theme.subTextColor}`}>{nextHint}</div>
@@ -194,7 +213,7 @@ export function TierCard({
               interactive
               shape="circle"
               alt={equippedBadge.badgeName}
-              className="relative shadow-glow sm:!w-[150px] sm:!h-[150px]"
+              className={`relative shadow-glow sm:!w-[150px] sm:!h-[150px] rounded-full ${subPolishClass}`}
             />
           </div>
           <div className="text-center">
