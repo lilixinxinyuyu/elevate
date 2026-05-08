@@ -3,6 +3,70 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.39 — 2026-05-08 · 语文写字 250 + 英语单词 207（含老数据迁移）
+
+爸爸三个要求：
+1. 借鉴老的"四年级上下册写字表 500 字·零泄露练习系统" → 把 G4B 250 字接进语文，迁移老进度
+2. 英文单词记忆系统也类似迁移过来
+3. 期中是明天 5/9 — 不能动核心 math/chinese 题型，全部新增模块独立旁路
+
+### 语文写字表 250 字（chinese 学科扩展）
+
+新增数据：`src/subjects/chinese/charLibrary.ts`（250 个 G4B 生字 + 拼音 + 词组提示 + 含义；从 `chinese/lower_words_full.js` 自动提取）。脚本：`scripts/extract-chinese-chars.mjs`。
+
+新增页面：`src/pages/chinese/CharPractice.tsx` (路由 `/chinese/char-practice`)
+- 顶栏 stats：已掌握 / 待巩固 / 没见过 / 在练 + 进度条
+- 每张卡显示：拼音 + 词组（`___` 占位目标字 · 零泄露）+ 含义；输入框写字
+- 答对自动 1.2s 切换；答错显示正确字，"下一字 →" 手动推进
+- 加权随机（pow(0.75, right - wrong)，clamp [0.3, 1.8]）+ 最近 5 字不重复
+
+进度库：`src/lib/chineseCharProgress.ts`
+- `db.meta::chinese_char_progress::<studentId>` 存 right/wrong/lastSeenAt
+- `migrateHistoricalCharProgress()`：从 `chinese/data.json` 的 `wordStudyData` 一次性导入历史 138 字进度
+- 幂等闸门 `chinese_char_progress_migrated::<studentId>`
+- 完全独立于现有 chinese skills/mastery/attempts，不污染期中诊断
+
+入口：ChineseHome 多一个 "✍️ 写字表 250 字 · 加权练习" 卡片。
+
+### 英语学科（new subject 注册）
+
+新增 SubjectId `"english"`（`src/core/types.ts`）。
+新增 subject 注册 `src/subjects/english/`（label "英语" / shortLabel "英" / theme cyan-blue / 无 units/skills/seedQuestions —— vocab 自带独立练习不走主框架）。
+SubjectPicker 自动多一张英语卡片；header chip 学科切换里也自动多一项。
+
+数据：`src/subjects/english/wordList.ts` — 207 个 G4 单词（A 上 + B 下，去重；从 `english/g4_english.html` 自动提取）。脚本 `scripts/extract-english-words.mjs`。
+
+页面：
+- `src/pages/english/EnglishHome.tsx` (路由 `/english`) — 概览 + stats + 单词卡入口
+- `src/pages/english/VocabPractice.tsx` (路由 `/english/vocab` 和 `/english/train`) — 中文 → 英文输入；可点"💡 提示首字母"显示首字母 + 长度
+
+进度库：`src/lib/englishVocabProgress.ts`
+- `db.meta::english_vocab_progress::<studentId>` 存 correct/wrong/lastSeenAt
+- `migrateHistoricalVocabProgress()`：从 `english/data.json` 的 `wordMemory4EN` 一次性导入历史 ~200 词进度
+- 幂等闸门同样靠 meta key
+- 大小写不敏感（`normWord(word.toLowerCase())`）
+
+### 路由 & 学科切换
+
+router.tsx：
+- HomeRoute 多 english 分支 → EnglishHomePage
+- TrainRoute 多 english 分支 → VocabPracticePage（让"开始今日挑战"链接也能落到 vocab）
+- 新加 `/chinese/char-practice` 和 `/english/vocab` 路由
+- 新加专属 Route 守卫 `CharPracticeRoute` / `VocabPracticeRoute`
+
+ORDERED_SUBJECT_IDS 现在是 `["math", "chinese", "english"]` —— picker 卡片 + chip 下拉自动显示。
+
+### 设计原则（沿用爸爸 v0.31.34/.35 反馈）
+
+- **零迁移**：所有新进度独立 db.meta，旧 attempt/mastery 表不动；期中考试相关流程零风险
+- **零泄露**：词组提示用 `___` 占位目标字，跟原老系统一致
+- **加权随机**：错过的字/词更频繁出现，掌握的少出现 — 4 年级专注度有限，省时间
+- **历史尊重**：Selena 已经在老系统练过的，新系统进去就看到 "已自动从老系统导入 N 个字的进度"
+
+### 改动文件
+- 新增 9 个文件（subject + 2 progress libs + 3 page + 2 wordList + extract scripts）
+- 修改：`src/core/types.ts` (SubjectId 加 english) / `src/subjects/index.ts` (注册) / `src/router.tsx` (路由) / `src/pages/chinese/ChineseHome.tsx` (加入口卡)
+
 ## v0.31.38 — 2026-05-08 · 闯关难度阶梯 + AI 再出题真注入会话
 
 爸爸反馈：

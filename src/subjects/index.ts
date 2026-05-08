@@ -10,15 +10,17 @@
 
 import { mathSubject } from "./math";
 import { chineseSubject } from "./chinese";
+import { englishSubject } from "./english";
 import type { Subject, SubjectId } from "./types";
 
 export const SUBJECTS: Record<SubjectId, Subject> = {
   math: mathSubject,
   chinese: chineseSubject,
+  english: englishSubject,
 };
 
 /** Picker 上从左到右、Header chip 下拉里上下展示的顺序。 */
-export const ORDERED_SUBJECT_IDS: SubjectId[] = ["math", "chinese"];
+export const ORDERED_SUBJECT_IDS: SubjectId[] = ["math", "chinese", "english"];
 
 /** URL 段是否对得上一个真实的、已登记的学科。 */
 export function isKnownSubjectId(id: string | undefined): id is SubjectId {

@@ -13,6 +13,9 @@ import { ChineseHomePage } from "./pages/chinese/ChineseHome";
 import { ChineseTrainPage } from "./pages/chinese/ChineseTrain";
 import { ChinesePickerPage } from "./pages/chinese/ChinesePicker";
 import { ChineseAdminPage } from "./pages/chinese/ChineseAdmin";
+import { CharPracticePage } from "./pages/chinese/CharPractice";
+import { EnglishHomePage } from "./pages/english/EnglishHome";
+import { VocabPracticePage } from "./pages/english/VocabPractice";
 import { FluencyPage } from "./pages/Fluency";
 import { FluencySessionPage } from "./pages/FluencySession";
 import { BigProblemsPage } from "./pages/BigProblems";
@@ -36,6 +39,7 @@ function HomeRoute() {
   const subject = useSubject();
   if (subject.id === "math") return <HomePage />;
   if (subject.id === "chinese") return <ChineseHomePage />;
+  if (subject.id === "english") return <EnglishHomePage />;
   return <ComingSoonPage />;
 }
 
@@ -43,6 +47,8 @@ function TrainRoute() {
   const subject = useSubject();
   if (subject.id === "math") return <TrainPage />;
   if (subject.id === "chinese") return <ChineseTrainPage />;
+  // english 的 Train 入口走 vocab page
+  if (subject.id === "english") return <VocabPracticePage />;
   return <ComingSoonPage />;
 }
 
@@ -71,6 +77,20 @@ function AdminRoute() {
   const subject = useSubject();
   if (subject.id === "math") return <AdminPage />;
   if (subject.id === "chinese") return <ChineseAdminPage />;
+  return <ComingSoonPage />;
+}
+
+/** v0.31.39: 语文写字表练习页（仅 chinese subject 显示） */
+function CharPracticeRoute() {
+  const subject = useSubject();
+  if (subject.id === "chinese") return <CharPracticePage />;
+  return <ComingSoonPage />;
+}
+
+/** v0.31.39: 英语单词练习页（仅 english subject 显示） */
+function VocabPracticeRoute() {
+  const subject = useSubject();
+  if (subject.id === "english") return <VocabPracticePage />;
   return <ComingSoonPage />;
 }
 
@@ -112,6 +132,10 @@ export const router = createBrowserRouter([
       { path: "mascot3d", element: <MathOnlyRoute><Mascot3DTestPage /></MathOnlyRoute> },
       { path: "mascot-compare", element: <MathOnlyRoute><MascotComparePage /></MathOnlyRoute> },
       { path: "admin", element: <AdminRoute /> },
+      // v0.31.39：语文写字表 250 字练习
+      { path: "char-practice", element: <CharPracticeRoute /> },
+      // v0.31.39：英语单词记忆
+      { path: "vocab", element: <VocabPracticeRoute /> },
       { path: "*", element: <ComingSoonPage /> },
     ],
   },

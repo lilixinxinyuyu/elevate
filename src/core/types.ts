@@ -1,10 +1,14 @@
 /**
- * 已登记的学科 id。多学科 Phase 1 包含 math + chinese；english 还没注册。
+ * 已登记的学科 id。
+ *  - math (Phase 1): 数学全功能
+ *  - chinese (Phase 2 MVP): 语文 + 写字表 250 字（v0.31.39）
+ *  - english (v0.31.39): 单词记忆 250 词（仅词汇练习页 + 迁移老 data.json）
+ *
  * 加学科：在这里加 union，再去 src/subjects/index.ts 登记 Subject 对象。
  *
  * 放在 core/ 而不是 subjects/ 是为了打破循环依赖（subjects/ 依赖 core/）。
  */
-export type SubjectId = "math" | "chinese";
+export type SubjectId = "math" | "chinese" | "english";
 
 export type AbilityId =
   | "calculation"
