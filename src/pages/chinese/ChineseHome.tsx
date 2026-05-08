@@ -27,7 +27,7 @@ import {
 import { CHINESE_TROPHIES, type ChineseTrophyDef } from "../../subjects/chinese/trophies";
 import { TrophyIcon } from "../../components/TrophyIcon";
 import type { MasteryScore, Term } from "../../core/types";
-import { TermSwitcher, termToSemester } from "../../components/TermSwitcher";
+import { TermSwitcher, termToSemester, ensureDefaultTerm } from "../../components/TermSwitcher";
 import { SubjectTodayRings, type RingSpec } from "../../components/SubjectTodayRings";
 import { loadDaily, type DailyState } from "../../lib/dailyTarget";
 import { loadCharProgress, calcOldStyleStats as charCalcOldStyleStats } from "../../lib/chineseCharProgress";
@@ -59,6 +59,7 @@ export function ChineseHomePage() {
     if (!student?.id) return;
     let cancelled = false;
     (async () => {
+      await ensureDefaultTerm();
       setCurrentTerm((student.currentTerm as Term) ?? "下册");
       const [xp, trophies, m, mistakeCount, mock, charProg, charDailyState] = await Promise.all([
         getChineseTotalXp(student.id),

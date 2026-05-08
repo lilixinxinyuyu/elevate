@@ -20,7 +20,7 @@ import {
 } from "../../lib/englishVocabProgress";
 import { MasteryTierBar } from "../../components/MasteryTierBar";
 import { SubjectTodayRings, type RingSpec } from "../../components/SubjectTodayRings";
-import { TermSwitcher, termToSemester } from "../../components/TermSwitcher";
+import { TermSwitcher, termToSemester, ensureDefaultTerm } from "../../components/TermSwitcher";
 import { loadDaily, type DailyState } from "../../lib/dailyTarget";
 import type { Term } from "../../core/types";
 
@@ -32,6 +32,7 @@ export function EnglishHomePage() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      await ensureDefaultTerm();
       const ss = await db.students.toArray();
       const s = ss[0];
       if (!s || cancelled) return;
@@ -48,7 +49,11 @@ export function EnglishHomePage() {
   }, []);
 
   const semester = termToSemester(currentTerm);
-  const pool = G4_WORDS.filter((w) => w.semester === semester);
+  // 综合复习 (semester=null) → 上下册混合
+  const pool =
+    semester === null
+      ? G4_WORDS
+      : G4_WORDS.filter((w) => w.semester === semester);
   const dist = progress ? calcTierDistribution(pool, progress) : null;
   const stats = progress ? calcOldStyleStats(pool, progress) : null;
 
@@ -68,6 +73,14 @@ export function EnglishHomePage() {
               外研版四年级 · 当前赛季：{currentTerm}（{pool.length} 词）
             </div>
           </div>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Link
+            to={`/english/vocab?fresh=${Date.now()}`}
+            className="btn-primary text-base px-5 py-2.5"
+          >
+            ▶ 开始今日挑战
+          </Link>
         </div>
       </div>
 

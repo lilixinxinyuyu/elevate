@@ -15,6 +15,7 @@
 
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../db/dexie";
 import { G4_WORDS, type G4Word } from "../../subjects/english/wordList";
 import {
@@ -37,7 +38,7 @@ import {
 } from "../../lib/masteryTier";
 import { loadDaily, tickDaily, type DailyState } from "../../lib/dailyTarget";
 import { MasteryTierBar, TierChip } from "../../components/MasteryTierBar";
-import { TermSwitcher, termToSemester } from "../../components/TermSwitcher";
+import { termToSemester } from "../../components/TermSwitcher";
 import type { Term } from "../../core/types";
 
 type Mode = "word2cn" | "cn2word" | "listen" | "sprint";
@@ -58,7 +59,9 @@ export function VocabPracticePage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [progress, setProgress] = useState<VocabProgress>({});
   const [daily, setDaily] = useState<DailyState | null>(null);
-  const [currentTerm, setCurrentTerm] = useState<Term>("下册");
+  // v0.31.43: useLiveQuery 让赛季实时跟首页切换
+  const liveStudent = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const currentTerm: Term = (liveStudent?.currentTerm as Term | undefined) ?? "下册";
   const [mode, setMode] = useState<Mode>("word2cn");
   const [current, setCurrent] = useState<G4Word | null>(null);
   const [options, setOptions] = useState<G4Word[]>([]);
@@ -82,8 +85,12 @@ export function VocabPracticePage() {
   const sprintTimerRef = useRef<number | null>(null);
 
   const semester = termToSemester(currentTerm);
+  // v0.31.43: 综合复习 (semester === null) → 上下册混合池
   const pool: G4Word[] = useMemo(
-    () => G4_WORDS.filter((w) => w.semester === semester),
+    () =>
+      semester === null
+        ? G4_WORDS
+        : G4_WORDS.filter((w) => w.semester === semester),
     [semester],
   );
 
@@ -98,7 +105,6 @@ export function VocabPracticePage() {
       }
       if (cancelled) return;
       setStudentId(s.id);
-      setCurrentTerm((s.currentTerm as Term) ?? "下册");
       const migr = await migrateHistoricalVocabProgress(s.id);
       if (migr.imported > 0 || migr.upgraded > 0) {
         setMigratedToast(`已迁移 ${migr.imported} 词 + 升级 ${migr.upgraded} 词到 5-tier 等级`);
@@ -287,7 +293,16 @@ export function VocabPracticePage() {
         </div>
       )}
 
-      <TermSwitcher currentTerm={currentTerm} onChange={(t) => setCurrentTerm(t)} />
+      {/* v0.31.43: 学期切换移到首页（与数学 UX 一致），这里只显示当前赛季 */}
+      <div className="text-xs text-slate-400">
+        当前赛季：
+        <span className="text-violet-200 font-semibold ml-1">
+          {currentTerm === "综合复习" ? "🎯 综合复习" : currentTerm === "上册" ? "📕 四年级上册" : "📚 四年级下册"}
+        </span>
+        <Link to="/english" className="ml-3 underline-offset-2 hover:underline">
+          ← 回首页换赛季
+        </Link>
+      </div>
 
       {/* 4 模式 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
@@ -300,7 +315,7 @@ export function VocabPracticePage() {
       {/* 5-tier 分布 */}
       <div className="card-glow space-y-3">
         <div className="text-xs text-slate-300 font-semibold">
-          本赛季掌握分布（{semester === "G4A" ? "上册" : "下册"} {tierDist.total} 词）
+          本赛季掌握分布（{semester === "G4A" ? "上册" : semester === "G4B" ? "下册" : "综合"} {tierDist.total} 词）
         </div>
         <MasteryTierBar dist={tierDist} />
       </div>

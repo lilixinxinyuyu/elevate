@@ -3,6 +3,77 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.43 — 2026-05-08 · 修 4 个反馈 bug + 跨学科 UX 对齐数学
+
+爸爸 4 个反馈：
+1. 视觉识别失败：judge_failed: unauthorized
+2. 英语打卡环动画有问题，一些点不停跳
+3. 学期切换 UX 应该跟数学完全一致（赛季：3 pill + 综合复习 + （当前）badge），且只在 home 页
+4. 字词大冒险/词汇大冒险加到顶部主菜单（与数学对齐）
+
+### Fix 1: judge-handwriting unauthorized
+
+bug：`if (!checkAuth(request, env))` 逻辑反了 —— `checkAuth` 授权返回 null（falsy），所以授权用户也被 401 顶回去。
+
+```ts
+// 修复前
+if (!checkAuth(request, env)) return jsonResponse({error:"unauthorized"}, 401);
+// 修复后
+const authResp = checkAuth(request, env);
+if (authResp) return authResp;
+```
+
+### Fix 2: sparkle 环动画无限循环
+
+bug：首次 mount 时 `lastDoneSetRef = empty`，所有当前 done 的环都被加进 `justClosedRef`，触发 sparkle。如果有 ≥2 个环初始 done，第 1 个 timeout 后还有第 2 个留在队列里。每次组件重建（赛季切换/数据加载）都重复这个流程。
+
+修复（`SubjectTodayRings.tsx` + `TodayRings.tsx`）：加 `initializedRef`，**首次 render 不算"新闭"**，只记录初始 done 集合。只有 mount 完成后真正发生闭合事件才触发 sparkle。
+
+### Fix 3: TermSwitcher 改成数学风格
+
+老版（v0.31.42）：上下册两个大 pill 顶在 page 上方
+新版：复刻数学 Home 的「赛季: 」label + 3 chip 行
+- 📚 四年级下册（当前） — 默认 active
+- 📕 四年级上册
+- 🎯 综合复习 — 上下册混合池
+
+active chip 加 "（当前）" 后缀 + violet glow + violet border。
+
+迁移到 home only：CharPractice / VocabPractice 不再放 TermSwitcher，改成"当前赛季 X · 回首页换赛季"链接。useLiveQuery 监听 student.currentTerm 实时更新。
+
+### Fix 4: 主菜单 nav 加字词大冒险/词汇大冒险
+
+`subjects/chinese/index.ts` navItems：
+```
+首页 / 今日挑战 / 字词大冒险 ← 新增 / 选单元 / 管理
+```
+
+`subjects/english/index.ts` navItems：
+```
+首页 / 词汇大冒险 ← 改名（原"单词"）
+```
+
+底部 mobile nav 自动跟随（Layout.tsx 已经按 navItems 渲染）。
+
+### 综合复习赛季对 vocab/char
+
+`termToSemester(t)` 返回值改成 `"G4A" | "G4B" | null`，null 表示综合复习。
+- CharPractice：semester=null 时用 G4_CHARS_ALL（500 字）
+- VocabPractice：semester=null 时用 G4_WORDS（不 filter，207 词）
+- 5-tier 分布也按当前赛季的池子算
+
+### 默认赛季 = 下册
+
+`ensureDefaultTerm()` 启动时若 `student.currentTerm` 为空，写入 "下册"。chinese/english home useEffect 都跑这个保险。
+
+### 改动文件
+- `functions/api/tutor/judge-handwriting.ts` — 修 checkAuth 逻辑
+- `src/components/SubjectTodayRings.tsx`, `src/components/TodayRings.tsx` — 加 initializedRef 防 first-render sparkle
+- `src/components/TermSwitcher.tsx` — 重写成数学风格 3 chip + 综合复习 + （当前）badge
+- `src/pages/chinese/CharPractice.tsx`, `src/pages/english/VocabPractice.tsx` — 移除 inline TermSwitcher，改用 useLiveQuery + 显示当前赛季文字
+- `src/pages/chinese/ChineseHome.tsx`, `src/pages/english/EnglishHome.tsx` — ensureDefaultTerm + 综合复习 mixed pool
+- `src/subjects/chinese/index.ts`, `src/subjects/english/index.ts` — navItems 加字词/词汇大冒险
+
 ## v0.31.42 — 2026-05-08 · 字词大冒险 + 词汇大冒险（Canvas 手写 + 赛季 + 今日 3 环）
 
 爸爸 6 项硬要求：

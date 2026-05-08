@@ -31,9 +31,18 @@ export function SubjectTodayRings({ rings, title = "今日打卡" }: { rings: Ri
 
   const justClosedRef = useRef<Set<string>>(new Set());
   const lastDoneSetRef = useRef<Set<string>>(new Set());
+  // v0.31.43: 首次 render 不算"新闭" — 否则页面初次加载已经 done 的环会持续 sparkle
+  // 导致环里的小点不停跳。只 mount 完成后才开始监听新闭合事件。
+  const initializedRef = useRef(false);
   const [pulseId, setPulseId] = useState<string | null>(null);
   useEffect(() => {
     const cur = new Set(rings.filter((r) => r.done).map((r) => r.id));
+    if (!initializedRef.current) {
+      // 首次：仅记录当前 done 集合，不触发 sparkle
+      lastDoneSetRef.current = cur;
+      initializedRef.current = true;
+      return;
+    }
     const prev = lastDoneSetRef.current;
     for (const id of cur) {
       if (!prev.has(id)) justClosedRef.current.add(id);

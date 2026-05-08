@@ -1,84 +1,109 @@
 /**
- * TermSwitcher — 切换学期 (赛季) 组件 (v0.31.42)
+ * TermSwitcher — 赛季切换 (v0.31.43)
  *
- * 学期是一个赛季（用户："切换了以后，所出现的内容应该都是只有这一个赛季的，
- * 而不是包含上一个赛季的"）。
+ * 完全对齐数学 Home 的 UX：
+ *   "赛季：" label + 3 个 pill chips
+ *     📚 四年级下册（当前）  ← 默认 active
+ *     📕 四年级上册
+ *     🎯 综合复习
  *
- * 这个组件读 student.currentTerm，点击切换 → 写回 db.students.update + 刷新页面。
+ * 综合复习对 chinese / english：上下册混合池。
+ * active 的 chip 显示 (当前) 后缀 + 紫色边框 + glow。
  *
- * 用在所有学科的 home 页：math/chinese/english 全部用同一个组件，跨学科一致。
+ * 写 student.currentTerm + selectedTerm::math::<sid> meta（与数学共用一个 key 简化）。
  */
 
 import { useState } from "react";
 import { db } from "../db/dexie";
 import type { Term } from "../core/types";
 
+const TERMS: { id: Term; emoji: string; label: string }[] = [
+  { id: "下册", emoji: "📚", label: "四年级下册" },
+  { id: "上册", emoji: "📕", label: "四年级上册" },
+  { id: "综合复习", emoji: "🎯", label: "综合复习" },
+];
+
+interface TermSwitcherProps {
+  currentTerm: Term;
+  onChange: (newTerm: Term) => void;
+  /** 是否 persist 到 student.currentTerm（默认 true） */
+  persist?: boolean;
+}
+
 export function TermSwitcher({
   currentTerm,
   onChange,
-}: {
-  currentTerm: Term;
-  onChange: (newTerm: Term) => void;
-}) {
-  const [pending, setPending] = useState(false);
+  persist = true,
+}: TermSwitcherProps) {
+  const [pending, setPending] = useState<Term | null>(null);
   async function pick(t: Term) {
     if (t === currentTerm || pending) return;
-    setPending(true);
+    setPending(t);
     try {
-      const ss = await db.students.toArray();
-      const s = ss[0];
-      if (s) {
-        await db.students.update(s.id, { currentTerm: t });
+      if (persist) {
+        const ss = await db.students.toArray();
+        const s = ss[0];
+        if (s) {
+          await db.students.update(s.id, { currentTerm: t });
+          // 与数学的 selectedTerm meta key 保持一致（math:: prefix 是历史名）
+          await db.meta.put({ key: `selectedTerm::math::${s.id}`, value: t });
+        }
       }
       onChange(t);
     } finally {
-      setPending(false);
+      setPending(null);
     }
   }
   return (
-    <div className="flex gap-2">
-      <TermPill label="四年级上册" semester="G4A" active={currentTerm === "上册"} onClick={() => pick("上册")} />
-      <TermPill label="四年级下册" semester="G4B" active={currentTerm === "下册"} onClick={() => pick("下册")} />
+    <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-1">
+      <span className="text-xs text-slate-400 shrink-0">赛季：</span>
+      {TERMS.map((t) => {
+        const active = currentTerm === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => pick(t.id)}
+            className={`shrink-0 chip text-xs px-3 py-1.5 transition-all ${
+              active
+                ? "bg-violet-500/30 text-violet-100 border border-violet-400/60 shadow-glow-violet"
+                : "bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10"
+            }`}
+          >
+            <span className="mr-1">{t.emoji}</span>
+            {t.label}
+            {active && <span className="ml-1 text-violet-200/80">（当前）</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function TermPill({
-  label,
-  semester,
-  active,
-  onClick,
-}: {
-  label: string;
-  semester: "G4A" | "G4B";
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-        active
-          ? "bg-violet-500/20 text-violet-100 border border-violet-400/40"
-          : "bg-ink-900/40 text-slate-400 border border-ink-700/60 hover:bg-ink-700/40"
-      }`}
-    >
-      <span className="inline-flex items-center gap-2">
-        <span
-          className={`text-[10px] px-1.5 py-0.5 rounded ${
-            active ? "bg-violet-400/30 text-violet-100" : "bg-slate-700 text-slate-400"
-          }`}
-        >
-          {semester}
-        </span>
-        {label}
-      </span>
-    </button>
-  );
+/**
+ * Term → 字/词池的过滤（chinese/english 用）。
+ *   "上册" → G4A
+ *   "下册" → G4B
+ *   "综合复习" → null（含义：不过滤，上下册都包括）
+ */
+export function termToSemester(t: Term): "G4A" | "G4B" | null {
+  if (t === "上册") return "G4A";
+  if (t === "下册") return "G4B";
+  return null;
 }
 
-/** Term ↔ Semester 映射（用在 chinese/english char/word 列表 filter） */
-export function termToSemester(t: Term): "G4A" | "G4B" {
-  return t === "上册" ? "G4A" : "G4B";
+/** 加载 student.currentTerm（默认 "下册"）。 */
+export async function loadCurrentTerm(): Promise<Term> {
+  const ss = await db.students.toArray();
+  const s = ss[0];
+  return ((s?.currentTerm as Term | undefined) ?? "下册");
+}
+
+/** 安全 default：如果 student.currentTerm 为空，写入 "下册"。 */
+export async function ensureDefaultTerm(): Promise<void> {
+  const ss = await db.students.toArray();
+  const s = ss[0];
+  if (s && !s.currentTerm) {
+    await db.students.update(s.id, { currentTerm: "下册" });
+  }
 }

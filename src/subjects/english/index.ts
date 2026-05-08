@@ -25,7 +25,8 @@ const ENGLISH_ABILITIES: SubjectAbilityDef[] = [
 
 const ENGLISH_NAV_ITEMS: SubjectNavItem[] = [
   { to: "", label: "首页", exact: true },
-  { to: "vocab", label: "单词" },
+  // v0.31.43: 词汇大冒险作为主菜单入口
+  { to: "vocab", label: "词汇大冒险" },
 ];
 
 export const englishSubject: Subject = {

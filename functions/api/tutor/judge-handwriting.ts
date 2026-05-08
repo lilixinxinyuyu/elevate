@@ -169,9 +169,9 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (request.method !== "POST") {
     return jsonResponse({ ok: false, error: "method_not_allowed" }, 405);
   }
-  if (!checkAuth(request, env)) {
-    return jsonResponse({ ok: false, error: "unauthorized" }, 401);
-  }
+  // checkAuth 约定：未授权返回 Response，授权返回 null
+  const authResp = checkAuth(request, env);
+  if (authResp) return authResp;
 
   let body: JudgeRequest;
   try {

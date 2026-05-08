@@ -16,10 +16,12 @@
 
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../db/dexie";
 import {
   G4A_CHARS,
   G4B_CHARS,
+  G4_CHARS_ALL,
   type G4Char,
 } from "../../subjects/chinese/charLibrary";
 import {
@@ -46,7 +48,7 @@ import {
 import { judgeHandwriting } from "../../lib/handwritingJudge";
 import { MasteryTierBar, TierChip } from "../../components/MasteryTierBar";
 import { HandwriteCanvas } from "../../components/HandwriteCanvas";
-import { TermSwitcher, termToSemester } from "../../components/TermSwitcher";
+import { termToSemester } from "../../components/TermSwitcher";
 import type { Term } from "../../core/types";
 
 type Mode = "write" | "choose" | "type";
@@ -66,7 +68,9 @@ export function CharPracticePage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [progress, setProgress] = useState<CharProgress>({});
   const [daily, setDaily] = useState<DailyState | null>(null);
-  const [currentTerm, setCurrentTerm] = useState<Term>("下册");
+  // v0.31.43: 用 useLiveQuery 让 student.currentTerm 实时跟随首页切换更新
+  const liveStudent = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const currentTerm: Term = (liveStudent?.currentTerm as Term | undefined) ?? "下册";
   const [mode, setMode] = useState<Mode>("write");
   const [current, setCurrent] = useState<G4Char | null>(null);
   const [chooseQ, setChooseQ] = useState<ReturnType<typeof generateChooseQuestion> | null>(null);
@@ -93,8 +97,17 @@ export function CharPracticePage() {
   const [canvasResetKey, setCanvasResetKey] = useState(0);
 
   const semester = termToSemester(currentTerm);
-  const pool: G4Char[] = semester === "G4A" ? G4A_CHARS : G4B_CHARS;
-  const fullPool: G4Char[] = useMemo(() => [...G4A_CHARS, ...G4B_CHARS], []);
+  // v0.31.43: 综合复习 (semester === null) → 上下册混合池
+  const pool: G4Char[] = useMemo(
+    () =>
+      semester === "G4A"
+        ? G4A_CHARS
+        : semester === "G4B"
+          ? G4B_CHARS
+          : G4_CHARS_ALL,
+    [semester],
+  );
+  const fullPool: G4Char[] = G4_CHARS_ALL;
 
   useEffect(() => {
     let cancelled = false;
@@ -107,7 +120,6 @@ export function CharPracticePage() {
       }
       if (cancelled) return;
       setStudentId(s.id);
-      setCurrentTerm((s.currentTerm as Term) ?? "下册");
       const migr = await migrateHistoricalCharProgress(s.id);
       if (migr.imported > 0 || migr.upgraded > 0) {
         setMigratedToast(
@@ -308,8 +320,16 @@ export function CharPracticePage() {
         </div>
       )}
 
-      {/* 学期切换（与数学一致 — 写 student.currentTerm） */}
-      <TermSwitcher currentTerm={currentTerm} onChange={(t) => setCurrentTerm(t)} />
+      {/* v0.31.43: 学期切换移到首页（与数学 UX 一致），这里只显示当前赛季 */}
+      <div className="text-xs text-slate-400">
+        当前赛季：
+        <span className="text-violet-200 font-semibold ml-1">
+          {currentTerm === "综合复习" ? "🎯 综合复习" : currentTerm === "上册" ? "📕 四年级上册" : "📚 四年级下册"}
+        </span>
+        <Link to="/chinese" className="ml-3 underline-offset-2 hover:underline">
+          ← 回首页换赛季
+        </Link>
+      </div>
 
       {/* 模式切换 */}
       <div className="flex gap-2">
@@ -328,7 +348,7 @@ export function CharPracticePage() {
       <div className="card-glow space-y-3">
         <div className="flex items-baseline justify-between text-xs">
           <span className="text-slate-300 font-semibold">
-            本赛季掌握分布（{semester === "G4A" ? "上册 250" : "下册 250"}）
+            本赛季掌握分布（{semester === "G4A" ? "上册 250" : semester === "G4B" ? "下册 250" : "综合 500"}）
           </span>
           {fullTierDist.byLevel[4] > 0 && (
             <span className="text-violet-300 text-[11px]">
