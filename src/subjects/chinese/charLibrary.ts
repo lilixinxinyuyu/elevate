@@ -78,7 +78,7 @@ export const G4A_CHARS: G4Char[] = [
   {
     "pinyin": "jiàn",
     "word": "渐",
-    "group": "___渐、逐___",
+    "group": "逐___、___进",
     "meaning": "慢慢地，一点一点地",
     "semester": "G4A"
   },
@@ -1774,1750 +1774,1750 @@ export const G4B_CHARS: G4Char[] = [
   {
     "pinyin": "zá",
     "word": "杂",
-    "group": "复___、___杂",
+    "group": "复___、___物",
     "meaning": "多种多样的，不单纯的",
     "semester": "G4B"
   },
   {
     "pinyin": "xī",
     "word": "稀",
-    "group": "稀___、___稀",
+    "group": "依___、___少",
     "meaning": "事物出现得少；浓度低，含水分多",
     "semester": "G4B"
   },
   {
     "pinyin": "qīng",
     "word": "蜻",
-    "group": "蜻___、___蜻",
+    "group": "红___、___蜓",
     "meaning": "蜻蜓，一种益虫",
     "semester": "G4B"
   },
   {
     "pinyin": "tíng",
     "word": "蜓",
-    "group": "蜓___、___蜓",
+    "group": "蜻___、___蜻",
     "meaning": "蜻蜓的别称",
     "semester": "G4B"
   },
   {
     "pinyin": "dié",
     "word": "蝶",
-    "group": "蝴___、___蝶",
+    "group": "蝴___、___舞",
     "meaning": "蝴蝶，一种昆虫",
     "semester": "G4B"
   },
   {
     "pinyin": "sù",
     "word": "宿",
-    "group": "宿___、___舍",
+    "group": "住___、___舍",
     "meaning": "夜里睡觉；住在一起的人",
     "semester": "G4B"
   },
   {
     "pinyin": "xú",
     "word": "徐",
-    "group": "徐___、___徐",
+    "group": "缓___、___步",
     "meaning": "慢慢地",
     "semester": "G4B"
   },
   {
     "pinyin": "shū",
     "word": "疏",
-    "group": "稀___、___疏",
+    "group": "生___、___通",
     "meaning": "清除阻塞使通畅；关系远",
     "semester": "G4B"
   },
   {
     "pinyin": "máo",
     "word": "茅",
-    "group": "茅___、___屋",
+    "group": "白___、___屋",
     "meaning": "茅草，一种植物",
     "semester": "G4B"
   },
   {
     "pinyin": "yán",
     "word": "檐",
-    "group": "房___、___檐",
+    "group": "房___、___下",
     "meaning": "屋顶向旁边伸出的部分",
     "semester": "G4B"
   },
   {
     "pinyin": "wēng",
     "word": "翁",
-    "group": "老___、___翁",
+    "group": "渔___、___老",
     "meaning": "老年男子；丈夫的父亲",
     "semester": "G4B"
   },
   {
     "pinyin": "lóng",
     "word": "笼",
-    "group": "鸟___、___笼",
+    "group": "鸟___、___头",
     "meaning": "用竹木等编成的器具",
     "semester": "G4B"
   },
   {
     "pinyin": "lài",
     "word": "赖",
-    "group": "依___、___赖",
+    "group": "依___、___皮",
     "meaning": "依靠；欠钱不还",
     "semester": "G4B"
   },
   {
     "pinyin": "bō",
     "word": "剥",
-    "group": "剥___、___剥",
+    "group": "不___、___开",
     "meaning": "去掉外面的皮或壳",
     "semester": "G4B"
   },
   {
     "pinyin": "gòu",
     "word": "构",
-    "group": "构___、___构",
+    "group": "结___、___图",
     "meaning": "制造，建造",
     "semester": "G4B"
   },
   {
     "pinyin": "shì",
     "word": "饰",
-    "group": "饰___、___饰",
+    "group": "装___、___品",
     "meaning": "装饰品，使美观",
     "semester": "G4B"
   },
   {
     "pinyin": "dūn",
     "word": "蹲",
-    "group": "蹲___、___蹲",
+    "group": "下___、___点",
     "meaning": "屈膝像坐但臀部不着地",
     "semester": "G4B"
   },
   {
     "pinyin": "fèng",
     "word": "凤",
-    "group": "凤___、___凤",
+    "group": "金___、___凰",
     "meaning": "凤凰，古代传说中的鸟王",
     "semester": "G4B"
   },
   {
     "pinyin": "xù",
     "word": "序",
-    "group": "序___、___序",
+    "group": "秩___、___号",
     "meaning": "排列的次第；文章的组成部分",
     "semester": "G4B"
   },
   {
     "pinyin": "tóu",
     "word": "投",
-    "group": "投___、___投",
+    "group": "拍___、___球",
     "meaning": "抛掷，扔进去",
     "semester": "G4B"
   },
   {
     "pinyin": "lì",
     "word": "例",
-    "group": "例___、___例",
+    "group": "举___、___子",
     "meaning": "可以用来比照的事例",
     "semester": "G4B"
   },
   {
     "pinyin": "shuài",
     "word": "率",
-    "group": "率___、___率",
+    "group": "效___、___真",
     "meaning": "带领；爽直坦白",
     "semester": "G4B"
   },
   {
     "pinyin": "sǒng",
     "word": "耸",
-    "group": "耸___、___耸",
+    "group": "高___、___肩",
     "meaning": "高起，直立",
     "semester": "G4B"
   },
   {
     "pinyin": "tà",
     "word": "踏",
-    "group": "踏___、___踏",
+    "group": "脚___、___步",
     "meaning": "用脚踩；亲自到现场",
     "semester": "G4B"
   },
   {
     "pinyin": "tǎng",
     "word": "倘",
-    "group": "倘___、___倘",
+    "group": "假___、___若",
     "meaning": "如果，假如",
     "semester": "G4B"
   },
   {
     "pinyin": "huì",
     "word": "绘",
-    "group": "绘___、___绘",
+    "group": "描___、___画",
     "meaning": "画，描画",
     "semester": "G4B"
   },
   {
     "pinyin": "xié",
     "word": "谐",
-    "group": "谐___、___谐",
+    "group": "和___、___音",
     "meaning": "配合得当；滑稽",
     "semester": "G4B"
   },
   {
     "pinyin": "jì",
     "word": "寄",
-    "group": "寄___、___寄",
+    "group": "邮___、___托",
     "meaning": "通过邮局递送；依靠",
     "semester": "G4B"
   },
   {
     "pinyin": "mián",
     "word": "眠",
-    "group": "眠___、___眠",
+    "group": "睡___、___休",
     "meaning": "睡觉",
     "semester": "G4B"
   },
   {
     "pinyin": "wèi",
     "word": "慰",
-    "group": "慰___、___慰",
+    "group": "安___、___问",
     "meaning": "使人心情安适",
     "semester": "G4B"
   },
   {
     "pinyin": "jiè",
     "word": "藉",
-    "group": "藉___、___藉",
+    "group": "慰___、___凭",
     "meaning": "垫在下面的东西；依靠",
     "semester": "G4B"
   },
   {
     "pinyin": "bǔ",
     "word": "卜",
-    "group": "卜___、___卜",
+    "group": "占___、___问",
     "meaning": "预测吉凶的手段",
     "semester": "G4B"
   },
   {
     "pinyin": "ruì",
     "word": "锐",
-    "group": "锐___、___锐",
+    "group": "尖___、___气",
     "meaning": "感觉灵敏；锋利",
     "semester": "G4B"
   },
   {
     "pinyin": "tān",
     "word": "滩",
-    "group": "滩___、___滩",
+    "group": "沙___、___头",
     "meaning": "江、河、湖、海边水浅的地方",
     "semester": "G4B"
   },
   {
     "pinyin": "zhàng",
     "word": "帐",
-    "group": "帐___、___帐",
+    "group": "蚊___、___本",
     "meaning": "用布、纱等做的遮蔽物",
     "semester": "G4B"
   },
   {
     "pinyin": "shuò",
     "word": "烁",
-    "group": "烁___、___烁",
+    "group": "闪___、___光",
     "meaning": "光亮的样子",
     "semester": "G4B"
   },
   {
     "pinyin": "biān",
     "word": "蝙",
-    "group": "蝙___、___蝙",
+    "group": "小___、___蝠",
     "meaning": "蝙蝠，哺乳动物",
     "semester": "G4B"
   },
   {
     "pinyin": "fú",
     "word": "蝠",
-    "group": "蝠___、___蝠",
+    "group": "蝙___、___翼",
     "meaning": "蝙蝠的蝠",
     "semester": "G4B"
   },
   {
     "pinyin": "bà",
     "word": "霸",
-    "group": "霸___、___霸",
+    "group": "称___、___气",
     "meaning": "强行霸道；用强力独占",
     "semester": "G4B"
   },
   {
     "pinyin": "yīng",
     "word": "鹰",
-    "group": "鹰___、___鹰",
+    "group": "雄___、___眼",
     "meaning": "一种猛禽",
     "semester": "G4B"
   },
   {
     "pinyin": "nù",
     "word": "怒",
-    "group": "怒___、___怒",
+    "group": "发___、___气",
     "meaning": "气愤，愤怒",
     "semester": "G4B"
   },
   {
     "pinyin": "hǒu",
     "word": "吼",
-    "group": "吼___、___吼",
+    "group": "大___、___叫",
     "meaning": "野兽大声叫；因愤怒而喊",
     "semester": "G4B"
   },
   {
     "pinyin": "zhī",
     "word": "脂",
-    "group": "脂___、___脂",
+    "group": "油___、___肪",
     "meaning": "动植物所含的油质",
     "semester": "G4B"
   },
   {
     "pinyin": "shì",
     "word": "拭",
-    "group": "拭___、___拭",
+    "group": "擦___、___泪",
     "meaning": "擦，抹",
     "semester": "G4B"
   },
   {
     "pinyin": "cān",
     "word": "餐",
-    "group": "餐___、___餐",
+    "group": "早___、___厅",
     "meaning": "吃的东西；吃饭",
     "semester": "G4B"
   },
   {
     "pinyin": "huá",
     "word": "划",
-    "group": "划___、___划",
+    "group": "计___、___船",
     "meaning": "用刀划开；分配",
     "semester": "G4B"
   },
   {
     "pinyin": "shǎng",
     "word": "晌",
-    "group": "晌___、___晌",
+    "group": "半___、___午",
     "meaning": "一天以内的一段时间",
     "semester": "G4B"
   },
   {
     "pinyin": "là",
     "word": "辣",
-    "group": "辣___、___辣",
+    "group": "麻___、___椒",
     "meaning": "像姜、蒜等的刺激味道",
     "semester": "G4B"
   },
   {
     "pinyin": "shèn",
     "word": "渗",
-    "group": "渗___、___渗",
+    "group": "浸___、___透",
     "meaning": "液体慢慢地透入",
     "semester": "G4B"
   },
   {
     "pinyin": "zhēng",
     "word": "挣",
-    "group": "挣___、___挣",
+    "group": "不___、___脱",
     "meaning": "用力支撑或摆脱",
     "semester": "G4B"
   },
   {
     "pinyin": "fān",
     "word": "番",
-    "group": "番___、___番",
+    "group": "一___、___茄",
     "meaning": "量词；外国的",
     "semester": "G4B"
   },
   {
     "pinyin": "mái",
     "word": "埋",
-    "group": "埋___、___埋",
+    "group": "掩___、___头",
     "meaning": "用土盖住；藏起来",
     "semester": "G4B"
   },
   {
     "pinyin": "shuā",
     "word": "刷",
-    "group": "刷___、___刷",
+    "group": "洗___、___新",
     "meaning": "用刷子清扫；挑选",
     "semester": "G4B"
   },
   {
     "pinyin": "cè",
     "word": "测",
-    "group": "测___、___测",
+    "group": "猜___、___验",
     "meaning": "用仪器量；猜想",
     "semester": "G4B"
   },
   {
     "pinyin": "xiáng",
     "word": "详",
-    "group": "详___、___详",
+    "group": "仔___、___细",
     "meaning": "详细，与简单相对",
     "semester": "G4B"
   },
   {
     "pinyin": "bèn",
     "word": "笨",
-    "group": "笨___、___笨",
+    "group": "愚___、___重",
     "meaning": "不聪明，不灵活",
     "semester": "G4B"
   },
   {
     "pinyin": "dùn",
     "word": "钝",
-    "group": "钝___、___钝",
+    "group": "迟___、___角",
     "meaning": "不锋利；反应慢",
     "semester": "G4B"
   },
   {
     "pinyin": "gē",
     "word": "鸽",
-    "group": "鸽___、___鸽",
+    "group": "白___、___子",
     "meaning": "一种常见的鸟",
     "semester": "G4B"
   },
   {
     "pinyin": "háo",
     "word": "毫",
-    "group": "毫___、___毫",
+    "group": "分___、___米",
     "meaning": "细长的毛；极少",
     "semester": "G4B"
   },
   {
     "pinyin": "líng",
     "word": "凌",
-    "group": "凌___、___凌",
+    "group": "欺___、___晨",
     "meaning": "冰；侵犯；逼近",
     "semester": "G4B"
   },
   {
     "pinyin": "mò",
     "word": "末",
-    "group": "末___、___末",
+    "group": "周___、___端",
     "meaning": "东西的梢；最后",
     "semester": "G4B"
   },
   {
     "pinyin": "miáo",
     "word": "描",
-    "group": "描___、___描",
+    "group": "素___、___写",
     "meaning": "照着样子画",
     "semester": "G4B"
   },
   {
     "pinyin": "suì",
     "word": "隧",
-    "group": "隧___、___隧",
+    "group": "地___、___道",
     "meaning": "凿穿山石而成的通道",
     "semester": "G4B"
   },
   {
     "pinyin": "tài",
     "word": "态",
-    "group": "态___、___态",
+    "group": "姿___、___度",
     "meaning": "形状，样子",
     "semester": "G4B"
   },
   {
     "pinyin": "dūn",
     "word": "吨",
-    "group": "吨___、___吨",
+    "group": "千___、___位",
     "meaning": "计量单位",
     "semester": "G4B"
   },
   {
     "pinyin": "lú",
     "word": "颅",
-    "group": "颅___、___颅",
+    "group": "头___、___骨",
     "meaning": "头的内部",
     "semester": "G4B"
   },
   {
     "pinyin": "péng",
     "word": "膨",
-    "group": "膨___、___膨",
+    "group": "怒___、___胀",
     "meaning": "体积增大",
     "semester": "G4B"
   },
   {
     "pinyin": "zhī",
     "word": "肢",
-    "group": "肢___、___肢",
+    "group": "四___、___体",
     "meaning": "人的胳膊和腿",
     "semester": "G4B"
   },
   {
     "pinyin": "yì",
     "word": "翼",
-    "group": "翼___、___翼",
+    "group": "羽___、___翅",
     "meaning": "翅膀",
     "semester": "G4B"
   },
   {
     "pinyin": "pì",
     "word": "辟",
-    "group": "辟___、___辟",
+    "group": "开___、___邪",
     "meaning": "开发；透彻",
     "semester": "G4B"
   },
   {
     "pinyin": "nà",
     "word": "纳",
-    "group": "纳___、___纳",
+    "group": "接___、___税",
     "meaning": "收进来；交付",
     "semester": "G4B"
   },
   {
     "pinyin": "yōng",
     "word": "拥",
-    "group": "拥___、___拥",
+    "group": "抱___、___有",
     "meaning": "抱；围着",
     "semester": "G4B"
   },
   {
     "pinyin": "xiāng",
     "word": "箱",
-    "group": "箱___、___箱",
+    "group": "书___、___子",
     "meaning": "收藏衣物的方形器具",
     "semester": "G4B"
   },
   {
     "pinyin": "chòu",
     "word": "臭",
-    "group": "臭___、___臭",
+    "group": "发___、___味",
     "meaning": "气味难闻",
     "semester": "G4B"
   },
   {
     "pinyin": "shū",
     "word": "蔬",
-    "group": "蔬___、___蔬",
+    "group": "菜___、___菜",
     "meaning": "可以吃的菜",
     "semester": "G4B"
   },
   {
     "pinyin": "tàn",
     "word": "碳",
-    "group": "碳___、___碳",
+    "group": "含___、___水",
     "meaning": "一种非金属元素",
     "semester": "G4B"
   },
   {
     "pinyin": "gāng",
     "word": "钢",
-    "group": "钢___、___钢",
+    "group": "炼___、___琴",
     "meaning": "铁和碳的合金",
     "semester": "G4B"
   },
   {
     "pinyin": "yǐn",
     "word": "隐",
-    "group": "隐___、___隐",
+    "group": "难___、___藏",
     "meaning": "藏起来不让人知道",
     "semester": "G4B"
   },
   {
     "pinyin": "jiàn",
     "word": "健",
-    "group": "健___、___健",
+    "group": "康___、___康",
     "meaning": "身体强壮",
     "semester": "G4B"
   },
   {
     "pinyin": "kāng",
     "word": "康",
-    "group": "康___、___康",
+    "group": "健___、___乐",
     "meaning": "身体健康",
     "semester": "G4B"
   },
   {
     "pinyin": "bāo",
     "word": "胞",
-    "group": "胞___、___胞",
+    "group": "细___、___同",
     "meaning": "同胞；细胞",
     "semester": "G4B"
   },
   {
     "pinyin": "jí",
     "word": "疾",
-    "group": "疾___、___疾",
+    "group": "残___、___病",
     "meaning": "病；快",
     "semester": "G4B"
   },
   {
     "pinyin": "fáng",
     "word": "防",
-    "group": "防___、___防",
+    "group": "国___、___止",
     "meaning": "防备，防御",
     "semester": "G4B"
   },
   {
     "pinyin": "zào",
     "word": "灶",
-    "group": "灶___、___灶",
+    "group": "厨___、___台",
     "meaning": "生火做饭的设备",
     "semester": "G4B"
   },
   {
     "pinyin": "xū",
     "word": "需",
-    "group": "需___、___需",
+    "group": "必___、___要",
     "meaning": "必须有",
     "semester": "G4B"
   },
   {
     "pinyin": "fán",
     "word": "繁",
-    "group": "繁___、___繁",
+    "group": "频___、___荣",
     "meaning": "多；复杂",
     "semester": "G4B"
   },
   {
     "pinyin": "màn",
     "word": "漫",
-    "group": "漫___、___漫",
+    "group": "浪___、___步",
     "meaning": "长到看不见头；随便",
     "semester": "G4B"
   },
   {
     "pinyin": "miè",
     "word": "灭",
-    "group": "灭___、___灭",
+    "group": "熄___、___亡",
     "meaning": "完结，消失",
     "semester": "G4B"
   },
   {
     "pinyin": "téng",
     "word": "藤",
-    "group": "藤___、___藤",
+    "group": "紫___、___条",
     "meaning": "植物的匍匐茎",
     "semester": "G4B"
   },
   {
     "pinyin": "luó",
     "word": "萝",
-    "group": "萝___、___萝",
+    "group": "菠___、___卜",
     "meaning": "萝卜，一种蔬菜",
     "semester": "G4B"
   },
   {
     "pinyin": "xī",
     "word": "膝",
-    "group": "膝___、___膝",
+    "group": "双___、___盖",
     "meaning": "大腿和小腿相连的关节",
     "semester": "G4B"
   },
   {
     "pinyin": "tāo",
     "word": "涛",
-    "group": "涛___、___涛",
+    "group": "波___、___声",
     "meaning": "大的波浪",
     "semester": "G4B"
   },
   {
     "pinyin": "duǒ",
     "word": "躲",
-    "group": "躲___、___躲",
+    "group": "闪___、___闪",
     "meaning": "避开",
     "semester": "G4B"
   },
   {
     "pinyin": "píng",
     "word": "瓶",
-    "group": "瓶___、___瓶",
+    "group": "花___、___子",
     "meaning": "口小腹大的容器",
     "semester": "G4B"
   },
   {
     "pinyin": "jǐ",
     "word": "挤",
-    "group": "挤___、___挤",
+    "group": "拥___、___压",
     "meaning": "紧紧靠在一起；用压力排出",
     "semester": "G4B"
   },
   {
     "pinyin": "chā",
     "word": "叉",
-    "group": "叉___、___叉",
+    "group": "交___、___路",
     "meaning": "一端有齿的器具",
     "semester": "G4B"
   },
   {
     "pinyin": "huī",
     "word": "挥",
-    "group": "挥___、___挥",
+    "group": "发___、___手",
     "meaning": "摇摆，舞动",
     "semester": "G4B"
   },
   {
     "pinyin": "huà",
     "word": "桦",
-    "group": "桦___、___桦",
+    "group": "白___、___树",
     "meaning": "一种落叶乔木",
     "semester": "G4B"
   },
   {
     "pinyin": "tú",
     "word": "涂",
-    "group": "涂___、___涂",
+    "group": "糊___、___写",
     "meaning": "使覆盖在表面；乱写",
     "semester": "G4B"
   },
   {
     "pinyin": "róng",
     "word": "茸",
-    "group": "茸___、___茸",
+    "group": "毛___、___球",
     "meaning": "草初生纤细柔软的样子",
     "semester": "G4B"
   },
   {
     "pinyin": "xiù",
     "word": "绣",
-    "group": "绣___、___绣",
+    "group": "刺___、___花",
     "meaning": "用彩线在布上做成图案",
     "semester": "G4B"
   },
   {
     "pinyin": "xiāo",
     "word": "潇",
-    "group": "潇___、___潇",
+    "group": "洒___、___湘",
     "meaning": "自然大方，不呆滞",
     "semester": "G4B"
   },
   {
     "pinyin": "suì",
     "word": "穗",
-    "group": "穗___、___穗",
+    "group": "麦___、___头",
     "meaning": "谷物聚在一起的花或果实",
     "semester": "G4B"
   },
   {
     "pinyin": "méng",
     "word": "朦",
-    "group": "朦___、___朦",
+    "group": "夜___、___胧",
     "meaning": "模糊，不清楚",
     "semester": "G4B"
   },
   {
     "pinyin": "lóng",
     "word": "胧",
-    "group": "胧___、___胧",
+    "group": "朦___、___月",
     "meaning": "模糊的样子",
     "semester": "G4B"
   },
   {
     "pinyin": "jì",
     "word": "寂",
-    "group": "寂___、___寂",
+    "group": "沉___、___静",
     "meaning": "静，没有声音",
     "semester": "G4B"
   },
   {
     "pinyin": "xiá",
     "word": "霞",
-    "group": "霞___、___霞",
+    "group": "晚___、___光",
     "meaning": "日出日落时的云彩",
     "semester": "G4B"
   },
   {
     "pinyin": "mǒ",
     "word": "抹",
-    "group": "抹___、___抹",
+    "group": "涂___、___布",
     "meaning": "涂上；擦",
     "semester": "G4B"
   },
   {
     "pinyin": "yōu",
     "word": "忧",
-    "group": "忧___、___忧",
+    "group": "担___、___愁",
     "meaning": "忧愁，愁闷",
     "semester": "G4B"
   },
   {
     "pinyin": "lǜ",
     "word": "虑",
-    "group": "虑___、___虑",
+    "group": "考___、___顾",
     "meaning": "思考，谋划",
     "semester": "G4B"
   },
   {
     "pinyin": "tān",
     "word": "贪",
-    "group": "贪___、___贪",
+    "group": "不___、___心",
     "meaning": "想要得到；不满足",
     "semester": "G4B"
   },
   {
     "pinyin": "zhí",
     "word": "职",
-    "group": "职___、___职",
+    "group": "任___、___业",
     "meaning": "分内应做的事",
     "semester": "G4B"
   },
   {
     "pinyin": "píng",
     "word": "屏",
-    "group": "屏___、___屏",
+    "group": "荧___、___风",
     "meaning": "挡风的障子；遮",
     "semester": "G4B"
   },
   {
     "pinyin": "cèng",
     "word": "蹭",
-    "group": "蹭___、___蹭",
+    "group": "磨___、___饭",
     "meaning": "摩擦；慢吞吞地走",
     "semester": "G4B"
   },
   {
     "pinyin": "gǎo",
     "word": "稿",
-    "group": "稿___、___稿",
+    "group": "文___、___纸",
     "meaning": "写东西的底稿",
     "semester": "G4B"
   },
   {
     "pinyin": "qiāng",
     "word": "腔",
-    "group": "腔___、___腔",
+    "group": "口___、___调",
     "meaning": "动物身体内的空部分",
     "semester": "G4B"
   },
   {
     "pinyin": "jiě",
     "word": "解",
-    "group": "解___、___解",
+    "group": "理___、___开",
     "meaning": "分开；懂",
     "semester": "G4B"
   },
   {
     "pinyin": "mèn",
     "word": "闷",
-    "group": "闷___、___闷",
+    "group": "烦___、___气",
     "meaning": "空气不流通；心烦",
     "semester": "G4B"
   },
   {
     "pinyin": "shé",
     "word": "蛇",
-    "group": "蛇___、___蛇",
+    "group": "毒___、___头",
     "meaning": "一种爬行动物",
     "semester": "G4B"
   },
   {
     "pinyin": "zāo",
     "word": "遭",
-    "group": "遭___、___遭",
+    "group": "惨___、___受",
     "meaning": "遇到；次，圈",
     "semester": "G4B"
   },
   {
     "pinyin": "yāng",
     "word": "殃",
-    "group": "殃___、___殃",
+    "group": "遭___、___祸",
     "meaning": "祸害，使受苦",
     "semester": "G4B"
   },
   {
     "pinyin": "pén",
     "word": "盆",
-    "group": "盆___、___盆",
+    "group": "花___、___景",
     "meaning": "盛东西的器具",
     "semester": "G4B"
   },
   {
     "pinyin": "bó",
     "word": "勃",
-    "group": "勃___、___勃",
+    "group": "蓬___、___然",
     "meaning": "突然；旺盛",
     "semester": "G4B"
   },
   {
     "pinyin": "tǎo",
     "word": "讨",
-    "group": "讨___、___讨",
+    "group": "商___、___论",
     "meaning": "研究；引起",
     "semester": "G4B"
   },
   {
     "pinyin": "yàn",
     "word": "厌",
-    "group": "厌___、___厌",
+    "group": "讨___、___恶",
     "meaning": "嫌恶，满足",
     "semester": "G4B"
   },
   {
     "pinyin": "bà",
     "word": "坝",
-    "group": "坝___、___坝",
+    "group": "大___、___堤",
     "meaning": "拦住水流的建筑物",
     "semester": "G4B"
   },
   {
     "pinyin": "zhōng",
     "word": "忠",
-    "group": "忠___、___忠",
+    "group": "效___、___诚",
     "meaning": "赤诚无私，诚心尽力",
     "semester": "G4B"
   },
   {
     "pinyin": "dú",
     "word": "毒",
-    "group": "毒___、___毒",
+    "group": "中___、___药",
     "meaning": "对生物有害的东西",
     "semester": "G4B"
   },
   {
     "pinyin": "jì",
     "word": "绩",
-    "group": "绩___、___绩",
+    "group": "成___、___效",
     "meaning": "成果，业绩",
     "semester": "G4B"
   },
   {
     "pinyin": "fū",
     "word": "孵",
-    "group": "孵___、___孵",
+    "group": "抱___、___化",
     "meaning": "昆虫、鱼、鸟等产卵后用体温使卵内的胚胎发育成幼体",
     "semester": "G4B"
   },
   {
     "pinyin": "jǐng",
     "word": "警",
-    "group": "警___、___警",
+    "group": "报___、___察",
     "meaning": "注意并防备；使人注意",
     "semester": "G4B"
   },
   {
     "pinyin": "jiè",
     "word": "戒",
-    "group": "戒___、___戒",
+    "group": "警___、___备",
     "meaning": "防备；改掉不良习惯",
     "semester": "G4B"
   },
   {
     "pinyin": "wāi",
     "word": "歪",
-    "group": "歪___、___歪",
+    "group": "偏___、___斜",
     "meaning": "不正，偏",
     "semester": "G4B"
   },
   {
     "pinyin": "gū",
     "word": "咕",
-    "group": "咕___、___咕",
+    "group": "叽___、___噜",
     "meaning": "象声词",
     "semester": "G4B"
   },
   {
     "pinyin": "tāng",
     "word": "汤",
-    "group": "汤___、___汤",
+    "group": "热___、___水",
     "meaning": "热水；煮食物的汁水",
     "semester": "G4B"
   },
   {
     "pinyin": "jué",
     "word": "掘",
-    "group": "掘___、___掘",
+    "group": "挖___、___进",
     "meaning": "刨，挖",
     "semester": "G4B"
   },
   {
     "pinyin": "fú",
     "word": "伏",
-    "group": "伏___、___伏",
+    "group": "潜___、___卧",
     "meaning": "趴；低下去",
     "semester": "G4B"
   },
   {
     "pinyin": "tí",
     "word": "啼",
-    "group": "啼___、___啼",
+    "group": "哭___、___哭",
     "meaning": "出声地哭；叫",
     "semester": "G4B"
   },
   {
     "pinyin": "diào",
     "word": "调",
-    "group": "调___、___调",
+    "group": "强___、___查",
     "meaning": "查访；更动",
     "semester": "G4B"
   },
   {
     "pinyin": "cù",
     "word": "促",
-    "group": "促___、___促",
+    "group": "督___、___进",
     "meaning": "催，推动",
     "semester": "G4B"
   },
   {
     "pinyin": "pō",
     "word": "颇",
-    "group": "颇___、___颇",
+    "group": "偏___、___为",
     "meaning": "很，相当地",
     "semester": "G4B"
   },
   {
     "pinyin": "jù",
     "word": "剧",
-    "group": "剧___、___剧",
+    "group": "戏___、___烈",
     "meaning": "戏剧；厉害",
     "semester": "G4B"
   },
   {
     "pinyin": "gǒu",
     "word": "苟",
-    "group": "苟___、___苟",
+    "group": "不___、___且",
     "meaning": "只顾眼前；随便",
     "semester": "G4B"
   },
   {
     "pinyin": "pì",
     "word": "譬",
-    "group": "譬___、___譬",
+    "group": "比___、___如",
     "meaning": "比如，比方",
     "semester": "G4B"
   },
   {
     "pinyin": "shì",
     "word": "侍",
-    "group": "侍___、___侍",
+    "group": "服___、___奉",
     "meaning": "陪伴伺候",
     "semester": "G4B"
   },
   {
     "pinyin": "guǎn",
     "word": "馆",
-    "group": "馆___、___馆",
+    "group": "饭___、___图",
     "meaning": "招待客人住的地方",
     "semester": "G4B"
   },
   {
     "pinyin": "fù",
     "word": "附",
-    "group": "附___、___附",
+    "group": "依___、___近",
     "meaning": "另外加上；依从",
     "semester": "G4B"
   },
   {
     "pinyin": "pí",
     "word": "脾",
-    "group": "脾___、___脾",
+    "group": "发___、___气",
     "meaning": "内脏之一",
     "semester": "G4B"
   },
   {
     "pinyin": "mǐn",
     "word": "敏",
-    "group": "敏___、___敏",
+    "group": "灵___、___捷",
     "meaning": "反应快",
     "semester": "G4B"
   },
   {
     "pinyin": "jié",
     "word": "捷",
-    "group": "捷___、___捷",
+    "group": "敏___、___报",
     "meaning": "快，战胜",
     "semester": "G4B"
   },
   {
     "pinyin": "áng",
     "word": "昂",
-    "group": "昂___、___昂",
+    "group": "高___、___贵",
     "meaning": "抬起；高涨",
     "semester": "G4B"
   },
   {
     "pinyin": "gōng",
     "word": "供",
-    "group": "供___、___供",
+    "group": "提___、___给",
     "meaning": "献；审查的口供",
     "semester": "G4B"
   },
   {
     "pinyin": "tiān",
     "word": "添",
-    "group": "添___、___添",
+    "group": "增___、___加",
     "meaning": "增加",
     "semester": "G4B"
   },
   {
     "pinyin": "kuò",
     "word": "扩",
-    "group": "扩___、___扩",
+    "group": "推___、___大",
     "meaning": "放大",
     "semester": "G4B"
   },
   {
     "pinyin": "fàn",
     "word": "范",
-    "group": "范___、___范",
+    "group": "模___、___围",
     "meaning": "一定范围的标准；榜样",
     "semester": "G4B"
   },
   {
     "pinyin": "nǔ",
     "word": "努",
-    "group": "努___、___努",
+    "group": "奋___、___力",
     "meaning": "尽量地用力",
     "semester": "G4B"
   },
   {
     "pinyin": "chà",
     "word": "刹",
-    "group": "刹___、___刹",
+    "group": "古___、___车",
     "meaning": "极短的时间；止住",
     "semester": "G4B"
   },
   {
     "pinyin": "làn",
     "word": "烂",
-    "group": "烂___、___烂",
+    "group": "腐___、___熟",
     "meaning": "过期；过度",
     "semester": "G4B"
   },
   {
     "pinyin": "tì",
     "word": "替",
-    "group": "替___、___替",
+    "group": "代___、___换",
     "meaning": "代，代理",
     "semester": "G4B"
   },
   {
     "pinyin": "xiāng",
     "word": "镶",
-    "group": "镶___、___镶",
+    "group": "金___、___嵌",
     "meaning": "把东西嵌进去或在外围加装饰",
     "semester": "G4B"
   },
   {
     "pinyin": "zǐ",
     "word": "紫",
-    "group": "紫___、___紫",
+    "group": "深___、___色",
     "meaning": "红和蓝合成的颜色",
     "semester": "G4B"
   },
   {
     "pinyin": "jǐn",
     "word": "仅",
-    "group": "仅___、___仅",
+    "group": "不___、___存",
     "meaning": "只，不过",
     "semester": "G4B"
   },
   {
     "pinyin": "zhè",
     "word": "浙",
-    "group": "浙___、___浙",
+    "group": "江___、___江",
     "meaning": "浙江，省名",
     "semester": "G4B"
   },
   {
     "pinyin": "luó",
     "word": "罗",
-    "group": "罗___、___罗",
+    "group": "张___、___列",
     "meaning": "排列；捉鸟的网",
     "semester": "G4B"
   },
   {
     "pinyin": "dù",
     "word": "杜",
-    "group": "杜___、___杜",
+    "group": "老___、___绝",
     "meaning": "堵住，封闭",
     "semester": "G4B"
   },
   {
     "pinyin": "juān",
     "word": "鹃",
-    "group": "鹃___、___鹃",
+    "group": "杜___、___花",
     "meaning": "杜鹃，一种鸟",
     "semester": "G4B"
   },
   {
     "pinyin": "zhǎi",
     "word": "窄",
-    "group": "窄___、___窄",
+    "group": "狭___、___小",
     "meaning": "横的距离小",
     "semester": "G4B"
   },
   {
     "pinyin": "yù",
     "word": "郁",
-    "group": "郁___、___郁",
+    "group": "忧___、___闷",
     "meaning": "草木茂盛；忧愁",
     "semester": "G4B"
   },
   {
     "pinyin": "jiān",
     "word": "肩",
-    "group": "肩___、___肩",
+    "group": "双___、___膀",
     "meaning": "脖子旁边胳膊上边的部分",
     "semester": "G4B"
   },
   {
     "pinyin": "tún",
     "word": "臀",
-    "group": "臀___、___臀",
+    "group": "后___、___部",
     "meaning": "屁股",
     "semester": "G4B"
   },
   {
     "pinyin": "yí",
     "word": "移",
-    "group": "移___、___移",
+    "group": "推___、___动",
     "meaning": "改换原来的位置",
     "semester": "G4B"
   },
   {
     "pinyin": "é",
     "word": "额",
-    "group": "额___、___额",
+    "group": "前___、___头",
     "meaning": "眉毛以上头发以下的部分",
     "semester": "G4B"
   },
   {
     "pinyin": "lù",
     "word": "陆",
-    "group": "陆___、___陆",
+    "group": "大___、___地",
     "meaning": "高出水面的土地",
     "semester": "G4B"
   },
   {
     "pinyin": "rǔ",
     "word": "乳",
-    "group": "乳___、___乳",
+    "group": "母___、___汁",
     "meaning": "奶汁；像奶汁的",
     "semester": "G4B"
   },
   {
     "pinyin": "sǔn",
     "word": "笋",
-    "group": "笋___、___笋",
+    "group": "竹___、___干",
     "meaning": "竹子的嫩芽",
     "semester": "G4B"
   },
   {
     "pinyin": "duān",
     "word": "端",
-    "group": "端___、___端",
+    "group": "末___、___正",
     "meaning": "正，不歪；东西的头",
     "semester": "G4B"
   },
   {
     "pinyin": "yuán",
     "word": "源",
-    "group": "源___、___源",
+    "group": "来___、___头",
     "meaning": "水流开始的地方",
     "semester": "G4B"
   },
   {
     "pinyin": "náng",
     "word": "囊",
-    "group": "囊___、___囊",
+    "group": "锦___、___括",
     "meaning": "口袋",
     "semester": "G4B"
   },
   {
     "pinyin": "yíng",
     "word": "萤",
-    "group": "萤___、___萤",
+    "group": "流___、___火",
     "meaning": "萤火虫，一种昆虫",
     "semester": "G4B"
   },
   {
     "pinyin": "gōng",
     "word": "恭",
-    "group": "恭___、___恭",
+    "group": "谦___、___敬",
     "meaning": "肃敬，谦逊有礼貌",
     "semester": "G4B"
   },
   {
     "pinyin": "qín",
     "word": "勤",
-    "group": "勤___、___勤",
+    "group": "辛___、___劳",
     "meaning": "努力，不怕苦",
     "semester": "G4B"
   },
   {
     "pinyin": "bó",
     "word": "博",
-    "group": "博___、___博",
+    "group": "渊___、___士",
     "meaning": "多，广",
     "semester": "G4B"
   },
   {
     "pinyin": "pín",
     "word": "贫",
-    "group": "贫___、___贫",
+    "group": "清___、___穷",
     "meaning": "穷，收入少",
     "semester": "G4B"
   },
   {
     "pinyin": "féng",
     "word": "逢",
-    "group": "逢___、___逢",
+    "group": "相___、___遇",
     "meaning": "遇到",
     "semester": "G4B"
   },
   {
     "pinyin": "jìn",
     "word": "晋",
-    "group": "晋___、___晋",
+    "group": "东___、___升",
     "meaning": "进；向前",
     "semester": "G4B"
   },
   {
     "pinyin": "niǔ",
     "word": "扭",
-    "group": "扭___、___扭",
+    "group": "别___、___转",
     "meaning": "掉转；揪住",
     "semester": "G4B"
   },
   {
     "pinyin": "kàng",
     "word": "炕",
-    "group": "炕___、___炕",
+    "group": "土___、___头",
     "meaning": "北方用砖、坯砌成的床",
     "semester": "G4B"
   },
   {
     "pinyin": "qiān",
     "word": "铅",
-    "group": "铅___、___铅",
+    "group": "黑___、___笔",
     "meaning": "金属元素",
     "semester": "G4B"
   },
   {
     "pinyin": "bīng",
     "word": "兵",
-    "group": "兵___、___兵",
+    "group": "士___、___器",
     "meaning": "战士；军队",
     "semester": "G4B"
   },
   {
     "pinyin": "huàng",
     "word": "晃",
-    "group": "晃___、___晃",
+    "group": "摇___、___眼",
     "meaning": "摇动；照耀",
     "semester": "G4B"
   },
   {
     "pinyin": "li",
     "word": "哩",
-    "group": "哩___、___哩",
+    "group": "咕___、___哒",
     "meaning": "英美计量单位",
     "semester": "G4B"
   },
   {
     "pinyin": "gē",
     "word": "胳",
-    "group": "胳___、___胳",
+    "group": "左___、___膊",
     "meaning": "胳膊",
     "semester": "G4B"
   },
   {
     "pinyin": "bo",
     "word": "膊",
-    "group": "膊___、___膊",
+    "group": "胳___、___臂",
     "meaning": "胳膊",
     "semester": "G4B"
   },
   {
     "pinyin": "jié",
     "word": "劫",
-    "group": "劫___、___劫",
+    "group": "抢___、___难",
     "meaning": "强取；威逼",
     "semester": "G4B"
   },
   {
     "pinyin": "chóu",
     "word": "绸",
-    "group": "绸___、___绸",
+    "group": "丝___、___缎",
     "meaning": "一种薄而软的丝织品",
     "semester": "G4B"
   },
   {
     "pinyin": "bā",
     "word": "扒",
-    "group": "扒___、___扒",
+    "group": "反___、___开",
     "meaning": "刨；拆；抓住",
     "semester": "G4B"
   },
   {
     "pinyin": "dí",
     "word": "敌",
-    "group": "敌___、___敌",
+    "group": "强___、___人",
     "meaning": "有利害冲突的；有仇恨的",
     "semester": "G4B"
   },
   {
     "pinyin": "shī",
     "word": "尸",
-    "group": "尸___、___尸",
+    "group": "死___、___体",
     "meaning": "死人的身体",
     "semester": "G4B"
   },
   {
     "pinyin": "huāng",
     "word": "慌",
-    "group": "慌___、___慌",
+    "group": "惊___、___张",
     "meaning": "心里不沉着，动作忙乱",
     "semester": "G4B"
   },
   {
     "pinyin": "fú",
     "word": "芙",
-    "group": "芙___、___芙",
+    "group": "出___、___蓉",
     "meaning": "芙蓉，植物名",
     "semester": "G4B"
   },
   {
     "pinyin": "róng",
     "word": "蓉",
-    "group": "蓉___、___蓉",
+    "group": "芙___、___花",
     "meaning": "四川成都的别称",
     "semester": "G4B"
   },
   {
     "pinyin": "luò",
     "word": "洛",
-    "group": "洛___、___洛",
+    "group": "京___、___阳",
     "meaning": "洛河，水名",
     "semester": "G4B"
   },
   {
     "pinyin": "hú",
     "word": "壶",
-    "group": "壶___、___壶",
+    "group": "茶___、___水",
     "meaning": "陶瓷或金属制成的容器",
     "semester": "G4B"
   },
   {
     "pinyin": "yàn",
     "word": "雁",
-    "group": "雁___、___雁",
+    "group": "大___、___群",
     "meaning": "一种候鸟",
     "semester": "G4B"
   },
   {
     "pinyin": "yíng",
     "word": "营",
-    "group": "营___、___营",
+    "group": "经___、___养",
     "meaning": "谋求；军队驻扎的地方",
     "semester": "G4B"
   },
   {
     "pinyin": "shè",
     "word": "射",
-    "group": "射___、___射",
+    "group": "注___、___击",
     "meaning": "用推力或弹力发出",
     "semester": "G4B"
   },
   {
     "pinyin": "dàn",
     "word": "弹",
-    "group": "弹___、___弹",
+    "group": "子___、___琴",
     "meaning": "可以用弹力发射的圆形物体",
     "semester": "G4B"
   },
   {
     "pinyin": "róng",
     "word": "荣",
-    "group": "荣___、___荣",
+    "group": "光___、___誉",
     "meaning": "草木茂盛；兴盛",
     "semester": "G4B"
   },
   {
     "pinyin": "bào",
     "word": "爆",
-    "group": "爆___、___爆",
+    "group": "火___、___炸",
     "meaning": "猛然破裂；突然发生",
     "semester": "G4B"
   },
   {
     "pinyin": "zhà",
     "word": "炸",
-    "group": "炸___、___炸",
+    "group": "爆___、___开",
     "meaning": "突然破裂",
     "semester": "G4B"
   },
   {
     "pinyin": "lún",
     "word": "伦",
-    "group": "伦___、___伦",
+    "group": "不___、___敦",
     "meaning": "同类；条理",
     "semester": "G4B"
   },
   {
     "pinyin": "fù",
     "word": "腹",
-    "group": "腹___、___腹",
+    "group": "大___、___部",
     "meaning": "肚子",
     "semester": "G4B"
   },
   {
     "pinyin": "pōu",
     "word": "剖",
-    "group": "剖___、___剖",
+    "group": "解___、___析",
     "meaning": "破开",
     "semester": "G4B"
   },
   {
     "pinyin": "kū",
     "word": "窟",
-    "group": "窟___、___窟",
+    "group": "石___、___窿",
     "meaning": "洞穴",
     "semester": "G4B"
   },
   {
     "pinyin": "lóng",
     "word": "窿",
-    "group": "窿___、___窿",
+    "group": "窟___、___隆",
     "meaning": "孔穴",
     "semester": "G4B"
   },
   {
     "pinyin": "hùn",
     "word": "混",
-    "group": "混___、___混",
+    "group": "搅___、___合",
     "meaning": "搀杂在一起",
     "semester": "G4B"
   },
   {
     "pinyin": "sī",
     "word": "嘶",
-    "group": "嘶___、___嘶",
+    "group": "长___、___喊",
     "meaning": "声音沙哑；喊",
     "semester": "G4B"
   },
   {
     "pinyin": "wéi",
     "word": "维",
-    "group": "维___、___维",
+    "group": "纤___、___护",
     "meaning": "连接；保持",
     "semester": "G4B"
   },
   {
     "pinyin": "zhì",
     "word": "秩",
-    "group": "秩___、___秩",
+    "group": "次___、___序",
     "meaning": "有条理",
     "semester": "G4B"
   },
   {
     "pinyin": "gǎng",
     "word": "岗",
-    "group": "岗___、___岗",
+    "group": "山___、___位",
     "meaning": "守卫的位置；突起",
     "semester": "G4B"
   },
   {
     "pinyin": "zǎi",
     "word": "宰",
-    "group": "宰___、___宰",
+    "group": "主___、___杀",
     "meaning": "杀；主管",
     "semester": "G4B"
   },
   {
     "pinyin": "cuò",
     "word": "措",
-    "group": "措___、___措",
+    "group": "举___、___施",
     "meaning": "安排；筹划",
     "semester": "G4B"
   },
   {
     "pinyin": "qiǎn",
     "word": "遣",
-    "group": "遣___、___遣",
+    "group": "派___、___送",
     "meaning": "派；打发",
     "semester": "G4B"
   },
   {
     "pinyin": "jiàn",
     "word": "践",
-    "group": "践___、___践",
+    "group": "实___、___行",
     "meaning": "踩；履行",
     "semester": "G4B"
   },
   {
     "pinyin": "jiè",
     "word": "介",
-    "group": "介___、___介",
+    "group": "推___、___绍",
     "meaning": "在两者中间",
     "semester": "G4B"
   },
   {
     "pinyin": "shào",
     "word": "绍",
-    "group": "绍___、___绍",
+    "group": "介___、___兴",
     "meaning": "接续；介绍",
     "semester": "G4B"
   },
   {
     "pinyin": "yāo",
     "word": "妖",
-    "group": "妖___、___妖",
+    "group": "怪___、___怪",
     "meaning": "神话中形状奇怪有害的怪物",
     "semester": "G4B"
   },
   {
     "pinyin": "jǔ",
     "word": "矩",
-    "group": "矩___、___矩",
+    "group": "规___、___形",
     "meaning": "画直角用的工具",
     "semester": "G4B"
   },
   {
     "pinyin": "guāi",
     "word": "乖",
-    "group": "乖___、___乖",
+    "group": "不___、___巧",
     "meaning": "顺从；机灵",
     "semester": "G4B"
   },
   {
     "pinyin": "niǎn",
     "word": "撵",
-    "group": "撵___、___撵",
+    "group": "快___、___走",
     "meaning": "驱逐；赶走",
     "semester": "G4B"
   },
   {
     "pinyin": "tàng",
     "word": "烫",
-    "group": "烫___、___烫",
+    "group": "滚___、___手",
     "meaning": "温度高；用温度高的东西使物体起变化",
     "semester": "G4B"
   },
   {
     "pinyin": "yā",
     "word": "丫",
-    "group": "丫___、___丫",
+    "group": "树___、___头",
     "meaning": "分叉的东西",
     "semester": "G4B"
   },
   {
     "pinyin": "zhuài",
     "word": "拽",
-    "group": "拽___、___拽",
+    "group": "拉___、___住",
     "meaning": "拉，拖",
     "semester": "G4B"
   },
   {
     "pinyin": "fú",
     "word": "福",
-    "group": "福___、___福",
+    "group": "幸___、___气",
     "meaning": "运气好",
     "semester": "G4B"
   },
   {
     "pinyin": "tiǎn",
     "word": "舔",
-    "group": "舔___、___舔",
+    "group": "舌___、___食",
     "meaning": "用舌头接触东西",
     "semester": "G4B"
   },
   {
     "pinyin": "kuí",
     "word": "葵",
-    "group": "葵___、___葵",
+    "group": "向___、___花",
     "meaning": "植物名",
     "semester": "G4B"
   },
   {
     "pinyin": "shòu",
     "word": "瘦",
-    "group": "瘦___、___瘦",
+    "group": "消___、___小",
     "meaning": "脂肪少；窄小",
     "semester": "G4B"
   },
   {
     "pinyin": "bàng",
     "word": "棒",
-    "group": "棒___、___棒",
+    "group": "木___、___球",
     "meaning": "棍子；好",
     "semester": "G4B"
   },
   {
     "pinyin": "bà",
     "word": "罢",
-    "group": "罢___、___罢",
+    "group": "作___、___工",
     "meaning": "停止；免去",
     "semester": "G4B"
   },
   {
     "pinyin": "shuò",
     "word": "硕",
-    "group": "硕___、___硕",
+    "group": "丰___、___果",
     "meaning": "大；学位名",
     "semester": "G4B"
   },
   {
     "pinyin": "yǔn",
     "word": "允",
-    "group": "允___、___允",
+    "group": "应___、___许",
     "meaning": "答应，许可",
     "semester": "G4B"
   },
   {
     "pinyin": "qì",
     "word": "砌",
-    "group": "砌___、___砌",
+    "group": "堆___、___墙",
     "meaning": "把砖石堆砌起来",
     "semester": "G4B"
   },
   {
     "pinyin": "pái",
     "word": "牌",
-    "group": "牌___、___牌",
+    "group": "招___、___号",
     "meaning": "用木板等做成的标志",
     "semester": "G4B"
   },
   {
     "pinyin": "jìn",
     "word": "禁",
-    "group": "禁___、___禁",
+    "group": "严___、___止",
     "meaning": "不许；法律或习俗的约束",
     "semester": "G4B"
   },
   {
     "pinyin": "chéng",
     "word": "惩",
-    "group": "惩___、___惩",
+    "group": "严___、___罚",
     "meaning": "警戒；处罚",
     "semester": "G4B"
   },
   {
     "pinyin": "zōng",
     "word": "踪",
-    "group": "踪___、___踪",
+    "group": "失___、___迹",
     "meaning": "脚印；行动留下的痕迹",
     "semester": "G4B"
   },
   {
     "pinyin": "xiào",
     "word": "啸",
-    "group": "啸___、___啸",
+    "group": "呼___、___声",
     "meaning": "动物拉长声音叫",
     "semester": "G4B"
   },
   {
     "pinyin": "sī",
     "word": "私",
-    "group": "私___、___私",
+    "group": "公___、___人",
     "meaning": "属于个人的",
     "semester": "G4B"
   },
   {
     "pinyin": "jiá",
     "word": "颊",
-    "group": "颊___、___颊",
+    "group": "脸___、___面",
     "meaning": "脸的两旁",
     "semester": "G4B"
   },
   {
     "pinyin": "chāi",
     "word": "拆",
-    "group": "拆___、___拆",
+    "group": "强___、___开",
     "meaning": "把合在一起的东西打开",
     "semester": "G4B"
   }
