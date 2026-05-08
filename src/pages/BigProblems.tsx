@@ -176,11 +176,12 @@ export function BigProblemsPage() {
       <FinalBossCard allBeaten={allBeaten} g4bAvg={g4bAvg} beatenCount={beatenCount} totalUnits={units.length} />
 
       <section className="rounded-2xl border border-ink-700/50 bg-ink-900/40 p-4 text-xs text-slate-400 leading-relaxed">
-        💡 闯关说明：
+        💡 闯关说明（v0.31.38 更新 · 难度更友好）：
         <ul className="list-disc pl-5 mt-2 space-y-1">
-          <li>每场 5 道大题（D3-D4 多步应用题，含 subquestions 分步答）</li>
-          <li>5 道至少答对 4 道 → 通过 + 获得本单元印章 + 段位星级 +1</li>
-          <li>不限时（cognitive load 高，慢慢想）</li>
+          <li>每场 5 道：1 道 D2 热身 + 3 道 D3 主战 + 1 道 D4 Boss（按难度阶梯递进）</li>
+          <li>5 道至少答对 <span className="text-emerald-300 font-semibold">3 道</span> → 通过 + 获得本单元印章 + 段位星级 +1</li>
+          <li><span className="text-cyan-200 font-semibold">不限时</span>（题面长，需要慢慢思考；倒计时已关闭）</li>
+          <li>多步应用题分步答：每步答错只是过程提示，不降级整题分</li>
           <li>XP / Elo / mastery 全部跟主线累计</li>
         </ul>
       </section>

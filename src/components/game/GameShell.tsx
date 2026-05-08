@@ -86,6 +86,12 @@ export interface GameShellProps {
    * 用户点"再做一次"时直接 swap displayedQuestion 到变式题。
    */
   onRequestVariant?: (original: Question) => Promise<Question | null>;
+  /**
+   * v0.31.38: 把生成的"再出一道类似的 / 加难度"的题真插进 session 队列。
+   * Train.tsx 在 state.questions[index+1] 处 splice，下一次 handleNext 就是这道。
+   * 之前 sessionAdaptive 只写 db.questions，没有改 session.questions → 用户看到旧 plan 里的下一题。
+   */
+  onInjectQuestion?: (q: Question) => void;
 }
 
 /** 每个子模板实现这个接口 */
@@ -106,7 +112,7 @@ export interface TriggerFx {
 }
 
 export function GameShell(props: GameShellProps) {
-  const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled, examMode, onRequestVariant } = props;
+  const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled, examMode, onRequestVariant, onInjectQuestion } = props;
   const resetKey = `${question.question_id}:${index}`;
   // v0.30.8: 当前在 TemplatePanel 里"渲染并接受答题"的题
   // - 默认 = props.question（原题）
@@ -425,7 +431,7 @@ export function GameShell(props: GameShellProps) {
         {/* v0.31.25：传 displayedQuestion 而非原题 — 变式题流程下 Selena 答的是变式题，
             FeedbackPanel 内的"小进讲一讲"按钮也应该讲她刚答的那道，而不是原题。
             之前传 props.question 导致 tutor 打开看到的 stem 跟 feedback 显示的答案对不上。 */}
-        {feedback && <FeedbackPanel feedback={feedback} question={displayedQuestion} onNext={onNext} />}
+        {feedback && <FeedbackPanel feedback={feedback} question={displayedQuestion} onNext={onNext} onInjectQuestion={onInjectQuestion} />}
       </div>
 
       <FloatLayer
@@ -547,6 +553,7 @@ function FeedbackPanel({
   feedback,
   question,
   onNext,
+  onInjectQuestion,
 }: {
   feedback: {
     isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string;
@@ -560,6 +567,7 @@ function FeedbackPanel({
   };
   question: Question;
   onNext: () => void;
+  onInjectQuestion?: (q: Question) => void;
 }) {
   const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, errorPattern } = feedback;
   const [showTutor, setShowTutor] = useState(false);
@@ -575,6 +583,11 @@ function FeedbackPanel({
     try {
       const newQs = await requestRetryQuestion(question);
       console.log(`[adaptive] retry → ${newQs.length} 题入库 (skill=${question.skill_id}, d=${question.difficulty})`);
+      // v0.31.38: 把生成的题真插进 session 队列，下一题就用它
+      const injected = newQs[0];
+      if (injected && onInjectQuestion) {
+        onInjectQuestion(injected);
+      }
       setAdaptiveDone("retry");
     } catch (e) {
       setAdaptiveErr(`再出题失败：${(e as Error).message.slice(0, 50)}`);
@@ -590,6 +603,11 @@ function FeedbackPanel({
     try {
       const newQs = await requestHarderQuestion(question);
       console.log(`[adaptive] bump → ${newQs.length} 题入库 (skill=${question.skill_id}, d=${question.difficulty + 1})`);
+      // v0.31.38: 把生成的题真插进 session 队列，下一题就用它
+      const injected = newQs[0];
+      if (injected && onInjectQuestion) {
+        onInjectQuestion(injected);
+      }
       setAdaptiveDone("bump");
     } catch (e) {
       setAdaptiveErr(`加难度失败：${(e as Error).message.slice(0, 50)}`);

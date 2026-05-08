@@ -735,64 +735,121 @@ function buildMockExam(input: InternalInput): DailySessionPlan {
  *   3. 按 skill 多样性（同 skill 最多 1 道，5 道至少 5 个 skill）
  *   4. 不够 5 道时降级到 D3-D4 不含 subquestions 的题（"题量警告"）
  */
+/**
+ * v0.31.38: 闯关难度阶梯重设计。
+ *
+ * 旧版 5×D3-D4 直接上 → 对孩子打击太大；用户反馈"难度太大、时间又特别短，闯关意愿小"。
+ *
+ * 新版：1×热身 (D2) + 3×主战 (D3) + 1×Boss (D4)
+ *   - D2 热身有 subquestions 优先；没有就放宽到任何 D2 应用题（让孩子手感找回来）
+ *   - 主战仍是 D3 多步应用题（subquestions 优先）
+ *   - Boss 是 D4 综合压轴
+ *   - 每档不够时降级（fallback）到下一档；不够 5 道时整体允许少
+ *
+ * 配合 service.ts 通过门槛 4/5 → 3/5（60%）— 给孩子"过得了"的体验，
+ * 不是每场都 80% 才发印章，那种压力对小学生是负反馈。
+ */
 function buildBigProblems(input: InternalInput): DailySessionPlan {
-  const isBigProblem = (q: Question) =>
-    q.difficulty >= 3 &&
-    q.difficulty <= 4 &&
-    Array.isArray(q.subquestions) &&
-    q.subquestions.length > 0;
+  const hasSubq = (q: Question) =>
+    Array.isArray(q.subquestions) && q.subquestions.length > 0;
 
   // v0.31.1：如果指定了 unitId（比如点 G4B U1 闯关），过滤到该单元
   const unitFilter = input.unitId
     ? (q: Question) => q.unit_id === input.unitId
     : () => true;
-  const baseCandidates = input.pool.filter((q) => isBigProblem(q) && unitFilter(q));
 
-  // 排除最近做过的题
-  const fresh = baseCandidates.filter(
-    (q) =>
-      !input.recentCorrectIds.has(q.question_id) &&
-      !input.recentWrongCooldownIds.has(q.question_id),
-  );
+  // 排除最近做过的题（按学过的标准筛掉做对/做错冷却）
+  const isFresh = (q: Question) =>
+    !input.recentCorrectIds.has(q.question_id) &&
+    !input.recentWrongCooldownIds.has(q.question_id);
+
+  // 同样的 unit + 还没做过的总池，按难度切分桶
+  const unitPool = input.pool.filter((q) => unitFilter(q) && isFresh(q));
+  const byDifficulty = (d: number, requireSubq = false) =>
+    unitPool.filter((q) => q.difficulty === d && (!requireSubq || hasSubq(q)));
+
+  /**
+   * 从一桶里随机挑 N 道题，跳过已选过的 (perSkill 用于多样性)
+   * 拿不够时降级 fallback 桶里挑剩。
+   */
+  function pickFromBucket(
+    primary: Question[],
+    fallback: Question[],
+    n: number,
+    perSkill: Set<string>,
+    alreadyPicked: Set<string>,
+  ): Question[] {
+    const out: Question[] = [];
+    const both = [primary, fallback];
+    for (const bucket of both) {
+      const shuffled = [...bucket].sort(() => input.rng() - 0.5);
+      // 第一遍：尝试 skill 多样性
+      for (const q of shuffled) {
+        if (out.length >= n) break;
+        if (alreadyPicked.has(q.question_id)) continue;
+        if (perSkill.has(q.skill_id)) continue;
+        out.push(q);
+        alreadyPicked.add(q.question_id);
+        perSkill.add(q.skill_id);
+      }
+      // 第二遍：放宽 skill 多样性
+      for (const q of shuffled) {
+        if (out.length >= n) break;
+        if (alreadyPicked.has(q.question_id)) continue;
+        out.push(q);
+        alreadyPicked.add(q.question_id);
+      }
+      if (out.length >= n) break;
+    }
+    return out;
+  }
 
   const target = Math.max(3, Math.min(5, input.targetCount));
-
-  // skill 多样性：先打乱，每个 skill 至多 1 道
-  const shuffled = [...fresh].sort(() => input.rng() - 0.5);
   const perSkill = new Set<string>();
-  const picked: Question[] = [];
-  for (const q of shuffled) {
-    if (perSkill.has(q.skill_id)) continue;
-    picked.push(q);
-    perSkill.add(q.skill_id);
-    if (picked.length >= target) break;
-  }
+  const alreadyPicked = new Set<string>();
 
-  // 还不够：放宽 skill 多样性约束
+  // 1×热身 D2
+  const warmup = pickFromBucket(
+    byDifficulty(2, true), // D2 + subq 优先
+    byDifficulty(2, false), // D2 单步退路
+    1,
+    perSkill,
+    alreadyPicked,
+  );
+
+  // 3×主战 D3
+  const main = pickFromBucket(
+    byDifficulty(3, true),
+    byDifficulty(3, false),
+    3,
+    perSkill,
+    alreadyPicked,
+  );
+
+  // 1×Boss D4
+  const boss = pickFromBucket(
+    byDifficulty(4, true),
+    byDifficulty(4, false),
+    1,
+    perSkill,
+    alreadyPicked,
+  );
+
+  let picked = [...warmup, ...main, ...boss];
+
+  // 总数仍不够 → 不限难度从未做过的池里再凑（保留 ≥ 3 道）
   if (picked.length < target) {
-    for (const q of shuffled) {
-      if (picked.includes(q)) continue;
-      picked.push(q);
+    const fillers = unitPool
+      .filter((q) => !alreadyPicked.has(q.question_id))
+      .sort(() => input.rng() - 0.5);
+    for (const q of fillers) {
       if (picked.length >= target) break;
+      picked.push(q);
+      alreadyPicked.add(q.question_id);
     }
   }
 
-  // 仍不够：降级到 D3-D4 但没 subquestions 的（依旧是"硬题"）
-  if (picked.length < target) {
-    const fallback = input.pool.filter(
-      (q) =>
-        q.difficulty >= 3 &&
-        q.difficulty <= 4 &&
-        !picked.includes(q) &&
-        !input.recentCorrectIds.has(q.question_id) &&
-        !input.recentWrongCooldownIds.has(q.question_id),
-    );
-    for (const q of fallback.sort(() => input.rng() - 0.5)) {
-      picked.push(q);
-      if (picked.length >= target) break;
-    }
-  }
-
+  // 关卡内顺序：永远是 warmup → main → boss
   const poolStarved = picked.length < target;
   const finalList = picked.slice(0, target);
 
@@ -802,7 +859,11 @@ function buildBigProblems(input: InternalInput): DailySessionPlan {
     plannedMinutes: input.targetMinutes,
     questionIds: finalList.map((q) => q.question_id),
     focusSkills: Array.from(new Set(finalList.map((q) => q.skill_id))),
-    breakdown: [{ bucket: "big_problems", count: finalList.length }],
+    breakdown: [
+      { bucket: "warmup_D2", count: warmup.length },
+      { bucket: "main_D3", count: main.length },
+      { bucket: "boss_D4", count: boss.length },
+    ].filter((b) => b.count > 0),
     poolStarved,
   };
 }

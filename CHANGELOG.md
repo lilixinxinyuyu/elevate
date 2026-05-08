@@ -3,6 +3,48 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.38 — 2026-05-08 · 闯关难度阶梯 + AI 再出题真注入会话
+
+爸爸反馈：
+1. 「闯关的难度太大了，时间又特别短，Selena 闯关意愿就特别小」
+2. 「AI 出题答错时蹦出"再出一道类似的"，但点了下一题没出现类似的题，好像变成了另外一种题」
+
+### 闯关重设计（friendly difficulty curve）
+
+旧版 `5 × D3-D4 + ceil(0.8) 通过` → 4/5 才发印章，时间还有倒计时。
+对 4 年级孩子，cognitive load 已经够高，再加压力打击信心。
+
+新版 `1 × D2(热身) + 3 × D3(主战) + 1 × D4(Boss)`：
+- D2 热身：subquestions 优先，单步退路；让孩子手感找回来再上主战
+- D3 主战：原来的多步应用题
+- D4 Boss：综合压轴
+- 每档不够时降级到下一档，整体仍然 5 道
+- 通过门槛 `4/5 (80%)` → `3/5 (60%)`：give a child a winnable game
+
+`buildBigProblems()` 完整重写（`src/core/scheduler.ts:738`）：每档独立挑桶 + skill 多样性 + fallback。
+`finalizeSession()`（`src/db/service.ts:676`）通过率从 0.8 → 0.6。
+`Train.tsx` 给 GameShell 的 `countdownEnabled` 现在是 `effectiveMode !== "big_problems"` —— **闯关不限时**。
+`BigProblems.tsx` landing 文案同步更新。
+
+### AI 再出题真注入会话队列
+
+`requestRetryQuestion()` / `requestHarderQuestion()` 之前只把生成的题写进 `db.questions`（带 `ai_generated/session_adaptive` tag），但 `Train.tsx` 的 `state.questions` 没改 → 用户点"下一题"看到的还是 plan 里原本的下一题。按钮显示"✓ 已加入下一题"是 **撒谎**。
+
+修复：
+- `GameShell` 加 `onInjectQuestion(q: Question)` prop，路由到 FeedbackPanel
+- FeedbackPanel 里 `onRetrySimilar` / `onBumpHarder` 在生成成功后调 `onInjectQuestion(newQs[0])`
+- `Train.tsx` 的 `handleInjectQuestion` 直接 `state.questions.splice(index+1, 0, q)`
+- 防重：同 questionId 已经在 cursor 之后就不再插
+
+下一次 `handleNext` 切到的就是这道新题。
+
+### 改动文件
+- `src/core/scheduler.ts` — 重写 `buildBigProblems` 加难度阶梯
+- `src/db/service.ts` — 通过率 0.8 → 0.6
+- `src/pages/Train.tsx` — `countdownEnabled` 闯关关 + `handleInjectQuestion` callback
+- `src/components/game/GameShell.tsx` — `onInjectQuestion` prop 串到 FeedbackPanel
+- `src/pages/BigProblems.tsx` — landing 文案更新
+
 ## v0.31.37 — 2026-05-07 · 真修 fill_blank 题 + 一键 AI 修全部
 
 爸爸：「静态规则检测到 42 道可疑题，这个不是已经修好了吗？...修好题，删除信息就完了」+「一个一个的点太耗费时间了」

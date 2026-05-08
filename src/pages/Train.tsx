@@ -214,6 +214,27 @@ export function TrainPage() {
     [state],
   );
 
+  /**
+   * v0.31.38: AI 生成的"再出一道类似的 / 加难度"的题真插进当前 session 的队列。
+   * sessionAdaptive 已经把题写入 db.questions（带 ai_generated/session_adaptive tag），
+   * 这里再把它 splice 进 state.questions[index+1]，下一次 handleNext 切到的就是这道。
+   *
+   * 一道题一次 inject — 防止用户连点 2 次插出 2 道。
+   */
+  const handleInjectQuestion = useCallback((q: Question) => {
+    setState((s) => {
+      if (s.status !== "running") return s;
+      // 防重：已经有同 id 的待答题就不再插
+      const existsAfterCursor = s.questions.findIndex(
+        (x, i) => i > s.index && x.question_id === q.question_id,
+      );
+      if (existsAfterCursor >= 0) return s;
+      const newQuestions = s.questions.slice();
+      newQuestions.splice(s.index + 1, 0, q);
+      return { ...s, questions: newQuestions };
+    });
+  }, []);
+
   const finalizingRef = useRef(false);
   const handleNext = useCallback(async () => {
     if (state.status !== "running") return;
@@ -293,9 +314,12 @@ export function TrainPage() {
       onSubmit={handleSubmit}
       onNext={handleNext}
       showStarter={state.index === 0}
-      countdownEnabled={true}
+      // v0.31.38: 闯关 (big_problems) 不限时 — 多步应用题需要慢慢想，
+      // 时间压力对孩子是负反馈。原 BigProblems UI 也明示 "不限时"。
+      countdownEnabled={effectiveMode !== "big_problems"}
       examMode={effectiveMode === "mock_exam"}
       onRequestVariant={handleRequestVariant}
+      onInjectQuestion={handleInjectQuestion}
     />
   );
 }
