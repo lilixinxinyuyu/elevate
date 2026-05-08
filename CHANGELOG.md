@@ -3,6 +3,45 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.48 — 2026-05-08 · 修英语 / 语文 打卡环填充动画
+
+爸爸：「英语的今日打卡环动画被你删除了，应该保持和数学和语文的打卡环一样」
+
+### 根因
+
+EnglishHome / ChineseHome 在数据加载完之前用了 `?? 0` fallback，导致初始 done 状态被误判为 true：
+
+```ts
+// 老（bug）
+const weak = stats?.weak ?? 0;
+const weakDone = weak === 0;     // 加载中 stats=null → weak=0 → done=true（错!）
+```
+
+后果：
+- 初始 render 环已经 progress=1 了，根本没有 "stroke-dashoffset 从 0 到 1" 的填充动画
+- 数学环为啥正常：math home 用 `todayCount >= challengeTarget` 判，初始 todayCount=0 ≠ 满足条件 → 初始 done=false → 数据加载后 transition 触发动画
+
+### 修
+
+让 buildRings 接收 `loaded: boolean`，未加载完前所有环 progress=0 / done=false：
+
+```ts
+// 新
+const loaded = daily !== null && stats !== null;
+const challengeProg = !loaded ? 0 : Math.min(1, todayCount / Math.max(1, targetCount));
+const challengeDone = loaded && todayCount >= targetCount;
+const weakDone = loaded && weak === 0;
+```
+
+数据加载后 transition `done: false → true` 触发：
+1. stroke-dashoffset 平滑填充（环看起来"在画"）
+2. sparkle 12 dots 庆祝（如果是新闭合）
+3. 900ms 后 sparkle 自动停（initializedRef 防穿越事件）
+
+### 改动文件
+- `src/pages/english/EnglishHome.tsx` — buildRings 加 `loaded` gate
+- `src/pages/chinese/ChineseHome.tsx` — buildChineseRings 加 `loaded` gate
+
 ## v0.31.47 — 2026-05-08 · 修 251 个泄露词组提示
 
 爸爸：「囊___、___囊 直接把答案写出来了。检查一下数据里面是不是所有的提示词组是不是都不对，调整一下数据库」

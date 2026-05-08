@@ -174,6 +174,8 @@ export function ChineseHomePage() {
           openMistakes,
           mockAvailable: mockCooldown.available,
           mockDaysUntilNext: mockCooldown.daysUntilNext,
+          // v0.31.48: 加载完才传 true，让初次环 progress 从 0 填到实际值
+          loaded: charDaily !== null,
         })}
       />
 
@@ -379,6 +381,7 @@ function buildChineseRings(args: {
   openMistakes: number;
   mockAvailable: boolean;
   mockDaysUntilNext: number;
+  loaded: boolean;
 }): RingSpec[] {
   const amberA = "#fcd34d";
   const amberB = "#d97706";
@@ -387,13 +390,19 @@ function buildChineseRings(args: {
   const cyanA = "#22d3ee";
   const cyanB = "#0891b2";
 
+  // v0.31.48: 数据加载完之前所有环 progress=0/done=false，加载完才填充。
+  // 让 stroke-dashoffset transition 跟数学一样顺畅播出"填充"动画，且 sparkle 能正常 trigger。
   const targetCount = args.charDaily?.target ?? 20;
   const todayCount = args.charDaily?.todayCount ?? 0;
-  const charProg = Math.min(1, todayCount / Math.max(1, targetCount));
-  const charDone = todayCount >= targetCount;
+  const charProg = !args.loaded ? 0 : Math.min(1, todayCount / Math.max(1, targetCount));
+  const charDone = args.loaded && todayCount >= targetCount;
 
-  const mistakeProg = args.openMistakes === 0 ? 1 : Math.max(0.1, 1 - Math.min(args.openMistakes / 20, 0.9));
-  const mistakeDone = args.openMistakes === 0;
+  const mistakeProg = !args.loaded
+    ? 0
+    : args.openMistakes === 0
+      ? 1
+      : Math.max(0.1, 1 - Math.min(args.openMistakes / 20, 0.9));
+  const mistakeDone = args.loaded && args.openMistakes === 0;
 
   return [
     {
@@ -422,14 +431,16 @@ function buildChineseRings(args: {
       id: "mock",
       icon: "📝",
       shortLabel: "模拟测试",
-      progress: args.mockAvailable ? 0.05 : 1,
-      statusText: args.mockAvailable
-        ? "本周已开放 · 跨单元 20 题"
-        : `${args.mockDaysUntilNext} 天后再开`,
+      progress: !args.loaded ? 0 : args.mockAvailable ? 0.05 : 1,
+      statusText: !args.loaded
+        ? "—"
+        : args.mockAvailable
+          ? "本周已开放 · 跨单元 20 题"
+          : `${args.mockDaysUntilNext} 天后再开`,
       to: args.mockAvailable ? "/chinese/train?mode=mock_exam" : "/chinese",
       hue: cyanA,
       hue2: cyanB,
-      done: !args.mockAvailable,
+      done: args.loaded && !args.mockAvailable,
     },
   ];
 }

@@ -136,16 +136,17 @@ function buildRings(
   const amberA = "#fcd34d";
   const amberB = "#d97706";
 
+  // v0.31.48: 数据加载完之前，所有环 progress=0 / done=false。
+  // 这样数据到位后会触发 stroke-dashoffset transition (跟数学一样有"填充"动画)，
+  // 真闭合时 sparkle 也能正常 trigger（之前因为初始 done=true 没有 transition）
+  const loaded = daily !== null && stats !== null;
   const targetCount = daily?.target ?? 20;
   const todayCount = daily?.todayCount ?? 0;
-  const challengeProg = Math.min(1, todayCount / Math.max(1, targetCount));
-  const challengeDone = todayCount >= targetCount;
+  const challengeProg = !loaded ? 0 : Math.min(1, todayCount / Math.max(1, targetCount));
+  const challengeDone = loaded && todayCount >= targetCount;
 
   const weak = stats?.weak ?? 0;
-  const weakDone = weak === 0;
-
-  const sprintTodayKey = `english_sprint_today`;
-  void sprintTodayKey; // reserved for future tracking
+  const weakDone = loaded && weak === 0;
 
   return [
     {
@@ -165,7 +166,7 @@ function buildRings(
       id: "sprint",
       icon: "⚡",
       shortLabel: "闪电冲刺",
-      progress: 0.05,
+      progress: !loaded ? 0 : 0.05,
       statusText: "60 秒看词选中文",
       to: "/english/vocab?mode=sprint",
       hue: violetA,
@@ -176,8 +177,8 @@ function buildRings(
       id: "review",
       icon: "🪄",
       shortLabel: "复习薄弱",
-      progress: weakDone ? 1 : Math.max(0.1, 1 - Math.min(weak / 20, 0.9)),
-      statusText: weakDone ? "无薄弱词 ✓" : `${weak} 个薄弱词`,
+      progress: !loaded ? 0 : weakDone ? 1 : Math.max(0.1, 1 - Math.min(weak / 20, 0.9)),
+      statusText: !loaded ? "—" : weakDone ? "无薄弱词 ✓" : `${weak} 个薄弱词`,
       to: "/english/vocab",
       hue: amberA,
       hue2: amberB,
