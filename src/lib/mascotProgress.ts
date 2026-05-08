@@ -65,9 +65,9 @@ export interface MascotLevel {
   };
 }
 
-// v0.31.53: 改成"教师职级"风名号 — 实习 → 助教 → 讲师 → 副校长 → 校长。
-// 视觉层换名，不动 XP 阈值 / 解锁逻辑。Lv 15/20 因为爸爸只给了 5 个名号，
-// 用"教育大家"和"教育传奇"作为校长之上的延伸。
+// v0.31.54: 真实学术职业阶梯 — 助教 → 讲师 → 副教授 → 教授 → 副校长 → 校长。
+// 7 级整条都是中国真实职称，孩子能直观感受到等级跃迁。校长正好落 Lv 20 顶点。
+// 视觉层换名，不动 XP 阈值 / 解锁逻辑。
 export const MASCOT_LEVELS: MascotLevel[] = [
   { level: 1, threshold: 0, title: "实习老师小进", unlocks: { voices: ["Tina"] } },
   { level: 3, threshold: 60, title: "助教小进", unlocks: { voices: ["Cindy"] } },
@@ -75,25 +75,25 @@ export const MASCOT_LEVELS: MascotLevel[] = [
   {
     level: 8,
     threshold: 320,
-    title: "副校长小进",
+    title: "副教授小进",
     unlocks: { voices: ["Serena"], talents: ["sing_multiplication"] },
   },
   {
     level: 12,
     threshold: 600,
-    title: "校长小进",
+    title: "教授小进",
     unlocks: { voices: ["Mia"], talents: ["math_jokes"], skins: ["wizard"] },
   },
   {
     level: 15,
     threshold: 900,
-    title: "教育大家小进",
+    title: "副校长小进",
     unlocks: { voices: ["Hana"], unlocks3d: true },
   },
   {
     level: 20,
     threshold: 1500,
-    title: "教育传奇小进",
+    title: "校长小进",
     unlocks: { skins: ["legendary"], talents: ["birthday_song"] },
   },
 ];
