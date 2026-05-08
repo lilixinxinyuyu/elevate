@@ -18,6 +18,7 @@ import { normalizeJsonText } from "../lib/normalizeJsonText";
 import { generateAiQuestions, generateImage } from "../lib/tutor";
 import { TrophyImagesAdminPanel } from "../components/TrophyImagesAdminPanel";
 import { QuestionsAdminPanel } from "../components/QuestionsAdminPanel";
+import { SkillBankDashboard } from "../components/admin/SkillBankDashboard";
 import type { Question } from "../core/types";
 
 export function AdminPage() {
@@ -211,8 +212,14 @@ export function AdminPage() {
         <CloudSyncPanel />
       </div>
 
+      {/* v0.31.52: 题库工作台 — Selena 学情 + 题库诊断合一，多选 skill 批量出题 */}
+      <div className="card" id="bank-workbench">
+        <div className="font-semibold mb-2">📋 题库工作台（合并诊断 + 批量出题）</div>
+        <SkillBankDashboard />
+      </div>
+
       <div className="card">
-        <div className="font-semibold mb-2">🤖 AI 自动出题（按薄弱 skill 生成）</div>
+        <div className="font-semibold mb-2">🤖 AI 自动出题（单 skill 简易版）</div>
         <MathAIGeneratorPanel />
       </div>
 

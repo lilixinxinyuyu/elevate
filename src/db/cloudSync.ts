@@ -95,12 +95,33 @@ interface SnapshotPayload {
   /** v0.27.0：小进姐姐对话日志，按 id 合并、按 updatedAt 取新 */
   tutorSessions?: unknown[];
   /** v0.30.0: trophyImages 不再走主 sync——拆走 /api/sync/trophy-images 独立端点 */
+  /**
+   * v0.31.52: AI 生成的题（仅 ai_generated tagged 或 AI_ 前缀），跨设备同步。
+   * Seed 题不进 — 它们从代码 bundle 来，每个设备都能离线拿到。
+   * 合并策略：union by question_id，本地已有的 ID 不覆盖（题创建后不可变）。
+   */
+  aiQuestions?: unknown[];
 }
 
 async function dumpLocal(): Promise<SnapshotPayload> {
   const bag: Record<string, unknown[]> = {};
   for (const t of PUSH_TABLES) {
     bag[t] = await db.table(t).toArray();
+  }
+  // v0.31.52: AI 生成的题单独 dump（seed 不上传），跨设备同步
+  try {
+    const allQs = (await db.questions.toArray()) as Array<{
+      question_id?: string;
+      tags?: string[];
+    }>;
+    bag.aiQuestions = allQs.filter(
+      (q) =>
+        (q.tags ?? []).includes("ai_generated") ||
+        (q.question_id ?? "").startsWith("AI_"),
+    );
+  } catch (e) {
+    console.warn("[dumpLocal] aiQuestions dump failed (continuing):", e);
+    bag.aiQuestions = [];
   }
   return bag as unknown as SnapshotPayload;
 }
@@ -115,7 +136,7 @@ async function dumpLocal(): Promise<SnapshotPayload> {
 export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.questions],
     async () => {
       for (const t of PUSH_TABLES) {
         const rows = (payload[t] ?? []) as Record<string, unknown>[];
@@ -123,6 +144,25 @@ export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<v
         const tbl = db.table(t);
         await tbl.clear();
         if (rows.length > 0) await tbl.bulkPut(rows);
+      }
+      // v0.31.52: aiQuestions 单独覆盖（仅 AI 生成的题，seed 留着）
+      const remoteAi = (payload.aiQuestions ?? []) as Array<{ question_id?: string }>;
+      if (Array.isArray(remoteAi) && remoteAi.length > 0) {
+        // 先删本地所有 AI 题，再写云端的
+        const localQs = (await db.questions.toArray()) as Array<{
+          question_id?: string;
+          tags?: string[];
+        }>;
+        const localAiIds = localQs
+          .filter(
+            (q) =>
+              (q.tags ?? []).includes("ai_generated") ||
+              (q.question_id ?? "").startsWith("AI_"),
+          )
+          .map((q) => q.question_id!)
+          .filter(Boolean);
+        if (localAiIds.length > 0) await db.questions.bulkDelete(localAiIds);
+        await db.questions.bulkPut(remoteAi as never);
       }
     },
   );
@@ -152,7 +192,7 @@ export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<v
 async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.questions],
     async () => {
       // attempts: pure union (immutable rows)
       const remoteA = (payload.attempts ?? []) as Array<{ id: string }>;
@@ -248,6 +288,15 @@ async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
           }
         }
         if (toPut.length > 0) await db.tutorSessions.bulkPut(toPut as never);
+      }
+
+      // v0.31.52: aiQuestions union by question_id — 题创建后视为不可变，本地已有的 ID 不覆盖
+      const remoteQ = (payload.aiQuestions ?? []) as Array<{ question_id?: string }>;
+      if (Array.isArray(remoteQ) && remoteQ.length > 0) {
+        const localQs = await db.questions.toArray();
+        const localIds = new Set(localQs.map((q) => q.question_id));
+        const toAdd = remoteQ.filter((q) => q.question_id && !localIds.has(q.question_id));
+        if (toAdd.length > 0) await db.questions.bulkPut(toAdd as never);
       }
 
       // v0.30.0: trophyImages 不在主 sync payload 里了——走 /api/sync/trophy-images 独立端点
