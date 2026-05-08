@@ -16,7 +16,7 @@
  *
  * 出题流程见 AiGenBatchModal。
  */
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../db/dexie";
 import {
@@ -26,7 +26,9 @@ import {
   type SkillRow,
 } from "../../lib/skillDiagnostic";
 import { AiGenBatchModal } from "./AiGenBatchModal";
-import type { ExamPriority, Term } from "../../core/types";
+import { auditQuestion } from "../../lib/questionAuditLite";
+import { recordDeletedQuestionIds } from "../../db/seed";
+import type { ExamPriority, Question, Term } from "../../core/types";
 
 type SortKey =
   | "genPriority"  // 默认 — 综合"该出题度"
@@ -61,6 +63,8 @@ export function SkillBankDashboard() {
   const [sortKey, setSortKey] = useState<SortKey>("genPriority");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
+  // v0.31.55: 行内详情展开 — 一次最多展开一行（点其他行自动收上一行）
+  const [expandedSkillId, setExpandedSkillId] = useState<string | null>(null);
 
   const allRows: SkillRow[] = useMemo(() => {
     if (!questions || !attempts || !mastery) return [];
@@ -236,20 +240,40 @@ export function SkillBankDashboard() {
               <th className="p-2 text-right">AI</th>
               <th className="p-2 text-right">问题</th>
               <th className="p-2 text-right">Selena 状况</th>
+              <th className="p-2 text-center w-8"></th>
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((r) => (
-              <Row
-                key={r.skillId}
-                row={r}
-                selected={selected.has(r.skillId)}
-                onToggle={() => toggleSelect(r.skillId)}
-              />
-            ))}
+            {sortedRows.map((r) => {
+              const isExpanded = expandedSkillId === r.skillId;
+              return (
+                <Fragment key={r.skillId}>
+                  <Row
+                    row={r}
+                    selected={selected.has(r.skillId)}
+                    onToggle={() => toggleSelect(r.skillId)}
+                    expanded={isExpanded}
+                    onToggleExpand={() =>
+                      setExpandedSkillId((prev) => (prev === r.skillId ? null : r.skillId))
+                    }
+                  />
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={8} className="p-0">
+                        <SkillDetailPanel
+                          row={r}
+                          allQuestions={questions ?? []}
+                          onClose={() => setExpandedSkillId(null)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
             {sortedRows.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-6 text-center text-slate-500 italic">
+                <td colSpan={8} className="p-6 text-center text-slate-500 italic">
                   没有匹配的 skill
                 </td>
               </tr>
@@ -345,17 +369,21 @@ function Row({
   row,
   selected,
   onToggle,
+  expanded,
+  onToggleExpand,
 }: {
   row: SkillRow;
   selected: boolean;
   onToggle: () => void;
+  expanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const prio = examPriorityChip(row.examPriority);
   return (
     <tr
       className={`border-t border-white/5 hover:bg-white/5 cursor-pointer ${
         selected ? "bg-violet-500/10" : ""
-      }`}
+      } ${expanded ? "bg-violet-500/5" : ""}`}
       onClick={onToggle}
     >
       <td className="p-2" onClick={(e) => e.stopPropagation()}>
@@ -438,7 +466,200 @@ function Row({
           <span className="text-slate-600">未练</span>
         )}
       </td>
+      <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          className={`w-7 h-7 rounded-md text-base transition-all ${
+            expanded
+              ? "bg-violet-500/30 text-violet-100"
+              : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200"
+          }`}
+          aria-label={expanded ? "收起详情" : "展开详情"}
+          title={expanded ? "收起" : "展开本 skill 详情"}
+        >
+          {expanded ? "▴" : "▾"}
+        </button>
+      </td>
     </tr>
+  );
+}
+
+// ============ v0.31.55: skill 行内详情面板 ============
+
+function SkillDetailPanel({
+  row,
+  allQuestions,
+  onClose,
+}: {
+  row: SkillRow;
+  allQuestions: Question[];
+  onClose: () => void;
+}) {
+  const skillQuestions = useMemo(
+    () =>
+      allQuestions
+        .filter((q) => q.skill_id === row.skillId)
+        .slice()
+        .sort((a, b) => {
+          // AI 题排前（更可能要 review），然后按 difficulty 升序
+          const aAi =
+            (a.tags ?? []).includes("ai_generated") || (a.question_id ?? "").startsWith("AI_");
+          const bAi =
+            (b.tags ?? []).includes("ai_generated") || (b.question_id ?? "").startsWith("AI_");
+          if (aAi !== bAi) return aAi ? -1 : 1;
+          return (a.difficulty ?? 0) - (b.difficulty ?? 0);
+        }),
+    [allQuestions, row.skillId],
+  );
+  const [busy, setBusy] = useState(false);
+  const [showLimit, setShowLimit] = useState(20);
+
+  const onClearAi = async () => {
+    const aiQs = skillQuestions.filter(
+      (q) =>
+        (q.tags ?? []).includes("ai_generated") || (q.question_id ?? "").startsWith("AI_"),
+    );
+    if (aiQs.length === 0) return;
+    if (
+      !window.confirm(
+        `将永久删除「${row.skillName}」下的 ${aiQs.length} 道 AI 题（保留 seed）。确定？`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      await recordDeletedQuestionIds(aiQs.map((q) => q.question_id));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDeleteOne = async (qid: string) => {
+    if (!window.confirm(`永久删除题 ${qid}？`)) return;
+    setBusy(true);
+    try {
+      await recordDeletedQuestionIds([qid]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="bg-violet-500/[0.04] border-t border-violet-400/30 px-4 py-3 text-xs">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="text-slate-300">
+          <span className="font-display font-bold text-violet-200">{row.skillName}</span>
+          <span className="ml-2 text-slate-500">
+            · 共 {skillQuestions.length} 道（seed {row.seedCount} · AI {row.aiCount}）
+          </span>
+        </div>
+        <div className="flex-1" />
+        {row.aiCount > 0 && (
+          <button
+            type="button"
+            onClick={() => void onClearAi()}
+            disabled={busy}
+            className="px-2 py-1 rounded-md bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-400/30 disabled:opacity-50"
+          >
+            🗑️ 全删此 skill 的 AI 题（{row.aiCount}）
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-2 py-1 rounded-md bg-white/5 text-slate-400 hover:text-slate-200"
+        >
+          ✕ 收起
+        </button>
+      </div>
+
+      {skillQuestions.length === 0 ? (
+        <div className="text-slate-500 italic py-3">没有题</div>
+      ) : (
+        <div className="space-y-1.5 max-h-96 overflow-y-auto">
+          {skillQuestions.slice(0, showLimit).map((q) => {
+            const isAi =
+              (q.tags ?? []).includes("ai_generated") ||
+              (q.question_id ?? "").startsWith("AI_");
+            const audit = auditQuestion(q);
+            const auditTone =
+              audit.worstSeverity === "critical"
+                ? "text-rose-300"
+                : audit.worstSeverity === "likely-broken"
+                  ? "text-amber-300"
+                  : audit.worstSeverity === "minor"
+                    ? "text-yellow-300/80"
+                    : "text-emerald-300/80";
+            const auditIcon =
+              audit.worstSeverity === "critical"
+                ? "🔴"
+                : audit.worstSeverity === "likely-broken"
+                  ? "🟠"
+                  : audit.worstSeverity === "minor"
+                    ? "🟡"
+                    : "🟢";
+            return (
+              <div
+                key={q.question_id}
+                className="flex items-start gap-2 px-2 py-1.5 rounded border border-white/5 bg-ink-900/40"
+              >
+                <span
+                  className={`shrink-0 px-1 rounded text-[10px] ${
+                    q.difficulty === 1 || q.difficulty === 2
+                      ? "bg-cyan-500/15 text-cyan-300"
+                      : q.difficulty === 3
+                        ? "bg-amber-500/15 text-amber-300"
+                        : "bg-rose-500/15 text-rose-300"
+                  }`}
+                  title={`难度 ${q.difficulty}`}
+                >
+                  D{q.difficulty}
+                </span>
+                <span
+                  className={`shrink-0 px-1 rounded text-[10px] ${
+                    isAi ? "bg-violet-500/15 text-violet-300" : "bg-slate-700/40 text-slate-400"
+                  }`}
+                >
+                  {isAi ? "AI" : "seed"}
+                </span>
+                <span
+                  className={`shrink-0 text-xs ${auditTone}`}
+                  title={
+                    audit.issues.length > 0
+                      ? audit.issues.slice(0, 3).map((i) => `${i.code}: ${i.message}`).join(" · ")
+                      : "通过"
+                  }
+                >
+                  {auditIcon}
+                </span>
+                <span className="flex-1 min-w-0 text-slate-300 truncate" title={q.stem}>
+                  {q.stem}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void onDeleteOne(q.question_id)}
+                  disabled={busy}
+                  className="shrink-0 px-1.5 text-slate-500 hover:text-rose-300 disabled:opacity-50"
+                  title="删此题"
+                >
+                  🗑️
+                </button>
+              </div>
+            );
+          })}
+          {skillQuestions.length > showLimit && (
+            <button
+              type="button"
+              onClick={() => setShowLimit((n) => n + 30)}
+              className="w-full py-1.5 text-slate-400 hover:text-slate-200 text-[11px]"
+            >
+              再显示 30 道（共 {skillQuestions.length} 道）
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

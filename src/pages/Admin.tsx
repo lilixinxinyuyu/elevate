@@ -21,24 +21,46 @@ import { QuestionsAdminPanel } from "../components/QuestionsAdminPanel";
 import { SkillBankDashboard } from "../components/admin/SkillBankDashboard";
 import type { Question } from "../core/types";
 
+type AdminTab = "bank" | "sync" | "assets" | "system";
+
+// v0.31.55: hash → tab 映射，支持老的 deep link
+const HASH_TO_TAB: Record<string, AdminTab> = {
+  "bank-workbench": "bank",
+  "ai-gen": "bank",
+  "trophy-images": "assets",
+  "image-gen": "assets",
+  "prompt-builder": "assets",
+  "cloud-sync": "sync",
+  "system": "system",
+};
+
 export function AdminPage() {
   const students = useLiveQuery(async () => db.students.toArray(), []);
   const questions = useLiveQuery(async () => db.questions.toArray(), []);
   const [importText, setImportText] = useState("");
   const location = useLocation();
+  // v0.31.55: 4 tabs replace flat cards
+  const [tab, setTab] = useState<AdminTab>(() => {
+    if (typeof window !== "undefined") {
+      const h = window.location.hash.replace(/^#/, "");
+      if (h && HASH_TO_TAB[h]) return HASH_TO_TAB[h]!;
+    }
+    return "bank";
+  });
 
-  // 处理 deep link：URL 带 #trophy-images / #ai-gen 等 hash 时自动滚到对应区块。
-  // 默认浏览器会处理 hash 跳转，但 react-router SPA 内部 navigate 不触发，所以
-  // 这里在 mount + hash 变化时手动 scrollIntoView。
+  // 处理 deep link：URL 带 #trophy-images / #ai-gen 等 hash 时切到对应 tab + 滚动到 id。
   useEffect(() => {
     if (!location.hash) return;
     const id = location.hash.replace(/^#/, "");
-    // 等一帧让所有 card 渲染完
+    const targetTab = HASH_TO_TAB[id];
+    if (targetTab && targetTab !== tab) setTab(targetTab);
+    // 等一帧让 tab 切换 + 所有 card 渲染完
     const t = setTimeout(() => {
       const el = document.getElementById(id);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
+    }, 150);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.hash]);
   const [importResult, setImportResult] = useState<null | {
     ok: number;
@@ -99,259 +121,226 @@ export function AdminPage() {
 
   const stats = buildStats(questions ?? []);
 
+  // v0.31.55: 4 tab 重组。SkillDiagnosticsPanel + 题库统计 + 学生档案 老 cards 删/合：
+  //   - SkillDiagnosticsPanel(Selena 学情 list) → 已合并到 SkillBankDashboard，函数后面删
+  //   - 题库统计(by unit) → 移到 系统 tab 当快速概览
+  //   - 学生档案 → 移到 同步 tab（一般和云同步一起看）
+  //   - 导入题目 JSON 拆开：导入 textarea 留 题库 tab，重置/导出按钮 → 同步 tab
   return (
-    <div className="space-y-4">
-      <div className="card">
-        <div className="font-semibold mb-2">学生档案</div>
-        {(students ?? []).length === 0 ? (
-          <div className="text-sm text-slate-500">暂无档案</div>
-        ) : (
-          <ul className="text-sm space-y-1">
-            {(students ?? []).map((s) => (
-              <li key={s.id} className="flex justify-between">
-                <span>{s.name}</span>
-                <span className="text-slate-500">
-                  {s.currentTerm} · 当前单元 {s.currentUnitId ?? "未设置"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+    <div className="space-y-3">
+      {/* Tab nav — 4 顶部 tabs */}
+      <nav className="flex gap-0.5 border-b border-white/10 -mb-px overflow-x-auto">
+        {(
+          [
+            { id: "bank", label: "📋 题库 / 学情" },
+            { id: "sync", label: "☁️ 同步 / 备份" },
+            { id: "assets", label: "🎨 资源生成" },
+            { id: "system", label: "🛠️ 系统" },
+          ] as { id: AdminTab; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`shrink-0 px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === t.id
+                ? "border-violet-400 text-violet-200"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-white/20"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
 
-      <div className="card">
-        <div className="font-semibold mb-2">题库统计</div>
-        <div className="text-sm text-slate-600 mb-2">
-          共 {stats.total} 道，下册 {stats.byTerm["下册"] ?? 0}，上册 {stats.byTerm["上册"] ?? 0}
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-          {UNITS.map((u) => (
-            <div key={u.id} className="rounded-lg border border-slate-200 p-2">
-              <div className="font-medium">{u.name}</div>
-              <div className="text-xs text-slate-500">
-                {stats.byUnit[u.id] ?? 0} 题 · {u.term}
-              </div>
+      {/* ============ 题库 / 学情 ============ */}
+      {tab === "bank" && (
+        <div className="space-y-4 pt-2">
+          {/* 主视图 */}
+          <div className="card" id="bank-workbench">
+            <div className="font-semibold mb-2">📋 题库工作台（合并诊断 + 批量出题）</div>
+            <SkillBankDashboard />
+          </div>
+
+          {/* 综合分 / 段位 — Selena 学情 XP 累积视角，跟 dashboard mastery 不重 */}
+          <div className="card">
+            <div className="font-semibold mb-2">📊 综合分 / 段位真实指标</div>
+            <RatingDiagnostics />
+          </div>
+
+          {/* 单 skill 简易出题 */}
+          <div className="card" id="ai-gen">
+            <div className="font-semibold mb-2">🤖 单 skill AI 出题（简易版）</div>
+            <div className="text-xs text-slate-500 mb-2">
+              批量出题去顶上工作台。这是单 skill 一道一道试的小工具。
             </div>
-          ))}
-        </div>
-      </div>
+            <MathAIGeneratorPanel />
+          </div>
 
-      <div className="card">
-        <div className="font-semibold mb-2">Selena 各 skill 诊断</div>
-        <SkillDiagnosticsPanel />
-      </div>
+          {/* 题库清理 + AI 质检 */}
+          <div className="card">
+            <div className="font-semibold mb-2">🩺 题库清理与 AI 质检</div>
+            <QuestionsAdminPanel />
+          </div>
 
-      <div className="card">
-        <div className="font-semibold mb-2">综合分 / 段位 真实指标</div>
-        <RatingDiagnostics />
-      </div>
-
-      <div className="card">
-        <div className="font-semibold mb-2">导入题目 JSON</div>
-        <div className="text-xs text-slate-500 mb-2">
-          粘贴 Question 对象数组或单个对象。每道题会走 validateQuestion 校验。
-        </div>
-        <textarea
-          value={importText}
-          onChange={(e) => setImportText(e.target.value)}
-          rows={6}
-          className="w-full rounded-lg border border-slate-300 p-2 text-sm font-mono"
-          placeholder='[{ "question_id": "...", ... }]'
-        />
-        <div className="mt-2 flex gap-2 flex-wrap">
-          <button type="button" className="btn-primary" onClick={handleImport} disabled={!importText.trim()}>
-            校验并导入
-          </button>
-          <button type="button" className="btn-secondary" onClick={handleExport}>
-            导出本地备份
-          </button>
-          <button
-            type="button"
-            className="btn-ghost text-amber-300 whitespace-nowrap"
-            onClick={async () => {
-              if (confirm("将清空所有训练记录、错题、奖杯和经验值。题库和档案保留。继续？")) {
-                await resetProgressOnly();
-                alert("进度已重置！可以开始新的挑战。");
-                window.location.href = "/";
-              }
-            }}
-          >
-            只清空进度数据
-          </button>
-          <button
-            type="button"
-            className="btn-ghost text-rose-400 whitespace-nowrap"
-            onClick={async () => {
-              if (confirm("会清空所有数据（包括题库），需要重新载入。继续？")) await resetAllData();
-            }}
-          >
-            完全清空
-          </button>
-        </div>
-        {importResult && (
-          <div className="mt-3 text-sm">
-            <div className="text-emerald-700">成功导入 {importResult.ok} 道</div>
-            {importResult.failed.length > 0 && (
-              <div className="mt-1">
-                <div className="text-rose-700">失败 {importResult.failed.length} 道：</div>
-                <ul className="list-disc list-inside text-xs text-rose-600 mt-1 space-y-0.5">
-                  {importResult.failed.slice(0, 10).map((f) => (
-                    <li key={f.id}>
-                      {f.id}：{f.issues.join(" / ")}
-                    </li>
-                  ))}
-                </ul>
+          {/* 题导入 JSON */}
+          <div className="card">
+            <div className="font-semibold mb-2">📥 导入题目 JSON</div>
+            <div className="text-xs text-slate-500 mb-2">
+              粘贴 Question 对象数组或单个对象。每道题会走 validateQuestion 校验。
+            </div>
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={6}
+              className="w-full rounded-lg border border-slate-300 p-2 text-sm font-mono"
+              placeholder='[{ "question_id": "...", ... }]'
+            />
+            <div className="mt-2 flex gap-2 flex-wrap">
+              <button type="button" className="btn-primary" onClick={handleImport} disabled={!importText.trim()}>
+                校验并导入
+              </button>
+            </div>
+            {importResult && (
+              <div className="mt-3 text-sm">
+                <div className="text-emerald-700">成功导入 {importResult.ok} 道</div>
+                {importResult.failed.length > 0 && (
+                  <div className="mt-1">
+                    <div className="text-rose-700">失败 {importResult.failed.length} 道：</div>
+                    <ul className="list-disc list-inside text-xs text-rose-600 mt-1 space-y-0.5">
+                      {importResult.failed.slice(0, 10).map((f) => (
+                        <li key={f.id}>
+                          {f.id}：{f.issues.join(" / ")}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      <div className="card">
-        <div className="font-semibold mb-2">云同步</div>
-        <CloudSyncPanel />
-      </div>
-
-      {/* v0.31.52: 题库工作台 — Selena 学情 + 题库诊断合一，多选 skill 批量出题 */}
-      <div className="card" id="bank-workbench">
-        <div className="font-semibold mb-2">📋 题库工作台（合并诊断 + 批量出题）</div>
-        <SkillBankDashboard />
-      </div>
-
-      <div className="card">
-        <div className="font-semibold mb-2">🤖 AI 自动出题（单 skill 简易版）</div>
-        <MathAIGeneratorPanel />
-      </div>
-
-      <div className="card">
-        <div className="font-semibold mb-2">🎨 AI 图像生成（勋章 / 图标）</div>
-        <ImageGeneratorPanel />
-      </div>
-
-      <div className="card">
-        <div className="font-semibold mb-2">🩺 题库诊断与清理</div>
-        <QuestionsAdminPanel />
-      </div>
-
-      <div className="card" id="trophy-images">
-        <div className="font-semibold mb-2">🏆 勋章图批量生成（替换 emoji）</div>
-        <TrophyImagesAdminPanel />
-      </div>
-
-      <div className="card">
-        <div className="font-semibold mb-2">AI 出题 Prompt 生成器</div>
-        <PromptBuilder />
-      </div>
-
-      {/* v0.31.36: 语文相关的 TTS 测试 + 语文测试数据清理 已移到 /chinese/admin
-          （那边本来就有 TtsSmokePanel + 重置语文测试数据 cards）。
-          数学 admin 不应该混语文专属功能。 */}
-    </div>
-  );
-}
-
-
-function SkillDiagnosticsPanel() {
-  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
-  const attempts = useLiveQuery(
-    async () => (student ? db.attempts.where({ studentId: student.id }).toArray() : []),
-    [student?.id],
-  );
-  const mastery = useLiveQuery(
-    async () => (student ? db.mastery.where({ studentId: student.id }).toArray() : []),
-    [student?.id],
-  );
-  const questions = useLiveQuery(async () => db.questions.toArray());
-
-  const [filter, setFilter] = useState<"weak" | "mustbig" | "all">("weak");
-
-  if (!student || !attempts || !mastery || !questions) return <div className="text-sm text-slate-500">加载中…</div>;
-
-  // 计算每个 skill 的诊断
-  const masteryById = new Map(mastery.map((m) => [m.skillId, m]));
-  const skillDiag = SKILLS.map((s) => {
-    const m = masteryById.get(s.id);
-    const skillAttempts = attempts.filter((a) => a.skillId === s.id);
-    const correct = skillAttempts.filter((a) => a.isCorrect).length;
-    const recent = skillAttempts.filter((a) => a.createdAt >= Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const recentCorrect = recent.filter((a) => a.isCorrect).length;
-    const totalQuestionsForSkill = questions.filter((q) => q.skill_id === s.id).length;
-    return {
-      skill: s,
-      mastery: m?.score ?? 0,
-      attempts: skillAttempts.length,
-      correct,
-      accuracy: skillAttempts.length > 0 ? correct / skillAttempts.length : 0,
-      recentAttempts: recent.length,
-      recentAccuracy: recent.length > 0 ? recentCorrect / recent.length : 0,
-      lastAt: m?.lastPracticedAt ?? 0,
-      questionTotal: totalQuestionsForSkill,
-    };
-  });
-
-  let view = skillDiag.filter((d) => d.attempts > 0);
-  if (filter === "weak") {
-    view = view.filter((d) => d.mastery < 75 || d.recentAccuracy < 0.7).sort((a, b) => a.mastery - b.mastery);
-  } else if (filter === "mustbig") {
-    view = view.filter((d) => d.skill.examPriority === "MUST_BIG").sort((a, b) => a.mastery - b.mastery);
-  } else {
-    view = view.sort((a, b) => a.mastery - b.mastery);
-  }
-
-  return (
-    <div className="text-sm space-y-3">
-      <div className="flex gap-2 text-xs">
-        <button type="button" className={`chip ${filter === "weak" ? "bg-rose-500/30 text-rose-100" : "bg-white/5 text-slate-400"}`} onClick={() => setFilter("weak")}>
-          薄弱（{skillDiag.filter((d) => d.attempts > 0 && (d.mastery < 75 || d.recentAccuracy < 0.7)).length}）
-        </button>
-        <button type="button" className={`chip ${filter === "mustbig" ? "bg-rose-500/30 text-rose-100" : "bg-white/5 text-slate-400"}`} onClick={() => setFilter("mustbig")}>
-          期末重点
-        </button>
-        <button type="button" className={`chip ${filter === "all" ? "bg-rose-500/30 text-rose-100" : "bg-white/5 text-slate-400"}`} onClick={() => setFilter("all")}>
-          全部练过
-        </button>
-      </div>
-      {view.length === 0 ? (
-        <div className="text-slate-500">没有数据</div>
-      ) : (
-        <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-          {view.map((d) => {
-            const acc = Math.round(d.accuracy * 100);
-            const recentAcc = Math.round(d.recentAccuracy * 100);
-            const masteryColor =
-              d.mastery >= 85 ? "text-emerald-300" : d.mastery >= 70 ? "text-amber-300" : "text-rose-300";
-            const lastAgo = d.lastAt > 0 ? Math.floor((Date.now() - d.lastAt) / (24 * 60 * 60 * 1000)) : null;
-            return (
-              <div key={d.skill.id} className="rounded-lg border border-white/10 bg-white/5 p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium text-slate-100 truncate">{d.skill.name}</div>
-                  <span className={`chip ${masteryColor} bg-white/5 border border-current/30 shrink-0`}>
-                    熟练 {Math.round(d.mastery)}
-                  </span>
-                </div>
-                <div className="text-xs text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span>共做 {d.attempts} 次（正确率 {acc}%）</span>
-                  <span>近 7 天 {d.recentAttempts} 次（{recentAcc}%）</span>
-                  <span>题库 {d.questionTotal} 道</span>
-                  {lastAgo != null && <span className="text-slate-500">{lastAgo > 0 ? `${lastAgo} 天前` : "今天"}</span>}
-                  {d.skill.examPriority === "MUST_BIG" && (
-                    <span className="text-rose-300">· 期末重点</span>
-                  )}
-                  {d.questionTotal < 5 && d.skill.examPriority === "MUST_BIG" && (
-                    <span className="text-amber-300">⚠ 题量不足</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
-      <div className="text-xs text-slate-500">
-        🔍 Hermes Agent 也是从这些数据看 Selena 的弱点。
-      </div>
+
+      {/* ============ 同步 / 备份 ============ */}
+      {tab === "sync" && (
+        <div className="space-y-4 pt-2">
+          <div className="card" id="cloud-sync">
+            <div className="font-semibold mb-2">☁️ 云同步</div>
+            <CloudSyncPanel />
+          </div>
+
+          <div className="card">
+            <div className="font-semibold mb-2">👤 学生档案</div>
+            {(students ?? []).length === 0 ? (
+              <div className="text-sm text-slate-500">暂无档案</div>
+            ) : (
+              <ul className="text-sm space-y-1">
+                {(students ?? []).map((s) => (
+                  <li key={s.id} className="flex justify-between">
+                    <span>{s.name}</span>
+                    <span className="text-slate-500">
+                      {s.currentTerm} · 当前单元 {s.currentUnitId ?? "未设置"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="font-semibold mb-2">💾 备份 / 重置</div>
+            <div className="text-xs text-slate-500 mb-2">
+              "只清空进度"保留题库和档案；"完全清空"会一并清掉题库（需重新 seed）。
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-secondary" onClick={handleExport}>
+                📦 导出本地备份 JSON
+              </button>
+              <button
+                type="button"
+                className="btn-ghost text-amber-300 whitespace-nowrap"
+                onClick={async () => {
+                  if (confirm("将清空所有训练记录、错题、奖杯和经验值。题库和档案保留。继续？")) {
+                    await resetProgressOnly();
+                    alert("进度已重置！可以开始新的挑战。");
+                    window.location.href = "/";
+                  }
+                }}
+              >
+                ⚠️ 只清空进度数据
+              </button>
+              <button
+                type="button"
+                className="btn-ghost text-rose-400 whitespace-nowrap"
+                onClick={async () => {
+                  if (confirm("会清空所有数据（包括题库），需要重新载入。继续？")) await resetAllData();
+                }}
+              >
+                ☠️ 完全清空
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ 资源生成 ============ */}
+      {tab === "assets" && (
+        <div className="space-y-4 pt-2">
+          <div className="card" id="trophy-images">
+            <div className="font-semibold mb-2">🏆 勋章图批量生成（替换 emoji）</div>
+            <TrophyImagesAdminPanel />
+          </div>
+
+          <div className="card" id="image-gen">
+            <div className="font-semibold mb-2">🎨 AI 图像生成（单图）</div>
+            <ImageGeneratorPanel />
+          </div>
+
+          <div className="card" id="prompt-builder">
+            <div className="font-semibold mb-2">📝 AI 出题 Prompt 生成器</div>
+            <PromptBuilder />
+          </div>
+        </div>
+      )}
+
+      {/* ============ 系统 ============ */}
+      {tab === "system" && (
+        <div className="space-y-4 pt-2">
+          <div className="card">
+            <div className="font-semibold mb-2">📊 题库快速统计（按 unit）</div>
+            <div className="text-sm text-slate-400 mb-2">
+              共 {stats.total} 道 · 下册 {stats.byTerm["下册"] ?? 0} · 上册 {stats.byTerm["上册"] ?? 0}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+              {UNITS.map((u) => (
+                <div key={u.id} className="rounded-lg border border-white/10 bg-ink-900/40 p-2">
+                  <div className="font-medium text-slate-200">{u.name}</div>
+                  <div className="text-xs text-slate-500">
+                    {stats.byUnit[u.id] ?? 0} 题 · {u.term}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="font-semibold mb-2">📚 文档</div>
+            <ul className="text-xs text-slate-400 space-y-1">
+              <li>语文专属 admin（TTS 测试 / 语文重置）→ <code className="text-violet-300">/chinese/admin</code></li>
+              <li>repo docs → <code className="text-violet-300">docs/README.md</code></li>
+              <li>当前应用版本见底部 footer。</li>
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+
+// v0.31.55: SkillDiagnosticsPanel 删除 — 内容已全部合并到 SkillBankDashboard
+// (上下册标签 + mastery + 准确率 + 期末重要度 + 题量 + audit issues 全在那一张表里)
 
 function CloudSyncPanel() {
   const [busy, setBusy] = useState<"push" | "pull" | null>(null);
