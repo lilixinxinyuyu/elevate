@@ -1,26 +1,13 @@
 /**
- * 语文写字表 500 字 · 练习页（v0.31.40 重写）
+ * 语文写字表 500 字 · 练习页（v0.31.41 — mastery tier + 间隔重现）
  *
- * 路由：/chinese/char-practice
- *
- * 重写动机：v0.31.39 简化太厉害，跟老 chinese/g4_cn.html 系统对不齐
- * - 老系统 500 字（上 250 + 下 250 切换），这版只有下册 250
- * - 老系统 2 模式（手写 + 辨字选择），这版只有 1 模式
- * - 老系统统计 总练习/正确率/错字总数 ；这版用的"已掌握"等逻辑跟老的不一致
- *
- * 新版（pixel-aligned with g4_cn.html UX，再加游戏化）：
- *   ┌────────────────────────────────────────┐
- *   │ [上册] [下册]   [写字模式] [辨字选择]    │  ← 双 toggle
- *   ├────────────────────────────────────────┤
- *   │ 总练习: 180  正确率: 96%  错字: 5       │  ← 老口径 stats
- *   │ ▓▓▓▓▓░░░░ 连击 × 7  +120 XP             │  ← 游戏化：连击 + 单次 XP
- *   ├────────────────────────────────────────┤
- *   │ <模式 panel>                            │
- *   ├────────────────────────────────────────┤
- *   │ 错字本：哩 / 颇 / 挣 / 囊 / 毫           │
- *   └────────────────────────────────────────┘
- *
- * 加权选字沿用老公式 `max(1, wrong*3 + 1 - min(right, 3))`。
+ * 比 v0.31.40 升级：
+ *   - 5 tier 分级（新/初识/在学/熟练/掌握）+ tier 分布条
+ *   - SM-2 间隔重现（答对的字按 1m→1h→1d→3d→14d 周期）
+ *   - 答错强化（错完那字下 2 题内必现）
+ *   - 今日目标 + 连续打卡 streak
+ *   - 老口径统计仍保留（总练习/正确率/错字总数）
+ *   - 写字模式 + 辨字选择模式
  */
 
 import { Link } from "react-router-dom";
@@ -33,6 +20,7 @@ import {
 } from "../../subjects/chinese/charLibrary";
 import {
   calcOldStyleStats,
+  calcTierDistribution,
   generateChooseQuestion,
   loadCharProgress,
   migrateHistoricalCharProgress,
@@ -41,10 +29,22 @@ import {
   type CharProgress,
   type OldStyleStats,
 } from "../../lib/chineseCharProgress";
+import {
+  freshStat,
+  type Level,
+  type MasteryStat,
+} from "../../lib/masteryTier";
+import {
+  loadDaily,
+  tickDaily,
+  type DailyState,
+} from "../../lib/dailyTarget";
+import { MasteryTierBar, TierChip } from "../../components/MasteryTierBar";
 
 type Book = "G4A" | "G4B";
 type Mode = "write" | "choose";
 const RECENT_WINDOW = 5;
+const REINFORCE_WINDOW = 2; // 错完后下 2 题内强化
 
 interface RoundResult {
   word: string;
@@ -52,31 +52,33 @@ interface RoundResult {
   isCorrect: boolean;
   userInput: string;
   mode: Mode;
+  newLevel: Level;
 }
 
 export function CharPracticePage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [progress, setProgress] = useState<CharProgress>({});
-  const [book, setBook] = useState<Book>("G4B"); // 默认下册（期中冲刺）
+  const [daily, setDaily] = useState<DailyState | null>(null);
+  const [book, setBook] = useState<Book>("G4B");
   const [mode, setMode] = useState<Mode>("write");
   const [current, setCurrent] = useState<G4Char | null>(null);
   const [chooseQ, setChooseQ] = useState<ReturnType<typeof generateChooseQuestion> | null>(null);
   const [input, setInput] = useState("");
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean; userInput: string } | null>(
-    null,
-  );
+  const [feedback, setFeedback] = useState<{ isCorrect: boolean; userInput: string } | null>(null);
   const [recentWords, setRecentWords] = useState<string[]>([]);
+  const [reinforceQueue, setReinforceQueue] = useState<{ word: string; remaining: number }[]>([]);
   const [history, setHistory] = useState<RoundResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [migratedToast, setMigratedToast] = useState<string | null>(null);
-  // 游戏化：连击 + 本次会话 XP
   const [combo, setCombo] = useState(0);
   const [sessionXp, setSessionXp] = useState(0);
   const [floatingXp, setFloatingXp] = useState<{ amount: number; key: number } | null>(null);
+  const [dailyCelebration, setDailyCelebration] = useState<{ streak: number } | null>(null);
+  const [levelUpToast, setLevelUpToast] = useState<{ word: string; from: Level; to: Level } | null>(null);
 
   const pool: G4Char[] = book === "G4A" ? G4A_CHARS : G4B_CHARS;
+  const fullPool: G4Char[] = useMemo(() => [...G4A_CHARS, ...G4B_CHARS], []);
 
-  // 初次加载
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -89,13 +91,17 @@ export function CharPracticePage() {
       if (cancelled) return;
       setStudentId(s.id);
       const migr = await migrateHistoricalCharProgress(s.id);
-      if (migr.imported > 0) {
-        setMigratedToast(`已从老系统导入 ${migr.imported} 个字的进度`);
+      if (migr.imported > 0 || migr.upgraded > 0) {
+        setMigratedToast(
+          `已迁移 ${migr.imported} 字 + 升级 ${migr.upgraded} 字到 5-tier 等级`,
+        );
         setTimeout(() => setMigratedToast(null), 5000);
       }
       const p = await loadCharProgress(s.id);
+      const d = await loadDaily("chinese_chars", s.id, 20);
       if (cancelled) return;
       setProgress(p);
+      setDaily(d);
       setLoading(false);
     })();
     return () => {
@@ -103,19 +109,19 @@ export function CharPracticePage() {
     };
   }, []);
 
-  // 切换 book / mode 时立即取新字
   useEffect(() => {
     if (loading) return;
     pickNew(progress);
     setRecentWords([]);
+    setReinforceQueue([]);
     setFeedback(null);
     setInput("");
     setCombo(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book, mode, loading]);
 
-  function pickNew(curProgress: CharProgress, recent: string[] = []) {
-    const next = pickNextChar(pool, curProgress, recent);
+  function pickNew(curProgress: CharProgress, recent: string[] = [], reinforceWords: string[] = []) {
+    const next = pickNextChar(pool, curProgress, recent, reinforceWords);
     setCurrent(next);
     if (next && mode === "choose") {
       setChooseQ(generateChooseQuestion(next, pool));
@@ -132,39 +138,65 @@ export function CharPracticePage() {
   async function recordResult(isCorrect: boolean, userInput: string) {
     if (!current) return;
     setFeedback({ isCorrect, userInput });
+    const oldStat = progress[current.word] ?? freshStat();
+    let nextStat: MasteryStat;
+    if (studentId) {
+      nextStat = await recordCharAttempt(studentId, current.word, isCorrect);
+    } else {
+      // 没 student：本地内存
+      const tmp = { ...oldStat };
+      tmp.right += isCorrect ? 1 : 0;
+      tmp.wrong += isCorrect ? 0 : 1;
+      tmp.lastSeenAt = Date.now();
+      tmp.consecutiveRight = isCorrect ? tmp.consecutiveRight + 1 : 0;
+      nextStat = tmp;
+    }
+    const nextProgress: CharProgress = { ...progress, [current.word]: nextStat };
+    setProgress(nextProgress);
+
     setHistory((h) => [
       ...h.slice(-19),
-      { word: current.word, pinyin: current.pinyin, isCorrect, userInput, mode },
+      { word: current.word, pinyin: current.pinyin, isCorrect, userInput, mode, newLevel: nextStat.level },
     ]);
-    // 游戏化算分
+
+    // 升级提示
+    if (isCorrect && nextStat.level > oldStat.level) {
+      setLevelUpToast({ word: current.word, from: oldStat.level, to: nextStat.level });
+      setTimeout(() => setLevelUpToast(null), 2000);
+    }
+
+    // XP / 连击
     if (isCorrect) {
       const base = 8;
-      const comboBonus = Math.min(combo, 9) * 2; // 连击 × 2，最多 +18
-      const earned = base + comboBonus;
+      const comboBonus = Math.min(combo, 9) * 2;
+      // tier bonus：升级到更高等级 +5
+      const tierBonus = nextStat.level > oldStat.level ? 5 : 0;
+      const earned = base + comboBonus + tierBonus;
       setSessionXp((x) => x + earned);
       setCombo((c) => c + 1);
       flashXp(earned);
+      // 强化队列：移出该字
+      setReinforceQueue((q) => q.filter((r) => r.word !== current.word).map((r) => ({ ...r, remaining: r.remaining - 1 })).filter((r) => r.remaining > 0));
     } else {
       setCombo(0);
       flashXp(0);
+      // 进强化队列：下 N 题内必现
+      setReinforceQueue((q) => {
+        const without = q.filter((r) => r.word !== current.word);
+        return [...without.map((r) => ({ ...r, remaining: r.remaining - 1 })).filter((r) => r.remaining > 0), { word: current.word, remaining: REINFORCE_WINDOW }];
+      });
     }
-    // 持久化
-    let nextProgress: CharProgress;
-    if (studentId) {
-      const newStat = await recordCharAttempt(studentId, current.word, isCorrect);
-      nextProgress = { ...progress, [current.word]: newStat };
-    } else {
-      const cur = progress[current.word] ?? { right: 0, wrong: 0, lastSeenAt: 0 };
-      nextProgress = {
-        ...progress,
-        [current.word]: {
-          right: cur.right + (isCorrect ? 1 : 0),
-          wrong: cur.wrong + (isCorrect ? 0 : 1),
-          lastSeenAt: Date.now(),
-        },
-      };
+
+    // 今日目标
+    if (studentId && daily) {
+      const { next: dNext, justCompleted } = await tickDaily("chinese_chars", studentId, daily);
+      setDaily(dNext);
+      if (justCompleted) {
+        setDailyCelebration({ streak: dNext.streak });
+        setTimeout(() => setDailyCelebration(null), 4500);
+      }
     }
-    setProgress(nextProgress);
+
     if (isCorrect) {
       setTimeout(() => advance(nextProgress), 1100);
     }
@@ -174,7 +206,8 @@ export function CharPracticePage() {
     if (!current) return;
     const nextRecent = [current.word, ...recentWords].slice(0, RECENT_WINDOW);
     setRecentWords(nextRecent);
-    pickNew(curProgress, nextRecent);
+    const reinforceWords = reinforceQueue.map((r) => r.word);
+    pickNew(curProgress, nextRecent, reinforceWords);
     setInput("");
     setFeedback(null);
   }
@@ -192,7 +225,9 @@ export function CharPracticePage() {
     void recordResult(opt === chooseQ.answer, opt);
   }
 
-  const stats = useMemo(() => calcOldStyleStats(progress), [progress]);
+  const oldStats = useMemo(() => calcOldStyleStats(progress), [progress]);
+  const tierDist = useMemo(() => calcTierDistribution(pool, progress), [pool, progress]);
+  const fullTierDist = useMemo(() => calcTierDistribution(fullPool, progress), [fullPool, progress]);
 
   if (loading) return <div className="card text-center text-slate-300">加载中…</div>;
 
@@ -204,7 +239,7 @@ export function CharPracticePage() {
             写字表 500 字
           </div>
           <div className="text-xs text-slate-400 mt-0.5">
-            人教版 G4 上下册 · 加权随机 · 错过的字会再出现
+            人教版 G4 上下册 · 5-tier 等级 · 间隔重现 · 错过的字会强化
           </div>
         </div>
         <Link
@@ -241,8 +276,23 @@ export function CharPracticePage() {
         </ModeTab>
       </div>
 
-      {/* 老口径统计 + 游戏化 */}
-      <StatsBar stats={stats} combo={combo} sessionXp={sessionXp} />
+      {/* 5-tier 分布条 */}
+      <div className="card-glow space-y-3">
+        <div className="flex items-baseline justify-between text-xs">
+          <span className="text-slate-300 font-semibold">
+            本册掌握分布（{book === "G4A" ? "上册 250" : "下册 250"}）
+          </span>
+          {fullTierDist.byLevel[4] > 0 && (
+            <span className="text-violet-300 text-[11px]">
+              全 500 已掌握 {fullTierDist.byLevel[4]}
+            </span>
+          )}
+        </div>
+        <MasteryTierBar dist={tierDist} />
+      </div>
+
+      {/* 老口径统计 + 今日目标 + 连击 */}
+      <StatsBar stats={oldStats} combo={combo} sessionXp={sessionXp} daily={daily} />
 
       {/* 模式 panel */}
       {!current ? (
@@ -256,7 +306,8 @@ export function CharPracticePage() {
             className="btn-primary mt-4"
             onClick={() => {
               setRecentWords([]);
-              pickNew(progress, []);
+              setReinforceQueue([]);
+              pickNew(progress, [], []);
             }}
           >
             再来一轮
@@ -270,7 +321,7 @@ export function CharPracticePage() {
           feedback={feedback}
           onSubmit={onSubmitWrite}
           onContinueWrong={() => advance(progress)}
-          progressEntry={progress[current.word]}
+          stat={progress[current.word]}
         />
       ) : (
         <ChoosePanel
@@ -279,16 +330,15 @@ export function CharPracticePage() {
           feedback={feedback}
           onPick={onPickChoose}
           onContinueWrong={() => advance(progress)}
-          progressEntry={progress[current.word]}
+          stat={progress[current.word]}
         />
       )}
 
-      {/* 错字本 */}
+      {/* 错字本（只显示 wrong > right 的字） */}
       <WrongBookPanel
-        wrongChars={stats.wrongChars}
+        wrongChars={oldStats.wrongChars}
         onPickChar={(w) => {
-          // 直接跳到那个字（人工选择）
-          const target = pool.find((c) => c.word === w);
+          const target = pool.find((c) => c.word === w) ?? fullPool.find((c) => c.word === w);
           if (target) {
             setCurrent(target);
             if (mode === "choose") {
@@ -311,9 +361,7 @@ export function CharPracticePage() {
                 <span className="text-slate-300">
                   <span className="text-amber-200 font-display text-base mr-2">{h.word}</span>
                   <span className="text-slate-400">{h.pinyin}</span>
-                  <span className="ml-2 text-[10px] text-slate-500">
-                    {h.mode === "write" ? "写字" : "辨字"}
-                  </span>
+                  <span className="ml-2"><TierChip level={h.newLevel} /></span>
                 </span>
                 <span className={h.isCorrect ? "text-emerald-300" : "text-rose-300"}>
                   {h.isCorrect ? "✓" : `✗ ${h.userInput || "(空)"}`}
@@ -328,9 +376,36 @@ export function CharPracticePage() {
       {floatingXp && floatingXp.amount > 0 && (
         <div
           key={floatingXp.key}
-          className="absolute right-4 top-32 text-amber-300 font-display font-bold text-2xl pointer-events-none animate-slide-up"
+          className="absolute right-4 top-32 text-amber-300 font-display font-bold text-2xl pointer-events-none animate-slide-up z-40"
         >
           +{floatingXp.amount} XP
+        </div>
+      )}
+
+      {levelUpToast && (
+        <div className="fixed top-1/3 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+          <div className="card-glow bg-violet-500/20 border-violet-400/50 text-violet-100 text-center animate-slide-up">
+            <div className="text-3xl">⬆️</div>
+            <div className="font-display text-lg">
+              {levelUpToast.word} 升到{" "}
+              <span className="text-violet-300 font-bold">
+                {["新", "初识", "在学", "熟练", "掌握"][levelUpToast.to]}
+              </span>
+              ！
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dailyCelebration && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className="card-glow bg-gradient-to-br from-amber-500 to-orange-500 text-white text-center p-6 max-w-xs animate-slide-up shadow-2xl">
+            <div className="text-5xl">🏆</div>
+            <div className="font-display font-bold text-2xl mt-2">今日目标完成！</div>
+            <div className="text-sm mt-1 opacity-90">
+              连续打卡 {dailyCelebration.streak} 天 · 加油！
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -392,18 +467,21 @@ function StatsBar({
   stats,
   combo,
   sessionXp,
+  daily,
 }: {
   stats: OldStyleStats;
   combo: number;
   sessionXp: number;
+  daily: DailyState | null;
 }) {
   const pct = Math.round(stats.correctRate * 100);
+  const dailyPct = daily ? Math.min(100, (daily.todayCount / daily.target) * 100) : 0;
   return (
     <div className="card-glow space-y-2">
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
           <div className="text-[10px] text-slate-400">总练习</div>
-          <div className="font-display font-bold text-xl text-amber-200">
+          <div className="font-display font-bold text-lg text-amber-200">
             {stats.totalAttempts}
             <span className="text-xs text-slate-400 ml-1">字次</span>
           </div>
@@ -411,7 +489,7 @@ function StatsBar({
         <div>
           <div className="text-[10px] text-slate-400">正确率</div>
           <div
-            className={`font-display font-bold text-xl ${
+            className={`font-display font-bold text-lg ${
               pct >= 90 ? "text-emerald-300" : pct >= 70 ? "text-amber-300" : "text-rose-300"
             }`}
           >
@@ -419,14 +497,40 @@ function StatsBar({
           </div>
         </div>
         <div>
-          <div className="text-[10px] text-slate-400">错字总数</div>
-          <div className="font-display font-bold text-xl text-rose-300">
+          <div className="text-[10px] text-slate-400">错字</div>
+          <div className="font-display font-bold text-lg text-rose-300">
             {stats.wrongChars.length}
             <span className="text-xs text-slate-400 ml-1">个</span>
           </div>
         </div>
       </div>
-      {/* 游戏化：连击 + 本次 XP */}
+
+      {/* 今日目标 */}
+      {daily && (
+        <div className="border-t border-ink-700/40 pt-2 text-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-slate-300">
+              今日目标{" "}
+              <span className="font-display font-bold text-amber-200">
+                {daily.todayCount}
+              </span>
+              <span className="text-slate-400"> / {daily.target} 字次</span>
+            </span>
+            {daily.streak > 0 && (
+              <span className="text-rose-300">
+                🔥 连续 {daily.streak} 天
+              </span>
+            )}
+          </div>
+          <div className="h-1.5 rounded-full bg-ink-700/60 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-400 to-orange-400 transition-[width] duration-300"
+              style={{ width: `${dailyPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between text-xs border-t border-ink-700/40 pt-2">
         <div className="flex items-center gap-2">
           <span className="text-slate-400">本次 XP</span>
@@ -450,7 +554,7 @@ function WritePanel({
   feedback,
   onSubmit,
   onContinueWrong,
-  progressEntry,
+  stat,
 }: {
   char: G4Char;
   input: string;
@@ -458,18 +562,26 @@ function WritePanel({
   feedback: { isCorrect: boolean; userInput: string } | null;
   onSubmit: (e?: React.FormEvent) => void;
   onContinueWrong: () => void;
-  progressEntry: { right: number; wrong: number; lastSeenAt: number } | undefined;
+  stat: MasteryStat | undefined;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
   }, [char.word]);
 
+  const level: Level = (stat?.level ?? 0) as Level;
+
   return (
     <form onSubmit={onSubmit} className="card-glow space-y-3" autoComplete="off">
-      <div className="text-center text-xs text-slate-500">
-        {progressEntry && (
-          <span>对 {progressEntry.right} · 错 {progressEntry.wrong}</span>
+      <div className="flex justify-between items-center text-xs">
+        <TierChip level={level} />
+        {stat && (stat.right > 0 || stat.wrong > 0) && (
+          <span className="text-slate-500 tabular-nums">
+            对 {stat.right} · 错 {stat.wrong}
+            {stat.consecutiveRight > 1 && (
+              <span className="ml-2 text-emerald-300">连对 {stat.consecutiveRight}</span>
+            )}
+          </span>
         )}
       </div>
 
@@ -531,21 +643,25 @@ function ChoosePanel({
   feedback,
   onPick,
   onContinueWrong,
-  progressEntry,
+  stat,
 }: {
   char: G4Char;
   chooseQ: ReturnType<typeof generateChooseQuestion> | null;
   feedback: { isCorrect: boolean; userInput: string } | null;
   onPick: (opt: string) => void;
   onContinueWrong: () => void;
-  progressEntry: { right: number; wrong: number; lastSeenAt: number } | undefined;
+  stat: MasteryStat | undefined;
 }) {
   if (!chooseQ) return <div className="card text-slate-400">题加载中…</div>;
+  const level: Level = (stat?.level ?? 0) as Level;
   return (
     <div className="card-glow space-y-3">
-      <div className="text-center text-xs text-slate-500">
-        {progressEntry && (
-          <span>对 {progressEntry.right} · 错 {progressEntry.wrong}</span>
+      <div className="flex justify-between items-center text-xs">
+        <TierChip level={level} />
+        {stat && (stat.right > 0 || stat.wrong > 0) && (
+          <span className="text-slate-500 tabular-nums">
+            对 {stat.right} · 错 {stat.wrong}
+          </span>
         )}
       </div>
       <div className="text-center">
@@ -558,8 +674,7 @@ function ChoosePanel({
       <div className="grid grid-cols-2 gap-2">
         {chooseQ.options.map((opt, idx) => {
           const showRight = !!feedback && opt === chooseQ.answer;
-          const showWrong =
-            !!feedback && !feedback.isCorrect && opt === feedback.userInput;
+          const showWrong = !!feedback && !feedback.isCorrect && opt === feedback.userInput;
           return (
             <button
               key={opt}
@@ -628,7 +743,7 @@ function WrongBookPanel({
       <div className="font-display font-bold text-rose-200 text-sm mb-2 flex items-center gap-2">
         <span>📕 错字本</span>
         <span className="text-[10px] text-slate-400 font-normal">
-          错过比对过多的 {wrongChars.length} 字 · 点击单独练
+          错 &gt; 对 共 {wrongChars.length} 字 · 点击单独练
         </span>
       </div>
       <div className="flex flex-wrap gap-1.5">

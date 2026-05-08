@@ -3,6 +3,77 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.41 — 2026-05-08 · 不只是复刻 — 5-tier 等级 + SM-2 间隔重现 + 每日目标
+
+爸爸："已掌握的概念并没有问题，但记住我们要做得比老系统更好。多花精力研究并深度思考"
+
+我列了老系统的根本缺陷 + 新设计：
+
+| 问题 | 老 HTML | 新版 |
+|------|---------|------|
+| 1. 掌握粗糙 | `correct > wrong*2` 一锤子 | **5 tier**: 新/初识/在学/熟练/掌握 |
+| 2. 无间隔复习 | 答对 3 次永不再现 | **SM-2 间隔**: 1m → 1h → 1d → 3d → 14d |
+| 3. 无遗忘强化 | 答错调权重 | **答错下 2 题内必现** + 等级 -1 |
+| 4. 无每日目标 | 任意刷 | **每日字次目标 + 连续打卡 streak** |
+| 5. 静态等级 | 看不出学到哪 | **每字 level 0-4 显示** + tier 分布条 |
+| 6. 进度看不清 | 三个数字 | **5 色分布条** + 升级动画 |
+
+### 新建底层
+
+**`src/lib/masteryTier.ts`** — 跨学科共用：
+- `MasteryStat` schema: right / wrong / consecutiveRight / level (0-4) / lastSeenAt / nextDueAt
+- `transitionStat(cur, isCorrect)` — 答对升级判断 + 间隔计算；答错降级 + 立即重现
+- `pickByMastery()` 三级选题策略：
+  - **强化队列优先**（答错的 2 题内）
+  - **过期未练**（nextDueAt < now，按逾期程度加权）
+  - **新字**（nextDueAt === 0）
+  - **未到期**（按最快到期优先）
+- `migrateLegacyStat(right, wrong)` — 老 right/wrong → 估算 level
+
+**`src/lib/dailyTarget.ts`** — 每日目标 + streak：
+- 默认 20 字次/天
+- 完成时弹 🏆 庆祝动画 + streak +1（连续打卡）
+- 跨日 reset todayCount，但保留 streak
+
+**`src/components/MasteryTierBar.tsx`**：
+- 5 色分布条（slate/cyan/amber/emerald/violet）
+- 5 个数字 + emoji（🌱📖✨⭐🏆）
+- `<TierChip level={n} />` 可在题面 inline 显示当前字/词的等级
+
+### 升级语文 / 英语
+
+`chineseCharProgress.ts` / `englishVocabProgress.ts` 都换用 MasteryStat，沿用老 schema 的 right/wrong 字段（向后兼容老系统统计），但加 level/nextDueAt/consecutiveRight。
+
+迁移逻辑（`migrateHistoricalCharProgress` / `migrateHistoricalVocabProgress`）现在 v2：
+- 升级现有 v1 stat（v0.31.40 的 right/wrong/weight） → 加 level/nextDueAt
+- 新增老 chinese/data.json + english/data.json 数据
+- 估算 level：right >= 5 → level 4; right >= 3 → level 3; right == 2 → level 2; right == 1 → level 1; wrong > right → level 0 reset
+
+### 升级实习页
+
+`CharPractice.tsx` / `VocabPractice.tsx` 双双引入：
+- 顶部 5-tier 分布条
+- 每题 `<TierChip />` 显示当前等级
+- 升级时弹"X 升到 Y"动画
+- 今日目标进度条 + 连续打卡显示
+- 完成今日目标时全屏 🏆 庆祝
+- 答错的字 push 到 reinforce queue，下 2 题内必现
+- 答对获 XP 时如果升级再 +5 bonus
+- 老口径 stats（总练习/正确率/错字 / 已掌握/薄弱/未学习）继续显示作为兼容
+
+`EnglishHome.tsx` — 上下册各显示 5-tier 分布条而非简单 3 数字。
+
+### 改动文件
+- 新增：`src/lib/masteryTier.ts`、`src/lib/dailyTarget.ts`、`src/components/MasteryTierBar.tsx`
+- 重写：`src/lib/chineseCharProgress.ts`、`src/lib/englishVocabProgress.ts`
+- 重写：`src/pages/chinese/CharPractice.tsx`、`src/pages/english/VocabPractice.tsx`、`src/pages/english/EnglishHome.tsx`
+
+### 实测验证（Preview MCP）
+- 语文上册：🌱新 211 / 📖初识 32 / ✨在学 6 / ⭐熟练 1 / 🏆掌握 0；老口径 总练习 180 / 正确率 96% / 错字 5 ✓
+- 英语上册：🌱新 2 / 📖初识 16 / ✨在学 37 / ⭐熟练 34 / 🏆掌握 6；老口径 已掌握 88 / 薄弱 5 / 未学习 2 ✓
+- 显示当前 word "sport" 的 ✨在学 tier chip + 连对 2 ✓
+- 每页 today target 0/20 + 进度条 ✓
+
 ## v0.31.40 — 2026-05-08 · 语文 500 字 / 英语 3 模式 · 全部对齐老 HTML 系统
 
 爸爸反馈 v0.31.39 太简化：

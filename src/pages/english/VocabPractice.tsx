@@ -1,44 +1,26 @@
 /**
- * 英语 G4 单词记忆 · 练习页 (v0.31.40 重写)
+ * 英语 G4 单词记忆 · 练习页 (v0.31.41 — mastery tier + 间隔重现)
  *
- * 路由：/english/vocab
+ * 比 v0.31.40 升级：
+ *   - 5 tier 等级 + tier 分布条
+ *   - SM-2 间隔重现 + 答错强化
+ *   - 今日目标 + streak
+ *   - 老口径"已掌握/薄弱/未学习"仍保留兼容
  *
- * 重写动机：v0.31.39 太简化，对不上老 english/g4_english.html 的功能：
- * - 老有 上/下册 切换；这版只有混合
- * - 老有 3 模式（看单词选中文 / 看中文选单词 / 听读音选单词）；这版只有看中文写英文
- * - 老的统计 已掌握/薄弱/未学习 公式跟新版不一致
- *
- * 新版（pixel-aligned with old + 游戏化）：
- *   ┌──────────────────────────────────────────┐
- *   │ [上册] [下册]                              │
- *   │ [看词→选中文] [看中→选词] [听音→选词]      │
- *   ├──────────────────────────────────────────┤
- *   │ 已掌握 47 · 薄弱 3 · 未学习 63              │
- *   │ 连击 × 5  +85 XP                           │
- *   ├──────────────────────────────────────────┤
- *   │ 焦点 🔴/🟡/🟢                              │
- *   │ <题面>                                    │
- *   │ ┌──────┐ ┌──────┐                         │
- *   │ │ A.   │ │ B.   │                         │
- *   │ ├──────┤ ├──────┤                         │
- *   │ │ C.   │ │ D.   │                         │
- *   │ └──────┘ └──────┘                         │
- *   └──────────────────────────────────────────┘
- *
- * 加权随机沿用老 weight 字段维护逻辑。TTS 用 Web Speech API en-US Samantha。
+ * 3 模式（沿用）：
+ *   1. 看单词 → 选中文 (English + 🔊 → 4 个中文)
+ *   2. 看中文 → 选单词 (中文 → 4 个英文)
+ *   3. 🔊 听读音 → 选单词 (TTS → 4 个英文)
  */
 
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { db } from "../../db/dexie";
-import {
-  G4_WORDS,
-  type G4Word,
-} from "../../subjects/english/wordList";
+import { G4_WORDS, type G4Word } from "../../subjects/english/wordList";
 import {
   buildOptions,
   calcOldStyleStats,
-  focusBadge,
+  calcTierDistribution,
   loadVocabProgress,
   migrateHistoricalVocabProgress,
   normWord,
@@ -47,12 +29,19 @@ import {
   speakEnglish,
   type OldStyleVocabStats,
   type VocabProgress,
-  type WordStat,
 } from "../../lib/englishVocabProgress";
+import {
+  freshStat,
+  type Level,
+  type MasteryStat,
+} from "../../lib/masteryTier";
+import { loadDaily, tickDaily, type DailyState } from "../../lib/dailyTarget";
+import { MasteryTierBar, TierChip } from "../../components/MasteryTierBar";
 
 type Book = "G4A" | "G4B";
 type Mode = "word2cn" | "cn2word" | "listen";
 const RECENT_WINDOW = 5;
+const REINFORCE_WINDOW = 2;
 
 interface RoundResult {
   word: string;
@@ -60,32 +49,34 @@ interface RoundResult {
   isCorrect: boolean;
   userPick: string;
   mode: Mode;
+  newLevel: Level;
 }
 
 export function VocabPracticePage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [progress, setProgress] = useState<VocabProgress>({});
-  const [book, setBook] = useState<Book>("G4A"); // 老系统默认上册
+  const [daily, setDaily] = useState<DailyState | null>(null);
+  const [book, setBook] = useState<Book>("G4A");
   const [mode, setMode] = useState<Mode>("word2cn");
   const [current, setCurrent] = useState<G4Word | null>(null);
   const [options, setOptions] = useState<G4Word[]>([]);
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean; pick: string } | null>(
-    null,
-  );
+  const [feedback, setFeedback] = useState<{ isCorrect: boolean; pick: string } | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
+  const [reinforceQueue, setReinforceQueue] = useState<{ word: string; remaining: number }[]>([]);
   const [history, setHistory] = useState<RoundResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [migratedToast, setMigratedToast] = useState<string | null>(null);
   const [combo, setCombo] = useState(0);
   const [sessionXp, setSessionXp] = useState(0);
   const [floatingXp, setFloatingXp] = useState<{ amount: number; key: number } | null>(null);
+  const [dailyCelebration, setDailyCelebration] = useState<{ streak: number } | null>(null);
+  const [levelUpToast, setLevelUpToast] = useState<{ word: string; from: Level; to: Level } | null>(null);
 
   const pool: G4Word[] = useMemo(
     () => G4_WORDS.filter((w) => w.semester === book),
     [book],
   );
 
-  // 初次加载
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -98,13 +89,15 @@ export function VocabPracticePage() {
       if (cancelled) return;
       setStudentId(s.id);
       const migr = await migrateHistoricalVocabProgress(s.id);
-      if (migr.imported > 0) {
-        setMigratedToast(`已从老系统导入 ${migr.imported} 个单词的进度`);
+      if (migr.imported > 0 || migr.upgraded > 0) {
+        setMigratedToast(`已迁移 ${migr.imported} 词 + 升级 ${migr.upgraded} 词到 5-tier 等级`);
         setTimeout(() => setMigratedToast(null), 5000);
       }
       const p = await loadVocabProgress(s.id);
+      const d = await loadDaily("english_vocab", s.id, 20);
       if (cancelled) return;
       setProgress(p);
+      setDaily(d);
       setLoading(false);
     })();
     return () => {
@@ -112,25 +105,24 @@ export function VocabPracticePage() {
     };
   }, []);
 
-  // 切换 book / mode 时重新选词
   useEffect(() => {
     if (loading) return;
-    pickNew(progress, []);
+    pickNew(progress, [], []);
     setRecent([]);
+    setReinforceQueue([]);
     setFeedback(null);
     setCombo(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book, mode, loading]);
 
-  // listen 模式自动播放
   useEffect(() => {
     if (mode !== "listen" || !current) return;
     const t = setTimeout(() => speakEnglish(current.w), 350);
     return () => clearTimeout(t);
   }, [mode, current]);
 
-  function pickNew(p: VocabProgress, recentLower: string[]) {
-    const next = pickNextWord(pool, p, recentLower);
+  function pickNew(p: VocabProgress, recentLower: string[], reinforceWords: string[]) {
+    const next = pickNextWord(pool, p, recentLower, reinforceWords);
     setCurrent(next);
     if (next) {
       setOptions(buildOptions(next, pool));
@@ -147,39 +139,66 @@ export function VocabPracticePage() {
   async function recordResult(isCorrect: boolean, pick: string) {
     if (!current) return;
     setFeedback({ isCorrect, pick });
+    const oldStat = progress[normWord(current.w)] ?? freshStat();
+    let nextStat: MasteryStat;
+    if (studentId) {
+      nextStat = await recordVocabAttempt(studentId, current.w, isCorrect);
+    } else {
+      const tmp = { ...oldStat };
+      tmp.right += isCorrect ? 1 : 0;
+      tmp.wrong += isCorrect ? 0 : 1;
+      tmp.lastSeenAt = Date.now();
+      tmp.consecutiveRight = isCorrect ? tmp.consecutiveRight + 1 : 0;
+      nextStat = tmp;
+    }
+    const nextProgress: VocabProgress = { ...progress, [normWord(current.w)]: nextStat };
+    setProgress(nextProgress);
+
     setHistory((h) => [
       ...h.slice(-19),
-      { word: current.w, cn: current.c, isCorrect, userPick: pick, mode },
+      { word: current.w, cn: current.c, isCorrect, userPick: pick, mode, newLevel: nextStat.level },
     ]);
+
+    if (isCorrect && nextStat.level > oldStat.level) {
+      setLevelUpToast({ word: current.w, from: oldStat.level, to: nextStat.level });
+      setTimeout(() => setLevelUpToast(null), 2000);
+    }
+
     if (isCorrect) {
       const base = 8;
       const comboBonus = Math.min(combo, 9) * 2;
-      const earned = base + comboBonus;
+      const tierBonus = nextStat.level > oldStat.level ? 5 : 0;
+      const earned = base + comboBonus + tierBonus;
       setSessionXp((x) => x + earned);
       setCombo((c) => c + 1);
       flashXp(earned);
+      setReinforceQueue((q) =>
+        q
+          .filter((r) => r.word !== normWord(current.w))
+          .map((r) => ({ ...r, remaining: r.remaining - 1 }))
+          .filter((r) => r.remaining > 0),
+      );
     } else {
       setCombo(0);
       flashXp(0);
+      setReinforceQueue((q) => {
+        const without = q.filter((r) => r.word !== normWord(current.w));
+        return [
+          ...without.map((r) => ({ ...r, remaining: r.remaining - 1 })).filter((r) => r.remaining > 0),
+          { word: normWord(current.w), remaining: REINFORCE_WINDOW },
+        ];
+      });
     }
-    let nextProgress: VocabProgress;
-    if (studentId) {
-      const newStat = await recordVocabAttempt(studentId, current.w, isCorrect);
-      nextProgress = { ...progress, [normWord(current.w)]: newStat };
-    } else {
-      const k = normWord(current.w);
-      const cur = progress[k] ?? { correct: 0, wrong: 0, weight: 1, lastSeenAt: 0 };
-      nextProgress = {
-        ...progress,
-        [k]: {
-          correct: cur.correct + (isCorrect ? 1 : 0),
-          wrong: cur.wrong + (isCorrect ? 0 : 1),
-          weight: isCorrect ? Math.max(0.4, cur.weight * 0.75) : cur.weight * 1.6,
-          lastSeenAt: Date.now(),
-        },
-      };
+
+    if (studentId && daily) {
+      const { next: dNext, justCompleted } = await tickDaily("english_vocab", studentId, daily);
+      setDaily(dNext);
+      if (justCompleted) {
+        setDailyCelebration({ streak: dNext.streak });
+        setTimeout(() => setDailyCelebration(null), 4500);
+      }
     }
-    setProgress(nextProgress);
+
     if (isCorrect) {
       setTimeout(() => advance(nextProgress), 1100);
     }
@@ -189,11 +208,12 @@ export function VocabPracticePage() {
     if (!current) return;
     const newRecent = [normWord(current.w), ...recent].slice(0, RECENT_WINDOW);
     setRecent(newRecent);
-    pickNew(p, newRecent);
+    pickNew(p, newRecent, reinforceQueue.map((r) => r.word));
     setFeedback(null);
   }
 
-  const stats = useMemo(() => calcOldStyleStats(pool, progress), [pool, progress]);
+  const oldStats = useMemo(() => calcOldStyleStats(pool, progress), [pool, progress]);
+  const tierDist = useMemo(() => calcTierDistribution(pool, progress), [pool, progress]);
 
   if (loading) return <div className="card text-center text-slate-300">加载中…</div>;
 
@@ -205,7 +225,7 @@ export function VocabPracticePage() {
             英语单词
           </div>
           <div className="text-xs text-slate-400 mt-0.5">
-            外研版 G4 上下册全部 · 加权随机 · 错过的会再出现
+            外研版 G4 上下册 · 5-tier 等级 · 间隔重现 · 错过的会强化
           </div>
         </div>
         <Link
@@ -222,7 +242,6 @@ export function VocabPracticePage() {
         </div>
       )}
 
-      {/* 上/下册切换 */}
       <div className="flex gap-2">
         <BookTab active={book === "G4A"} onClick={() => setBook("G4A")} count={G4_WORDS.filter((w) => w.semester === "G4A").length}>
           四年级上册
@@ -232,7 +251,6 @@ export function VocabPracticePage() {
         </BookTab>
       </div>
 
-      {/* 3 模式切换 */}
       <div className="flex gap-2 text-xs">
         <ModeTab active={mode === "word2cn"} onClick={() => setMode("word2cn")}>
           看单词 → 选中文
@@ -245,7 +263,15 @@ export function VocabPracticePage() {
         </ModeTab>
       </div>
 
-      <StatsBar stats={stats} combo={combo} sessionXp={sessionXp} />
+      {/* 5-tier 分布条 */}
+      <div className="card-glow space-y-3">
+        <div className="text-xs text-slate-300 font-semibold">
+          本册掌握分布（{book === "G4A" ? "上册" : "下册"} {tierDist.total} 词）
+        </div>
+        <MasteryTierBar dist={tierDist} />
+      </div>
+
+      <StatsBar stats={oldStats} combo={combo} sessionXp={sessionXp} daily={daily} />
 
       {!current ? (
         <div className="card text-center text-slate-300 py-8">
@@ -258,7 +284,8 @@ export function VocabPracticePage() {
             className="btn-primary mt-4"
             onClick={() => {
               setRecent([]);
-              pickNew(progress, []);
+              setReinforceQueue([]);
+              pickNew(progress, [], []);
             }}
           >
             再来一轮
@@ -270,7 +297,7 @@ export function VocabPracticePage() {
           options={options}
           mode={mode}
           feedback={feedback}
-          progressEntry={progress[normWord(current.w)]}
+          stat={progress[normWord(current.w)]}
           onPick={(opt) => {
             const isCorrect =
               mode === "word2cn"
@@ -294,9 +321,7 @@ export function VocabPracticePage() {
                 <span className="text-slate-300">
                   <span className="text-cyan-200 font-display text-sm mr-2">{h.word}</span>
                   <span className="text-slate-400">{h.cn}</span>
-                  <span className="ml-2 text-[10px] text-slate-500">
-                    {h.mode === "word2cn" ? "→中" : h.mode === "cn2word" ? "→英" : "🔊"}
-                  </span>
+                  <span className="ml-2"><TierChip level={h.newLevel} /></span>
                 </span>
                 <span className={h.isCorrect ? "text-emerald-300" : "text-rose-300"}>
                   {h.isCorrect ? "✓" : `✗ ${h.userPick}`}
@@ -310,9 +335,36 @@ export function VocabPracticePage() {
       {floatingXp && floatingXp.amount > 0 && (
         <div
           key={floatingXp.key}
-          className="absolute right-4 top-32 text-cyan-300 font-display font-bold text-2xl pointer-events-none animate-slide-up"
+          className="absolute right-4 top-32 text-cyan-300 font-display font-bold text-2xl pointer-events-none animate-slide-up z-40"
         >
           +{floatingXp.amount} XP
+        </div>
+      )}
+
+      {levelUpToast && (
+        <div className="fixed top-1/3 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+          <div className="card-glow bg-violet-500/20 border-violet-400/50 text-violet-100 text-center animate-slide-up">
+            <div className="text-3xl">⬆️</div>
+            <div className="font-display text-lg">
+              {levelUpToast.word} 升到{" "}
+              <span className="text-violet-300 font-bold">
+                {["新", "初识", "在学", "熟练", "掌握"][levelUpToast.to]}
+              </span>
+              ！
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dailyCelebration && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className="card-glow bg-gradient-to-br from-cyan-500 to-blue-500 text-white text-center p-6 max-w-xs animate-slide-up shadow-2xl">
+            <div className="text-5xl">🏆</div>
+            <div className="font-display font-bold text-2xl mt-2">今日目标完成！</div>
+            <div className="text-sm mt-1 opacity-90">
+              连续打卡 {dailyCelebration.streak} 天 · 加油！
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -374,42 +426,59 @@ function StatsBar({
   stats,
   combo,
   sessionXp,
+  daily,
 }: {
   stats: OldStyleVocabStats;
   combo: number;
   sessionXp: number;
+  daily: DailyState | null;
 }) {
-  const masteredPct = stats.totalWords === 0 ? 0 : (stats.mastered / stats.totalWords) * 100;
-  const weakPct = stats.totalWords === 0 ? 0 : (stats.weak / stats.totalWords) * 100;
+  const dailyPct = daily ? Math.min(100, (daily.todayCount / daily.target) * 100) : 0;
   return (
     <div className="card-glow space-y-2">
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
           <div className="text-[10px] text-slate-400">已掌握</div>
-          <div className="font-display font-bold text-xl text-emerald-300">
+          <div className="font-display font-bold text-lg text-emerald-300">
             {stats.mastered}
             <span className="text-xs text-slate-400 ml-1">/ {stats.totalWords}</span>
           </div>
         </div>
         <div>
           <div className="text-[10px] text-slate-400">薄弱</div>
-          <div className="font-display font-bold text-xl text-rose-300">{stats.weak}</div>
+          <div className="font-display font-bold text-lg text-rose-300">{stats.weak}</div>
         </div>
         <div>
           <div className="text-[10px] text-slate-400">未学习</div>
-          <div className="font-display font-bold text-xl text-amber-300">{stats.unknown}</div>
+          <div className="font-display font-bold text-lg text-amber-300">{stats.unknown}</div>
         </div>
       </div>
-      <div className="h-2 rounded-full bg-ink-700/60 overflow-hidden flex">
-        <div
-          className="bg-emerald-400 transition-[width] duration-300"
-          style={{ width: `${masteredPct}%` }}
-        />
-        <div
-          className="bg-rose-400/50 transition-[width] duration-300"
-          style={{ width: `${weakPct}%` }}
-        />
-      </div>
+
+      {daily && (
+        <div className="border-t border-ink-700/40 pt-2 text-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-slate-300">
+              今日目标{" "}
+              <span className="font-display font-bold text-cyan-200">
+                {daily.todayCount}
+              </span>
+              <span className="text-slate-400"> / {daily.target} 词次</span>
+            </span>
+            {daily.streak > 0 && (
+              <span className="text-rose-300">
+                🔥 连续 {daily.streak} 天
+              </span>
+            )}
+          </div>
+          <div className="h-1.5 rounded-full bg-ink-700/60 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-400 to-blue-400 transition-[width] duration-300"
+              style={{ width: `${dailyPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between text-xs border-t border-ink-700/40 pt-2">
         <div className="flex items-center gap-2">
           <span className="text-slate-400">本次 XP</span>
@@ -431,7 +500,7 @@ function QuestionPanel({
   options,
   mode,
   feedback,
-  progressEntry,
+  stat,
   onPick,
   onSpeak,
   onContinueWrong,
@@ -440,14 +509,13 @@ function QuestionPanel({
   options: G4Word[];
   mode: Mode;
   feedback: { isCorrect: boolean; pick: string } | null;
-  progressEntry: WordStat | undefined;
+  stat: MasteryStat | undefined;
   onPick: (opt: string) => void;
   onSpeak: () => void;
   onContinueWrong: () => void;
 }) {
-  const focus = focusBadge(progressEntry);
+  const level: Level = (stat?.level ?? 0) as Level;
 
-  // 题面 / 选项内容
   let questionContent: React.ReactNode;
   let pickFromOptions: { label: string; value: string }[];
   let correctValue: string;
@@ -474,7 +542,6 @@ function QuestionPanel({
     pickFromOptions = options.map((o) => ({ label: o.w, value: o.w }));
     correctValue = word.w;
   } else {
-    // listen
     questionContent = (
       <button
         type="button"
@@ -491,20 +558,16 @@ function QuestionPanel({
   return (
     <div className="card-glow space-y-3">
       <div className="flex justify-between items-center text-xs">
-        <span
-          className={`chip text-[10px] px-2 py-0.5 border ${
-            focus.color === "rose"
-              ? "bg-rose-500/15 text-rose-200 border-rose-400/40"
-              : focus.color === "amber"
-                ? "bg-amber-500/15 text-amber-200 border-amber-400/40"
-                : "bg-emerald-500/15 text-emerald-200 border-emerald-400/40"
-          }`}
-        >
-          {focus.label} · {word.semester}
-        </span>
-        {progressEntry && (
+        <div className="flex items-center gap-2">
+          <TierChip level={level} />
+          <span className="text-slate-500 text-[10px]">{word.semester}</span>
+        </div>
+        {stat && (stat.right > 0 || stat.wrong > 0) && (
           <span className="text-slate-500 tabular-nums">
-            对 {progressEntry.correct} · 错 {progressEntry.wrong}
+            对 {stat.right} · 错 {stat.wrong}
+            {stat.consecutiveRight > 1 && (
+              <span className="ml-2 text-emerald-300">连对 {stat.consecutiveRight}</span>
+            )}
           </span>
         )}
       </div>
