@@ -3,6 +3,46 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.46 — 2026-05-08 · 词组提示改成数学风格付费 hint (-3 XP)
+
+爸爸：「词组提示应该把这个字可以组词的其他字写出来，要不然这个提示就完全没有意义了，可以把词组提示作为提示按钮，就像数学的提示一样。包括积分经验分的机制也可以和数学类似」
+
+v0.31.44 我用 〇 占位符把 group 净化（"〇___、___〇"），但用户说这等于完全没显示——确实如此。
+
+### 改成数学风格付费 hint
+
+默认（免费）：
+- 拼音 ✓ 显示
+- 含义 ✓ 显示
+- 词组 ✗ 隐藏，只显示 "💡 词组提示（-3 XP）" 按钮
+
+点击按钮 →
+- 显示原始 group（不 sanitize，因为是付费提示）
+- 加 hint："💡 词组提示已展开 · 本题 -3 XP"
+- 加底部 footer："___ 处填的就是这个字（1 个汉字）"
+- 答对时 earned XP = base + combo + tier - 3
+
+跟数学的 HintLadder 一致：花钱看提示，不用就拿满分。
+
+3 个练习模式都加：手写挑战 / 辨字选择 / 打字回忆。advance() 时 reset hintOpened，下一字重新隐藏。
+
+### XP 公式更新
+
+```
+write 模式: 12 + 连击×2(最多18) + 升级 5 - 提示 3 = 9 ~ 32 XP / 题
+choose:    8  + ...                       - 3 = 5 ~ 28 XP / 题
+type:      8  + ...                       - 3 = 5 ~ 28 XP / 题
+```
+
+错答仍然 0 XP（无论是否用了提示）。
+
+### 改动文件
+- `src/pages/chinese/CharPractice.tsx`：
+  - 加 `hintOpened` state + reset
+  - WritePanel/ChoosePanel/TypePanel 都接收 `hintOpened` + `onOpenHint` props
+  - 新加 `<HintRevealer>` 组件：默认显示按钮，opened 后显示 group
+  - `recordResult` 计算 `hintPenalty = hintOpened ? 3 : 0`
+
 ## v0.31.45 — 2026-05-08 · 修视觉判定模型链 (用 qwen3.6-plus)
 
 爸爸：写字判定还是 unauthorized 之后又 all_providers_failed [token-plan/qwen3-vl-plus]，"为什么不用我说的 qwen3.6-plus？qwen3.6plus 是多模态支持图片输入的"

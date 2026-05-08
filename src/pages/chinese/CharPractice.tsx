@@ -32,7 +32,6 @@ import {
   migrateHistoricalCharProgress,
   pickNextChar,
   recordCharAttempt,
-  sanitizeGroupDisplay,
   type CharProgress,
   type OldStyleStats,
 } from "../../lib/chineseCharProgress";
@@ -96,6 +95,8 @@ export function CharPracticePage() {
   const [levelUpToast, setLevelUpToast] = useState<{ word: string; from: Level; to: Level } | null>(null);
   // 用于强制重置 canvas（提交后下一字时清空）
   const [canvasResetKey, setCanvasResetKey] = useState(0);
+  // v0.31.46: 词组提示作为付费 hint（-3 XP），与数学的 hint 机制一致
+  const [hintOpened, setHintOpened] = useState(false);
 
   const semester = termToSemester(currentTerm);
   // v0.31.43: 综合复习 (semester === null) → 上下册混合池
@@ -149,6 +150,7 @@ export function CharPracticePage() {
     setTypeInput("");
     setCombo(0);
     setCanvasResetKey((k) => k + 1);
+    setHintOpened(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTerm, mode, loading]);
 
@@ -203,7 +205,9 @@ export function CharPracticePage() {
       const base = mode === "write" ? 12 : 8; // 手写难度高，加分多
       const comboBonus = Math.min(combo, 9) * 2;
       const tierBonus = nextStat.level > oldStat.level ? 5 : 0;
-      const earned = base + comboBonus + tierBonus;
+      // v0.31.46: 用了词组提示 → -3 XP（数学风格）
+      const hintPenalty = hintOpened ? 3 : 0;
+      const earned = Math.max(0, base + comboBonus + tierBonus - hintPenalty);
       setSessionXp((x) => x + earned);
       setCombo((c) => c + 1);
       flashXp(earned);
@@ -248,6 +252,7 @@ export function CharPracticePage() {
     setTypeInput("");
     setFeedback(null);
     setCanvasResetKey((k) => k + 1);
+    setHintOpened(false); // v0.31.46: 下一字重新隐藏提示
   }
 
   // 手写提交 → 调 LLM 视觉判
@@ -391,6 +396,8 @@ export function CharPracticePage() {
           canvasResetKey={canvasResetKey}
           onSubmit={onSubmitCanvas}
           onContinueWrong={() => advance(progress)}
+          hintOpened={hintOpened}
+          onOpenHint={() => setHintOpened(true)}
         />
       ) : mode === "choose" ? (
         <ChoosePanel
@@ -400,6 +407,8 @@ export function CharPracticePage() {
           stat={progress[current.word]}
           onPick={onPickChoose}
           onContinueWrong={() => advance(progress)}
+          hintOpened={hintOpened}
+          onOpenHint={() => setHintOpened(true)}
         />
       ) : (
         <TypePanel
@@ -410,6 +419,8 @@ export function CharPracticePage() {
           onSubmit={onSubmitType}
           onContinueWrong={() => advance(progress)}
           stat={progress[current.word]}
+          hintOpened={hintOpened}
+          onOpenHint={() => setHintOpened(true)}
         />
       )}
 
@@ -423,6 +434,7 @@ export function CharPracticePage() {
             setTypeInput("");
             setFeedback(null);
             setCanvasResetKey((k) => k + 1);
+            setHintOpened(false);
           }
         }}
       />
@@ -599,6 +611,8 @@ function WritePanel({
   canvasResetKey,
   onSubmit,
   onContinueWrong,
+  hintOpened,
+  onOpenHint,
 }: {
   char: G4Char;
   stat: MasteryStat | undefined;
@@ -607,6 +621,8 @@ function WritePanel({
   canvasResetKey: number;
   onSubmit: (base64: string) => void;
   onContinueWrong: () => void;
+  hintOpened: boolean;
+  onOpenHint: () => void;
 }) {
   const level: Level = (stat?.level ?? 0) as Level;
   const fb = feedback as {
@@ -637,16 +653,14 @@ function WritePanel({
       </div>
 
       <div className="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4 text-center">
-        <div className="text-xs text-slate-400 mb-1">词组提示</div>
-        <div className="font-display text-2xl text-amber-100 tracking-wide">
-          {sanitizeGroupDisplay(char.group, char.word)}
-        </div>
-        <div className="text-xs text-slate-400 mt-3">
-          含义：<span className="text-slate-200">{char.meaning}</span>
-        </div>
-        <div className="text-[10px] text-slate-500 mt-2">
-          〇 = 看不见的字（保持神秘 · 你写的就是答案）
-        </div>
+        <div className="text-xs text-slate-400 mb-1">含义</div>
+        <div className="text-base text-slate-100 mt-1">{char.meaning}</div>
+        <HintRevealer
+          group={char.group}
+          target={char.word}
+          opened={hintOpened}
+          onOpen={onOpenHint}
+        />
       </div>
 
       <div className="text-center">
@@ -700,6 +714,8 @@ function ChoosePanel({
   stat,
   onPick,
   onContinueWrong,
+  hintOpened,
+  onOpenHint,
 }: {
   char: G4Char;
   chooseQ: ReturnType<typeof generateChooseQuestion> | null;
@@ -707,6 +723,8 @@ function ChoosePanel({
   stat: MasteryStat | undefined;
   onPick: (opt: string) => void;
   onContinueWrong: () => void;
+  hintOpened: boolean;
+  onOpenHint: () => void;
 }) {
   if (!chooseQ) return <div className="card text-slate-400">题加载中…</div>;
   const level: Level = (stat?.level ?? 0) as Level;
@@ -724,6 +742,13 @@ function ChoosePanel({
       </div>
       <div className="rounded-2xl border border-violet-400/30 bg-violet-500/5 p-3 text-center">
         <div className="text-sm text-slate-200">{chooseQ.question}</div>
+        <HintRevealer
+          group={char.group}
+          target={char.word}
+          opened={hintOpened}
+          onOpen={onOpenHint}
+          compact
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         {chooseQ.options.map((opt, idx) => {
@@ -775,6 +800,8 @@ function TypePanel({
   onSubmit,
   onContinueWrong,
   stat,
+  hintOpened,
+  onOpenHint,
 }: {
   char: G4Char;
   input: string;
@@ -783,6 +810,8 @@ function TypePanel({
   onSubmit: (e?: React.FormEvent) => void;
   onContinueWrong: () => void;
   stat: MasteryStat | undefined;
+  hintOpened: boolean;
+  onOpenHint: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -805,13 +834,14 @@ function TypePanel({
         <div className="font-display text-3xl text-cyan-200 mt-1">{char.pinyin}</div>
       </div>
       <div className="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4 text-center">
-        <div className="text-xs text-slate-400 mb-1">词组提示</div>
-        <div className="font-display text-2xl text-amber-100 tracking-wide">
-          {sanitizeGroupDisplay(char.group, char.word)}
-        </div>
-        <div className="text-xs text-slate-400 mt-3">
-          含义：<span className="text-slate-200">{char.meaning}</span>
-        </div>
+        <div className="text-xs text-slate-400 mb-1">含义</div>
+        <div className="text-base text-slate-100 mt-1">{char.meaning}</div>
+        <HintRevealer
+          group={char.group}
+          target={char.word}
+          opened={hintOpened}
+          onOpen={onOpenHint}
+        />
       </div>
       <div>
         <input
@@ -852,6 +882,56 @@ function TypePanel({
         </button>
       )}
     </form>
+  );
+}
+
+/**
+ * 词组提示按钮 — 数学风格的"付费提示"机制 (v0.31.46)
+ *
+ * 默认隐藏 group（拼音 + 含义已经免费提供）。点击 → 显示完整 group（含 target 字
+ * 可见），扣 3 XP。下一题自动 reset。
+ *
+ * compact: 在辨字模式那种空间紧的地方用更紧凑的视觉。
+ */
+function HintRevealer({
+  group,
+  target,
+  opened,
+  onOpen,
+  compact = false,
+}: {
+  group: string;
+  target: string;
+  opened: boolean;
+  onOpen: () => void;
+  compact?: boolean;
+}) {
+  if (opened) {
+    return (
+      <div className={`mt-3 rounded-xl border border-amber-400/40 bg-amber-500/10 ${compact ? "p-2" : "p-3"} text-center`}>
+        <div className="text-[10px] text-amber-200/80 mb-1">
+          💡 词组提示已展开 · 本题 -3 XP
+        </div>
+        <div className={`font-display ${compact ? "text-lg" : "text-2xl"} text-amber-100 tracking-wide`}>
+          {group}
+        </div>
+        <div className="text-[10px] text-slate-500 mt-1">
+          ___ 处填的就是这个字（{target.length === 1 ? "1" : target.length} 个汉字）
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 flex justify-center">
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`chip px-3 py-1.5 ${compact ? "text-[11px]" : "text-xs"} bg-amber-500/15 border border-amber-400/30 text-amber-100 hover:bg-amber-500/25 transition-colors`}
+        title="展开词组提示，本题扣 3 XP"
+      >
+        💡 词组提示（-3 XP）
+      </button>
+    </div>
   );
 }
 
