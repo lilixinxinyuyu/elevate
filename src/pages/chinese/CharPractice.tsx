@@ -32,6 +32,7 @@ import {
   migrateHistoricalCharProgress,
   pickNextChar,
   recordCharAttempt,
+  sanitizeGroupDisplay,
   type CharProgress,
   type OldStyleStats,
 } from "../../lib/chineseCharProgress";
@@ -303,7 +304,7 @@ export function CharPracticePage() {
             🗡️ 字词大冒险
           </div>
           <div className="text-xs text-slate-400 mt-0.5">
-            5-tier 等级 · 间隔重现 · 错过的字会强化 · 手写真笔画 + 视觉 AI 判定
+            手写挑战 + 视觉 AI 判定
           </div>
         </div>
         <Link
@@ -320,14 +321,16 @@ export function CharPracticePage() {
         </div>
       )}
 
-      {/* v0.31.43: 学期切换移到首页（与数学 UX 一致），这里只显示当前赛季 */}
-      <div className="text-xs text-slate-400">
-        当前赛季：
-        <span className="text-violet-200 font-semibold ml-1">
+      {/* v0.31.43: 学期切换移到首页（与数学 UX 一致），这里只显示当前赛季 chip */}
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="chip text-[11px] px-2.5 py-1 bg-violet-500/15 border border-violet-400/30 text-violet-100">
           {currentTerm === "综合复习" ? "🎯 综合复习" : currentTerm === "上册" ? "📕 四年级上册" : "📚 四年级下册"}
         </span>
-        <Link to="/chinese" className="ml-3 underline-offset-2 hover:underline">
-          ← 回首页换赛季
+        <Link
+          to="/chinese"
+          className="chip text-[11px] px-2.5 py-1 bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10"
+        >
+          切换赛季 →
         </Link>
       </div>
 
@@ -636,10 +639,13 @@ function WritePanel({
       <div className="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4 text-center">
         <div className="text-xs text-slate-400 mb-1">词组提示</div>
         <div className="font-display text-2xl text-amber-100 tracking-wide">
-          {char.group}
+          {sanitizeGroupDisplay(char.group, char.word)}
         </div>
         <div className="text-xs text-slate-400 mt-3">
           含义：<span className="text-slate-200">{char.meaning}</span>
+        </div>
+        <div className="text-[10px] text-slate-500 mt-2">
+          〇 = 看不见的字（保持神秘 · 你写的就是答案）
         </div>
       </div>
 
@@ -800,7 +806,9 @@ function TypePanel({
       </div>
       <div className="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4 text-center">
         <div className="text-xs text-slate-400 mb-1">词组提示</div>
-        <div className="font-display text-2xl text-amber-100 tracking-wide">{char.group}</div>
+        <div className="font-display text-2xl text-amber-100 tracking-wide">
+          {sanitizeGroupDisplay(char.group, char.word)}
+        </div>
         <div className="text-xs text-slate-400 mt-3">
           含义：<span className="text-slate-200">{char.meaning}</span>
         </div>

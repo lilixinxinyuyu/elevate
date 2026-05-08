@@ -69,7 +69,9 @@ export function SubjectTodayRings({ rings, title = "今日打卡" }: { rings: Ri
       </div>
       <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
         <ConcentricRings rings={rings} allDone={allDone} pulseId={pulseId} />
-        <div className="flex-1 w-full grid grid-cols-3 sm:grid-cols-1 gap-2">
+        {/* v0.31.44: 移动端改成纵向 stack — 横向 3 chip 在 320-420px 宽下文字会被截断
+            ("词...", "闪...", "复...", "0/...", "60..."），改成 flex column 全宽展示 */}
+        <div className="flex-1 w-full flex flex-col gap-2">
           {rings.map((r) => (
             <Link
               key={r.id}

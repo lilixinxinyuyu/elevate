@@ -3,6 +3,49 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.44 — 2026-05-08 · 视觉审计修 4 个 UX 问题
+
+我自查移动端 (420×900) 发现并修：
+
+### 1. TodayRings 移动端 chip 文字被截断
+
+老版用 `grid grid-cols-3` 横排 3 chip，移动端 320-420px 宽度下"字..."、"闪..."、"复..."、"0/..."、"60..." 等都被截断不可读。
+
+修：`SubjectTodayRings` + `TodayRings` 改成 `flex flex-col`，3 chip 纵向 stack 全宽展示。每个 chip 现在能完整显示"字词大冒险 / 0 / 20 字次"。
+
+### 2. 词组提示 target 字泄露 (50% 词条)
+
+实测：500 个 G4 字里 **251 个** group 字段含目标字（`稀___、___稀` 把目标 `稀` 直接显示给用户看）。属于 `chinese/lower_words_full.js` 源数据 bug。
+
+修：新增 `sanitizeGroupDisplay(group, target)` 函数，把 group 里所有 target 实例替换成 `〇`（unicode 圆圈占位符）。
+- `稀___、___稀` → `〇___、___〇`
+- `复___、___杂` (target=杂) → `复___、___〇`
+- 不泄露的原样保留
+
+CharPractice 写字模式 + 打字模式都用净化后的 group。下方加小字提示 "〇 = 看不见的字（保持神秘 · 你写的就是答案）"
+
+### 3. 长副标题在窄屏换行 ugly
+
+CharPractice header 老副标题 "5-tier 等级 · 间隔重现 · 错过的字会强化 · 手写真笔画 + 视觉 AI 判定" 太长，换行难看。
+改成 "**手写挑战 + 视觉 AI 判定**"。
+
+VocabPractice 老 "5-tier 等级 · 间隔重现 · 4 种玩法" 改成 "**4 种玩法 · 间隔重现**"。
+
+### 4. "回首页换赛季" 链接弱
+
+老用文字 link 视觉太弱。
+修：换成两个真正的 chip
+- 左：紫色当前赛季 chip（如 `📚 四年级下册`）
+- 右：白色 hover chip "切换赛季 →"
+
+明确告诉用户"想换学期 → 这里点"。
+
+### 改动文件
+- `src/components/SubjectTodayRings.tsx`, `src/components/TodayRings.tsx` — flex column for ring chips
+- `src/lib/chineseCharProgress.ts` — sanitizeGroupDisplay
+- `src/pages/chinese/CharPractice.tsx` — apply sanitizer + shorter subtitle + chip-style 切换赛季
+- `src/pages/english/VocabPractice.tsx` — shorter subtitle + chip-style 切换赛季
+
 ## v0.31.43 — 2026-05-08 · 修 4 个反馈 bug + 跨学科 UX 对齐数学
 
 爸爸 4 个反馈：

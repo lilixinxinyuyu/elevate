@@ -157,6 +157,24 @@ export async function migrateHistoricalCharProgress(
   return { imported, skipped, upgraded };
 }
 
+/**
+ * 词组提示泄露净化：500 字数据里 ~50% 的 group 字段会把 target 字也展示出来
+ * （比如 "稀___、___稀" 让 target=稀 在视觉上直接出现，等于给答案）。
+ *
+ * 净化：把 group 里所有 target 字替换成 `〇`（unicode 圆圈占位符），
+ * 这样视觉上仍然知道那位置有个字，但不再泄露答案。
+ *
+ * 例如：
+ *   sanitize("复___、___杂", "杂")  →  "复___、___〇"
+ *   sanitize("稀___、___稀", "稀")  →  "〇___、___〇"
+ *   sanitize("___水、涨___", "潮")  →  "___水、涨___"   (无泄露原样)
+ */
+export function sanitizeGroupDisplay(group: string, target: string): string {
+  if (!target) return group;
+  // global replace target char everywhere in group
+  return group.split(target).join("〇");
+}
+
 /** 辨字选择题：同 g4_cn.html 公式 */
 export function generateChooseQuestion(
   target: G4Char,

@@ -97,8 +97,8 @@ export function TodayRings(input: TodayRingsInput) {
         {/* 同心环 SVG */}
         <ConcentricRings rings={rings} allDone={allDone} pulseId={pulseId} />
 
-        {/* Legend 3 chips（点这里跳） */}
-        <div className="flex-1 w-full grid grid-cols-3 sm:grid-cols-1 gap-2">
+        {/* Legend 3 chips（点这里跳） — v0.31.44 改成 flex column 防止 mobile 被截断 */}
+        <div className="flex-1 w-full flex flex-col gap-2">
           {rings.map((r) => (
             <Link
               key={r.id}
