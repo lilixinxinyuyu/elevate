@@ -3,6 +3,24 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.45 — 2026-05-08 · 修视觉判定模型链 (用 qwen3.6-plus)
+
+爸爸：写字判定还是 unauthorized 之后又 all_providers_failed [token-plan/qwen3-vl-plus]，"为什么不用我说的 qwen3.6-plus？qwen3.6plus 是多模态支持图片输入的"
+
+### 修
+v0.31.42 我误用了 `qwen3-vl-plus`（这个 model 名在 token-plan 上不存在）。改成爸爸指出的 **`qwen3.6-plus`** 作为 token-plan 主力（多模态支持图片输入）。
+
+token-plan 模型链：`qwen3.6-plus` → `qwen-vl-max-latest` → `qwen-vl-plus`
+DashScope intl 兜底：`qwen-vl-max-latest` → `qwen-vl-plus`
+
+### 提升健壮性
+- 移除 `response_format: json_object` 约束（部分模型不支持，靠 system prompt 强制 JSON 即可）
+- JSON 提取更宽松：找 first `{` 到 last `}` block，防模型在前后包额外文字
+- 错误信息加 content 前 120 字便于排查
+
+### 改动文件
+- `functions/api/tutor/judge-handwriting.ts`
+
 ## v0.31.44 — 2026-05-08 · 视觉审计修 4 个 UX 问题
 
 我自查移动端 (420×900) 发现并修：

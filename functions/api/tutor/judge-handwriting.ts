@@ -48,7 +48,15 @@ interface JudgeResult {
   comment?: string;
 }
 
-// 视觉模型 provider 链：token-plan 优先（订阅版），DashScope intl 兜底
+/**
+ * 视觉模型 provider 链：token-plan 优先（订阅版有 qwen3.6-plus 多模态），
+ * DashScope intl 兜底（qwen-vl-max-latest）
+ *
+ * 模型名注意：
+ *   - token-plan: `qwen3.6-plus` 是订阅版的多模态主力（支持文本 + 图片输入）
+ *   - 之前误用的 `qwen3-vl-plus` 在 token-plan 上不存在，所以 all_providers_failed
+ *   - DashScope intl: `qwen-vl-max-latest` / `qwen-vl-plus` 是 free-tier 视觉链
+ */
 function getVisionProviders(env: Env): {
   baseUrl: string;
   apiKey: string;
@@ -60,7 +68,7 @@ function getVisionProviders(env: Env): {
     providers.push({
       baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com",
       apiKey: env.TOKEN_PLAN_API_KEY,
-      models: ["qwen3-vl-plus", "qwen-vl-max-latest"],
+      models: ["qwen3.6-plus", "qwen-vl-max-latest", "qwen-vl-plus"],
       label: "token-plan",
     });
   }
@@ -115,7 +123,7 @@ async function callVisionAPI(
         ],
       },
     ],
-    response_format: { type: "json_object" },
+    // v0.31.45: 不强制 json_object — 部分模型不支持，让 system prompt 强制 JSON
     temperature: 0.2,
     max_tokens: 200,
   };
@@ -147,15 +155,23 @@ async function callVisionAPI(
   };
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("empty_content");
+  // v0.31.45: 更宽松的 JSON 提取——模型可能在 JSON 前后说点啥，找到第一个 { ... } block
   let parsed: JudgeResult;
   try {
-    // 模型可能包 ```json``` 即使 system 让别包，这里清一下
-    const cleaned = content.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+    let cleaned = content.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+    // 找 first { ... last } — 防模型在前后包了文字
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
     parsed = JSON.parse(cleaned) as JudgeResult;
   } catch (e) {
-    throw new Error(`parse_failed: ${(e as Error).message}; content=${content.slice(0, 100)}`);
+    throw new Error(`parse_failed: ${(e as Error).message}; content=${content.slice(0, 120)}`);
   }
-  if (typeof parsed.isCorrect !== "boolean") throw new Error("invalid_isCorrect");
+  if (typeof parsed.isCorrect !== "boolean") {
+    throw new Error(`invalid_isCorrect; got=${JSON.stringify(parsed.isCorrect)}`);
+  }
   if (!["high", "medium", "low"].includes(parsed.confidence)) {
     parsed.confidence = "medium";
   }
