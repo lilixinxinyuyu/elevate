@@ -44,7 +44,12 @@ export interface TodayRingsInput {
   challengeTodayCount: number;
   challengeTarget: number;
   focus:
-    | { kind: "boss_close"; unitName: string; gap: number; targetGate: number }
+    /**
+     * v0.31.58: boss_close 老逻辑（mastery 接近解锁阈值才显示）已删 —
+     * Selena 已经解锁所有 boss 后这环就消失。换成"今日闯关赢 ≥1 星"，
+     * 真正每天可做：随便挑一关再打，得 1 颗星即闭环。
+     */
+    | { kind: "boss_star_today"; starsToday: number; target: number }
     | { kind: "mistakes_due"; count: number }
     | { kind: "exam_countdown"; examName: string; days: number }
     | { kind: "all_done" }
@@ -332,19 +337,26 @@ function buildFocus(
   const amber1 = "#fcd34d";
   const amber2 = "#d97706";
   switch (f.kind) {
-    case "boss_close":
+    case "boss_star_today": {
+      // v0.31.58: 每日可做 — 闯关任意一关，拿 ≥1 星就闭环。
+      // 如果今日已 ≥target 星：done=true，进度满，celebratory 文案；
+      // 否则：去闯关赢星，进度 0（避免假光圈骗孩子）。
+      const done = f.starsToday >= f.target;
       return {
         id: "focus",
-        icon: "⚔️",
-        shortLabel: "解锁闯关",
-        longLabel: "解锁闯关",
-        progress: Math.max(0, Math.min(0.85, 1 - f.gap / f.targetGate)),
-        statusText: `${f.unitName} · 距开战差 ${f.gap}`,
+        icon: done ? "🏆" : "⚔️",
+        shortLabel: "闯关赢星",
+        longLabel: "闯关赢星",
+        progress: done ? 1 : 0,
+        statusText: done
+          ? `今日已得 ${f.starsToday} ⭐`
+          : `去闯关赢 ${f.target} 颗星`,
         to: phase2 ? "/math/big-problems" : "/math/skills",
         hue: amber1,
         hue2: amber2,
-        done: false,
+        done,
       };
+    }
     case "mistakes_due":
       return {
         id: "focus",

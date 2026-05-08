@@ -49,15 +49,17 @@ function* skillStems(skillId) {
   }
 }
 
-async function generateForSkill(skill) {
-  const existingStems = Array.from(skillStems(skill.skillId)).slice(0, 30);
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function generateForSkillOnce(skill, perSkill) {
+  const existingStems = Array.from(skillStems(skill.skillId)).slice(0, 25);
   const body = {
     subjectId: "math",
     unitId: skill.unitId,
     unitName: skill.unitName,
     skillId: skill.skillId,
     skillName: skill.skillName,
-    count: PER_SKILL,
+    count: perSkill,
     difficulty: "2-4",
     term: skill.term === "综合复习" ? undefined : skill.term,
     existingStems,
@@ -67,10 +69,36 @@ async function generateForSkill(skill) {
     headers: { "Content-Type": "application/json", Authorization: auth },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`gen failed ${skill.skillId}: ${r.status} ${await r.text()}`);
-  const j = await r.json();
+  const txt = await r.text();
+  if (!r.ok) {
+    const isBudget =
+      r.status === 502 &&
+      (txt.includes("budget") || txt.includes("timeout") || txt.includes("no_model_worked"));
+    const e = new Error(`gen ${r.status}: ${txt.slice(0, 200)}`);
+    e.isBudget = isBudget;
+    throw e;
+  }
+  const j = JSON.parse(txt);
   if (!j.ok || !Array.isArray(j.questions)) throw new Error(`gen empty ${skill.skillId}`);
   return j.questions;
+}
+
+// 动态退避：budget 触发就等 30s/90s/300s/600s/1200s，最多 5 次
+async function generateForSkill(skill) {
+  const waits = [30_000, 90_000, 300_000, 600_000, 1_200_000];
+  let lastErr;
+  for (let i = 0; i <= waits.length; i++) {
+    try {
+      return await generateForSkillOnce(skill, PER_SKILL);
+    } catch (e) {
+      lastErr = e;
+      if (!e.isBudget || i >= waits.length) throw e;
+      const w = waits[i];
+      process.stderr.write(`  budget/timeout, 等 ${w/1000}s 重试…\n`);
+      await sleep(w);
+    }
+  }
+  throw lastErr;
 }
 
 const accepted = [];

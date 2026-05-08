@@ -30,6 +30,7 @@ import type {
   Question,
 } from "../core/types";
 import { GameShell, type AttemptResult } from "../components/game/GameShell";
+import { BossAvatar } from "../components/boss/BossAvatar";
 import { sfx } from "../lib/sfx";
 import {
   bossForUnit,
@@ -466,7 +467,15 @@ function IntroScreen({ boss, unitId }: { boss: BossPersona; unitId: string }) {
   const unit = UNITS.find((u) => u.id === unitId);
   return (
     <div className="card-glow text-center py-12 animate-slide-up">
-      <div className="text-7xl animate-pop">{boss.emoji}</div>
+      <div className="inline-flex justify-center animate-pop">
+        <BossAvatar
+          unitId={boss.unitId}
+          emoji={boss.emoji}
+          size={144}
+          className="rounded-3xl shadow-glow"
+          alt={boss.name}
+        />
+      </div>
       <div className="font-display font-bold text-2xl text-amber-100 mt-3">
         {boss.name}
       </div>
@@ -487,7 +496,15 @@ function PhaseBreakScreen({ boss, phase }: { boss: BossPersona; phase: Phase }) 
   const m = messages[phase];
   return (
     <div className="card-glow text-center py-12 animate-slide-up bg-gradient-to-br from-amber-500/15 to-rose-500/10">
-      <div className="text-5xl">{boss.emoji}</div>
+      <div className="inline-flex justify-center">
+        <BossAvatar
+          unitId={boss.unitId}
+          emoji={boss.emoji}
+          size={88}
+          className="rounded-2xl"
+          alt={boss.name}
+        />
+      </div>
       <div className="font-display font-bold text-2xl mt-3 text-amber-100">{m.title}</div>
       <div className="text-sm text-slate-300 mt-2">{m.sub}</div>
       <div className="mt-3 text-xs text-amber-300">+1 ❤️ 心数恢复</div>

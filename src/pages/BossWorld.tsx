@@ -12,6 +12,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { db } from "../db/dexie";
+import { BossAvatar } from "../components/boss/BossAvatar";
 import { UNITS } from "../content/units";
 import { SKILLS } from "../content/skills";
 import {
@@ -238,7 +239,13 @@ function UnitCard({ u }: { u: UnitRow }) {
       className={`block rounded-2xl bg-gradient-to-br ${cls.from} ${cls.to} ${cls.border} border-2 p-4 hover:scale-[1.01] transition-transform`}
     >
       <div className="flex items-center gap-3">
-        <div className="text-3xl shrink-0">{boss.emoji}</div>
+        <BossAvatar
+          unitId={boss.unitId}
+          emoji={boss.emoji}
+          size={56}
+          className="shrink-0 rounded-xl"
+          alt={boss.name}
+        />
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             <div className={`font-display font-bold text-base ${cls.text}`}>
@@ -283,7 +290,13 @@ function FinalBossCard({
         className="block rounded-3xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-violet-500 p-6 text-white shadow-glow"
       >
         <div className="flex items-center gap-4">
-          <div className="text-5xl">{FINAL_BOSS.emoji}</div>
+          <BossAvatar
+            unitId={FINAL_BOSS.unitId}
+            emoji={FINAL_BOSS.emoji}
+            size={80}
+            className="rounded-2xl"
+            alt={FINAL_BOSS.name}
+          />
           <div className="flex-1">
             <div className="font-display font-bold text-xl">{FINAL_BOSS.name} · 已开启</div>
             <div className="text-sm opacity-90 mt-1">
@@ -300,7 +313,14 @@ function FinalBossCard({
   const need = finalUnlock.totalUnits - finalUnlock.metCount;
   return (
     <div className="rounded-3xl border-2 border-dashed border-rose-400/30 bg-ink-900/40 p-5 text-center">
-      <div className="text-4xl opacity-40">{FINAL_BOSS.emoji}</div>
+      <div className="opacity-40 inline-flex justify-center">
+        <BossAvatar
+          unitId={FINAL_BOSS.unitId}
+          emoji={FINAL_BOSS.emoji}
+          size={64}
+          alt={FINAL_BOSS.name}
+        />
+      </div>
       <div className="font-display font-bold text-base text-slate-300 mt-2">
         {FINAL_BOSS.name} · 锁定中
       </div>

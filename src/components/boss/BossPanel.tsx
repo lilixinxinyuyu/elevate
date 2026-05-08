@@ -4,6 +4,7 @@
 
 import type { BossPersona } from "../../core/bossPersonas";
 import { COLOR_CLASSES } from "../../core/bossPersonas";
+import { BossAvatar } from "./BossAvatar";
 
 export function BossPanel({
   boss,
@@ -21,8 +22,14 @@ export function BossPanel({
       className={`rounded-2xl border-2 bg-gradient-to-br ${cls.from} ${cls.to} ${cls.border} p-3 ${enraged ? "animate-pulse-soft" : ""}`}
     >
       <div className="flex items-center gap-3">
-        <div className={`text-4xl shrink-0 ${enraged ? "animate-shake" : ""}`}>
-          {boss.emoji}
+        <div className={`shrink-0 ${enraged ? "animate-shake" : ""}`}>
+          <BossAvatar
+            unitId={boss.unitId}
+            emoji={boss.emoji}
+            size={64}
+            className="rounded-xl"
+            alt={boss.name}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <div className={`font-display font-bold text-lg ${cls.text} truncate`}>

@@ -15,6 +15,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { UNITS } from "../content/units";
 import { UNIT_BOSSES, FINAL_BOSS } from "../core/bossPersonas";
+import { BossAvatar } from "./boss/BossAvatar";
 import {
   canChallengeFinal,
   loadAllBossStates,
@@ -112,10 +113,16 @@ export function BossStarCard({ studentId }: { studentId: string }) {
             <div
               key={u.id}
               className={`flex items-center gap-2 ${
-                untouched ? "text-slate-500" : "text-slate-200"
+                untouched ? "text-slate-500 grayscale opacity-70" : "text-slate-200"
               }`}
             >
-              <span className="text-base shrink-0">{persona?.emoji ?? "👹"}</span>
+              <BossAvatar
+                unitId={u.id}
+                emoji={persona?.emoji ?? "👹"}
+                size={28}
+                className="shrink-0 rounded-md"
+                alt={persona?.name ?? u.name}
+              />
               <span className="flex-1 truncate">{persona?.name ?? u.name}</span>
               <StarsDisplay stars={stars} max={4} perfect={perfect} untouched={untouched} />
             </div>
@@ -124,10 +131,16 @@ export function BossStarCard({ studentId }: { studentId: string }) {
         {/* 期末大魔王 */}
         <div
           className={`flex items-center gap-2 sm:col-span-2 mt-1 pt-1.5 border-t border-amber-400/20 ${
-            data.unlock.unlocked ? "text-amber-200" : "text-slate-500"
+            data.unlock.unlocked ? "text-amber-200" : "text-slate-500 grayscale opacity-70"
           }`}
         >
-          <span className="text-base shrink-0">{FINAL_BOSS.emoji}</span>
+          <BossAvatar
+            unitId={FINAL_BOSS.unitId}
+            emoji={FINAL_BOSS.emoji}
+            size={32}
+            className="shrink-0 rounded-md"
+            alt={FINAL_BOSS.name}
+          />
           <span className="flex-1 truncate font-bold">{FINAL_BOSS.name}</span>
           {data.unlock.unlocked ? (
             <StarsDisplay

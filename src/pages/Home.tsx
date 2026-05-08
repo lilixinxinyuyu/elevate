@@ -8,6 +8,7 @@ import { MascotProfile } from "../components/MascotProfile";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { isPhase2Live } from "../lib/featureFlags";
+import { starsFromAccuracy } from "../lib/bossBattleState";
 import {
   checkPoolHealth,
   computeCurrentRating,
@@ -49,6 +50,8 @@ function buildTodayRingsInput(args: {
   challengeTarget: number;
   /** v0.31.29：今日闪电口算 session 数（≥1 算闭环） */
   fluencyTodayCount: number;
+  /** v0.31.58：今日闯关获星总数（boss session 完成 → starsFromAccuracy 之和） */
+  todayBossStars: number;
   mastery: { skillId: string; score: number }[];
   mistakes: { resolved: boolean; nextReviewAt: number; questionId: string }[];
   streak: number;
@@ -88,17 +91,17 @@ function buildTodayRingsInput(args: {
   const exam = currentExam();
   const examDays = daysUntil(exam.date);
 
-  if (phase2 && closestBoss && (G4B_GATE - closestBoss.avg) <= 15) {
-    focus = {
-      kind: "boss_close",
-      unitName: closestBoss.unitName,
-      gap: G4B_GATE - closestBoss.avg,
-      targetGate: G4B_GATE,
-    };
-  } else if (dueMistakes > 0) {
+  // v0.31.58: 优先级重排
+  //   1. 错题到期（必须做的事，最紧迫）
+  //   2. 考试 ≤14 天倒计时（高紧迫感）
+  //   3. Phase 2: 闯关赢星（每天必做，常态）
+  //   4. 全闭/idle 兜底
+  if (dueMistakes > 0) {
     focus = { kind: "mistakes_due", count: dueMistakes };
   } else if (examDays >= 0 && examDays <= 14) {
     focus = { kind: "exam_countdown", examName: exam.name, days: examDays };
+  } else if (phase2) {
+    focus = { kind: "boss_star_today", starsToday: args.todayBossStars, target: 1 };
   } else if (challengeDone && fluencyTodayCount >= 1) {
     focus = { kind: "all_done" };
   } else {
@@ -155,6 +158,26 @@ export function HomePage() {
       if (a.createdAt >= startMs && a.sessionId) sessionsToday.add(a.sessionId);
     }
     return sessionsToday.size;
+  }, [student?.id]);
+
+  // v0.31.58: 今日闯关获星总数 — 扫今日 mode=big_problems sessions 的 summary，
+  // 用 starsFromAccuracy 推星数。focus ring "闯关赢星" 闭环判定用这个。
+  const todayBossStars = useLiveQuery(async () => {
+    if (!student) return 0;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startMs = startOfToday.getTime();
+    const sessions = await db.sessions
+      .where({ studentId: student.id })
+      .filter((s) => s.mode === "big_problems" && (s.finishedAt ?? 0) >= startMs)
+      .toArray();
+    let total = 0;
+    for (const s of sessions) {
+      const correct = s.summary?.correct ?? 0;
+      const total_ = s.summary?.total ?? 0;
+      total += starsFromAccuracy(correct, total_);
+    }
+    return total;
   }, [student?.id]);
 
   const [rating, setRating] = useState<RatingResult | null>(null);
@@ -338,6 +361,7 @@ export function HomePage() {
       {isPhase2Live() ? (
         <TodayRings {...buildTodayRingsInput({
           fluencyTodayCount: fluencyTodayCount ?? 0,
+          todayBossStars: todayBossStars ?? 0,
           todayCount: todayAttempts.length,
           challengeTarget: 15,
           mastery: mastery ?? [],
