@@ -3,6 +3,92 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.42 — 2026-05-08 · 字词大冒险 + 词汇大冒险（Canvas 手写 + 赛季 + 今日 3 环）
+
+爸爸 6 项硬要求：
+1. 语文写字练习根本不是写字 — IME 拼音直接出字 → **必须用 canvas 手绘**，提交给 qwen 视觉模型判定
+2. 上下册切换应该跟数学一致（**student.currentTerm 赛季制**），不是局部 toggle
+3. 切换学期后只显示当前赛季的内容（不混合）
+4. 字词练习要有游戏化主菜单名字（不是"写字练习"那么单调）
+5. 今日挑战中文/英文都要做（**现在就做**，不要拖）
+6. 整体游戏化设计现在就到位
+
+### 新增底层
+
+**`functions/api/tutor/judge-handwriting.ts`** — qwen-vl 视觉判定端点
+- POST { targetChar, pinyin?, imageBase64 } → { isCorrect, confidence, observed?, comment? }
+- 优先 token-plan 的 `qwen3-vl-plus`，fallback `qwen-vl-max-latest`
+- 系统 prompt 写明 "4 年级宽松友好标准 — 字形结构正确即对，即使不工整"
+
+**`src/components/HandwriteCanvas.tsx`** — 通用画板
+- pointer events (touch + mouse + pen 都支持)
+- 米字格辅助线（粉色 dashed cross + diagonals）
+- 笔画数组（独立笔），支持"撤回上一笔" / "清空" / "提交手写"
+- exportBase64() 给 LLM 加白底（PNG 透明对视觉模型不友好）
+
+**`src/lib/handwritingJudge.ts`** — 客户端 judgeHandwriting() 包装
+
+**`src/components/TermSwitcher.tsx`** — 统一学期切换组件
+- 写 student.currentTerm（赛季制）
+- 跨 chinese/english/math 通用
+- termToSemester(t): "上册" → "G4A", "下册" → "G4B"
+
+**`src/components/SubjectTodayRings.tsx`** — 把 math 的 TodayRings 抽成通用版
+- 保留 Apple Watch 同心 3 环视觉 + sparkle 庆祝
+- 接受 RingSpec[] 由调用方自定义
+
+### 字词大冒险（Chinese）
+
+`/chinese/char-practice` 重写（保留路由 + 别名兼容）：
+
+**3 模式**：
+- ✍️ **手写挑战**: HandwriteCanvas → judgeHandwriting → AI 视觉判定
+  - 答对 +12 XP（base 8 + 手写 bonus 4），LLM 还会给 30-60 字鼓励
+  - 答错显示 "AI 识别成了 X" + 评语
+- 🎯 **辨字选择**: 4 选项中挑（同 g4_cn.html 公式）
+- ⌨️ **打字回忆**: input 框（标有"输入法会自动出字，仅作辅助"警告 — 跟手写挑战的真笔画对比）
+
+**赛季制**：
+- 读 student.currentTerm，filter G4A/G4B
+- TermSwitcher 切换写回 db
+- 上下册不混合
+
+`ChineseHome.tsx` 同步：TermSwitcher + SubjectTodayRings(字词大冒险/错题复活/模拟测试) + "字词大冒险" 卡片。
+
+### 词汇大冒险（English）
+
+`/english/vocab` 加一个 **⚡ 闪电冲刺** 模式（4 种玩法）：
+- 60 秒内尽量多答；倒计时显示
+- 单题 5 XP（base 5 而非 8，但题量大）+ 连击 bonus
+- 不计入今日目标（防一次冲刺 60s 把 daily 用光）
+- 完赛弹结果板：答对 / 答错 / 正确率
+
+`EnglishHome.tsx` 同步：
+- TermSwitcher
+- SubjectTodayRings(词汇大冒险/闪电冲刺/复习薄弱)
+- "词汇大冒险 · 4 种玩法" 入口卡
+
+赛季制：读 student.currentTerm 决定显示 G4A 还是 G4B，与数学一致。
+
+### 视觉判定 prompt 设计
+
+system prompt: "你是温柔耐心的小学语文老师助手「小进」。学生在画板上手写一个汉字，你需要看图判断她写的是不是要求的目标字。**判断标准（4 年级宽松友好）**：字形结构正确算对（即使笔画不工整）；完全不同的字算错；写到一半空白看着像就 medium 信心算对鼓励完成。"
+
+return JSON：`{ isCorrect, confidence: high/medium/low, observed: 你看到的字, comment: 30-60 字鼓励或纠正话 }`
+
+### 改动文件
+- 新增：`functions/api/tutor/judge-handwriting.ts`、`src/components/HandwriteCanvas.tsx`、`src/components/TermSwitcher.tsx`、`src/components/SubjectTodayRings.tsx`、`src/lib/handwritingJudge.ts`
+- 重写：`src/pages/chinese/CharPractice.tsx`、`src/pages/english/VocabPractice.tsx`、`src/pages/english/EnglishHome.tsx`
+- 修改：`src/pages/chinese/ChineseHome.tsx`（加 TermSwitcher + Rings + 字词大冒险卡）
+
+### 验证
+- TypeScript: 0 error
+- 测试: 139 / 139 通过
+- 视觉:
+  - Chinese home 显示 TermSwitcher + 今日打卡 3 环 + 字词大冒险卡
+  - Char practice 显示 🗡️ 字词大冒险 + 3 模式 tab + canvas 米字格画板 + 撤回/清空/提交按钮
+  - English home 显示 banner 含"当前赛季: 下册（112 词）" + TermSwitcher + 3 环 + 词汇大冒险 4 玩法卡
+
 ## v0.31.41 — 2026-05-08 · 不只是复刻 — 5-tier 等级 + SM-2 间隔重现 + 每日目标
 
 爸爸："已掌握的概念并没有问题，但记住我们要做得比老系统更好。多花精力研究并深度思考"

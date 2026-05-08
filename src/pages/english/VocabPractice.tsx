@@ -1,20 +1,20 @@
 /**
- * 英语 G4 单词记忆 · 练习页 (v0.31.41 — mastery tier + 间隔重现)
+ * 词汇大冒险 — 英语单词主战场（v0.31.42）
  *
- * 比 v0.31.40 升级：
- *   - 5 tier 等级 + tier 分布条
- *   - SM-2 间隔重现 + 答错强化
- *   - 今日目标 + streak
- *   - 老口径"已掌握/薄弱/未学习"仍保留兼容
+ * 路由：/english/vocab
  *
- * 3 模式（沿用）：
- *   1. 看单词 → 选中文 (English + 🔊 → 4 个中文)
- *   2. 看中文 → 选单词 (中文 → 4 个英文)
- *   3. 🔊 听读音 → 选单词 (TTS → 4 个英文)
+ * 升级（v0.31.42）：
+ *   1. 上下册切换 → student.currentTerm（赛季制；与数学一致）
+ *   2. 游戏化命名 "词汇大冒险" 而非纯"单词"
+ *   3. 4 模式：
+ *      - 看单词 → 选中文（含 🔊）
+ *      - 看中文 → 选单词
+ *      - 🔊 听读音 → 选单词
+ *      - ⚡ 闪电冲刺：60 秒尽量多答（沿用数学闪电口算节奏）
  */
 
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../../db/dexie";
 import { G4_WORDS, type G4Word } from "../../subjects/english/wordList";
 import {
@@ -37,11 +37,13 @@ import {
 } from "../../lib/masteryTier";
 import { loadDaily, tickDaily, type DailyState } from "../../lib/dailyTarget";
 import { MasteryTierBar, TierChip } from "../../components/MasteryTierBar";
+import { TermSwitcher, termToSemester } from "../../components/TermSwitcher";
+import type { Term } from "../../core/types";
 
-type Book = "G4A" | "G4B";
-type Mode = "word2cn" | "cn2word" | "listen";
+type Mode = "word2cn" | "cn2word" | "listen" | "sprint";
 const RECENT_WINDOW = 5;
 const REINFORCE_WINDOW = 2;
+const SPRINT_DURATION_SECONDS = 60;
 
 interface RoundResult {
   word: string;
@@ -56,7 +58,7 @@ export function VocabPracticePage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [progress, setProgress] = useState<VocabProgress>({});
   const [daily, setDaily] = useState<DailyState | null>(null);
-  const [book, setBook] = useState<Book>("G4A");
+  const [currentTerm, setCurrentTerm] = useState<Term>("下册");
   const [mode, setMode] = useState<Mode>("word2cn");
   const [current, setCurrent] = useState<G4Word | null>(null);
   const [options, setOptions] = useState<G4Word[]>([]);
@@ -71,10 +73,18 @@ export function VocabPracticePage() {
   const [floatingXp, setFloatingXp] = useState<{ amount: number; key: number } | null>(null);
   const [dailyCelebration, setDailyCelebration] = useState<{ streak: number } | null>(null);
   const [levelUpToast, setLevelUpToast] = useState<{ word: string; from: Level; to: Level } | null>(null);
+  // 闪电冲刺状态
+  const [sprintState, setSprintState] = useState<
+    | { stage: "idle" }
+    | { stage: "running"; secondsLeft: number; correct: number; wrong: number }
+    | { stage: "done"; correct: number; wrong: number }
+  >({ stage: "idle" });
+  const sprintTimerRef = useRef<number | null>(null);
 
+  const semester = termToSemester(currentTerm);
   const pool: G4Word[] = useMemo(
-    () => G4_WORDS.filter((w) => w.semester === book),
-    [book],
+    () => G4_WORDS.filter((w) => w.semester === semester),
+    [semester],
   );
 
   useEffect(() => {
@@ -88,6 +98,7 @@ export function VocabPracticePage() {
       }
       if (cancelled) return;
       setStudentId(s.id);
+      setCurrentTerm((s.currentTerm as Term) ?? "下册");
       const migr = await migrateHistoricalVocabProgress(s.id);
       if (migr.imported > 0 || migr.upgraded > 0) {
         setMigratedToast(`已迁移 ${migr.imported} 词 + 升级 ${migr.upgraded} 词到 5-tier 等级`);
@@ -112,8 +123,13 @@ export function VocabPracticePage() {
     setReinforceQueue([]);
     setFeedback(null);
     setCombo(0);
+    setSprintState({ stage: "idle" });
+    if (sprintTimerRef.current) {
+      window.clearInterval(sprintTimerRef.current);
+      sprintTimerRef.current = null;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book, mode, loading]);
+  }, [currentTerm, mode, loading]);
 
   useEffect(() => {
     if (mode !== "listen" || !current) return;
@@ -134,6 +150,26 @@ export function VocabPracticePage() {
   function flashXp(amount: number) {
     setFloatingXp({ amount, key: Date.now() });
     setTimeout(() => setFloatingXp(null), 900);
+  }
+
+  function startSprint() {
+    if (sprintTimerRef.current) window.clearInterval(sprintTimerRef.current);
+    setSprintState({ stage: "running", secondsLeft: SPRINT_DURATION_SECONDS, correct: 0, wrong: 0 });
+    pickNew(progress, [], []);
+    setFeedback(null);
+    sprintTimerRef.current = window.setInterval(() => {
+      setSprintState((s) => {
+        if (s.stage !== "running") return s;
+        if (s.secondsLeft <= 1) {
+          if (sprintTimerRef.current) {
+            window.clearInterval(sprintTimerRef.current);
+            sprintTimerRef.current = null;
+          }
+          return { stage: "done", correct: s.correct, wrong: s.wrong };
+        }
+        return { ...s, secondsLeft: s.secondsLeft - 1 };
+      });
+    }, 1000);
   }
 
   async function recordResult(isCorrect: boolean, pick: string) {
@@ -165,7 +201,7 @@ export function VocabPracticePage() {
     }
 
     if (isCorrect) {
-      const base = 8;
+      const base = mode === "sprint" ? 5 : 8; // sprint 单题分少但题量大
       const comboBonus = Math.min(combo, 9) * 2;
       const tierBonus = nextStat.level > oldStat.level ? 5 : 0;
       const earned = base + comboBonus + tierBonus;
@@ -190,7 +226,8 @@ export function VocabPracticePage() {
       });
     }
 
-    if (studentId && daily) {
+    if (studentId && daily && mode !== "sprint") {
+      // sprint 模式不计入今日字次（避免一次 60s 把 daily 用光）
       const { next: dNext, justCompleted } = await tickDaily("english_vocab", studentId, daily);
       setDaily(dNext);
       if (justCompleted) {
@@ -199,7 +236,15 @@ export function VocabPracticePage() {
       }
     }
 
-    if (isCorrect) {
+    if (mode === "sprint") {
+      // sprint：立刻进下一题，更新 score
+      setSprintState((s) =>
+        s.stage === "running"
+          ? { ...s, correct: s.correct + (isCorrect ? 1 : 0), wrong: s.wrong + (isCorrect ? 0 : 1) }
+          : s,
+      );
+      setTimeout(() => advance(nextProgress), 600);
+    } else if (isCorrect) {
       setTimeout(() => advance(nextProgress), 1100);
     }
   }
@@ -222,10 +267,10 @@ export function VocabPracticePage() {
       <header className="flex items-center justify-between gap-2">
         <div>
           <div className="font-display font-bold text-2xl text-cyan-200">
-            英语单词
+            🌍 词汇大冒险
           </div>
           <div className="text-xs text-slate-400 mt-0.5">
-            外研版 G4 上下册 · 5-tier 等级 · 间隔重现 · 错过的会强化
+            5-tier 等级 · 间隔重现 · 4 种玩法
           </div>
         </div>
         <Link
@@ -242,43 +287,57 @@ export function VocabPracticePage() {
         </div>
       )}
 
-      <div className="flex gap-2">
-        <BookTab active={book === "G4A"} onClick={() => setBook("G4A")} count={G4_WORDS.filter((w) => w.semester === "G4A").length}>
-          四年级上册
-        </BookTab>
-        <BookTab active={book === "G4B"} onClick={() => setBook("G4B")} count={G4_WORDS.filter((w) => w.semester === "G4B").length}>
-          四年级下册
-        </BookTab>
+      <TermSwitcher currentTerm={currentTerm} onChange={(t) => setCurrentTerm(t)} />
+
+      {/* 4 模式 */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <ModeTab active={mode === "word2cn"} onClick={() => setMode("word2cn")}>看词 → 中文</ModeTab>
+        <ModeTab active={mode === "cn2word"} onClick={() => setMode("cn2word")}>看中文 → 词</ModeTab>
+        <ModeTab active={mode === "listen"} onClick={() => setMode("listen")}>🔊 听 → 词</ModeTab>
+        <ModeTab active={mode === "sprint"} onClick={() => setMode("sprint")}>⚡ 闪电冲刺</ModeTab>
       </div>
 
-      <div className="flex gap-2 text-xs">
-        <ModeTab active={mode === "word2cn"} onClick={() => setMode("word2cn")}>
-          看单词 → 选中文
-        </ModeTab>
-        <ModeTab active={mode === "cn2word"} onClick={() => setMode("cn2word")}>
-          看中文 → 选单词
-        </ModeTab>
-        <ModeTab active={mode === "listen"} onClick={() => setMode("listen")}>
-          🔊 听读音 → 选单词
-        </ModeTab>
-      </div>
-
-      {/* 5-tier 分布条 */}
+      {/* 5-tier 分布 */}
       <div className="card-glow space-y-3">
         <div className="text-xs text-slate-300 font-semibold">
-          本册掌握分布（{book === "G4A" ? "上册" : "下册"} {tierDist.total} 词）
+          本赛季掌握分布（{semester === "G4A" ? "上册" : "下册"} {tierDist.total} 词）
         </div>
         <MasteryTierBar dist={tierDist} />
       </div>
 
-      <StatsBar stats={oldStats} combo={combo} sessionXp={sessionXp} daily={daily} />
+      <StatsBar
+        stats={oldStats}
+        combo={combo}
+        sessionXp={sessionXp}
+        daily={daily}
+        sprintInfo={
+          sprintState.stage === "running"
+            ? { secondsLeft: sprintState.secondsLeft, correct: sprintState.correct, wrong: sprintState.wrong }
+            : null
+        }
+      />
 
-      {!current ? (
+      {mode === "sprint" ? (
+        <SprintPanel
+          state={sprintState}
+          word={current}
+          options={options}
+          feedback={feedback}
+          stat={current ? progress[normWord(current.w)] : undefined}
+          onStart={startSprint}
+          onPick={(opt) => {
+            if (sprintState.stage !== "running" || !current) return;
+            const isCorrect = opt === current.c;
+            void recordResult(isCorrect, opt);
+          }}
+          onRestart={() => {
+            setSprintState({ stage: "idle" });
+          }}
+        />
+      ) : !current ? (
         <div className="card text-center text-slate-300 py-8">
           <div className="text-4xl mb-2">🎉</div>
-          <div className="font-display text-lg text-emerald-200">
-            这一轮所有词都出过了
-          </div>
+          <div className="font-display text-lg text-emerald-200">这一轮所有词都出过了</div>
           <button
             type="button"
             className="btn-primary mt-4"
@@ -324,7 +383,7 @@ export function VocabPracticePage() {
                   <span className="ml-2"><TierChip level={h.newLevel} /></span>
                 </span>
                 <span className={h.isCorrect ? "text-emerald-300" : "text-rose-300"}>
-                  {h.isCorrect ? "✓" : `✗ ${h.userPick}`}
+                  {h.isCorrect ? "✓" : `✗`}
                 </span>
               </li>
             ))}
@@ -371,33 +430,6 @@ export function VocabPracticePage() {
   );
 }
 
-function BookTab({
-  active,
-  onClick,
-  count,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  count: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-        active
-          ? "bg-cyan-500/20 text-cyan-100 border border-cyan-400/40"
-          : "bg-ink-900/40 text-slate-400 border border-ink-700/60 hover:bg-ink-700/40"
-      }`}
-    >
-      {children}
-      <span className="ml-2 text-[10px] opacity-70">{count} 词</span>
-    </button>
-  );
-}
-
 function ModeTab({
   active,
   onClick,
@@ -411,7 +443,7 @@ function ModeTab({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 px-2 py-2 rounded-lg font-semibold transition-colors ${
+      className={`px-2 py-2 rounded-lg font-semibold transition-colors ${
         active
           ? "bg-violet-500/20 text-violet-100 border border-violet-400/40"
           : "bg-ink-900/40 text-slate-400 border border-ink-700/60 hover:bg-ink-700/40"
@@ -427,11 +459,13 @@ function StatsBar({
   combo,
   sessionXp,
   daily,
+  sprintInfo,
 }: {
   stats: OldStyleVocabStats;
   combo: number;
   sessionXp: number;
   daily: DailyState | null;
+  sprintInfo: { secondsLeft: number; correct: number; wrong: number } | null;
 }) {
   const dailyPct = daily ? Math.min(100, (daily.todayCount / daily.target) * 100) : 0;
   return (
@@ -454,30 +488,35 @@ function StatsBar({
         </div>
       </div>
 
-      {daily && (
+      {sprintInfo ? (
+        <div className="border-t border-ink-700/40 pt-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-cyan-200 font-display font-bold">⚡ 闪电冲刺</span>
+            <span className="font-display font-bold text-amber-300 text-lg">
+              {sprintInfo.secondsLeft}s
+            </span>
+          </div>
+          <div className="text-[10px] text-slate-400">
+            ✓ {sprintInfo.correct} · ✗ {sprintInfo.wrong}
+          </div>
+        </div>
+      ) : daily ? (
         <div className="border-t border-ink-700/40 pt-2 text-xs">
           <div className="flex items-center justify-between mb-1">
             <span className="text-slate-300">
               今日目标{" "}
-              <span className="font-display font-bold text-cyan-200">
-                {daily.todayCount}
-              </span>
+              <span className="font-display font-bold text-cyan-200">{daily.todayCount}</span>
               <span className="text-slate-400"> / {daily.target} 词次</span>
             </span>
             {daily.streak > 0 && (
-              <span className="text-rose-300">
-                🔥 连续 {daily.streak} 天
-              </span>
+              <span className="text-rose-300">🔥 连续 {daily.streak} 天</span>
             )}
           </div>
           <div className="h-1.5 rounded-full bg-ink-700/60 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-cyan-400 to-blue-400 transition-[width] duration-300"
-              style={{ width: `${dailyPct}%` }}
-            />
+            <div className="h-full bg-gradient-to-r from-cyan-400 to-blue-400 transition-[width] duration-300" style={{ width: `${dailyPct}%` }} />
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="flex items-center justify-between text-xs border-t border-ink-700/40 pt-2">
         <div className="flex items-center gap-2">
@@ -609,18 +648,12 @@ function QuestionPanel({
         <>
           <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
             <div className="font-semibold mb-1">再来一次 — 正确答案：</div>
-            <div className="text-center font-display text-2xl text-amber-200 my-1">
-              {correctValue}
-            </div>
+            <div className="text-center font-display text-2xl text-amber-200 my-1">{correctValue}</div>
             <div className="text-xs text-rose-200/80">
-              {mode === "word2cn"
-                ? `${word.w} = ${word.c}`
-                : `${word.c} = ${word.w}`}
+              {mode === "word2cn" ? `${word.w} = ${word.c}` : `${word.c} = ${word.w}`}
             </div>
           </div>
-          <button type="button" onClick={onContinueWrong} className="btn-primary w-full">
-            下一词 →
-          </button>
+          <button type="button" onClick={onContinueWrong} className="btn-primary w-full">下一词 →</button>
         </>
       )}
       {feedback && feedback.isCorrect && (
@@ -628,6 +661,115 @@ function QuestionPanel({
           ✓ 太棒了！
         </div>
       )}
+    </div>
+  );
+}
+
+function SprintPanel({
+  state,
+  word,
+  options,
+  feedback,
+  stat,
+  onStart,
+  onPick,
+  onRestart,
+}: {
+  state:
+    | { stage: "idle" }
+    | { stage: "running"; secondsLeft: number; correct: number; wrong: number }
+    | { stage: "done"; correct: number; wrong: number };
+  word: G4Word | null;
+  options: G4Word[];
+  feedback: { isCorrect: boolean; pick: string } | null;
+  stat: MasteryStat | undefined;
+  onStart: () => void;
+  onPick: (opt: string) => void;
+  onRestart: () => void;
+}) {
+  if (state.stage === "idle") {
+    return (
+      <div className="card-glow text-center py-6 space-y-3">
+        <div className="text-5xl">⚡</div>
+        <div className="font-display font-bold text-xl text-cyan-200">闪电冲刺</div>
+        <div className="text-sm text-slate-300">
+          60 秒尽量多答对题 · 看英文选中文
+          <br />
+          每对 +5 XP，连击 × 还有连击奖励
+        </div>
+        <button type="button" onClick={onStart} className="btn-primary inline-flex">
+          ▶ 开始
+        </button>
+      </div>
+    );
+  }
+  if (state.stage === "done") {
+    const total = state.correct + state.wrong;
+    const acc = total === 0 ? 0 : Math.round((state.correct / total) * 100);
+    return (
+      <div className="card-glow text-center py-6 space-y-3">
+        <div className="text-5xl">🏁</div>
+        <div className="font-display font-bold text-xl text-cyan-200">冲刺结束</div>
+        <div className="grid grid-cols-3 gap-2 text-center max-w-sm mx-auto">
+          <div>
+            <div className="text-[10px] text-slate-400">答对</div>
+            <div className="font-display font-bold text-2xl text-emerald-300">{state.correct}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400">答错</div>
+            <div className="font-display font-bold text-2xl text-rose-300">{state.wrong}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400">正确率</div>
+            <div className="font-display font-bold text-2xl text-amber-300">{acc}%</div>
+          </div>
+        </div>
+        <button type="button" onClick={onRestart} className="btn-primary inline-flex">
+          🔄 再来一轮
+        </button>
+      </div>
+    );
+  }
+  // running
+  if (!word) return <div className="card text-slate-400">加载中…</div>;
+  const level: Level = (stat?.level ?? 0) as Level;
+  return (
+    <div className="card-glow space-y-3">
+      <div className="flex justify-between items-center text-xs">
+        <TierChip level={level} />
+        <div className="font-display font-bold text-amber-300 text-base tabular-nums">
+          ⏱ {state.secondsLeft}s
+        </div>
+      </div>
+      <div className="rounded-2xl border border-cyan-400/30 bg-cyan-500/5 p-4 text-center">
+        <span className="font-display text-2xl text-cyan-100">{word.w}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((o, idx) => {
+          const showRight = !!feedback && o.c === word.c;
+          const showWrong = !!feedback && !feedback.isCorrect && o.c === feedback.pick;
+          return (
+            <button
+              key={`${o.c}-${idx}`}
+              type="button"
+              onClick={() => onPick(o.c)}
+              disabled={!!feedback}
+              className={`p-3 rounded-2xl border-2 text-left transition-colors ${
+                showRight
+                  ? "bg-emerald-500/30 border-emerald-400 text-emerald-100"
+                  : showWrong
+                    ? "bg-rose-500/30 border-rose-400 text-rose-100"
+                    : "bg-ink-900/60 border-ink-600 hover:bg-ink-700/60 hover:border-violet-400 text-slate-100"
+              }`}
+            >
+              <span className="text-xs text-slate-400 mr-1.5">
+                {String.fromCharCode(65 + idx)}.
+              </span>
+              <span className="text-base">{o.c}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

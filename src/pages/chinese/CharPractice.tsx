@@ -1,13 +1,17 @@
 /**
- * 语文写字表 500 字 · 练习页（v0.31.41 — mastery tier + 间隔重现）
+ * 字词大冒险 — 语文写字 / 辨字主战场（v0.31.42）
  *
- * 比 v0.31.40 升级：
- *   - 5 tier 分级（新/初识/在学/熟练/掌握）+ tier 分布条
- *   - SM-2 间隔重现（答对的字按 1m→1h→1d→3d→14d 周期）
- *   - 答错强化（错完那字下 2 题内必现）
- *   - 今日目标 + 连续打卡 streak
- *   - 老口径统计仍保留（总练习/正确率/错字总数）
- *   - 写字模式 + 辨字选择模式
+ * 路由：/chinese/char-quest（保留 /chinese/char-practice 别名兼容）
+ *
+ * 三大改进（v0.31.42）：
+ *   1. 写字模式真用 Canvas + qwen-vl 视觉判定（修 v0.31.41 IME 拼音输入直接出字的 bug）
+ *   2. 上下册切换 = student.currentTerm（赛季制；与数学一致）
+ *   3. 游戏化命名：字词大冒险（不再叫"写字练习"）
+ *
+ * 三种模式：
+ *   ✍️ 手写挑战：canvas 画 → LLM 视觉判
+ *   🎯 辨字选择：4 选项中挑正确字
+ *   👀 看拼音猜字：input 框（输入法不灵的字 / 没法画 canvas 的电脑端 fallback）
  */
 
 import { Link } from "react-router-dom";
@@ -39,12 +43,15 @@ import {
   tickDaily,
   type DailyState,
 } from "../../lib/dailyTarget";
+import { judgeHandwriting } from "../../lib/handwritingJudge";
 import { MasteryTierBar, TierChip } from "../../components/MasteryTierBar";
+import { HandwriteCanvas } from "../../components/HandwriteCanvas";
+import { TermSwitcher, termToSemester } from "../../components/TermSwitcher";
+import type { Term } from "../../core/types";
 
-type Book = "G4A" | "G4B";
-type Mode = "write" | "choose";
+type Mode = "write" | "choose" | "type";
 const RECENT_WINDOW = 5;
-const REINFORCE_WINDOW = 2; // 错完后下 2 题内强化
+const REINFORCE_WINDOW = 2;
 
 interface RoundResult {
   word: string;
@@ -59,12 +66,19 @@ export function CharPracticePage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [progress, setProgress] = useState<CharProgress>({});
   const [daily, setDaily] = useState<DailyState | null>(null);
-  const [book, setBook] = useState<Book>("G4B");
+  const [currentTerm, setCurrentTerm] = useState<Term>("下册");
   const [mode, setMode] = useState<Mode>("write");
   const [current, setCurrent] = useState<G4Char | null>(null);
   const [chooseQ, setChooseQ] = useState<ReturnType<typeof generateChooseQuestion> | null>(null);
-  const [input, setInput] = useState("");
-  const [feedback, setFeedback] = useState<{ isCorrect: boolean; userInput: string } | null>(null);
+  const [typeInput, setTypeInput] = useState("");
+  const [feedback, setFeedback] = useState<{
+    isCorrect: boolean;
+    userInput: string;
+    comment?: string;
+    confidence?: "high" | "medium" | "low";
+    observed?: string;
+  } | null>(null);
+  const [judgingCanvas, setJudgingCanvas] = useState(false);
   const [recentWords, setRecentWords] = useState<string[]>([]);
   const [reinforceQueue, setReinforceQueue] = useState<{ word: string; remaining: number }[]>([]);
   const [history, setHistory] = useState<RoundResult[]>([]);
@@ -75,8 +89,11 @@ export function CharPracticePage() {
   const [floatingXp, setFloatingXp] = useState<{ amount: number; key: number } | null>(null);
   const [dailyCelebration, setDailyCelebration] = useState<{ streak: number } | null>(null);
   const [levelUpToast, setLevelUpToast] = useState<{ word: string; from: Level; to: Level } | null>(null);
+  // 用于强制重置 canvas（提交后下一字时清空）
+  const [canvasResetKey, setCanvasResetKey] = useState(0);
 
-  const pool: G4Char[] = book === "G4A" ? G4A_CHARS : G4B_CHARS;
+  const semester = termToSemester(currentTerm);
+  const pool: G4Char[] = semester === "G4A" ? G4A_CHARS : G4B_CHARS;
   const fullPool: G4Char[] = useMemo(() => [...G4A_CHARS, ...G4B_CHARS], []);
 
   useEffect(() => {
@@ -90,6 +107,7 @@ export function CharPracticePage() {
       }
       if (cancelled) return;
       setStudentId(s.id);
+      setCurrentTerm((s.currentTerm as Term) ?? "下册");
       const migr = await migrateHistoricalCharProgress(s.id);
       if (migr.imported > 0 || migr.upgraded > 0) {
         setMigratedToast(
@@ -115,10 +133,11 @@ export function CharPracticePage() {
     setRecentWords([]);
     setReinforceQueue([]);
     setFeedback(null);
-    setInput("");
+    setTypeInput("");
     setCombo(0);
+    setCanvasResetKey((k) => k + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book, mode, loading]);
+  }, [currentTerm, mode, loading]);
 
   function pickNew(curProgress: CharProgress, recent: string[] = [], reinforceWords: string[] = []) {
     const next = pickNextChar(pool, curProgress, recent, reinforceWords);
@@ -135,15 +154,18 @@ export function CharPracticePage() {
     setTimeout(() => setFloatingXp(null), 900);
   }
 
-  async function recordResult(isCorrect: boolean, userInput: string) {
+  async function recordResult(
+    isCorrect: boolean,
+    userInput: string,
+    extras?: { comment?: string; confidence?: "high"|"medium"|"low"; observed?: string },
+  ) {
     if (!current) return;
-    setFeedback({ isCorrect, userInput });
+    setFeedback({ isCorrect, userInput, ...extras });
     const oldStat = progress[current.word] ?? freshStat();
     let nextStat: MasteryStat;
     if (studentId) {
       nextStat = await recordCharAttempt(studentId, current.word, isCorrect);
     } else {
-      // 没 student：本地内存
       const tmp = { ...oldStat };
       tmp.right += isCorrect ? 1 : 0;
       tmp.wrong += isCorrect ? 0 : 1;
@@ -159,35 +181,37 @@ export function CharPracticePage() {
       { word: current.word, pinyin: current.pinyin, isCorrect, userInput, mode, newLevel: nextStat.level },
     ]);
 
-    // 升级提示
     if (isCorrect && nextStat.level > oldStat.level) {
       setLevelUpToast({ word: current.word, from: oldStat.level, to: nextStat.level });
       setTimeout(() => setLevelUpToast(null), 2000);
     }
 
-    // XP / 连击
     if (isCorrect) {
-      const base = 8;
+      const base = mode === "write" ? 12 : 8; // 手写难度高，加分多
       const comboBonus = Math.min(combo, 9) * 2;
-      // tier bonus：升级到更高等级 +5
       const tierBonus = nextStat.level > oldStat.level ? 5 : 0;
       const earned = base + comboBonus + tierBonus;
       setSessionXp((x) => x + earned);
       setCombo((c) => c + 1);
       flashXp(earned);
-      // 强化队列：移出该字
-      setReinforceQueue((q) => q.filter((r) => r.word !== current.word).map((r) => ({ ...r, remaining: r.remaining - 1 })).filter((r) => r.remaining > 0));
+      setReinforceQueue((q) =>
+        q
+          .filter((r) => r.word !== current.word)
+          .map((r) => ({ ...r, remaining: r.remaining - 1 }))
+          .filter((r) => r.remaining > 0),
+      );
     } else {
       setCombo(0);
       flashXp(0);
-      // 进强化队列：下 N 题内必现
       setReinforceQueue((q) => {
         const without = q.filter((r) => r.word !== current.word);
-        return [...without.map((r) => ({ ...r, remaining: r.remaining - 1 })).filter((r) => r.remaining > 0), { word: current.word, remaining: REINFORCE_WINDOW }];
+        return [
+          ...without.map((r) => ({ ...r, remaining: r.remaining - 1 })).filter((r) => r.remaining > 0),
+          { word: current.word, remaining: REINFORCE_WINDOW },
+        ];
       });
     }
 
-    // 今日目标
     if (studentId && daily) {
       const { next: dNext, justCompleted } = await tickDaily("chinese_chars", studentId, daily);
       setDaily(dNext);
@@ -198,7 +222,7 @@ export function CharPracticePage() {
     }
 
     if (isCorrect) {
-      setTimeout(() => advance(nextProgress), 1100);
+      setTimeout(() => advance(nextProgress), 1300);
     }
   }
 
@@ -208,14 +232,42 @@ export function CharPracticePage() {
     setRecentWords(nextRecent);
     const reinforceWords = reinforceQueue.map((r) => r.word);
     pickNew(curProgress, nextRecent, reinforceWords);
-    setInput("");
+    setTypeInput("");
     setFeedback(null);
+    setCanvasResetKey((k) => k + 1);
   }
 
-  function onSubmitWrite(e?: React.FormEvent) {
+  // 手写提交 → 调 LLM 视觉判
+  async function onSubmitCanvas(base64: string) {
+    if (!current || feedback) return;
+    setJudgingCanvas(true);
+    try {
+      const result = await judgeHandwriting({
+        targetChar: current.word,
+        pinyin: current.pinyin,
+        imageBase64: base64,
+      });
+      void recordResult(result.isCorrect, "(手写)", {
+        comment: result.comment,
+        confidence: result.confidence,
+        observed: result.observed,
+      });
+    } catch (e) {
+      // LLM 失败 → 不计错，弹 toast 让用户重试
+      setFeedback({
+        isCorrect: false,
+        userInput: "(网络错误)",
+        comment: `视觉识别失败：${(e as Error).message.slice(0, 60)}。可以再试一次或换"辨字"模式。`,
+      });
+    } finally {
+      setJudgingCanvas(false);
+    }
+  }
+
+  function onSubmitType(e?: React.FormEvent) {
     e?.preventDefault();
     if (!current || feedback) return;
-    const trimmed = input.trim();
+    const trimmed = typeInput.trim();
     if (!trimmed) return;
     void recordResult(trimmed === current.word, trimmed);
   }
@@ -236,10 +288,10 @@ export function CharPracticePage() {
       <header className="flex items-center justify-between gap-2">
         <div>
           <div className="font-display font-bold text-2xl text-amber-200">
-            写字表 500 字
+            🗡️ 字词大冒险
           </div>
           <div className="text-xs text-slate-400 mt-0.5">
-            人教版 G4 上下册 · 5-tier 等级 · 间隔重现 · 错过的字会强化
+            5-tier 等级 · 间隔重现 · 错过的字会强化 · 手写真笔画 + 视觉 AI 判定
           </div>
         </div>
         <Link
@@ -256,31 +308,27 @@ export function CharPracticePage() {
         </div>
       )}
 
-      {/* 上/下册切换 */}
-      <div className="flex gap-2">
-        <BookTab active={book === "G4A"} onClick={() => setBook("G4A")} count={G4A_CHARS.length}>
-          四年级上册
-        </BookTab>
-        <BookTab active={book === "G4B"} onClick={() => setBook("G4B")} count={G4B_CHARS.length}>
-          四年级下册
-        </BookTab>
-      </div>
+      {/* 学期切换（与数学一致 — 写 student.currentTerm） */}
+      <TermSwitcher currentTerm={currentTerm} onChange={(t) => setCurrentTerm(t)} />
 
       {/* 模式切换 */}
       <div className="flex gap-2">
         <ModeTab active={mode === "write"} onClick={() => setMode("write")}>
-          ✍️ 写字练习
+          ✍️ 手写挑战
         </ModeTab>
         <ModeTab active={mode === "choose"} onClick={() => setMode("choose")}>
           🎯 辨字选择
         </ModeTab>
+        <ModeTab active={mode === "type"} onClick={() => setMode("type")}>
+          ⌨️ 打字回忆
+        </ModeTab>
       </div>
 
-      {/* 5-tier 分布条 */}
+      {/* 5-tier 分布 */}
       <div className="card-glow space-y-3">
         <div className="flex items-baseline justify-between text-xs">
           <span className="text-slate-300 font-semibold">
-            本册掌握分布（{book === "G4A" ? "上册 250" : "下册 250"}）
+            本赛季掌握分布（{semester === "G4A" ? "上册 250" : "下册 250"}）
           </span>
           {fullTierDist.byLevel[4] > 0 && (
             <span className="text-violet-300 text-[11px]">
@@ -291,10 +339,8 @@ export function CharPracticePage() {
         <MasteryTierBar dist={tierDist} />
       </div>
 
-      {/* 老口径统计 + 今日目标 + 连击 */}
       <StatsBar stats={oldStats} combo={combo} sessionXp={sessionXp} daily={daily} />
 
-      {/* 模式 panel */}
       {!current ? (
         <div className="card text-center text-slate-300 py-8">
           <div className="text-4xl mb-2">🎉</div>
@@ -316,36 +362,44 @@ export function CharPracticePage() {
       ) : mode === "write" ? (
         <WritePanel
           char={current}
-          input={input}
-          onInput={setInput}
-          feedback={feedback}
-          onSubmit={onSubmitWrite}
-          onContinueWrong={() => advance(progress)}
           stat={progress[current.word]}
+          feedback={feedback}
+          judging={judgingCanvas}
+          canvasResetKey={canvasResetKey}
+          onSubmit={onSubmitCanvas}
+          onContinueWrong={() => advance(progress)}
         />
-      ) : (
+      ) : mode === "choose" ? (
         <ChoosePanel
           char={current}
           chooseQ={chooseQ}
           feedback={feedback}
+          stat={progress[current.word]}
           onPick={onPickChoose}
+          onContinueWrong={() => advance(progress)}
+        />
+      ) : (
+        <TypePanel
+          char={current}
+          input={typeInput}
+          onInput={setTypeInput}
+          feedback={feedback}
+          onSubmit={onSubmitType}
           onContinueWrong={() => advance(progress)}
           stat={progress[current.word]}
         />
       )}
 
-      {/* 错字本（只显示 wrong > right 的字） */}
       <WrongBookPanel
         wrongChars={oldStats.wrongChars}
         onPickChar={(w) => {
           const target = pool.find((c) => c.word === w) ?? fullPool.find((c) => c.word === w);
           if (target) {
             setCurrent(target);
-            if (mode === "choose") {
-              setChooseQ(generateChooseQuestion(target, pool));
-            }
-            setInput("");
+            if (mode === "choose") setChooseQ(generateChooseQuestion(target, pool));
+            setTypeInput("");
             setFeedback(null);
+            setCanvasResetKey((k) => k + 1);
           }
         }}
       />
@@ -362,9 +416,12 @@ export function CharPracticePage() {
                   <span className="text-amber-200 font-display text-base mr-2">{h.word}</span>
                   <span className="text-slate-400">{h.pinyin}</span>
                   <span className="ml-2"><TierChip level={h.newLevel} /></span>
+                  <span className="ml-2 text-[10px] text-slate-500">
+                    {h.mode === "write" ? "手写" : h.mode === "choose" ? "辨字" : "打字"}
+                  </span>
                 </span>
                 <span className={h.isCorrect ? "text-emerald-300" : "text-rose-300"}>
-                  {h.isCorrect ? "✓" : `✗ ${h.userInput || "(空)"}`}
+                  {h.isCorrect ? "✓" : `✗`}
                 </span>
               </li>
             ))}
@@ -372,7 +429,6 @@ export function CharPracticePage() {
         </details>
       )}
 
-      {/* 飞行 XP 数字 */}
       {floatingXp && floatingXp.amount > 0 && (
         <div
           key={floatingXp.key}
@@ -412,33 +468,6 @@ export function CharPracticePage() {
   );
 }
 
-function BookTab({
-  active,
-  onClick,
-  count,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  count: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-        active
-          ? "bg-amber-500/20 text-amber-100 border border-amber-400/40"
-          : "bg-ink-900/40 text-slate-400 border border-ink-700/60 hover:bg-ink-700/40"
-      }`}
-    >
-      {children}
-      <span className="ml-2 text-[10px] opacity-70">{count} 字</span>
-    </button>
-  );
-}
-
 function ModeTab({
   active,
   onClick,
@@ -452,7 +481,7 @@ function ModeTab({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+      className={`flex-1 px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
         active
           ? "bg-violet-500/20 text-violet-100 border border-violet-400/40"
           : "bg-ink-900/40 text-slate-400 border border-ink-700/60 hover:bg-ink-700/40"
@@ -505,28 +534,20 @@ function StatsBar({
         </div>
       </div>
 
-      {/* 今日目标 */}
       {daily && (
         <div className="border-t border-ink-700/40 pt-2 text-xs">
           <div className="flex items-center justify-between mb-1">
             <span className="text-slate-300">
               今日目标{" "}
-              <span className="font-display font-bold text-amber-200">
-                {daily.todayCount}
-              </span>
+              <span className="font-display font-bold text-amber-200">{daily.todayCount}</span>
               <span className="text-slate-400"> / {daily.target} 字次</span>
             </span>
             {daily.streak > 0 && (
-              <span className="text-rose-300">
-                🔥 连续 {daily.streak} 天
-              </span>
+              <span className="text-rose-300">🔥 连续 {daily.streak} 天</span>
             )}
           </div>
           <div className="h-1.5 rounded-full bg-ink-700/60 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-amber-400 to-orange-400 transition-[width] duration-300"
-              style={{ width: `${dailyPct}%` }}
-            />
+            <div className="h-full bg-gradient-to-r from-amber-400 to-orange-400 transition-[width] duration-300" style={{ width: `${dailyPct}%` }} />
           </div>
         </div>
       )}
@@ -549,30 +570,32 @@ function StatsBar({
 
 function WritePanel({
   char,
-  input,
-  onInput,
+  stat,
   feedback,
+  judging,
+  canvasResetKey,
   onSubmit,
   onContinueWrong,
-  stat,
 }: {
   char: G4Char;
-  input: string;
-  onInput: (v: string) => void;
-  feedback: { isCorrect: boolean; userInput: string } | null;
-  onSubmit: (e?: React.FormEvent) => void;
-  onContinueWrong: () => void;
   stat: MasteryStat | undefined;
+  feedback: NonNullable<unknown> | null;
+  judging: boolean;
+  canvasResetKey: number;
+  onSubmit: (base64: string) => void;
+  onContinueWrong: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [char.word]);
-
   const level: Level = (stat?.level ?? 0) as Level;
+  const fb = feedback as {
+    isCorrect: boolean;
+    userInput: string;
+    comment?: string;
+    confidence?: "high"|"medium"|"low";
+    observed?: string;
+  } | null;
 
   return (
-    <form onSubmit={onSubmit} className="card-glow space-y-3" autoComplete="off">
+    <div className="card-glow space-y-3">
       <div className="flex justify-between items-center text-xs">
         <TierChip level={level} />
         {stat && (stat.right > 0 || stat.wrong > 0) && (
@@ -600,40 +623,47 @@ function WritePanel({
         </div>
       </div>
 
-      <div>
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => onInput(e.target.value)}
-          placeholder="在这里写出这个字"
-          maxLength={6}
-          disabled={!!feedback}
-          className={`w-full text-center font-display text-3xl p-4 rounded-2xl border bg-ink-900/60 ${
-            feedback?.isCorrect
-              ? "border-emerald-400 text-emerald-200"
-              : feedback
-                ? "border-rose-400 text-rose-200"
-                : "border-ink-600 text-amber-100 focus:border-violet-400 focus:outline-none"
-          }`}
+      <div className="text-center">
+        <div className="text-xs text-violet-200 mb-2">在画板上手写这个字 → AI 视觉识别判定</div>
+        <HandwriteCanvas
+          key={canvasResetKey}
+          width={300}
+          height={300}
+          onSubmit={onSubmit}
+          disabled={judging || !!fb}
         />
       </div>
 
-      {feedback && !feedback.isCorrect && (
-        <WrongCard correct={char.word} userInput={feedback.userInput} />
+      {judging && (
+        <div className="rounded-xl border border-cyan-400/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100 text-center">
+          🔍 AI 正在识别你写的字…
+        </div>
       )}
-      {feedback && feedback.isCorrect && <CorrectCard />}
 
-      {!feedback ? (
-        <button type="submit" disabled={!input.trim()} className="btn-primary w-full disabled:opacity-50">
-          提交
-        </button>
-      ) : !feedback.isCorrect ? (
-        <button type="button" onClick={onContinueWrong} className="btn-primary w-full">
-          下一字 →
-        </button>
-      ) : null}
-    </form>
+      {fb && fb.isCorrect && (
+        <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 text-center">
+          <div className="font-display text-2xl mb-1">✓ 写对了！</div>
+          {fb.comment && <div className="text-xs text-emerald-200">{fb.comment}</div>}
+        </div>
+      )}
+      {fb && !fb.isCorrect && (
+        <>
+          <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+            <div className="font-semibold mb-1">再来一次 — 正确字是：</div>
+            <div className="text-center font-display text-3xl text-amber-200 my-1">{char.word}</div>
+            {fb.observed && fb.observed !== char.word && (
+              <div className="text-xs text-rose-200/80">
+                AI 识别成了 <span className="font-display text-base">{fb.observed}</span>
+              </div>
+            )}
+            {fb.comment && <div className="text-xs text-rose-200/80 mt-1">{fb.comment}</div>}
+          </div>
+          <button type="button" onClick={onContinueWrong} className="btn-primary w-full">
+            下一字 →
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -641,16 +671,16 @@ function ChoosePanel({
   char,
   chooseQ,
   feedback,
+  stat,
   onPick,
   onContinueWrong,
-  stat,
 }: {
   char: G4Char;
   chooseQ: ReturnType<typeof generateChooseQuestion> | null;
   feedback: { isCorrect: boolean; userInput: string } | null;
+  stat: MasteryStat | undefined;
   onPick: (opt: string) => void;
   onContinueWrong: () => void;
-  stat: MasteryStat | undefined;
 }) {
   if (!chooseQ) return <div className="card text-slate-400">题加载中…</div>;
   const level: Level = (stat?.level ?? 0) as Level;
@@ -659,9 +689,7 @@ function ChoosePanel({
       <div className="flex justify-between items-center text-xs">
         <TierChip level={level} />
         {stat && (stat.right > 0 || stat.wrong > 0) && (
-          <span className="text-slate-500 tabular-nums">
-            对 {stat.right} · 错 {stat.wrong}
-          </span>
+          <span className="text-slate-500 tabular-nums">对 {stat.right} · 错 {stat.wrong}</span>
         )}
       </div>
       <div className="text-center">
@@ -689,9 +717,7 @@ function ChoosePanel({
                     : "bg-ink-900/60 border-ink-600 text-amber-100 hover:bg-ink-700/60 hover:border-violet-400"
               }`}
             >
-              <span className="text-xs text-slate-400 mr-2">
-                {String.fromCharCode(65 + idx)}.
-              </span>
+              <span className="text-xs text-slate-400 mr-2">{String.fromCharCode(65 + idx)}.</span>
               {opt}
             </button>
           );
@@ -699,34 +725,105 @@ function ChoosePanel({
       </div>
       {feedback && !feedback.isCorrect && (
         <>
-          <WrongCard correct={chooseQ.answer} userInput={feedback.userInput} />
-          <button type="button" onClick={onContinueWrong} className="btn-primary w-full">
-            下一字 →
-          </button>
+          <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+            <div className="font-semibold mb-1">再来一次 — 正确字是：</div>
+            <div className="text-center font-display text-3xl text-amber-200 my-1">{chooseQ.answer}</div>
+          </div>
+          <button type="button" onClick={onContinueWrong} className="btn-primary w-full">下一字 →</button>
         </>
       )}
-      {feedback && feedback.isCorrect && <CorrectCard />}
+      {feedback && feedback.isCorrect && (
+        <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 text-center">
+          ✓ 太棒了！
+        </div>
+      )}
     </div>
   );
 }
 
-function CorrectCard() {
+function TypePanel({
+  char,
+  input,
+  onInput,
+  feedback,
+  onSubmit,
+  onContinueWrong,
+  stat,
+}: {
+  char: G4Char;
+  input: string;
+  onInput: (v: string) => void;
+  feedback: { isCorrect: boolean; userInput: string } | null;
+  onSubmit: (e?: React.FormEvent) => void;
+  onContinueWrong: () => void;
+  stat: MasteryStat | undefined;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [char.word]);
+  const level: Level = (stat?.level ?? 0) as Level;
   return (
-    <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 text-center">
-      ✓ 太棒了！
-    </div>
-  );
-}
-
-function WrongCard({ correct, userInput }: { correct: string; userInput: string }) {
-  return (
-    <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
-      <div className="font-semibold mb-1">再来一次 — 正确字是：</div>
-      <div className="text-center font-display text-3xl text-amber-200 my-1">{correct}</div>
-      <div className="text-xs text-rose-200/80">
-        你写的：<span className="line-through">{userInput || "(空)"}</span>
+    <form onSubmit={onSubmit} className="card-glow space-y-3" autoComplete="off">
+      <div className="flex justify-between items-center text-xs">
+        <TierChip level={level} />
+        {stat && (stat.right > 0 || stat.wrong > 0) && (
+          <span className="text-slate-500 tabular-nums">对 {stat.right} · 错 {stat.wrong}</span>
+        )}
       </div>
-    </div>
+      <div className="rounded-xl border border-amber-300/30 bg-amber-500/5 p-3 text-xs text-amber-200/70">
+        💡 注意：打字模式拼音 IME 会自动出字。仅推荐用 ✍️ 手写挑战 来真正练写字。
+      </div>
+      <div className="text-center">
+        <div className="text-xs text-slate-400 uppercase tracking-widest">拼音</div>
+        <div className="font-display text-3xl text-cyan-200 mt-1">{char.pinyin}</div>
+      </div>
+      <div className="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4 text-center">
+        <div className="text-xs text-slate-400 mb-1">词组提示</div>
+        <div className="font-display text-2xl text-amber-100 tracking-wide">{char.group}</div>
+        <div className="text-xs text-slate-400 mt-3">
+          含义：<span className="text-slate-200">{char.meaning}</span>
+        </div>
+      </div>
+      <div>
+        <input
+          ref={inputRef}
+          type="text"
+          value={input}
+          onChange={(e) => onInput(e.target.value)}
+          placeholder="打字输入（仅作辅助）"
+          maxLength={6}
+          disabled={!!feedback}
+          className={`w-full text-center font-display text-3xl p-4 rounded-2xl border bg-ink-900/60 ${
+            feedback?.isCorrect
+              ? "border-emerald-400 text-emerald-200"
+              : feedback
+                ? "border-rose-400 text-rose-200"
+                : "border-ink-600 text-amber-100 focus:border-violet-400 focus:outline-none"
+          }`}
+        />
+      </div>
+      {feedback && !feedback.isCorrect && (
+        <>
+          <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+            <div className="font-semibold mb-1">再来一次 — 正确字是：</div>
+            <div className="text-center font-display text-3xl text-amber-200 my-1">{char.word}</div>
+            <div className="text-xs text-rose-200/80">你写的：<span className="line-through">{feedback.userInput || "(空)"}</span></div>
+          </div>
+          <button type="button" onClick={onContinueWrong} className="btn-primary w-full">下一字 →</button>
+        </>
+      )}
+      {feedback && feedback.isCorrect && (
+        <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 text-center">
+          ✓ 太棒了！
+        </div>
+      )}
+      {!feedback && (
+        <button type="submit" disabled={!input.trim()} className="btn-primary w-full disabled:opacity-50">
+          提交
+        </button>
+      )}
+    </form>
   );
 }
 

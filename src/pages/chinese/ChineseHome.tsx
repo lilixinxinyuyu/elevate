@@ -26,7 +26,12 @@ import {
 } from "../../subjects/chinese/service";
 import { CHINESE_TROPHIES, type ChineseTrophyDef } from "../../subjects/chinese/trophies";
 import { TrophyIcon } from "../../components/TrophyIcon";
-import type { MasteryScore } from "../../core/types";
+import type { MasteryScore, Term } from "../../core/types";
+import { TermSwitcher, termToSemester } from "../../components/TermSwitcher";
+import { SubjectTodayRings, type RingSpec } from "../../components/SubjectTodayRings";
+import { loadDaily, type DailyState } from "../../lib/dailyTarget";
+import { loadCharProgress, calcOldStyleStats as charCalcOldStyleStats } from "../../lib/chineseCharProgress";
+import { G4A_CHARS, G4B_CHARS } from "../../subjects/chinese/charLibrary";
 
 export function ChineseHomePage() {
   const subject = useSubject();
@@ -46,17 +51,23 @@ export function ChineseHomePage() {
     available: boolean;
     daysUntilNext: number;
   }>({ available: true, daysUntilNext: 0 });
+  const [currentTerm, setCurrentTerm] = useState<Term>("下册");
+  const [charDaily, setCharDaily] = useState<DailyState | null>(null);
+  const [charWrongCount, setCharWrongCount] = useState(0);
 
   useEffect(() => {
     if (!student?.id) return;
     let cancelled = false;
     (async () => {
-      const [xp, trophies, m, mistakeCount, mock] = await Promise.all([
+      setCurrentTerm((student.currentTerm as Term) ?? "下册");
+      const [xp, trophies, m, mistakeCount, mock, charProg, charDailyState] = await Promise.all([
         getChineseTotalXp(student.id),
         getChineseTrophies(student.id),
         getChineseSkillMastery(student.id),
         countChineseUnresolvedMistakes(student.id),
         getChineseMockExamCooldown(student.id),
+        loadCharProgress(student.id),
+        loadDaily("chinese_chars", student.id, 20),
       ]);
       if (cancelled) return;
       setTotalXp(xp);
@@ -64,11 +75,13 @@ export function ChineseHomePage() {
       setMastery(m);
       setOpenMistakes(mistakeCount);
       setMockCooldown({ available: mock.available, daysUntilNext: mock.daysUntilNext });
+      setCharDaily(charDailyState);
+      setCharWrongCount(charCalcOldStyleStats(charProg).wrongChars.length);
     })();
     return () => {
       cancelled = true;
     };
-  }, [student?.id]);
+  }, [student?.id, student?.currentTerm]);
 
   const level = chineseLevelInfo(totalXp);
   const ownedCount = trophyState
@@ -150,22 +163,35 @@ export function ChineseHomePage() {
         </div>
       </div>
 
-      {/* v0.31.40：写字表 500 字 — 上下册可切换 + 写字 / 辨字双模式 + 错字本（迁移老数据） */}
+      {/* v0.31.42：学期切换（赛季制 — 写 student.currentTerm，与数学一致） */}
+      <TermSwitcher currentTerm={currentTerm} onChange={(t) => setCurrentTerm(t)} />
+
+      {/* v0.31.42：今日 3 环（字词大冒险 / 错题复活 / 模拟测试） */}
+      <SubjectTodayRings
+        rings={buildChineseRings({
+          charDaily,
+          openMistakes,
+          mockAvailable: mockCooldown.available,
+          mockDaysUntilNext: mockCooldown.daysUntilNext,
+        })}
+      />
+
+      {/* v0.31.42：字词大冒险（手写 + 辨字 + 打字 三模式） */}
       <Link
         to="/chinese/char-practice"
         className="card-glow bg-gradient-to-br from-amber-500/15 to-orange-500/10 border-amber-400/40 hover:scale-[1.01] transition-transform block"
       >
         <div className="flex items-center gap-3">
-          <div className="text-3xl">✍️</div>
+          <div className="text-3xl">🗡️</div>
           <div className="flex-1">
             <div className="font-display font-bold text-amber-100">
-              写字表 500 字 · 上下册可切换
+              字词大冒险 · 当前赛季 {currentTerm}
             </div>
             <div className="text-xs text-slate-300 mt-0.5">
-              ✍️ 写字练习 + 🎯 辨字选择 双模式 · 错字本自动收录 · 连击 XP
+              ✍️ 手写挑战 (Canvas + AI 视觉判) · 🎯 辨字选择 · ⌨️ 打字回忆
             </div>
             <div className="text-[11px] text-amber-300/80 mt-1">
-              已自动从老系统迁移你之前的进度
+              5-tier 等级 · 间隔重现 · 错字本 · 今日目标 · 连击 XP
             </div>
           </div>
           <div className="text-amber-300 text-2xl">→</div>
@@ -345,4 +371,64 @@ export function ChineseHomePage() {
       </div>
     </div>
   );
+}
+
+function buildChineseRings(args: {
+  charDaily: DailyState | null;
+  openMistakes: number;
+  mockAvailable: boolean;
+  mockDaysUntilNext: number;
+}): RingSpec[] {
+  const amberA = "#fcd34d";
+  const amberB = "#d97706";
+  const violetA = "#a78bfa";
+  const violetB = "#7c3aed";
+  const cyanA = "#22d3ee";
+  const cyanB = "#0891b2";
+
+  const targetCount = args.charDaily?.target ?? 20;
+  const todayCount = args.charDaily?.todayCount ?? 0;
+  const charProg = Math.min(1, todayCount / Math.max(1, targetCount));
+  const charDone = todayCount >= targetCount;
+
+  const mistakeProg = args.openMistakes === 0 ? 1 : Math.max(0.1, 1 - Math.min(args.openMistakes / 20, 0.9));
+  const mistakeDone = args.openMistakes === 0;
+
+  return [
+    {
+      id: "char_quest",
+      icon: "🗡️",
+      shortLabel: "字词大冒险",
+      progress: charProg,
+      statusText: charDone ? `今日完成 ✓` : `${todayCount} / ${targetCount} 字次`,
+      to: "/chinese/char-practice",
+      hue: amberA,
+      hue2: amberB,
+      done: charDone,
+    },
+    {
+      id: "mistakes",
+      icon: "🪄",
+      shortLabel: "错题复活",
+      progress: mistakeProg,
+      statusText: mistakeDone ? "无未消化错题" : `${args.openMistakes} 道待练`,
+      to: "/chinese/train?mode=review",
+      hue: violetA,
+      hue2: violetB,
+      done: mistakeDone,
+    },
+    {
+      id: "mock",
+      icon: "📝",
+      shortLabel: "模拟测试",
+      progress: args.mockAvailable ? 0.05 : 1,
+      statusText: args.mockAvailable
+        ? "本周已开放 · 跨单元 20 题"
+        : `${args.mockDaysUntilNext} 天后再开`,
+      to: args.mockAvailable ? "/chinese/train?mode=mock_exam" : "/chinese",
+      hue: cyanA,
+      hue2: cyanB,
+      done: !args.mockAvailable,
+    },
+  ];
 }

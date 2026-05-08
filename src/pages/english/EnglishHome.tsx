@@ -1,7 +1,11 @@
 /**
- * 英语首页 (v0.31.41)
+ * 英语首页 (v0.31.42)
  *
- * 顶部 banner + 上下册各自 tier 分布 + 进入 vocab 卡。
+ * 跟数学一致的设计：
+ *   - 顶部 banner
+ *   - 学期切换（写 student.currentTerm；赛季制）
+ *   - 今日 3 环（词汇大冒险 / 闪电冲刺 / 复习薄弱）
+ *   - 5-tier 分布卡（仅本赛季）
  */
 
 import { Link } from "react-router-dom";
@@ -9,15 +13,21 @@ import { useEffect, useState } from "react";
 import { db } from "../../db/dexie";
 import { G4_WORDS } from "../../subjects/english/wordList";
 import {
+  calcOldStyleStats,
   calcTierDistribution,
   loadVocabProgress,
   type VocabProgress,
 } from "../../lib/englishVocabProgress";
 import { MasteryTierBar } from "../../components/MasteryTierBar";
-import type { TierDistribution } from "../../lib/masteryTier";
+import { SubjectTodayRings, type RingSpec } from "../../components/SubjectTodayRings";
+import { TermSwitcher, termToSemester } from "../../components/TermSwitcher";
+import { loadDaily, type DailyState } from "../../lib/dailyTarget";
+import type { Term } from "../../core/types";
 
 export function EnglishHomePage() {
   const [progress, setProgress] = useState<VocabProgress | null>(null);
+  const [daily, setDaily] = useState<DailyState | null>(null);
+  const [currentTerm, setCurrentTerm] = useState<Term>("下册");
 
   useEffect(() => {
     let cancelled = false;
@@ -25,22 +35,28 @@ export function EnglishHomePage() {
       const ss = await db.students.toArray();
       const s = ss[0];
       if (!s || cancelled) return;
+      setCurrentTerm((s.currentTerm as Term) ?? "下册");
       const p = await loadVocabProgress(s.id);
+      const d = await loadDaily("english_vocab", s.id, 20);
       if (cancelled) return;
       setProgress(p);
+      setDaily(d);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const upperPool = G4_WORDS.filter((w) => w.semester === "G4A");
-  const lowerPool = G4_WORDS.filter((w) => w.semester === "G4B");
-  const upperDist = progress ? calcTierDistribution(upperPool, progress) : null;
-  const lowerDist = progress ? calcTierDistribution(lowerPool, progress) : null;
+  const semester = termToSemester(currentTerm);
+  const pool = G4_WORDS.filter((w) => w.semester === semester);
+  const dist = progress ? calcTierDistribution(pool, progress) : null;
+  const stats = progress ? calcOldStyleStats(pool, progress) : null;
+
+  const rings: RingSpec[] = buildRings(daily, stats);
 
   return (
     <div className="space-y-5">
+      {/* 顶部 banner */}
       <div className="card-glow bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-500 text-white flex items-center justify-center font-display font-bold shadow-glow">
@@ -49,73 +65,110 @@ export function EnglishHomePage() {
           <div className="flex-1">
             <div className="font-display font-bold text-xl">英语</div>
             <div className="text-xs text-slate-300 mt-0.5">
-              外研版四年级 · 上下册全部 {G4_WORDS.length} 单词
+              外研版四年级 · 当前赛季：{currentTerm}（{pool.length} 词）
             </div>
           </div>
         </div>
       </div>
 
+      {/* 学期切换 */}
+      <TermSwitcher currentTerm={currentTerm} onChange={(t) => setCurrentTerm(t)} />
+
+      {/* 今日 3 环 */}
+      <SubjectTodayRings rings={rings} />
+
+      {/* 词汇大冒险入口 */}
       <Link
         to="/english/vocab"
         className="card-glow bg-gradient-to-br from-cyan-500/15 to-blue-500/10 border-cyan-400/40 hover:scale-[1.01] transition-transform block"
       >
         <div className="flex items-center gap-3">
-          <div className="text-3xl">🔤</div>
+          <div className="text-3xl">🌍</div>
           <div className="flex-1">
             <div className="font-display font-bold text-cyan-100">
-              单词记忆 · 5-tier 分级 + 间隔重现
+              词汇大冒险 · 4 种玩法
             </div>
             <div className="text-xs text-slate-300 mt-0.5">
-              3 模式 · 看单词→中文 / 看中文→单词 / 听读音→单词
+              看词→中文 / 看中文→词 / 🔊 听→词 / ⚡ 闪电冲刺
             </div>
             <div className="text-[11px] text-cyan-300/80 mt-1">
-              从老系统迁移进度 · 答错的会强化 · 答对的按间隔回炉
+              5-tier 等级 · 间隔重现 · 答错的会强化
             </div>
           </div>
           <div className="text-cyan-300 text-2xl">→</div>
         </div>
       </Link>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <BookCard label="四年级上册" total={upperPool.length} dist={upperDist} />
-        <BookCard label="四年级下册" total={lowerPool.length} dist={lowerDist} />
-      </div>
-
-      <div className="card text-xs text-slate-400 leading-relaxed">
-        💡 玩法：进 "单词" 页面后可切换上/下册和 3 种模式。
-        <ul className="list-disc pl-5 mt-1">
-          <li>🌱 新 → 📖 初识 → ✨ 在学 → ⭐ 熟练 → 🏆 掌握 五个等级</li>
-          <li>答错的字下 2 题内必现，答对的按间隔回炉（1分→1时→1天→3天→14天）</li>
-          <li>每日目标 + 连续打卡，完成有庆祝</li>
-        </ul>
-      </div>
+      {/* tier 分布 */}
+      {dist && (
+        <div className="card">
+          <div className="text-xs text-slate-400 mb-2">
+            本赛季掌握分布（{currentTerm} {pool.length} 词）
+          </div>
+          <MasteryTierBar dist={dist} />
+        </div>
+      )}
     </div>
   );
 }
 
-function BookCard({
-  label,
-  total,
-  dist,
-}: {
-  label: string;
-  total: number;
-  dist: TierDistribution | null;
-}) {
-  return (
-    <div className="card">
-      <div className="text-xs text-slate-400 mb-2">{label}</div>
-      {!dist ? (
-        <div className="text-slate-500 text-sm">— 加载中 —</div>
-      ) : (
-        <>
-          <MasteryTierBar dist={dist} />
-          <div className="text-[10px] text-slate-500 mt-2 text-center">
-            总 {total} 词 · 已掌握 {dist.byLevel[4]} ·{" "}
-            {Math.round((dist.byLevel[4] / total) * 100)}%
-          </div>
-        </>
-      )}
-    </div>
-  );
+function buildRings(
+  daily: DailyState | null,
+  stats: ReturnType<typeof calcOldStyleStats> | null,
+): RingSpec[] {
+  const cyanA = "#22d3ee";
+  const cyanB = "#0891b2";
+  const violetA = "#a78bfa";
+  const violetB = "#7c3aed";
+  const amberA = "#fcd34d";
+  const amberB = "#d97706";
+
+  const targetCount = daily?.target ?? 20;
+  const todayCount = daily?.todayCount ?? 0;
+  const challengeProg = Math.min(1, todayCount / Math.max(1, targetCount));
+  const challengeDone = todayCount >= targetCount;
+
+  const weak = stats?.weak ?? 0;
+  const weakDone = weak === 0;
+
+  const sprintTodayKey = `english_sprint_today`;
+  void sprintTodayKey; // reserved for future tracking
+
+  return [
+    {
+      id: "challenge",
+      icon: "🌍",
+      shortLabel: "词汇大冒险",
+      progress: challengeProg,
+      statusText: challengeDone
+        ? "今日完成 ✓"
+        : `${todayCount} / ${targetCount} 词次`,
+      to: "/english/vocab",
+      hue: cyanA,
+      hue2: cyanB,
+      done: challengeDone,
+    },
+    {
+      id: "sprint",
+      icon: "⚡",
+      shortLabel: "闪电冲刺",
+      progress: 0.05,
+      statusText: "60 秒看词选中文",
+      to: "/english/vocab?mode=sprint",
+      hue: violetA,
+      hue2: violetB,
+      done: false,
+    },
+    {
+      id: "review",
+      icon: "🪄",
+      shortLabel: "复习薄弱",
+      progress: weakDone ? 1 : Math.max(0.1, 1 - Math.min(weak / 20, 0.9)),
+      statusText: weakDone ? "无薄弱词 ✓" : `${weak} 个薄弱词`,
+      to: "/english/vocab",
+      hue: amberA,
+      hue2: amberB,
+      done: weakDone,
+    },
+  ];
 }
