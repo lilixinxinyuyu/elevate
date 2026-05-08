@@ -1,4 +1,5 @@
 import type { AbilityId, Question } from "./types";
+import { adjustedEstimatedTime } from "./timing";
 
 export interface ScoreInput {
   question: Question;
@@ -176,9 +177,11 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
     ? (tutorAssisted ? TUTOR_ASSISTED_FACTOR : 1)
     : (input.partialCorrect ? 0.5 : 0.2);
   // 速度奖励：仅 1st 答对独享
+  // v0.31.51: 用 adjustedEstimatedTime 而不是裸 question.estimated_time_seconds，
+  // 长题（stem ≥60 字 / 多行选项）的时间在运行时加成，跟 GameShell 倒计时一致
   const { bonus: timeBonus } = noBonusAttempt
     ? { bonus: 0 }
-    : speedBonus(elapsedSeconds, question.estimated_time_seconds, isCorrect);
+    : speedBonus(elapsedSeconds, adjustedEstimatedTime(question), isCorrect);
   const hintPenalty = -hintsOpened;
   // multi-step + review + new-skill 奖励都属于"真功夫"加成，tutor-assisted 不给
   const stepBonus = (multiStepAllStepsCorrect && !tutorAssisted) ? 3 : 0;

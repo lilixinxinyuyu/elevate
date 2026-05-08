@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CountdownBar } from "./CountdownBar";
 import { speedBonus } from "../../core/scoring";
+import { adjustedEstimatedTime } from "../../core/timing";
 import { ComboBadge } from "./ComboBadge";
 import { XpBar } from "./XpBar";
 import { HintLadder } from "./HintLadder";
@@ -173,7 +174,8 @@ export function GameShell(props: GameShellProps) {
   }, [resetKey, question]);
 
   const hints = question.hints ?? [];
-  const estimatedSec = question.estimated_time_seconds;
+  // v0.31.51: 长题（stem ≥60 字 或 多行选项）自动加阅读时间，避免 Selena 读字慢被超时坑
+  const estimatedSec = adjustedEstimatedTime(question);
 
   const triggerFx: TriggerFx = useMemo(
     () => ({
@@ -276,7 +278,7 @@ export function GameShell(props: GameShellProps) {
         );
         const speedTier = (wasRetriedRef.current && !examMode)
           ? ("on_time" as const) // 2nd 不奖速度（无论变式还是原题）
-          : speedBonus(elapsed, displayedQuestion.estimated_time_seconds, r.isCorrect).tier;
+          : speedBonus(elapsed, adjustedEstimatedTime(displayedQuestion), r.isCorrect).tier;
         setFeedback({
           isCorrect: r.isCorrect,
           partialCorrect: r.partialCorrect,

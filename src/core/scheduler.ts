@@ -973,28 +973,48 @@ export function findParallelQuestion(
     !excludeIds.has(q.question_id) &&
     (q.subjectId ?? "math") === subj;
 
+  // v0.31.51: tier 重排 —— `game_type` 是"概念身份"，最该保住。
+  //
+  // 老版顺序问题：tier 2 先放宽 game_type（保留 difficulty+term），
+  // 导致用户做"20-3.68 (decimal_shifter / 小数减法)"想要"再做一道相似的"，
+  // 系统返回了"位移题（shift）"——同 skill 但 game_type 完全不同的概念。
+  //
+  // 新顺序：先保 game_type（最多放宽 term/difficulty），实在没辙才换 game_type。
+  // 也就是说"30-5.65"型 (即使难度不同) 永远比"位移题"先返回。
   const tiers: ((q: Question) => boolean)[] = [
-    // tier 1: 严格
+    // tier 1: 严格 — same skill + game_type + difficulty + term
     (q) =>
       baseFilter(q) &&
       q.skill_id === original.skill_id &&
       q.game_type === original.game_type &&
       q.difficulty === original.difficulty &&
       q.term === original.term,
-    // tier 2: 放宽 game_type（同 skill+diff+term）
+    // tier 2: 放宽 term（保 game_type + difficulty）
+    (q) =>
+      baseFilter(q) &&
+      q.skill_id === original.skill_id &&
+      q.game_type === original.game_type &&
+      q.difficulty === original.difficulty,
+    // tier 3: 放宽 difficulty（保 game_type — 概念身份最该保住）
+    (q) =>
+      baseFilter(q) &&
+      q.skill_id === original.skill_id &&
+      q.game_type === original.game_type,
+    // tier 4: 没有同 game_type 的题了，才 fallback 跨概念。
+    //          仍保 difficulty + term（让难度感受相近）
     (q) =>
       baseFilter(q) &&
       q.skill_id === original.skill_id &&
       q.difficulty === original.difficulty &&
       q.term === original.term,
-    // tier 3: 放宽 difficulty（同 skill+term）
+    // tier 5: 放宽 difficulty
     (q) =>
       baseFilter(q) &&
       q.skill_id === original.skill_id &&
       q.term === original.term,
-    // tier 4: 放宽 term（同 skill）
+    // tier 6: 放宽 term（同 skill）
     (q) => baseFilter(q) && q.skill_id === original.skill_id,
-    // tier 5: 同学科任意题（保底）
+    // tier 7: 同学科任意题（保底，几乎不会到这里）
     (q) => baseFilter(q),
   ];
 

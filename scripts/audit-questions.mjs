@@ -214,8 +214,39 @@ function checkMeta(q) {
     add(q.question_id, "minor", "M1", "feedback_correct / feedback_wrong 有缺失", "补全两个 feedback");
   }
   const ets = q.estimated_time_seconds;
-  if (typeof ets === "number" && (ets < 10 || ets > 180)) {
-    add(q.question_id, "minor", "M3", `estimated_time_seconds=${ets} 偏离合理区间`, "调到 15-90");
+  if (typeof ets === "number" && (ets < 10 || ets > 240)) {
+    add(q.question_id, "minor", "M3", `estimated_time_seconds=${ets} 偏离合理区间`, "调到 15-180");
+  }
+
+  // v0.31.51: 阅读量 vs 时间相关性检查 — 长题给短时间是 Selena 反映的真实问题
+  // (10 岁小学生读字慢，4 行情境题 + 4 行选项不能跟一句计算题同时间)
+  if (typeof ets === "number") {
+    const stemLen = (q.stem ?? "").length;
+    const longestOptionLen = Array.isArray(q.options)
+      ? Math.max(0, ...q.options.map((o) => (o?.text ?? "").length))
+      : 0;
+    const hasMultiLineOption = Array.isArray(q.options)
+      ? q.options.some((o) => (o?.text ?? "").includes("\n") || (o?.text ?? "").length >= 20)
+      : false;
+
+    // 长 stem ≥ 60 字 但时间 < 30s → 太短
+    if (stemLen >= 60 && ets < 30) {
+      add(q.question_id, "minor", "M4",
+        `stem 长 ${stemLen} 字但 estimated_time=${ets}s 太短（小学生读字慢）`,
+        `按 quality-rubric 长题加成 +15s（建议 ≥ ${Math.min(90, 30 + 15)}s）`);
+    }
+    // 超长 stem ≥ 120 字 但时间 < 50s → 严重不够
+    if (stemLen >= 120 && ets < 50) {
+      add(q.question_id, "minor", "M4",
+        `stem 超长 ${stemLen} 字但 estimated_time=${ets}s 严重不足`,
+        `应当 ≥ 50s（基础 + 长题加成 +25s）`);
+    }
+    // 多行选项 但时间 < 30s → 短
+    if (hasMultiLineOption && longestOptionLen >= 20 && ets < 30) {
+      add(q.question_id, "minor", "M4",
+        `option 多行（最长 ${longestOptionLen} 字）但 estimated_time=${ets}s 太短`,
+        `多行选项需要 +15s（建议 ≥ 30s）`);
+    }
   }
 }
 
