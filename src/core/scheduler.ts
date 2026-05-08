@@ -183,7 +183,7 @@ export function buildDailySession(input: BuildSessionInput): DailySessionPlan {
       ...input,
       now,
       rng,
-      targetCount: 5,
+      targetCount: 7, // v0.31.49: 7 题三阶段
       pool: approvedPool,
       recentCorrectIds,
       recentSeenCount,
@@ -736,18 +736,19 @@ function buildMockExam(input: InternalInput): DailySessionPlan {
  *   4. 不够 5 道时降级到 D3-D4 不含 subquestions 的题（"题量警告"）
  */
 /**
- * v0.31.38: 闯关难度阶梯重设计。
+ * v0.31.49: 闯关 v3 — Boss 战 7 题三阶段
  *
- * 旧版 5×D3-D4 直接上 → 对孩子打击太大；用户反馈"难度太大、时间又特别短，闯关意愿小"。
+ * 老版本（v0.31.38 5 题平铺）→ 跟今日挑战体验一样，没有过关感。
  *
- * 新版：1×热身 (D2) + 3×主战 (D3) + 1×Boss (D4)
- *   - D2 热身有 subquestions 优先；没有就放宽到任何 D2 应用题（让孩子手感找回来）
- *   - 主战仍是 D3 多步应用题（subquestions 优先）
- *   - Boss 是 D4 综合压轴
- *   - 每档不够时降级（fallback）到下一档；不够 5 道时整体允许少
+ * 新版：7 题，3 阶段
+ *   Phase 1 (热身): 2 × D2 单步应用题
+ *   Phase 2 (主战): 3 × D3 多步应用题（含 subquestions）
+ *   Phase 3 (Boss): 2 × D4 综合压轴（subquestions 必需）
  *
- * 配合 service.ts 通过门槛 4/5 → 3/5（60%）— 给孩子"过得了"的体验，
- * 不是每场都 80% 才发印章，那种压力对小学生是负反馈。
+ * 顺序固定：warmup → main → boss，让前端 BossBattle 页能按 index 划分阶段：
+ *   index 0-1 = 热身，2-4 = 主战，5-6 = Boss。
+ *
+ * 失败时只要有 4+ 道答对就拿星（详见 starsFromAccuracy in bossBattleState.ts）。
  */
 function buildBigProblems(input: InternalInput): DailySessionPlan {
   const hasSubq = (q: Question) =>
@@ -804,20 +805,21 @@ function buildBigProblems(input: InternalInput): DailySessionPlan {
     return out;
   }
 
-  const target = Math.max(3, Math.min(5, input.targetCount));
+  // v0.31.49: 7 题三阶段（2 + 3 + 2）
+  const target = 7;
   const perSkill = new Set<string>();
   const alreadyPicked = new Set<string>();
 
-  // 1×热身 D2
+  // Phase 1: 2 × D2 (热身)
   const warmup = pickFromBucket(
-    byDifficulty(2, true), // D2 + subq 优先
-    byDifficulty(2, false), // D2 单步退路
-    1,
+    byDifficulty(2, false), // 单步即可，热身要快
+    byDifficulty(2, true),
+    2,
     perSkill,
     alreadyPicked,
   );
 
-  // 3×主战 D3
+  // Phase 2: 3 × D3 (主战，多步优先)
   const main = pickFromBucket(
     byDifficulty(3, true),
     byDifficulty(3, false),
@@ -826,18 +828,18 @@ function buildBigProblems(input: InternalInput): DailySessionPlan {
     alreadyPicked,
   );
 
-  // 1×Boss D4
+  // Phase 3: 2 × D4 (Boss，必须有 subquestions)
   const boss = pickFromBucket(
     byDifficulty(4, true),
     byDifficulty(4, false),
-    1,
+    2,
     perSkill,
     alreadyPicked,
   );
 
   let picked = [...warmup, ...main, ...boss];
 
-  // 总数仍不够 → 不限难度从未做过的池里再凑（保留 ≥ 3 道）
+  // 总数不够 → 用 unit 池里其他题填补（不限难度，但 fresh）
   if (picked.length < target) {
     const fillers = unitPool
       .filter((q) => !alreadyPicked.has(q.question_id))
@@ -849,7 +851,7 @@ function buildBigProblems(input: InternalInput): DailySessionPlan {
     }
   }
 
-  // 关卡内顺序：永远是 warmup → main → boss
+  // 顺序锁定：warmup → main → boss
   const poolStarved = picked.length < target;
   const finalList = picked.slice(0, target);
 

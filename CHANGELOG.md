@@ -3,6 +3,60 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.49 — 2026-05-08 · 闯关 v3：Boss 战 7 题三阶段 + 心数 + 救场 + 星级
+
+爸爸：「闯关之前太难，时间又特别短；现在改了又太简单，跟今日挑战一样了。重新设计一下」
+
+讨论后定的方案 (Option B 全新闯关引擎)，4 个里程碑一次性完成：
+
+### M1 核心引擎
+- **新 page** `/math/boss-battle/:unitId` (BossBattle.tsx) — 完全独立的战斗页
+- **scheduler 重写** buildBigProblems → 7 题三阶段（2 D2 + 3 D3 + 2 D4）
+- **状态机**: loading → intro (1.5s) → playing → phase_break (1.5s) → playing → victory/defeat
+- **心数系统**: 3 ❤️，错答 -1，每过阶段 +1（最多 3），归 0 失败
+- **boss persona**: 6 单元各有 emoji + 名字 + 台词（🌊小数浪潮怪 / 📐三角魔兽 / ✖️倍数巨人 / 👁️视角恶魔 / ⚖️平衡魔王 / 📊统计巨怪）+ 期末 👑 数学大魔王
+
+### M2 救场系统 + 段位绑定
+- **救场配额跟数学段位动态**:
+  - school (童生小学) → 1 次基础救场
+  - district (锦江区) → 1 次 + 答对回血
+  - city (成都市) → 2 次 + 免 XP 扣分
+  - province (四川省) → 2 次 + 听完整解题
+  - country (全国) → 3 次 + boss HP -10%
+- **救场二选一**: 看提示 / 跳过 / (省级+ 完整解题)
+- "练数学涨 XP → 升段位 → 闯关救场更多" 反馈循环
+
+### M3 BossWorld 重做 + 星级
+- **新 page** `/math/big-problems` (BossWorld.tsx) 替代 BigProblems.tsx
+- **每单元显示**: emoji boss + 历史最佳星数 (0-4) + 试过次数
+- **星级算法** (`starsFromAccuracy`): correct/total → 4/7=1★, 5/7=2★, 6/7=3★, 7/7=4★
+- **期末解锁**: 6 单元全 ≥ 3 ★ → 数学大魔王
+- **完美勋章**: 6 单元全 4 ★ → "G4B 完美通关" 特殊勋章
+
+### M4 polish
+- 进场动画 (boss 头像 fade in + 台词)
+- 阶段切换动画 (1.5s "进入主战" 卡片)
+- HP 条按答题动态削减（对答 -1/total，错 -0.4/total，跳过 -0.3/total）
+- Boss 在 phase 3 进入"狂怒态" (animate-pulse-soft + 摇晃 emoji)
+- 通关结算页 (VictoryScreen): 星级动画 + 新纪录提示 + 再战满星按钮
+- 失败结算页 (DefeatScreen): 心碎 + "先去练 skill →" 引导
+
+### 改动文件
+**新增**:
+- `src/core/bossPersonas.ts` — boss 数据 + RescueAllowance 配置
+- `src/lib/bossBattleState.ts` — 持久化状态 + 期末解锁判定
+- `src/pages/BossBattle.tsx` — 战斗页
+- `src/pages/BossWorld.tsx` — landing 页（替代 BigProblems）
+- `src/components/boss/{BossPanel,HeartsBar,PhaseIndicator,LifelineButton,VictoryScreen,DefeatScreen}.tsx`
+
+**修改**:
+- `src/core/scheduler.ts` — buildBigProblems 改成 7 题三阶段
+- `src/db/service.ts` — 通过门槛改成 ≥ 4/7 (匹配 1 ★ 阈值)
+- `src/router.tsx` — 加 boss-battle 路由 + 改 big-problems 指向 BossWorld
+
+**删除**:
+- `src/pages/BigProblems.tsx` — 被 BossWorld 替代（注：保留物理文件以防回滚）
+
 ## v0.31.48 — 2026-05-08 · 修英语 / 语文 打卡环填充动画
 
 爸爸：「英语的今日打卡环动画被你删除了，应该保持和数学和语文的打卡环一样」

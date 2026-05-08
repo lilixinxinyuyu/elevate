@@ -18,7 +18,8 @@ import { EnglishHomePage } from "./pages/english/EnglishHome";
 import { VocabPracticePage } from "./pages/english/VocabPractice";
 import { FluencyPage } from "./pages/Fluency";
 import { FluencySessionPage } from "./pages/FluencySession";
-import { BigProblemsPage } from "./pages/BigProblems";
+import { BossWorldPage } from "./pages/BossWorld";
+import { BossBattlePage } from "./pages/BossBattle";
 import { VoiceTestPage } from "./pages/VoiceTest";
 import { Mascot3DTestPage } from "./pages/Mascot3DTest";
 import { MascotComparePage } from "./pages/MascotCompare";
@@ -126,8 +127,9 @@ export const router = createBrowserRouter([
       // Phase 2 Axis 3：Fluency 口算训练营。feature flag off 期间走 ComingSoon。
       { path: "fluency", element: <Phase2Route><FluencyPage /></Phase2Route> },
       { path: "fluency/:moduleId", element: <Phase2Route><FluencySessionPage /></Phase2Route> },
-      // Phase 2 Axis 1：大题营 landing。Train 内部用 ?mode=big_problems 直接跑。
-      { path: "big-problems", element: <Phase2Route><BigProblemsPage /></Phase2Route> },
+      // v0.31.49: 闯关 v3 — Boss 战 + 闯关世界
+      { path: "big-problems", element: <Phase2Route><BossWorldPage /></Phase2Route> },
+      { path: "boss-battle/:unitId", element: <Phase2Route><BossBattlePage /></Phase2Route> },
       { path: "voice-test", element: <MathOnlyRoute><VoiceTestPage /></MathOnlyRoute> },
       { path: "mascot3d", element: <MathOnlyRoute><Mascot3DTestPage /></MathOnlyRoute> },
       { path: "mascot-compare", element: <MathOnlyRoute><MascotComparePage /></MathOnlyRoute> },

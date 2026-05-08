@@ -665,18 +665,12 @@ export async function finalizeSession(
     }
   }
 
-  // v0.31.1 / v0.31.38：闯关印章 + 闯关相关勋章。
-  //   通过条件：mode=big_problems + 5/5 中 ≥ 3 道对（accuracy ≥ 0.6）
-  //     v0.31.38 从 4/5 (0.8) 降到 3/5 (0.6)：用户反馈"闯关意愿小"，
-  //     配合"1×D2 + 3×D3 + 1×D4"难度阶梯（scheduler.buildBigProblems），
-  //     给孩子一个能过得了的关卡，胜利感建立后再加挑战。
-  //   单元印章: trophyId = boss_<unitId>_master
-  //   零提示通关: 整场没开过 hint
-  //   闯关首通: 首次任意通过任意单元
-  //   闯关连胜: meta:bossWinStreak 累计，>= 5 拿
-  //   期末大闯关: session.final=1 + 通过 → boss_final_master
+  // v0.31.49：闯关 v3 — boss 战 7 题。
+  //   通过条件：correct >= 4 (= 1 star, 单元印章解锁)
+  //   星级评价由 BossBattle 页直接记录在 db.meta::boss::<sid>::<unitId>
+  //   service 这里仅处理 trophy（单元印章 / 首通 / 连胜 / 零提示）
   if (session.mode === "big_problems") {
-    const passed = total > 0 && correct >= Math.ceil(total * 0.6);
+    const passed = total > 0 && correct >= 4;
     if (passed) {
       const noHints = attempts.every((a) => (a.hintsOpened ?? 0) === 0);
       const trophiesToAdd: { id: string; meta?: Record<string, unknown> }[] = [];
