@@ -45,7 +45,9 @@ export async function ensureMascotImage(): Promise<string | null> {
     const row = await ensureTrophyImageWithCustomPrompt(MASCOT_XIAOJIN, MASCOT_PROMPT);
     return row.imageDataUrl;
   } catch (e) {
-    console.error("[mascot] failed to generate:", e);
+    // v0.31.57: dev server 没 API endpoint 时会返 404，调用方已有 fallback emoji，
+    // 这里降到 warn 级别避免控制台被无限红字刷屏
+    console.warn("[mascot] failed to generate (using emoji fallback):", e);
     return null;
   }
 }

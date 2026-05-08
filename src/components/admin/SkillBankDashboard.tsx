@@ -274,6 +274,11 @@ export function SkillBankDashboard() {
                           row={r}
                           allQuestions={questions ?? []}
                           onClose={() => setExpandedSkillId(null)}
+                          onRequestGen={() => {
+                            // v0.31.57: 单 skill inline 出题入口 — 把当前 skill 设为唯一选中并开 modal
+                            setSelected(new Set([r.skillId]));
+                            setModalOpen(true);
+                          }}
                         />
                       </td>
                     </tr>
@@ -501,10 +506,13 @@ function SkillDetailPanel({
   row,
   allQuestions,
   onClose,
+  onRequestGen,
 }: {
   row: SkillRow;
   allQuestions: Question[];
   onClose: () => void;
+  /** v0.31.57: 行内点 🤖 → 父组件打开批量出题 modal 仅含本 skill */
+  onRequestGen: () => void;
 }) {
   const skillQuestions = useMemo(
     () =>
@@ -668,6 +676,15 @@ function SkillDetailPanel({
             <span className="ml-2 text-cyan-300/80">· 已质检 {judgments.size}</span>
           )}
         </div>
+        <button
+          type="button"
+          onClick={onRequestGen}
+          disabled={busy || judging}
+          className="px-2 py-1 rounded-md bg-violet-500/20 hover:bg-violet-500/30 text-violet-200 border border-violet-400/40 disabled:opacity-50"
+          title="给本 skill 一键批量出题（打开工作台）"
+        >
+          🤖 给此 skill 出题
+        </button>
         <button
           type="button"
           onClick={() => void onJudgeAll()}
