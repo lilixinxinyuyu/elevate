@@ -407,6 +407,18 @@ export const TROPHIES: TrophyDef[] = [
     category: "daily",
     tier: (ctx) => totalSubrankStagesAchieved(ctx.attempts),
   },
+  // v0.31.53: 难题猎人 — 每周一自动结算上周 D4 题数 ≥ 阈值就颁发。
+  // 跟标准 tier() 流程不同 — 颁发逻辑走 service.ts::awardWeeklyD4HunterIfDue
+  // （需要 join db.questions 拿 difficulty，不在 TrophyCheckContext 里），
+  // 所以 check 返回 false 让标准流程跳过，由 passiveTrophyCheck 单独触发。
+  {
+    id: "weekly_d4_hunter",
+    name: "难题猎人",
+    description: "一周内挑战 ≥ 8 道难题（D4），战士本色。每周一自动结算上周成绩。",
+    icon: "🏹",
+    category: "daily",
+    check: () => false,
+  },
 
   // ============================================
   //  ⛰️ milestone — 单槽 4 等级进阶

@@ -41,6 +41,7 @@ export async function getDefaultStudent(): Promise<StudentProfile> {
  * 典型用例：
  *   - 时间触发型 commemorative（新学期/期中/期末/生日）：日期到了即解锁，不必再答题
  *   - 跨段型 commemorative（破晓登阶）：上次跨段是历史事件，本次进 app 即补发
+ *   - v0.31.53: 难题猎人 — 每周一查上周 D4 数 ≥ 阈值即颁发
  *
  * 不弹 lottery（lottery 由 Train 结算页负责）；只把记录写进 db.trophies。
  * 返回新颁发数量，调用方可以决定是否提示。
@@ -81,7 +82,95 @@ export async function runPassiveTrophyCheck(studentId: string): Promise<string[]
     }
   }
   // v0.31.13: 返回新颁发的 trophyId 列表（不是 count），让 Layout 用来弹 lottery 庆祝。
-  return commemorativeAwards.map((aw) => aw.trophyId);
+  const passiveAwards = commemorativeAwards.map((aw) => aw.trophyId);
+
+  // v0.31.53: 难题猎人 — 每周自动结算
+  const hunter = await awardWeeklyD4HunterIfDue(studentId);
+  if (hunter) passiveAwards.push(hunter);
+
+  return passiveAwards;
+}
+
+// ============= v0.31.53: 难题猎人周勋章 =============
+
+const D4_HUNTER_THRESHOLD = 8;
+const d4HunterWeekKey = (sid: string) => `weeklyD4Hunter::lastAwardedWeek::${sid}`;
+
+/**
+ * 给定 Date，返回所在周的"周一"日期 key (YYYY-MM-DD)。
+ * 周一作为一周开始（中国习惯 + ISO 8601）。
+ */
+function weekStartKey(d: Date): string {
+  const dt = new Date(d.getTime());
+  dt.setHours(0, 0, 0, 0);
+  const day = dt.getDay() === 0 ? 7 : dt.getDay(); // Mon=1..Sun=7
+  dt.setDate(dt.getDate() - (day - 1));
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * 检查上一个完整周（上周一 00:00 → 本周一 00:00）的 D4 attempts 数。
+ * ≥ THRESHOLD 且本周未颁发过 → 写一行 db.trophies 并返回 trophyId。
+ *
+ * 用 weekStartKey 跟踪：每周只可能颁发一次（防 layout 反复触发）。
+ * 即使没达标也会更新 weekKey，避免每次 layout mount 都扫一次。
+ */
+async function awardWeeklyD4HunterIfDue(studentId: string): Promise<string | null> {
+  try {
+    const now = new Date();
+    const thisWeekStart = new Date(now);
+    thisWeekStart.setHours(0, 0, 0, 0);
+    const todayDay = thisWeekStart.getDay() === 0 ? 7 : thisWeekStart.getDay();
+    thisWeekStart.setDate(thisWeekStart.getDate() - (todayDay - 1));
+    const lastWeekStart = new Date(thisWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    const lastWeekKey = weekStartKey(lastWeekStart);
+
+    // 本周已扫过该 lastWeek？(即使没达标也会标记，避免重复扫)
+    const last = await db.meta.get(d4HunterWeekKey(studentId));
+    if (last?.value === lastWeekKey) return null;
+
+    const attempts = (await db.attempts.where({ studentId }).toArray()).filter(
+      (a) =>
+        a.createdAt >= lastWeekStart.getTime() &&
+        a.createdAt < thisWeekStart.getTime(),
+    );
+
+    if (attempts.length === 0) {
+      // 上周没数据 — 标记跳过，不颁发
+      await db.meta.put({ key: d4HunterWeekKey(studentId), value: lastWeekKey });
+      return null;
+    }
+
+    // join 上 questions 拿 difficulty
+    const qIds = Array.from(new Set(attempts.map((a) => a.questionId)));
+    const questions = await db.questions.where("question_id").anyOf(qIds).toArray();
+    const qMap = new Map(questions.map((q) => [q.question_id, q]));
+    let d4Count = 0;
+    for (const a of attempts) {
+      const q = qMap.get(a.questionId);
+      if (q && q.difficulty === 4) d4Count++;
+    }
+
+    // 标记本周已扫
+    await db.meta.put({ key: d4HunterWeekKey(studentId), value: lastWeekKey });
+
+    if (d4Count < D4_HUNTER_THRESHOLD) return null;
+
+    const trophy: UserTrophy = {
+      id: uid("t-"),
+      studentId,
+      subjectId: "math",
+      trophyId: "weekly_d4_hunter",
+      unlockedAt: Date.now(),
+      meta: { weekKey: lastWeekKey, d4Count },
+    };
+    await db.trophies.put(trophy);
+    return "weekly_d4_hunter";
+  } catch (e) {
+    console.warn("[awardWeeklyD4HunterIfDue] failed:", e);
+    return null;
+  }
 }
 
 export interface SessionOptions {

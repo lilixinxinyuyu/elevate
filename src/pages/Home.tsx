@@ -22,6 +22,7 @@ import {
 import { tierById, TIERS, tierIndex } from "../core/tiers";
 import { TierCard } from "../components/TierCard";
 import { WeeklyCompareCard } from "../components/WeeklyCompareCard";
+import { BossStarCard } from "../components/BossStarCard";
 import { TrophyWall } from "../components/TrophyWall";
 import { BadgeInventory } from "../components/BadgeInventory";
 import { UnlockCelebration } from "../components/UnlockCelebration";
@@ -324,6 +325,10 @@ export function HomePage() {
           <div className="mt-2 font-display text-2xl text-white">载入中…</div>
         </section>
       )}
+
+      {/* v0.31.53：闯关星章独立卡 — 24 颗星目标（含期末 4 颗 = 28 极限）。
+          段位是连续 XP，星章是离散里程碑，二者并列让 Selena 多一条进步线。 */}
+      <BossStarCard studentId={student.id} />
 
       {/* v0.31.50：本周 vs 上周 — 短周期可见进步，配合"难度加权 XP + 5 段小段位"
           一起给 Selena 一个"每天都看得到动"的反馈点 */}
