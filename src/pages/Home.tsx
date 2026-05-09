@@ -91,12 +91,16 @@ function buildTodayRingsInput(args: {
   const exam = currentExam();
   const examDays = daysUntil(exam.date);
 
-  // v0.31.58: 优先级重排
-  //   1. 错题到期（必须做的事，最紧迫）
-  //   2. 考试 ≤14 天倒计时（高紧迫感）
-  //   3. Phase 2: 闯关赢星（每天必做，常态）
-  //   4. 全闭/idle 兜底
-  if (dueMistakes > 0) {
+  // v0.31.59: 优先级重排（爸爸反馈第三环显示了错题复活，期望看到闯关赢星）
+  //   1. Phase 2 + 今日还没拿到 boss 星 → 闯关赢星（默认每日打卡，强动机）
+  //   2. 错题到期（仅当今日 boss 星已拿，作为下一件该做的事）
+  //   3. 考试 ≤14 天倒计时
+  //   4. Phase 2 + 已拿星 → 仍显示 boss_star_today (done 状态)
+  //   5. all_done / idle 兜底
+  const bossStarDone = (args.todayBossStars ?? 0) >= 1;
+  if (phase2 && !bossStarDone) {
+    focus = { kind: "boss_star_today", starsToday: args.todayBossStars, target: 1 };
+  } else if (dueMistakes > 0) {
     focus = { kind: "mistakes_due", count: dueMistakes };
   } else if (examDays >= 0 && examDays <= 14) {
     focus = { kind: "exam_countdown", examName: exam.name, days: examDays };

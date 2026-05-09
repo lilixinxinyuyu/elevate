@@ -43,7 +43,9 @@ const { SEED_QUESTIONS, validateQuestion, auditQuestion } = await import(tmpFile
 rmSync(tmpFile, { force: true });
 
 const priorities = JSON.parse(readFileSync("/tmp/priorities.json", "utf8"));
-const skills = priorities.topToFill.slice(0, 12);
+// v0.31.59: 不再 slice(0, 12) — 让 keep-filling.sh 决定多少个 skill 每轮跑
+//   单轮过多时间太长（19 skill × 20 题 × 8 pass × 30s = 5h）→ 上限 24
+const skills = priorities.topToFill.slice(0, 24);
 console.error(`▶ v2: ${skills.length} skills × target ${TARGET_PER_SKILL}, max ${PASSES} passes`);
 
 const auth = `Bearer ${PWD}`;
