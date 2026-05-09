@@ -101,6 +101,21 @@ function autoFix(rawQ, sk) {
   if (!Array.isArray(q.hints)) q.hints = [];
   if (!Array.isArray(q.tags)) q.tags = [];
 
+  // **过滤** ability_dimension 中的非法 enum 值（不强加默认）
+  //   - AI 经常把 cognitive_level 的 "procedural" 误塞进来
+  //   - 过滤是"删 AI 写错的部分"，不是"我编对的值"
+  //   - 过滤后空数组 → 继续 vfail（让我看到 AI 没选好的情况）
+  const VALID_ABILITY = new Set([
+    "calculation", "concept", "reasoning", "modeling",
+    "spatial", "data", "strategy", "habit",
+  ]);
+  if (Array.isArray(q.ability_dimension)) {
+    const filtered = q.ability_dimension.filter((a) => VALID_ABILITY.has(a));
+    if (filtered.length > 0 && filtered.length < q.ability_dimension.length) {
+      q.ability_dimension = filtered;
+    }
+  }
+
   return q;
 }
 

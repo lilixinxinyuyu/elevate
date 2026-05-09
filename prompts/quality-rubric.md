@@ -49,6 +49,26 @@
 - `ability_dimension` 用 `"concept"`（概念力）
 - `cognitive_level` 用 `"recall"`/`"procedural"`/`"application"`/`"reasoning"` —— **没有 `"conceptual"` 选项**
 
+⚠️ **两个 enum 互不通用 — 不要混入对方的值**：
+
+| 字段 | 合法值（仅这些） |
+|---|---|
+| `ability_dimension[]` | `calculation` / `concept` / `reasoning` / `modeling` / `spatial` / `data` / `strategy` / `habit` |
+| `cognitive_level` | `recall` / `procedural` / `application` / `reasoning` |
+
+**❌ 常见错误**：
+- 把 `"procedural"` 塞到 `ability_dimension` —— **不行**，`procedural` 是 cognitive_level 专用
+- 把 `"recall"` / `"application"` 塞到 `ability_dimension` —— **不行**，同理
+- 把 `"calculation"` / `"concept"` 等放到 `cognitive_level` —— **不行**
+
+**✓ 正确写法**：
+```json
+"ability_dimension": ["calculation"],   // ← 只能从上面 8 个里选
+"cognitive_level": "procedural"         // ← 只能从上面 4 个里选
+```
+
+注意 `reasoning` 出现在两个集合里 —— 但每个字段是独立判断，不要因此混用其他词。
+
 ## 2. 题型与必备字段
 
 所有题型必须有：
