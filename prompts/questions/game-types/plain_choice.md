@@ -26,9 +26,17 @@
 ⚠️ **必填枚举字段（合法值，不要改写、不要翻译）**：
 - `term`: 必须是 `"上册"` 或 `"下册"`（用户传入的 `{{term}}`）。**不要写 `"G4A"` / `"G4B"`** — 那是 unit_id 的前缀，不是 term 的值。
 - `cognitive_level`: 必须是 `"recall"` / `"procedural"` / `"application"` / `"reasoning"` 中的一个。**不要写 `"conceptual"`**。
-- `ability_dimension[]`: 数组元素必须从 `["calculation","concept","reasoning","modeling","spatial","data","strategy","habit"]` 选。**不要写 `"conceptual"`**。
+- `ability_dimension[]`: 数组元素必须从 `["calculation","concept","reasoning","modeling","spatial","data","strategy","habit"]` 选。**不要写 `"conceptual"`，不要写 `"procedural"`**（procedural 是 cognitive_level 的值，不是 ability）。
 - `question_format`: `"single_choice"`（plain_choice 题型固定这个）。
 - `exam_priority`: 见 prompts/quality-rubric.md，常用 `"HIGH_BIG"`。
+
+⚠️ **`solution_steps` 是字符串数组，不是对象数组**：
+- ✓ `"solution_steps": ["先算 A，得 X", "再算 B，得 Y", "因此答案是 Z"]`
+- ✗ `"solution_steps": [{ "step": 1, "text": "..." }]`
+
+⚠️ **`hints[].penalty` 是整数 1-3，不要用浮点**：
+- ✓ `{ "text": "提示...", "penalty": 1 }`
+- ✗ `{ "text": "提示...", "penalty": 0.5 }`
 
 输出每题的 JSON 形如：
 

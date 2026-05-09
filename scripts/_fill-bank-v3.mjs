@@ -116,6 +116,39 @@ function autoFix(rawQ, sk) {
     }
   }
 
+  // solution_steps: 如果 AI 给了对象数组（{step, text}），抽 .text 转字符串
+  //   - schema 要求 string[]，AI 偶尔给富对象
+  //   - 这是"提取 AI 已写好的内容"，不是"我编新内容"
+  if (Array.isArray(q.solution_steps)) {
+    q.solution_steps = q.solution_steps.map((s) => {
+      if (typeof s === "string") return s;
+      if (s && typeof s === "object") {
+        // 优先 .text，其次 .step / 整体 stringify
+        if (typeof s.text === "string") return s.text;
+        if (typeof s.step === "string") return s.step;
+        if (typeof s.description === "string") return s.description;
+        // 最后兜底：取所有字符串字段拼接
+        const vals = Object.values(s).filter((v) => typeof v === "string");
+        if (vals.length > 0) return vals.join("：");
+      }
+      return String(s);
+    }).filter((s) => s && s.length > 0);
+  }
+
+  // hints[].penalty: AI 偶尔给浮点 (0.1, 0.5, 1.5)，schema 要 int
+  //   - round 是机械 conversion，不引入新事实
+  //   - 0.1 → 0 → 但 penalty=0 不太合理，用 max(1, round) 防 0
+  if (Array.isArray(q.hints)) {
+    q.hints = q.hints.map((h) => {
+      if (h && typeof h === "object" && typeof h.penalty === "number" && !Number.isInteger(h.penalty)) {
+        // 0.1 / 0.2 / 0.3 → 1 / 1 / 1 — round 不够细致，scale up
+        const p = h.penalty < 1 ? Math.round(h.penalty * 10) : Math.round(h.penalty);
+        return { ...h, penalty: Math.max(1, Math.min(5, p)) };
+      }
+      return h;
+    });
+  }
+
   return q;
 }
 

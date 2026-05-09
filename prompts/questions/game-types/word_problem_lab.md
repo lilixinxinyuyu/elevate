@@ -116,3 +116,20 @@
 5. **数字保持小数点后 1-2 位**（4 年级范围）
 6. **estimated_time_seconds 推荐 60-120**（应用题需要思考时间）
 7. **difficulty 取 3-5**（应用题本身就是中难）
+
+### ⛔ 常见格式陷阱（schema 严格，错了直接拒绝）
+
+1. **`answer.steps[i].expected` 必须是字符串或数字，不能是数组**：
+   - `"clue"` 步：用**逗号拼接的字符串**（如 `"0,1,2"`），**不要**写成 `[0, 1, 2]`
+   - `"relationship"` 步：写完整的关系式字符串
+   - `"answer"` 步：用 number（带 `kind: "answer"`）
+   ✓ `{ "step_id": "clue", "expected": "0,1,2" }`
+   ✗ `{ "step_id": "clue", "expected": [0,1,2] }`
+
+2. **`solution_steps` 是字符串数组**，不是对象数组：
+   ✓ `["第一步：先算...", "第二步：...", "答案：592"]`
+   ✗ `[{ "step": 1, "text": "..." }, ...]`
+
+3. **`hints[].penalty` 必须是整数 1-3**，不要用浮点：
+   ✓ `{ "text": "...", "penalty": 1 }`
+   ✗ `{ "text": "...", "penalty": 0.5 }`
