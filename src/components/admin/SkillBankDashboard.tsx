@@ -471,11 +471,25 @@ function Row({
               <span className="text-slate-100">m {row.mastery}</span>
               <span className="text-slate-500"> · {row.attemptsCount} 次</span>
             </div>
-            {!Number.isNaN(row.accuracy) && (
-              <div className="text-[10px] text-slate-500">
-                {Math.round(row.accuracy * 100)}% 准
-              </div>
-            )}
+            <div className="text-[10px] text-slate-500 flex items-center justify-end gap-1.5 flex-wrap">
+              {!Number.isNaN(row.accuracy) && <span>{Math.round(row.accuracy * 100)}% 准</span>}
+              {!Number.isNaN(row.daysSinceLast) && (
+                <span
+                  className={
+                    row.daysSinceLast === 0
+                      ? "text-emerald-300/80"
+                      : row.daysSinceLast <= 3
+                        ? "text-slate-400"
+                        : row.daysSinceLast <= 7
+                          ? "text-amber-300/70"
+                          : "text-rose-300/70"
+                  }
+                  title={`上次练习：${new Date(row.lastPracticedAt).toLocaleDateString()}`}
+                >
+                  · {row.daysSinceLast === 0 ? "今天" : `${row.daysSinceLast}天前`}
+                </span>
+              )}
+            </div>
           </>
         ) : (
           <span className="text-slate-600">未练</span>

@@ -58,6 +58,10 @@ export interface SkillRow {
   isWeak: boolean;
   /** 题量低 (< 8 道) 标缺货 */
   isLowStock: boolean;
+  /** v0.31.60: 上次练这个 skill 距今多少毫秒；0 = 没练过 */
+  lastPracticedAt: number;
+  /** 上次练距今多少天（向下取整）；NaN = 没练过 */
+  daysSinceLast: number;
 }
 
 /**
@@ -126,6 +130,16 @@ export function buildSkillRows(
     const masteryScore = masteryBySkill.get(skill.id)?.score ?? 0;
     const isWeak = skillAttempts.length >= 3 && masteryScore < 60;
     const isLowStock = skillQs.length < 8;
+    // v0.31.60: 上次练距今多少天（用 mastery.lastPracticedAt；fallback 用 attempts 最大 createdAt）
+    const lastPracticedAt =
+      masteryBySkill.get(skill.id)?.lastPracticedAt ??
+      (skillAttempts.length > 0
+        ? Math.max(...skillAttempts.map((a) => a.createdAt))
+        : 0);
+    const daysSinceLast =
+      lastPracticedAt > 0
+        ? Math.floor((Date.now() - lastPracticedAt) / (24 * 60 * 60 * 1000))
+        : Number.NaN;
 
     rows.push({
       skillId: skill.id,
@@ -146,6 +160,8 @@ export function buildSkillRows(
       accuracy,
       isWeak,
       isLowStock,
+      lastPracticedAt,
+      daysSinceLast,
     });
   }
   return rows;

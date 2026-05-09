@@ -49,11 +49,16 @@ while true; do
   # 4. swap priorities to under20 list
   cp /tmp/under20.json /tmp/priorities.json
 
-  # 5. run fill-bank-v2 — target=20 per script run, but v2 reads per-skill `need`
-  #    from priorities so won't overshoot. Cap 8 passes per round.
+  # 5. run fill-bank-v3（闭环：autoFix + vfail capture + 跳过卡死 skill）
   echo "  filling round $ROUND…" >> "$LOG"
-  node scripts/_fill-bank-v2.mjs 20 8 >> "$LOG" 2>&1 || \
-    echo "  fill-bank-v2 exit nonzero (continuing)" >> "$LOG"
+  node scripts/_fill-bank-v3.mjs 20 10 >> "$LOG" 2>&1 || \
+    echo "  fill-bank-v3 exit nonzero (continuing)" >> "$LOG"
+
+  # 6. 检查 vfail summary — 如果有被跳过的 skill 反复 vfail，提示后续 prompt review
+  SKIPPED=$(jq '.skipped | length' /tmp/vfail-summary.json 2>/dev/null || echo "0")
+  if [ "$SKIPPED" != "0" ] && [ "$SKIPPED" != "" ]; then
+    echo "  ⚠ $SKIPPED skill 因连续 vfail 跳过（见 /tmp/vfail-summary.json）" >> "$LOG"
+  fi
 
   echo "▶ round $ROUND end at $(date)" >> "$LOG"
 
