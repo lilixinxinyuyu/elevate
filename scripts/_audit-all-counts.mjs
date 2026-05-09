@@ -31,7 +31,16 @@ const { SEED_QUESTIONS, SKILLS, UNITS } = await import(tmpFile);
 rmSync(tmpFile, { force: true });
 
 const snap = JSON.parse(readFileSync("/tmp/prod-snapshot.json", "utf8"));
-const aiQs = snap.latest?.payload?.aiQuestions ?? [];
+// v0.31.65: aiQuestions 已拆出独立端点。优先从 /tmp/aiqs.json 读（独立 fetch），
+// fallback 到主 snapshot（兼容老数据）。
+let aiQs = [];
+try {
+  const aiqsFile = readFileSync("/tmp/aiqs.json", "utf8");
+  const aj = JSON.parse(aiqsFile);
+  if (Array.isArray(aj.rows)) aiQs = aj.rows;
+} catch {
+  aiQs = snap.latest?.payload?.aiQuestions ?? [];
+}
 
 const UNIT_BY = new Map(UNITS.map(u => [u.id, u]));
 

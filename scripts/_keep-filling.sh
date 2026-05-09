@@ -24,10 +24,12 @@ while true; do
   ROUND=$((ROUND+1))
   echo "▶ round $ROUND begin at $(date)" >> "$LOG"
 
-  # 1. pull D1 latest
+  # 1. pull D1 latest（主 snapshot + 独立 ai-questions）
   curl -s -H "Authorization: Bearer $APP_PASSWORD" \
     "$PROD/api/sync/download" -o /tmp/prod-snapshot.json
-  if [ ! -s /tmp/prod-snapshot.json ]; then
+  curl -s -H "Authorization: Bearer $APP_PASSWORD" \
+    "$PROD/api/sync/ai-questions" -o /tmp/aiqs.json
+  if [ ! -s /tmp/prod-snapshot.json ] || [ ! -s /tmp/aiqs.json ]; then
     echo "  download failed, sleep 5min" >> "$LOG"
     sleep 300
     continue
