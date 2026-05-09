@@ -21,6 +21,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { isPhase2Live } from "../lib/featureFlags";
+import { DAILY_REVIVE_TARGET } from "../lib/mistakeSchedule";
 
 interface RingSpec {
   id: "fluency" | "challenge" | "focus";
@@ -50,7 +51,15 @@ export interface TodayRingsInput {
      * 真正每天可做：随便挑一关再打，得 1 颗星即闭环。
      */
     | { kind: "boss_star_today"; starsToday: number; target: number }
-    | { kind: "mistakes_due"; count: number }
+    /**
+     * v0.31.69: 每日复活配额 + 自动分散积压。
+     *  - count: 当前到期数（已经过 service.spreadOverflowDueMistakes 规整，
+     *    一般 ≤ DAILY_REVIVE_TARGET，除非新进错题刚好让总量回升）
+     *  - revivedToday: 今日已推进的到期错题数
+     *  - encourageMore: 闭环后是否鼓励继续做（>70% accuracy + 比 estimated 快 ≥20%）
+     * 闭环规则：revivedToday >= min(target, totalDueToday)；不再要求"清零所有"。
+     */
+    | { kind: "mistakes_due"; count: number; revivedToday: number; encourageMore: boolean }
     | { kind: "exam_countdown"; examName: string; days: number }
     | { kind: "all_done" }
     | { kind: "idle" };
@@ -357,19 +366,34 @@ function buildFocus(
         done,
       };
     }
-    case "mistakes_due":
+    case "mistakes_due": {
+      // v0.31.69: 每日复活目标 = min(10, totalDueToday)。多余到期题已被
+      // spreadOverflowDueMistakes 推到未来 7 天，这里只算今日工作量。
+      const totalToday = f.count + f.revivedToday;
+      const targetToday = Math.min(DAILY_REVIVE_TARGET, totalToday);
+      const done = f.revivedToday >= targetToday && targetToday > 0;
+      const ratio = targetToday > 0 ? f.revivedToday / targetToday : 1;
+      const statusText = (() => {
+        if (totalToday === 0) return "今日已清";
+        if (done && f.encourageMore) return `🔥 状态超好！再来 10 道？`;
+        if (done) return `今日已闭 ✓（队列还有 ${f.count} 道，明天再战）`;
+        if (f.revivedToday > 0)
+          return `复活 ${f.revivedToday} / ${targetToday} 道`;
+        return `今日目标 ${targetToday} 道`;
+      })();
       return {
         id: "focus",
-        icon: "🪄",
+        icon: done ? "✨" : "🪄",
         shortLabel: "错题复活",
         longLabel: "错题复活",
-        progress: f.count > 0 ? 0.1 : 1,
-        statusText: f.count > 0 ? `今日到期 ${f.count} 道` : "今日已清",
+        progress: done ? 1 : Math.max(0.1, ratio),
+        statusText,
         to: "/math/mistakes",
         hue: amber1,
         hue2: amber2,
-        done: f.count === 0,
+        done,
       };
+    }
     case "exam_countdown":
       return {
         id: "focus",

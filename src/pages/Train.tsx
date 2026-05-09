@@ -23,6 +23,7 @@ import { trophyImageKey } from "../lib/allTrophies";
 import type { TrophyMeta } from "../lib/trophyImages";
 import { TROPHIES } from "../core/trophies";
 import { tierById } from "../core/tiers";
+import { CelebrationBurst, type BurstKind } from "../components/CelebrationBurst";
 
 export function TrainPage() {
   const [params] = useSearchParams();
@@ -54,6 +55,15 @@ export function TrainPage() {
       }
     | { status: "done"; summary: SessionSummary; studentId: string }
   >({ status: "loading" });
+
+  // v0.31.71: 正反馈密度引擎状态
+  //   - consecutiveWrong：连续答错计数（答对 reset 0），用于触发"鼓励"节点
+  //   - manualBurst：显式触发其他节点（session_win），递增 nonce 即可
+  const [consecutiveWrong, setConsecutiveWrong] = useState(0);
+  const [manualBurst, setManualBurst] = useState<{ kind: BurstKind; nonce: number }>({
+    kind: "first_correct",
+    nonce: 0,
+  });
 
   // 唯一标识本次"想要的训练"——只有 URL 真的改变才重新建会话；HMR / 重渲染都不会重置。
   const initKey = useMemo(
@@ -149,6 +159,13 @@ export function TrainPage() {
           : s,
       );
       if (outcome.comboAfter >= 3 && outcome.comboAfter % 3 === 0) sfx.combo();
+
+      // v0.31.71: 正反馈密度 —— 答对清零连错计数，答错累加（>=2 触发鼓励 burst）
+      if (result.isCorrect) {
+        setConsecutiveWrong(0);
+      } else {
+        setConsecutiveWrong((w) => w + 1);
+      }
       return {
         points: outcome.points,
         repeatDecay: outcome.repeatDecay,
@@ -250,6 +267,8 @@ export function TrainPage() {
           await recordMockExamCompleted(state.studentId);
         }
         setState({ status: "done", summary, studentId: state.studentId });
+        // v0.31.71: session 完成 → 触发 session_win burst（在 SummaryView 出现前的"凯旋"瞬间）
+        setManualBurst((b) => ({ kind: "session_win", nonce: b.nonce + 1 }));
         // 后台静默上传到云端，不阻塞 UI
         pushToCloud().catch(() => {/* 忽略：失败下次再试 */});
         // 完成时智能补题：检查 fresh 题数，< 30 才触发；触发时跨 3 个最弱 skill
@@ -305,22 +324,30 @@ export function TrainPage() {
 
   const question = state.questions[state.index]!;
   return (
-    <GameShell
-      question={question}
-      index={state.index}
-      total={state.questions.length}
-      xp={state.xp}
-      combo={state.combo}
-      onSubmit={handleSubmit}
-      onNext={handleNext}
-      showStarter={state.index === 0}
-      // v0.31.38: 闯关 (big_problems) 不限时 — 多步应用题需要慢慢想，
-      // 时间压力对孩子是负反馈。原 BigProblems UI 也明示 "不限时"。
-      countdownEnabled={effectiveMode !== "big_problems"}
-      examMode={effectiveMode === "mock_exam"}
-      onRequestVariant={handleRequestVariant}
-      onInjectQuestion={handleInjectQuestion}
-    />
+    <>
+      <GameShell
+        question={question}
+        index={state.index}
+        total={state.questions.length}
+        xp={state.xp}
+        combo={state.combo}
+        onSubmit={handleSubmit}
+        onNext={handleNext}
+        showStarter={state.index === 0}
+        // v0.31.38: 闯关 (big_problems) 不限时 — 多步应用题需要慢慢想，
+        // 时间压力对孩子是负反馈。原 BigProblems UI 也明示 "不限时"。
+        countdownEnabled={effectiveMode !== "big_problems"}
+        examMode={effectiveMode === "mock_exam"}
+        onRequestVariant={handleRequestVariant}
+        onInjectQuestion={handleInjectQuestion}
+      />
+      {/* v0.31.71: 正反馈密度引擎 —— combo 5/10/20 burst + 连续 2 错鼓励 + session 完成凯旋 */}
+      <CelebrationBurst
+        combo={state.combo}
+        consecutiveWrong={consecutiveWrong}
+        manualTrigger={manualBurst}
+      />
+    </>
   );
 }
 

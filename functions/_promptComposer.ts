@@ -286,11 +286,15 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
   lines.push(``);
 
   // 6. existing stems
+  // v0.31.66: 不再裁切 — 全量传给 AI。
+  //   - 1000 道 × ~50 字 = 50KB ≈ 12K token，现代模型 context 100K+ 完全不在意
+  //   - 之前 slice(0, 12) + slice(0, 60) 是过早优化，导致 AI 看不到第 13+ 条 → 重复
+  //   - 唯一防爆的兜底：万一 stem 超长（>200 字），单条截 200 — 防异常数据，不为省 token
   if (existingStems && existingStems.length > 0) {
-    lines.push(`## 已有题干（必须避免重复，换情境/换数字/换字词）`);
+    lines.push(`## 已有题干 (${existingStems.length} 道, 必须避免重复 — 换情境/换数字/换字词)`);
     lines.push(``);
-    for (const s of existingStems.slice(0, 12)) {
-      lines.push(`- ${s.slice(0, 60)}`);
+    for (const s of existingStems) {
+      lines.push(`- ${s.length > 200 ? s.slice(0, 200) + "…" : s}`);
     }
     lines.push(``);
   }

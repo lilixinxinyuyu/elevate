@@ -128,6 +128,20 @@ export default {
           "0%": { transform: "translateY(14px)", opacity: "0" },
           "100%": { transform: "translateY(0)", opacity: "1" },
         },
+        // v0.31.71：庆祝主文 burst —— 由 0.4 弹起到 1.05 再回落，最后 fade
+        burstText: {
+          "0%": { transform: "scale(0.4) translateY(20px)", opacity: "0" },
+          "30%": { transform: "scale(1.15) translateY(0)", opacity: "1" },
+          "55%": { transform: "scale(0.95) translateY(0)", opacity: "1" },
+          "75%": { transform: "scale(1) translateY(0)", opacity: "1" },
+          "100%": { transform: "scale(1) translateY(-10px)", opacity: "0" },
+        },
+        // v0.31.71：粒子下落 emoji
+        particleFall: {
+          "0%": { transform: "translateY(-20px) rotate(0deg)", opacity: "0" },
+          "20%": { opacity: "1" },
+          "100%": { transform: "translateY(110vh) rotate(360deg)", opacity: "0" },
+        },
       },
       animation: {
         shake: "shake 0.45s ease-in-out",
@@ -150,6 +164,9 @@ export default {
         "badge-enter": "badgeEnter 720ms cubic-bezier(0.34,1.56,0.64,1) both",
         "badge-wiggle": "badgeHoverWiggle 0.7s ease-in-out",
         "score-slide-in": "scoreSlideIn 480ms cubic-bezier(0.16,1,0.3,1) both",
+        // v0.31.71 庆祝节点
+        "burst-text": "burstText 1.6s cubic-bezier(0.16,1,0.3,1) forwards",
+        "particle-fall": "particleFall 1.8s ease-in forwards",
       },
     },
   },

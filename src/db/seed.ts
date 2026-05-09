@@ -5,6 +5,11 @@ import { SEED_QUESTIONS } from "../content/questions";
 import { validateQuestion } from "../core/validateQuestion";
 import type { Question, StudentProfile } from "../core/types";
 
+// v0.31.68 (SEED_VERSION 23)：之前几次往 SEED_QUESTIONS 加 pack（GAP_FILL_PACK_G4B_V2/V3
+// + AI_GEN_G4B_PACK 等）+ genQuickSet 扩充时漏 bump。已有设备 (Bruce) 的 Dexie 仍是 v22 数据
+// → admin UI "题量" 比 audit 少很多。bump 到 23 让所有设备 boot 时 bulkPut 重 upsert
+// 全量 SEED（不影响 ai_questions / mistakes / attempts）。
+//
 // v0.30.14 (SEED_VERSION 21)：v0.30.12 加了 aiGenG4B_U14_Pack（60 道 G4B U1-U4
 // 弱 skill 题）进 SEED_QUESTIONS，但忘了 bump SEED_VERSION，导致已有 IndexedDB
 // 的现有设备 ensureSeeded() early-return，新题永远进不来。现在 bump 到 21 让
@@ -16,7 +21,7 @@ import type { Question, StudentProfile } from "../core/types";
 // 中文 "答 N"，同时补 8 道 decimal_compare 高质量题。
 // v0.31.0 Phase 2 Axis 2：加 DOT_GRID_DEMO_PACK 5 道点子图画图题，bump 版本让现有
 // 用户也下载到（5/8 道画图题型起步）。
-const SEED_VERSION = 22;
+const SEED_VERSION = 23;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

@@ -14,6 +14,8 @@ import { LotteryBoxModal } from "./LotteryBoxModal";
 import { TROPHIES } from "../core/trophies";
 import { trophyImageKey } from "../lib/allTrophies";
 import type { TrophyMeta } from "../lib/trophyImages";
+import { SyncStatusIndicator } from "./SyncStatusIndicator";
+import { flushPushNow, pullIfStale } from "../db/cloudSync";
 
 /**
  * Layout：所有 /:subject/* 子路由共用的壳。
@@ -45,6 +47,33 @@ export function Layout() {
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [chipOpen]);
+
+  // v0.31.71: tab 重新可见 / window 重获焦点 → pull 一次（节流 60s）。
+  // 让爸爸切回 Selena's Elevate 时立刻看到她最新进度，不用刷新页面。
+  // 同时 pagehide / visibilitychange=hidden → flushPushNow，确保关 tab 前
+  // pending 的防抖 push 立刻发出（fetch keepalive=true 让请求继续完成）。
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== "visible") return;
+      void pullIfStale();
+    }
+    function onHidden() {
+      if (document.visibilityState === "hidden") {
+        flushPushNow();
+      }
+    }
+    document.addEventListener("visibilitychange", () => {
+      onVisible();
+      onHidden();
+    });
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pagehide", () => flushPushNow());
+    // 进 layout 立刻拉一次（覆盖"刷新页面没拉新数据"的情况）
+    void pullIfStale({ minIntervalMs: 0 });
+    return () => {
+      window.removeEventListener("focus", onVisible);
+    };
+  }, []);
 
   // 第一次进入 Layout 时（用户登录后访问任何 page），后台静默生成小进吉祥物
   // 缓存命中就立刻 return，缺失才 fetch image。失败 fallback emoji 不影响主流程。
@@ -135,6 +164,9 @@ export function Layout() {
               })}
             </nav>
 
+            {/* v0.31.71: 同步状态芯片（已同步/待同步/同步中），点击立即同步 */}
+            <SyncStatusIndicator />
+
             {/* 学科切换 chip — v0.30.14: 不再重复显示当前 shortLabel（左上 logo 已经
                 有了），改成中性切换图标，避免视觉冗余但仍保留可点性 */}
             <div className="relative" ref={popoverRef}>
@@ -224,7 +256,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.31.65
+        本地优先 · v0.31.71
       </footer>
 
       {/* v0.30.10: 自动解锁的单元庆祝（一次弹一个，关掉再弹下一个）*/}

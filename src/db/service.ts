@@ -22,7 +22,13 @@ import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { todayKey } from "../lib/date";
 import { uid } from "../lib/format";
+import {
+  planMistakeSpread,
+  shouldEncourageMore,
+} from "../lib/mistakeSchedule";
 import type { Term } from "../core/types";
+// v0.31.71: 每次答题后防抖 push，防止 Selena 中途关 tab 数据丢
+import { schedulePushToCloud } from "./cloudSync";
 
 const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]));
 const UNIT_TERM = new Map(UNITS.map((u) => [u.id, u.term]));
@@ -471,6 +477,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
       // 真正"复习成功 → 推进 stage"。tutor-assisted 答对也不推进（半信半疑）。
       const shouldAdvance = isFirstAttempt && !usedTutor;
       if (shouldAdvance) {
+        const wasDue = !existingMistake.resolved && existingMistake.nextReviewAt <= Date.now();
         const newStage = advanceStageOnSuccess(existingMistake.stage);
         if (newStage >= REVIEW_INTERVAL_DAYS.length) {
           existingMistake.resolved = true;
@@ -478,9 +485,35 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
           existingMistake.stage = newStage;
           existingMistake.nextReviewAt = nextReviewAt(newStage);
         }
+        if (wasDue) {
+          await bumpMistakeRevivedToday(studentId);
+        }
       }
       existingMistake.lastAttemptAt = Date.now();
       await db.mistakes.put(existingMistake);
+    } else if (isCorrect && session.mode === "review" && isFirstAttempt && !usedTutor) {
+      // v0.31.68: 复活流程里答对了同 skill 的 variant（不是原错题）— 把同 skill
+      // 最早到期的那条错题推进一级。和 "shouldAdvance" 一样的安全条件
+      // （first attempt + 无 tutor）。否则 buildReview 抽 variant 会让原错题
+      // 永远停在到期状态，焦点环死锁（Selena 做了 2 轮还闭不上）。
+      const propagated = await db.mistakes
+        .where({ studentId, skillId: question.skill_id })
+        .toArray();
+      const earliestDue = propagated
+        .filter((m) => !m.resolved && m.nextReviewAt <= Date.now())
+        .sort((a, b) => a.nextReviewAt - b.nextReviewAt)[0];
+      if (earliestDue) {
+        const newStage = advanceStageOnSuccess(earliestDue.stage);
+        if (newStage >= REVIEW_INTERVAL_DAYS.length) {
+          earliestDue.resolved = true;
+        } else {
+          earliestDue.stage = newStage;
+          earliestDue.nextReviewAt = nextReviewAt(newStage);
+        }
+        earliestDue.lastAttemptAt = Date.now();
+        await db.mistakes.put(earliestDue);
+        await bumpMistakeRevivedToday(studentId);
+      }
     }
 
     // 更新 totalXp meta
@@ -504,6 +537,11 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
       }
     } catch { /* 静默：分析失败不影响主流程 */ }
   }
+
+  // v0.31.71: 每答一题就 schedule 防抖 push（8s 静默后触发）。
+  // 这样 Selena 即使中途关 tab，数据也至多丢 8s。
+  // 失败/无密码 schedulePushToCloud 内部会静默处理，不影响 UI。
+  schedulePushToCloud();
 
   return {
     attempt,
@@ -626,6 +664,97 @@ function termKey(
 
 function studentKey(name: string, studentId: string): string {
   return `${name}::${SUBJECT_NAMESPACE}::${studentId}`;
+}
+
+/**
+ * v0.31.68: 今日"已复活"计数 key（per-day, per-student）。
+ * 在原错题 advance 或 variant propagate advance 时 +1。Home → TodayRings 读取
+ * 显示进度条 "已复活 X / X+N 道"（X = 今日推进数, N = 当前到期数）。
+ */
+function mistakeRevivedTodayKey(studentId: string, dateKey: string): string {
+  return `mistakeRevived::${SUBJECT_NAMESPACE}::${studentId}::${dateKey}`;
+}
+
+async function bumpMistakeRevivedToday(studentId: string): Promise<void> {
+  const key = mistakeRevivedTodayKey(studentId, todayKey());
+  const row = await db.meta.get(key);
+  const prev = typeof row?.value === "number" ? (row.value as number) : 0;
+  await db.meta.put({ key, value: prev + 1 });
+}
+
+export async function getMistakeRevivedToday(studentId: string): Promise<number> {
+  const row = await db.meta.get(mistakeRevivedTodayKey(studentId, todayKey()));
+  return typeof row?.value === "number" ? (row.value as number) : 0;
+}
+
+/**
+ * v0.31.69: 当前到期错题超出今日上限时，把多余的 nextReviewAt 重新分散到
+ * 未来 7 天。每日打卡入口（Home / Mistakes 页）调用，幂等（spread 后 dueCount
+ * 降到 target，不再触发）。
+ *
+ * @returns 被推后的错题道数（0 = 没触发 spread）
+ */
+export async function spreadOverflowDueMistakes(studentId: string): Promise<number> {
+  const all = await db.mistakes.where({ studentId }).toArray();
+  const due = all.filter((m) => !m.resolved && m.nextReviewAt <= Date.now());
+  const { spread } = planMistakeSpread(due);
+  if (spread.length === 0) return 0;
+  await db.transaction("rw", db.mistakes, async () => {
+    for (const m of spread) await db.mistakes.put(m);
+  });
+  return spread.length;
+}
+
+/**
+ * v0.31.69: 拉今日 review-mode session 的 attempts，关联 question.estimated_time
+ * 算"是否顺利"（>70% 准确率 + 比 estimated 快 ≥20%）。供 Home 焦点环显示
+ * "继续鼓励 5 道" 用。
+ */
+export async function getReviveSessionVitality(studentId: string): Promise<{
+  encourageMore: boolean;
+  attempts: number;
+  accuracy: number;
+}> {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startMs = startOfToday.getTime();
+
+  const todayReviewSessionIds = new Set<string>();
+  const sessions = await db.sessions
+    .where({ studentId })
+    .filter((s) => s.mode === "review" && (s.startedAt ?? 0) >= startMs)
+    .toArray();
+  for (const s of sessions) todayReviewSessionIds.add(s.id);
+  if (todayReviewSessionIds.size === 0) {
+    return { encourageMore: false, attempts: 0, accuracy: 0 };
+  }
+
+  const allAttempts = await db.attempts.where({ studentId }).toArray();
+  const todayReviewAttempts = allAttempts.filter(
+    (a) => a.sessionId && todayReviewSessionIds.has(a.sessionId) && a.createdAt >= startMs,
+  );
+  if (todayReviewAttempts.length === 0) {
+    return { encourageMore: false, attempts: 0, accuracy: 0 };
+  }
+
+  const qids = [...new Set(todayReviewAttempts.map((a) => a.questionId))];
+  const qs = await db.questions.bulkGet(qids);
+  const qMap = new Map<string, number>();
+  for (const q of qs) {
+    if (q?.question_id) qMap.set(q.question_id, q.estimated_time_seconds ?? 30);
+  }
+
+  const samples = todayReviewAttempts.map((a) => ({
+    isCorrect: a.isCorrect,
+    elapsedSeconds: a.elapsedSeconds,
+    estimatedSeconds: qMap.get(a.questionId) ?? 30,
+  }));
+  const correct = samples.filter((s) => s.isCorrect).length;
+  return {
+    encourageMore: shouldEncourageMore(samples),
+    attempts: samples.length,
+    accuracy: samples.length > 0 ? correct / samples.length : 0,
+  };
 }
 
 function masteryId(studentId: string, skillId: string): string {

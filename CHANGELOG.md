@@ -3,6 +3,136 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.71 — 2026-05-10 · 同步实时化 + 巧算工具箱 + 正反馈密度引擎
+
+爸爸："我发现 Selena 做完的时候并没有实时把数据推到 D1 里面，我总是拉不到她最新的进度...希望无论怎么同步都不会删掉本地最新的记录"。同时希望加 4 年级巧算技巧；并把"游戏感从题量推动升级为正反馈密度"。
+
+### 1. 同步架构升级 — 实时 + 安全
+
+数据流向规则化：
+- **做题记录（attempts/mastery/fluency）= 本地权威**：append-only union 合并，远程绝不删本地新写入
+- **题库 = 远程权威**：admin 加题已经走 `/api/sync/ai-questions` 直推 D1，本地 pull 同步
+
+Push（每答一题）：
+- 之前只在 `finalizeSession()` 末尾一次推送 → Selena 中途关 tab 数据丢
+- 现在 `submitAttempt()` + `recordFluencyAttempt()` 各自调 `schedulePushToCloud()` → 8s 静默防抖 → 自动 push
+- `pagehide` / `visibilitychange=hidden` → `flushPushNow()` 立刻发出 pending push
+
+Pull（每次拿到焦点）：
+- 之前只在登录 / 手动按钮触发 → 爸爸切回浏览器看不到 Selena 最新进度
+- 现在 `visibilitychange=visible` + `window.focus` + Layout mount → `pullIfStale()`（60s 节流）
+- AuthGate 既有 pull 保留
+
+UI 反馈：
+- header 右上加同步状态 chip（已同步 / 待同步 / 同步中 / 同步异常）
+- 点 chip = 立即 flush push + force pull（切设备前用）
+
+新增同步表：
+- `fluencyAttempts` / `fluencyStats` 加入 PUSH_TABLES（之前漏同步，闪电口算永远不跨设备）
+
+### 2. 巧算工具箱 `/math/tricks`
+
+四年级 Selena 的 8 个核心心算技巧：
+- 凑整法（99=100-1）/ 拆分加减 / 拆分除法（爸爸举的 150÷2=140÷2+10÷2 例子）
+- 借十法 / ×25 快算 / 折半乘倍 / ×9 ×11 / 配对求和
+
+每张卡：标语 + 适用场景 + 原理 + 1-2 worked example + 3 道动手练习。
+- 答对全部 3 道 → 卡片顶部点亮"已掌握 ✓" + 一个 emoji 烟花
+- localStorage 存进度，首页加 "🪄 巧算工具箱" CTA 入口
+
+### 3. 正反馈密度引擎 v1（庆祝节点）
+
+新组件 `<CelebrationBurst/>`，统一渲染所有庆祝节点（Path B 共享引擎雏形）：
+- **combo5 / combo10 / combo20** burst — emoji + 大字 + 粒子飘落，不同色调
+- **encourage** burst — 连续 2 错时弹"没关系，深呼吸再来一道"（绿色温和调）
+- **session_win** burst — finalizeSession 后 SummaryView 出现前的"凯旋"瞬间
+
+新动画：`burstText` + `particleFall` 加进 tailwind config。
+
+后续可加 D4 win / 闪电连胜 / 错题复活等节点 — 都通过同一接口走，UI 一致。
+
+## v0.31.70 — 2026-05-09 · 错题复活鼓励文案：再来 5 道 → 再来 10 道
+
+爸爸："可以再来一轮 10 道题吧" — 配额是 10，鼓励就该匹配（不抠搜）。
+
+改 4 处文案：
+- TodayRings.mistakes_due chip 鼓励态："🔥 状态超好！再来 10 道？"
+- Mistakes 页 header 鼓励行："...— 再来 10 道？"
+- Mistakes 页主按钮 encourage 态："🔥 再来 10 道"
+
+(后台行为不变 — 点了还是走 /math/train?mode=review，不限题数；这是纯文案对齐)
+
+## v0.31.69 — 2026-05-09 · 错题复活每日上限 10 + 自动分散积压 + 顺利就鼓励多做
+
+爸爸：「上周六做太多题，今天必须复活 76 道有点太具挑战了，上周六是花了一天做，今天最多就一个小时」「我们可能要重新思考一下怎么配置算闭环才合理」
+
+之前 v0.31.68 修了 chip 进度显示，但没解决积压本身的问题——周六 80 道错题 → 周日全部到期 → 一小时根本做不完 → 焦点环永远闭不上 → 雪球。
+
+### 新规则：每日复活配额 + 自动分散
+
+- **`DAILY_REVIVE_TARGET = 10`** — 小四 1h 内合理量
+- **触发分散**：当前到期数 > 15（10 × 1.5 headroom 防小波动反复重排）时
+- **保留逻辑**：按 stage ASC + nextReviewAt ASC 排序，最薄弱 / 最久未复习的 10 道留今日，其余按每天 10 道分散到未来 7 天（+0-6h jitter 避免一秒钟内大批同时到期）
+- **闭环规则**：`revivedToday >= min(10, totalDueToday)`，不再要求"清零所有"
+- **触发点**：Home.tsx + Mistakes.tsx 加载时各跑一次（idempotent — spread 后 dueCount ≤ 10 不会再触发）
+
+### 顺利就鼓励 / 不顺就放过
+
+闭环后看今日 review-mode session 的表现：
+- ≥5 个样本 + accuracy > 70% + 平均答题时间 < estimated × 80%（比平时快 ≥ 20%）
+  → chip "🔥 状态超好！再来 5 道？" + Mistakes 页"🔥 再来 5 道"按钮 + 显示具体 % 准确率
+- 不顺利
+  → chip "今日已闭 ✓" + "今天就到这吧，明天再战 👋" + 弱化按钮
+
+### 文件改动
+- 新建 `src/lib/mistakeSchedule.ts`：`DAILY_REVIVE_TARGET` / `planMistakeSpread` / `shouldEncourageMore` / `remainingForToday` 全部纯函数
+- `src/db/service.ts`：`spreadOverflowDueMistakes(studentId)` 写回 db、`getReviveSessionVitality(studentId)` 计算顺利度
+- `src/components/TodayRings.tsx`：focus.kind="mistakes_due" 加 `encourageMore` 字段，文案分支改写
+- `src/pages/Home.tsx`：useEffect 触发 spread、useLiveQuery vitality
+- `src/pages/Mistakes.tsx`：header 显示"今日 X / 10 道 · 未来 7 天分散 N 道"，闭环后展示鼓励 / 放过文案
+
+### 测试
+- 新建 mistakeSchedule.test.ts 17 例：spread 边界（≤ 15 不触发 / 76 → 10+66 / 100 → 10+90 day-6 压顶）/ 优先低 stage / encourage 准确率边界 70% / 速度边界 80% / 数据缺失防误判
+
+---
+
+## v0.31.68 — 2026-05-09 · 错题复活闭环 bug 修 + 进度可见
+
+爸爸：「数学错题复活中的今日复活现在不知道自己已经完成了多少个，每日打卡的环一直无法关闭（做了两轮）」
+
+读了代码定位到两处：
+
+### 1. scheduler.ts buildReview — 死锁根源
+
+旧实现：到期错题进入 review session 时，从同 skill 题池里**随机抽 variant**（不一定是原错题）。
+而 advance 逻辑只认 `question_id` 查 `existingMistake` → 做对 variant 不会推动原错题 → 焦点环永远闭不上。
+
+修：优先用原 mistake.questionId（原题在 pool 且未被本次用过）；不在 / 已用才 fallback 同 skill variant。
+
+### 2. service.ts submitAttempt — variant 也要能推进
+
+修 buildReview 后大多数情况会拿到原题。但 fallback 路径（同 skill 多条到期）下仍会出现 variant，需要让 variant 答对也推动原错题：
+
+- `mode === "review"` + `isCorrect` + `isFirstAttempt` + `!usedTutor` + 没有 existingMistake on 当前 question_id
+  → 找同 skill 最早到期的那条原错题，按 advance 规则推一级（满 stage 就 resolved）
+- 安全条件 (first attempt + 无 tutor) 和直接 advance 一致，防"讲一下就算复习通关"
+
+### 3. 进度可见 — chip 显示 "已复活 X / X+N 道"
+
+旧 chip 只写"今日到期 N 道"，做对了不知道剩多少。
+
+加 per-day meta key `mistakeRevived::math::{sid}::{YYYY-MM-DD}`：直接 advance 和 variant propagate 都 +1，**仅当 wasDue=true 才计**（避免主动加练未到期题刷计数）。
+
+UI：
+- chip 文案 `已复活 X / (X+N) 道`，amber 弧按 X/(X+N) 比例填充
+- 闭环规则保持 `count === 0`（守 spaced-review 教育意义，不退化为"做了一轮就算完"）
+
+### 测试
+- scheduler.test.ts 加 2 例：单 mistake → 100% 选原题；多 mistake 同 skill → 原题优先 + variant fallback
+- 新建 mistakeRevive.test.ts 5 例 fake-indexeddb 集成：variant propagate / 非 review mode 不 propagate / tutor 不 propagate / 直接答对走原路径 / 未到期不计数
+
+---
+
 ## v0.31.49 — 2026-05-08 · 闯关 v3：Boss 战 7 题三阶段 + 心数 + 救场 + 星级
 
 爸爸：「闯关之前太难，时间又特别短；现在改了又太简单，跟今日挑战一样了。重新设计一下」

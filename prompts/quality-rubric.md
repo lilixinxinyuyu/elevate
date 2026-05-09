@@ -180,6 +180,31 @@
 
 ⛔ **绝对禁止**：stem 是数值题但 options 混入纯中文短语；或反过来。
 
+### 4.6 ⛔ 语文「看拼音写字 / 听写」类题的答案泄露禁令（v0.31.67）
+
+**适用范围**：`subjectId="chinese"` 且 `skill_id` 以 `_PINYIN` 或 `_DICTATION` 结尾，并且题面 `stem` 给的是拼音（含声调字符 ā/á/ǎ/à 等）。这类题的核心训练点就是孩子凭拼音回想字形，**任何在题面之外提前露出目标字的内容都等于直接给答案**。
+
+**禁止**：在 `hints[].text` / `solution_steps[]` / `common_errors[].error` / `common_errors[].remediation` / `feedback_correct` / `feedback_wrong` 里出现 `answer` 对应选项 text（或 `audio_text`）里的任何**汉字**（前提是这个字没在 stem 已经写出来 — stem 已含的字属于辨字题，不在禁令内）。
+
+**反面例子**（`stem`：「读拼音写词语：sù xīn shì xú gōng diàn → ___」，answer="宿新市徐公店"）：
+- ❌ `hints: [{ text: "宿是宝盖头加百" }]` — 直接露出「宿」
+- ❌ `solution_steps: ["先写宿，再写新市..."]` — 全部露出
+- ❌ `feedback_correct: "对！是宿新市徐公店"` — 露出
+- ❌ `common_errors: [{ remediation: "宿不要写成夙" }]` — 露出「宿」
+
+**正面例子**（同题）：
+- ✅ `hints: [{ text: "第一个字宝盖头下面是「百」字底", penalty: 1 }]` — 用部首/笔画线索
+- ✅ `solution_steps: ["第一字声母 s + 韵母 ù，注意翘舌；第二字带「斤」字旁..."]` — 描述结构不写字
+- ✅ `feedback_correct: "完全正确！五个字都写对了 🎉"` — 不复述答案
+- ✅ `common_errors: [{ tag: "wrong_radical", error: "第二字部首写错", remediation: "再确认第二字是「立」字头" }]` — 部位描述
+
+**例外**：如果 stem 本身是「下面哪个词的"宿"字读音是 sù？」这种已经把目标字"宿"写在 stem 里的辨字题，那么 hints / solution 里再写"宿"是允许的（学生已经看到了）。判定靠 stem 是否包含该字。
+
+**自查清单**（每道拼音写字题 commit 前过一遍）：
+1. stem 是不是只有拼音、空白、标点？是 → 走严格模式。
+2. 列出 answer 对应汉字。
+3. 把这些字逐个在 hints / solution / common_errors / feedback 里全文搜索，命中就改写。
+
 ---
 
 ## 5. 4 选 1 干扰项设计

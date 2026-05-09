@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
@@ -6,6 +6,12 @@ import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import type { Attempt, Question } from "../core/types";
 import { TutorPanel } from "../components/tutor/TutorPanel";
+import {
+  getMistakeRevivedToday,
+  getReviveSessionVitality,
+  spreadOverflowDueMistakes,
+} from "../db/service";
+import { DAILY_REVIVE_TARGET } from "../lib/mistakeSchedule";
 
 const SKILL_MAP = new Map(SKILLS.map((s) => [s.id, s]));
 const UNIT_MAP = new Map(UNITS.map((u) => [u.id, u]));
@@ -32,6 +38,22 @@ export function MistakesPage() {
     questionId: string;
   } | null>(null);
 
+  // v0.31.69: 进页时跑一次 spread，把多余到期题推到未来 7 天
+  useEffect(() => {
+    if (!student?.id) return;
+    void spreadOverflowDueMistakes(student.id);
+  }, [student?.id]);
+
+  const revivedToday = useLiveQuery(async () => {
+    if (!student) return 0;
+    return await getMistakeRevivedToday(student.id);
+  }, [student?.id, attempts?.length]);
+
+  const reviveVitality = useLiveQuery(async () => {
+    if (!student) return { encourageMore: false, attempts: 0, accuracy: 0 };
+    return await getReviveSessionVitality(student.id);
+  }, [student?.id, attempts?.length]);
+
   if (!student) return <div className="card">加载中…</div>;
   const qmap = new Map((questions ?? []).map((q) => [q.question_id, q]));
   const lastAttemptByQ = new Map<string, Attempt>();
@@ -55,18 +77,55 @@ export function MistakesPage() {
   const unresolvedCount = liveMistakes.filter((m) => !m.resolved).length;
   const dueCount = liveMistakes.filter((m) => !m.resolved && m.nextReviewAt <= Date.now()).length;
 
+  // v0.31.69: 今日目标 / 进度 / 是否已闭环 / 是否鼓励多做
+  const revivedTodayN = revivedToday ?? 0;
+  const totalToday = dueCount + revivedTodayN;
+  const targetToday = Math.min(DAILY_REVIVE_TARGET, totalToday);
+  const reviveDone = revivedTodayN >= targetToday && targetToday > 0;
+  const encourageMore = reviveVitality?.encourageMore ?? false;
+  const futureQueue = unresolvedCount - dueCount; // 已被 spread 推到未来的
+
   return (
     <div className="space-y-4">
       <div className="card-glow flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div>
-          <div className="font-display font-bold text-xl">错题复活</div>
-          <div className="text-sm text-slate-400">
-            未解决 <span className="text-slate-100 font-semibold">{unresolvedCount}</span> 道
-            <span className="mx-1.5 text-slate-600">·</span>
-            今日到期 <span className="text-amber-300 font-semibold">{dueCount}</span> 道
-            <span className="mx-1.5 text-slate-600">·</span>
-            <span className="text-slate-500">历史 {allCount}</span>
+          <div className="font-display font-bold text-xl flex items-center gap-2">
+            错题复活
+            {reviveDone && <span className="text-xs text-emerald-300">✓ 今日已闭</span>}
           </div>
+          <div className="text-sm text-slate-400">
+            {targetToday > 0 ? (
+              <>
+                今日 <span className="text-amber-300 font-semibold">{revivedTodayN} / {targetToday}</span> 道
+                {dueCount > 0 && !reviveDone && (
+                  <>
+                    <span className="mx-1.5 text-slate-600">·</span>
+                    剩 <span className="text-amber-300">{Math.max(0, targetToday - revivedTodayN)}</span> 道
+                  </>
+                )}
+              </>
+            ) : (
+              <span className="text-emerald-300">今日已清 ✨</span>
+            )}
+            {futureQueue > 0 && (
+              <>
+                <span className="mx-1.5 text-slate-600">·</span>
+                <span className="text-slate-500">未来 7 天分散 {futureQueue} 道</span>
+              </>
+            )}
+            <span className="mx-1.5 text-slate-600">·</span>
+            <span className="text-slate-500">历史共 {allCount}</span>
+          </div>
+          {reviveDone && encourageMore && (
+            <div className="text-xs text-amber-200 mt-1.5">
+              🔥 状态超好（{Math.round((reviveVitality?.accuracy ?? 0) * 100)}% 准确率 + 比平时快）— 再来 10 道？
+            </div>
+          )}
+          {reviveDone && !encourageMore && (
+            <div className="text-xs text-slate-300 mt-1.5">
+              今天就到这吧，明天再战 👋
+            </div>
+          )}
         </div>
         <div className="flex gap-2 items-center">
           <select
@@ -78,8 +137,15 @@ export function MistakesPage() {
             <option value="unresolved">未解决</option>
             <option value="all">全部</option>
           </select>
-          <Link to={`/math/train?mode=review&fresh=${Date.now()}`} className="btn-primary">
-            🪄 开始复活
+          <Link
+            to={`/math/train?mode=review&fresh=${Date.now()}`}
+            className={reviveDone && !encourageMore ? "btn-secondary" : "btn-primary"}
+          >
+            {reviveDone
+              ? encourageMore
+                ? "🔥 再来 10 道"
+                : "🪄 还想做"
+              : "🪄 开始复活"}
           </Link>
         </div>
       </div>

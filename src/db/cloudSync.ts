@@ -28,6 +28,9 @@ const PUSH_TABLES = [
   "meta",
   "students",
   "tutorSessions",
+  // v0.31.71: 闪电口算两张表也加进来，否则 Selena 的 fluency 进度永远不同步。
+  "fluencyAttempts",
+  "fluencyStats",
   // v0.30.0: trophyImages 拆出走独立 endpoint（D1 单参数大小限制）
 ] as const;
 
@@ -94,6 +97,10 @@ interface SnapshotPayload {
   students: unknown[];
   /** v0.27.0：小进姐姐对话日志，按 id 合并、按 updatedAt 取新 */
   tutorSessions?: unknown[];
+  /** v0.31.71: 闪电口算 attempts，append-only union by id */
+  fluencyAttempts?: unknown[];
+  /** v0.31.71: 闪电口算累计 stats，按 id 合并取 newer */
+  fluencyStats?: unknown[];
   /** v0.30.0: trophyImages 不再走主 sync——拆走 /api/sync/trophy-images 独立端点 */
   /**
    * v0.31.52: AI 生成的题（仅 ai_generated tagged 或 AI_ 前缀），跨设备同步。
@@ -124,7 +131,7 @@ async function dumpLocal(): Promise<SnapshotPayload> {
 export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.questions],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.questions, db.fluencyAttempts, db.fluencyStats],
     async () => {
       for (const t of PUSH_TABLES) {
         const rows = (payload[t] ?? []) as Record<string, unknown>[];
@@ -180,7 +187,7 @@ export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<v
 async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.questions],
+    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.questions, db.fluencyAttempts, db.fluencyStats],
     async () => {
       // attempts: pure union (immutable rows)
       const remoteA = (payload.attempts ?? []) as Array<{ id: string }>;
@@ -276,6 +283,42 @@ async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
           }
         }
         if (toPut.length > 0) await db.tutorSessions.bulkPut(toPut as never);
+      }
+
+      // v0.31.71: fluencyAttempts append-only union by id（闪电口算 attempts 不可变）
+      const remoteFa = (payload.fluencyAttempts ?? []) as Array<{ id: string }>;
+      if (Array.isArray(remoteFa) && remoteFa.length > 0) {
+        const localFa = await db.fluencyAttempts.toArray();
+        const localIds = new Set(localFa.map((r) => r.id));
+        const toAdd = remoteFa.filter((r) => !localIds.has(r.id));
+        if (toAdd.length > 0) await db.fluencyAttempts.bulkPut(toAdd as never);
+      }
+
+      // v0.31.71: fluencyStats union by id, prefer newer lastSession.at 或 masteredAt
+      const remoteFs = (payload.fluencyStats ?? []) as Array<{
+        id: string;
+        masteredAt?: number | null;
+        lastSession?: { at?: number } | null;
+        totalAttempts?: number;
+      }>;
+      if (Array.isArray(remoteFs) && remoteFs.length > 0) {
+        const localFs = await db.fluencyStats.toArray();
+        const localById = new Map(localFs.map((r) => [r.id, r]));
+        const toPut: typeof remoteFs = [];
+        for (const r of remoteFs) {
+          const local = localById.get(r.id);
+          const remoteTs = r.lastSession?.at ?? r.masteredAt ?? 0;
+          const localTs = local?.lastSession?.at ?? local?.masteredAt ?? 0;
+          // 用 lastSession.at 比时间；若 ts 一样则比 totalAttempts（更多 attempts 视为更新）
+          if (!local) {
+            toPut.push(r);
+          } else if (remoteTs > localTs) {
+            toPut.push(r);
+          } else if (remoteTs === localTs && (r.totalAttempts ?? 0) > (local.totalAttempts ?? 0)) {
+            toPut.push(r);
+          }
+        }
+        if (toPut.length > 0) await db.fluencyStats.bulkPut(toPut as never);
       }
 
       // v0.31.52: aiQuestions union by question_id — 题创建后视为不可变，本地已有的 ID 不覆盖
@@ -548,6 +591,160 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
 
   return { ok: true, changed, version };
 }
+
+/**
+ * v0.31.71: 防抖式自动 push。
+ *
+ * 设计动机：之前只在 finalizeSession() 末尾 push 一次，意味着 Selena 在 session
+ * 中途关 tab，本地写了的 attempts 就只在她设备里。爸爸在另一台设备 pull 拉不到。
+ * 现在 submitAttempt() 每次都 schedulePushToCloud()，攒 8s 静默后 push，效果：
+ *   - 连答 5 题（30s 内）→ 最后一题后 8s 触发 1 次 push
+ *   - 答 1 题离开 → 8s 后自动 push
+ *   - 中途 push 在飞 → 标 dirty，等当前完成再来一遍
+ *
+ * 还监听 pagehide / visibilitychange=hidden：tab 即将关闭时若有 pending push，
+ * 立刻触发（虽然可能来不及 fetch 完，但比纯靠后台轮询好）。
+ */
+let pushTimer: ReturnType<typeof setTimeout> | null = null;
+let pushInFlight = false;
+let pushDirtyAfterFlight = false;
+let lastPushAttemptAt = 0;
+const PUSH_DEBOUNCE_MS = 8000;
+
+const pushListeners = new Set<(state: SyncState) => void>();
+
+export interface SyncState {
+  pushing: boolean;
+  pulling: boolean;
+  pendingPush: boolean;
+  lastPushAt: number;
+  lastPullAt: number;
+  lastError: string | null;
+}
+
+let pullInFlight = false;
+let lastSyncError: string | null = null;
+
+export function getSyncState(): SyncState {
+  return {
+    pushing: pushInFlight,
+    pulling: pullInFlight,
+    pendingPush: pushTimer !== null,
+    lastPushAt: getLastPushAt(),
+    lastPullAt: getLastPullAt(),
+    lastError: lastSyncError,
+  };
+}
+
+function emitSyncState(): void {
+  const s = getSyncState();
+  for (const l of pushListeners) {
+    try {
+      l(s);
+    } catch {
+      /* */
+    }
+  }
+}
+
+export function subscribeSyncState(listener: (s: SyncState) => void): () => void {
+  pushListeners.add(listener);
+  listener(getSyncState());
+  return () => pushListeners.delete(listener);
+}
+
+async function runPushNow(): Promise<void> {
+  if (pushInFlight) {
+    pushDirtyAfterFlight = true;
+    return;
+  }
+  pushInFlight = true;
+  emitSyncState();
+  try {
+    const r = await pushToCloud();
+    if (!r.ok) {
+      lastSyncError = r.error ?? "push_failed";
+      // no_password / unauthorized 等就静默；网络错保留 lastError 给 UI 看
+    } else {
+      lastSyncError = null;
+    }
+  } catch (e) {
+    lastSyncError = (e as Error).message;
+  } finally {
+    pushInFlight = false;
+    lastPushAttemptAt = Date.now();
+    emitSyncState();
+    if (pushDirtyAfterFlight) {
+      pushDirtyAfterFlight = false;
+      schedulePushToCloud(PUSH_DEBOUNCE_MS);
+    }
+  }
+}
+
+/**
+ * 防抖触发 push：8s 静默后 push 一次本地快照。
+ * 多次调用只会 reset timer，最终只 push 一次。
+ */
+export function schedulePushToCloud(delayMs: number = PUSH_DEBOUNCE_MS): void {
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    void runPushNow();
+    emitSyncState();
+  }, delayMs);
+  emitSyncState();
+}
+
+/**
+ * 立即 flush pending push（不等防抖）。如果已在 push 中，等当前完成。
+ * 用于 tab 即将关闭 / 用户手动点同步按钮。
+ */
+export function flushPushNow(): void {
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  void runPushNow();
+}
+
+/**
+ * 包装 pullFromCloud，带 in-flight 状态广播 + 1 分钟节流。
+ * 用于 visibilitychange / focus 事件。
+ */
+let lastPullAttemptAt = 0;
+export async function pullIfStale(opts: { minIntervalMs?: number } = {}): Promise<void> {
+  const now = Date.now();
+  const minInterval = opts.minIntervalMs ?? 60_000;
+  if (pullInFlight) return;
+  if (now - lastPullAttemptAt < minInterval) return;
+  lastPullAttemptAt = now;
+  pullInFlight = true;
+  emitSyncState();
+  try {
+    const r = await pullFromCloud();
+    lastSyncError = r.ok ? null : (r.error ?? null);
+  } catch (e) {
+    lastSyncError = (e as Error).message;
+  } finally {
+    pullInFlight = false;
+    emitSyncState();
+  }
+}
+
+// 让其他模块能查询是否有"未推送的脏写入"。useful for UI hint.
+export function hasPendingPush(): boolean {
+  return pushTimer !== null || pushInFlight || pushDirtyAfterFlight;
+}
+
+// 暴露给 cleanup hook（虽然 SPA 一般不卸载，但类型完整）
+export function _resetPushStateForTest(): void {
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = null;
+  pushInFlight = false;
+  pushDirtyAfterFlight = false;
+  lastPushAttemptAt = 0;
+}
+void lastPushAttemptAt; // 避免 lint unused
 
 /** 主页/管理页判定是否启用云同步：默认启用，用 localStorage 关掉。 */
 export function isCloudSyncEnabled(): boolean {

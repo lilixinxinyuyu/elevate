@@ -47,6 +47,26 @@ process.stderr.write(`▶ v3 closed-loop: ${skills.length} skills, default targe
 const auth = `Bearer ${PWD}`;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// v0.31.66: 把 D1 已有 AI 题的 stem 也传给 server，让 AI 知道哪些已生成过
+// （否则 AI 容易给重复模板，比如 large_compare 5 道全是"下面四个数中，最大的是哪一个？"）
+// /tmp/aiqs.json 是 keep-filling.sh 在每轮 audit 前从 /api/sync/ai-questions 拉的
+const existingAiStemsBySkill = new Map();
+try {
+  const aj = JSON.parse(readFileSync("/tmp/aiqs.json", "utf8"));
+  if (Array.isArray(aj.rows)) {
+    for (const r of aj.rows) {
+      if (r?.skill_id && typeof r?.stem === "string") {
+        const arr = existingAiStemsBySkill.get(r.skill_id) ?? [];
+        arr.push(r.stem);
+        existingAiStemsBySkill.set(r.skill_id, arr);
+      }
+    }
+  }
+  process.stderr.write(`▶ Loaded existing AI stems: ${[...existingAiStemsBySkill.values()].reduce((s, a) => s + a.length, 0)} 道（${existingAiStemsBySkill.size} skill）\n`);
+} catch (e) {
+  process.stderr.write(`▶ Warn: 没读到 /tmp/aiqs.json (${e.message})，dedup 只用 SEED\n`);
+}
+
 function targetFor(sk) {
   const n = sk.need;
   if (typeof n === "number" && n > 0) return Math.min(n, TARGET_PER_SKILL);
@@ -57,6 +77,8 @@ function* skillStems(skillId, extras = []) {
   for (const q of SEED_QUESTIONS) {
     if (q.skill_id === skillId && typeof q.stem === "string") yield q.stem;
   }
+  // D1 已有 AI 题的 stem 一并喂给 server，server 会在 prompt 里提示 AI 别重复
+  for (const s of (existingAiStemsBySkill.get(skillId) ?? [])) yield s;
   for (const s of extras) yield s;
 }
 
@@ -256,6 +278,15 @@ for (let pass = 1; pass <= PASSES; pass++) {
     const a = auditQuestion(v.question);
     if (a.worstSeverity === "critical" || a.worstSeverity === "likely-broken") {
       process.stderr.write(`afail(${a.worstSeverity})\n`);
+      // v0.31.66: 同时把 afail 样本写到 vfail-samples（便于人工审核 AI 算错的题）
+      try {
+        appendFileSync(VFAIL_SAMPLES, JSON.stringify({
+          skillId: sk.skillId, pass, kind: "afail",
+          severity: a.worstSeverity,
+          issues: a.issues,
+          q: v.question,
+        }) + "\n");
+      } catch { /* */ }
       await sleep(800);
       continue;
     }

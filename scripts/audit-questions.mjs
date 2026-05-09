@@ -21,6 +21,7 @@
  *         → 抽数字算一下，跟 options[answer.value].text 比对
  *     L3  options 含完全相同 text（4 选 1 重复 → 必有干扰项乱了）
  *     L4  答案 text 看不出对应数学含义（"以上都不是"等元选项 + 应用题主体）
+ *     L5  语文「看拼音写字」答案在 hints / solution_steps / common_errors / feedback 里泄露
  *
  *   🟢 minor：可改可不改
  *     M1  feedback_correct / feedback_wrong 缺失
@@ -209,6 +210,54 @@ function checkSimpleArithmetic(q) {
   }
 }
 
+/** L5: 看拼音写字答案泄露（与 src/lib/questionAuditLite.ts 同步）。 */
+const PINYIN_TONE_RE = /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜüńňǹ]/;
+const HANZI_RE = /[一-鿿]/g;
+function checkPinyinAnswerLeak(q) {
+  if (q.subjectId !== "chinese") return;
+  if (!/_(?:PINYIN|DICTATION)$/i.test(q.skill_id ?? "")) return;
+  const stem = q.stem ?? "";
+  if (!PINYIN_TONE_RE.test(stem)) return;
+  let answerText = "";
+  if (q.answer?.type === "choice" && Array.isArray(q.options)) {
+    answerText = q.options.find((o) => o?.id === q.answer.value)?.text ?? "";
+  }
+  if (!answerText) answerText = q.audio_text ?? "";
+  if (!answerText) return;
+  const targetChars = [...new Set(answerText.match(HANZI_RE) ?? [])];
+  if (targetChars.length === 0) return;
+  const stemChars = new Set(stem.match(HANZI_RE) ?? []);
+  const checkChars = targetChars.filter((c) => !stemChars.has(c));
+  if (checkChars.length === 0) return;
+  const buckets = [];
+  for (const h of q.hints ?? []) if (h?.text) buckets.push({ name: "hints", text: h.text });
+  for (const s of q.solution_steps ?? []) if (s) buckets.push({ name: "solution_steps", text: s });
+  for (const e of q.common_errors ?? []) {
+    if (e?.error) buckets.push({ name: "common_errors", text: e.error });
+    if (e?.remediation) buckets.push({ name: "common_errors", text: e.remediation });
+  }
+  if (q.feedback_correct) buckets.push({ name: "feedback_correct", text: q.feedback_correct });
+  if (q.feedback_wrong) buckets.push({ name: "feedback_wrong", text: q.feedback_wrong });
+  const leakedChars = new Set();
+  const leakedFields = new Set();
+  for (const ch of checkChars) {
+    for (const b of buckets) {
+      if (b.text.includes(ch)) {
+        leakedChars.add(ch);
+        leakedFields.add(b.name);
+      }
+    }
+  }
+  if (leakedChars.size === 0) return;
+  add(
+    q.question_id,
+    "likely-broken",
+    "L5",
+    `看拼音写字答案泄露：「${[...leakedChars].join("")}」出现在 ${[...leakedFields].join(" / ")}（题面只给拼音 = 直接给答案）`,
+    "把提示 / 解析 / common_errors / feedback 里的目标字换成部首描述、笔画位置等线索",
+  );
+}
+
 function checkMeta(q) {
   if (!q.feedback_correct || !q.feedback_wrong) {
     add(q.question_id, "minor", "M1", "feedback_correct / feedback_wrong 有缺失", "补全两个 feedback");
@@ -257,6 +306,7 @@ for (const q of SEED_QUESTIONS) {
   checkMultistepAnswer(q);
   checkFormatVsAnswer(q);
   checkSimpleArithmetic(q);
+  checkPinyinAnswerLeak(q);
   checkMeta(q);
 }
 

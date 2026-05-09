@@ -23,6 +23,7 @@ import { BossBattlePage } from "./pages/BossBattle";
 import { VoiceTestPage } from "./pages/VoiceTest";
 import { Mascot3DTestPage } from "./pages/Mascot3DTest";
 import { MascotComparePage } from "./pages/MascotCompare";
+import { MathTricksPage } from "./pages/MathTricks";
 import { useSubject } from "./subjects/context";
 import { isPhase2Live } from "./lib/featureFlags";
 
@@ -130,6 +131,8 @@ export const router = createBrowserRouter([
       // v0.31.49: 闯关 v3 — Boss 战 + 闯关世界
       { path: "big-problems", element: <Phase2Route><BossWorldPage /></Phase2Route> },
       { path: "boss-battle/:unitId", element: <Phase2Route><BossBattlePage /></Phase2Route> },
+      // v0.31.71: 巧算工具箱（math-only）
+      { path: "tricks", element: <MathOnlyRoute><MathTricksPage /></MathOnlyRoute> },
       { path: "voice-test", element: <MathOnlyRoute><VoiceTestPage /></MathOnlyRoute> },
       { path: "mascot3d", element: <MathOnlyRoute><Mascot3DTestPage /></MathOnlyRoute> },
       { path: "mascot-compare", element: <MathOnlyRoute><MascotComparePage /></MathOnlyRoute> },

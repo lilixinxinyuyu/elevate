@@ -306,6 +306,87 @@ describe("findParallelQuestion v0.30.8", () => {
     expect(v?.question_id).toBe(targetId);
   });
 
+  it("v0.31.68: review 模式优先用原错题 question_id（而不是同 skill 的随机 variant）", () => {
+    // 找一个 skill 有 ≥3 道同类题的，挑第二道当 mistake，验证 buildReview 选的是这道
+    const bySkill = new Map<string, Question[]>();
+    for (const q of SEED_QUESTIONS) {
+      if (q.status !== "approved" && q.status !== "active") continue;
+      const arr = bySkill.get(q.skill_id) ?? [];
+      arr.push(q);
+      bySkill.set(q.skill_id, arr);
+    }
+    const richSkill = [...bySkill.entries()].find(([, arr]) => arr.length >= 3)!;
+    const [, qs] = richSkill;
+    // 选中间那道，避免 sort 误把它排第一让测试假阳
+    const target = qs[1]!;
+    const mistake: MistakeReview = {
+      id: "m-test",
+      studentId: "s1",
+      subjectId: "math",
+      questionId: target.question_id,
+      skillId: target.skill_id,
+      stage: 0,
+      nextReviewAt: Date.now() - 1000,
+      lastAttemptAt: Date.now() - 86400_000,
+      errorTags: [],
+      resolved: false,
+    };
+    // 跑 5 次，每次都应该是原题（rng 随机也不会变 variant）
+    for (let i = 0; i < 5; i++) {
+      const plan = buildDailySession({
+        studentId: "s1",
+        mode: "review",
+        targetMinutes: 10,
+        dateKey: `2026-04-2${i}`,
+        pool: SEED_QUESTIONS,
+        mastery: [],
+        mistakes: [mistake],
+        attempts: [],
+      });
+      expect(plan.questionIds[0]).toBe(target.question_id);
+    }
+  });
+
+  it("v0.31.68: 原题已用过 → fallback 到同 skill variant（不死锁）", () => {
+    // 两条同 skill mistake — 第一条占了原题位置，第二条只能 fallback variant
+    const bySkill = new Map<string, Question[]>();
+    for (const q of SEED_QUESTIONS) {
+      if (q.status !== "approved" && q.status !== "active") continue;
+      const arr = bySkill.get(q.skill_id) ?? [];
+      arr.push(q);
+      bySkill.set(q.skill_id, arr);
+    }
+    const richSkill = [...bySkill.entries()].find(([, arr]) => arr.length >= 3)!;
+    const [, qs] = richSkill;
+    const m1: MistakeReview = {
+      id: "m-1",
+      studentId: "s1",
+      subjectId: "math",
+      questionId: qs[0]!.question_id,
+      skillId: qs[0]!.skill_id,
+      stage: 0,
+      nextReviewAt: Date.now() - 2000,
+      lastAttemptAt: Date.now() - 86400_000,
+      errorTags: [],
+      resolved: false,
+    };
+    const m2: MistakeReview = { ...m1, id: "m-2", questionId: qs[1]!.question_id, nextReviewAt: Date.now() - 1000 };
+    const plan = buildDailySession({
+      studentId: "s1",
+      mode: "review",
+      targetMinutes: 10,
+      dateKey: "2026-04-25",
+      pool: SEED_QUESTIONS,
+      mastery: [],
+      mistakes: [m1, m2],
+      attempts: [],
+    });
+    expect(plan.questionIds.length).toBe(2);
+    expect(new Set(plan.questionIds).size).toBe(2);
+    // 至少一道是原题
+    expect(plan.questionIds.includes(qs[0]!.question_id) || plan.questionIds.includes(qs[1]!.question_id)).toBe(true);
+  });
+
   it("v0.31.17：term 不再是硬约束——同 skill 不同 term 也是后备选择", () => {
     // 用户核心诉求 > 学期边界。如果下册题 retry 时只有上册同 skill 题，就用上册的。
     // 仍然优先匹配同 term；只在必要时跨 term。

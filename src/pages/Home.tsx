@@ -13,12 +13,15 @@ import {
   checkPoolHealth,
   computeCurrentRating,
   getEquippedBadge,
+  getMistakeRevivedToday,
   getMockExamCooldown,
+  getReviveSessionVitality,
   getSelectedTerm,
   getStruggleSkills,
   getUnlockedTiers,
   setEquippedBadge,
   setSelectedTerm,
+  spreadOverflowDueMistakes,
 } from "../db/service";
 import { tierById, TIERS, tierIndex } from "../core/tiers";
 import { TierCard } from "../components/TierCard";
@@ -52,6 +55,10 @@ function buildTodayRingsInput(args: {
   fluencyTodayCount: number;
   /** v0.31.58：今日闯关获星总数（boss session 完成 → starsFromAccuracy 之和） */
   todayBossStars: number;
+  /** v0.31.68：今日已复活（advance 过的到期错题数）；用来在 chip 显示进度 */
+  mistakesRevivedToday: number;
+  /** v0.31.69：今日复活是否"顺利"（>70% 准确率 + 比 estimated 快 ≥20%） */
+  reviveEncourageMore: boolean;
   mastery: { skillId: string; score: number }[];
   mistakes: { resolved: boolean; nextReviewAt: number; questionId: string }[];
   streak: number;
@@ -100,8 +107,14 @@ function buildTodayRingsInput(args: {
   const bossStarDone = (args.todayBossStars ?? 0) >= 1;
   if (phase2 && !bossStarDone) {
     focus = { kind: "boss_star_today", starsToday: args.todayBossStars, target: 1 };
-  } else if (dueMistakes > 0) {
-    focus = { kind: "mistakes_due", count: dueMistakes };
+  } else if (dueMistakes > 0 || args.mistakesRevivedToday > 0) {
+    // v0.31.69: revivedToday > 0 也展示 mistakes_due（让闭环 / 鼓励文案能露出来）
+    focus = {
+      kind: "mistakes_due",
+      count: dueMistakes,
+      revivedToday: args.mistakesRevivedToday,
+      encourageMore: args.reviveEncourageMore,
+    };
   } else if (examDays >= 0 && examDays <= 14) {
     focus = { kind: "exam_countdown", examName: exam.name, days: examDays };
   } else if (phase2) {
@@ -162,6 +175,27 @@ export function HomePage() {
       if (a.createdAt >= startMs && a.sessionId) sessionsToday.add(a.sessionId);
     }
     return sessionsToday.size;
+  }, [student?.id]);
+
+  // v0.31.68: 今日已复活（推进过的到期错题数 — 含原题直接 advance + variant
+  // 通过 propagate 推进的）。chip 显示 "已复活 X / X+N 道" 进度。
+  const mistakesRevivedToday = useLiveQuery(async () => {
+    if (!student) return 0;
+    return await getMistakeRevivedToday(student.id);
+  }, [student?.id, attempts?.length]);
+
+  // v0.31.69: 今日复活"顺利度"——决定闭环后是否鼓励继续做。
+  const reviveVitality = useLiveQuery(async () => {
+    if (!student) return { encourageMore: false, attempts: 0, accuracy: 0 };
+    return await getReviveSessionVitality(student.id);
+  }, [student?.id, attempts?.length]);
+
+  // v0.31.69: Home 加载时若到期错题超过上限 (15)，自动把多余的推到未来 7 天，
+  // 让 Selena 不被一次性 76 道吓到。idempotent — spread 后 dueCount 降到 ≤ 10
+  // 不再触发。
+  useEffect(() => {
+    if (!student) return;
+    void spreadOverflowDueMistakes(student.id);
   }, [student?.id]);
 
   // v0.31.58: 今日闯关获星总数 — 扫今日 mode=big_problems sessions 的 summary，
@@ -366,6 +400,8 @@ export function HomePage() {
         <TodayRings {...buildTodayRingsInput({
           fluencyTodayCount: fluencyTodayCount ?? 0,
           todayBossStars: todayBossStars ?? 0,
+          mistakesRevivedToday: mistakesRevivedToday ?? 0,
+          reviveEncourageMore: reviveVitality?.encourageMore ?? false,
           todayCount: todayAttempts.length,
           challengeTarget: 15,
           mastery: mastery ?? [],
@@ -515,6 +551,23 @@ export function HomePage() {
           <div className="text-[11px] text-slate-400 mt-0.5">每个 skill 熟练度</div>
         </Link>
       </div>
+
+      {/* v0.31.71: 巧算工具箱入口（独立一行，强调"基本功"性质） */}
+      <Link
+        to="/math/tricks"
+        className="card-glow block border-violet-400/30 bg-gradient-to-br from-violet-500/15 via-pink-500/10 to-amber-500/5 hover:scale-[1.005] transition-transform"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-2xl">🪄</div>
+          <div className="flex-1">
+            <div className="font-display font-bold text-violet-100 text-sm">巧算工具箱</div>
+            <div className="text-[11px] text-slate-300 mt-0.5">
+              凑整、借十、折半乘倍 · 8 个让心算变快的秘密武器
+            </div>
+          </div>
+          <div className="text-violet-300 text-sm">→</div>
+        </div>
+      </Link>
 
       {/* ROI #2：每周一次的考试模拟 */}
       {mockExam && (

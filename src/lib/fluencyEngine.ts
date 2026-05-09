@@ -9,6 +9,7 @@
  */
 
 import { db } from "../db/dexie";
+import { schedulePushToCloud } from "../db/cloudSync";
 import type {
   FluencyAttemptRow,
   FluencyModule,
@@ -63,6 +64,8 @@ export async function recordFluencyAttempt(input: {
     createdAt: Date.now(),
   };
   await db.fluencyAttempts.put(row);
+  // v0.31.71: 防抖 push，确保 fluency 答题进度也实时同步
+  schedulePushToCloud();
   return row;
 }
 

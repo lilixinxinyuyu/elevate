@@ -888,6 +888,18 @@ function buildReview(
   for (const mistake of dueMistakes) {
     if (picked.length >= targetCount) break;
     const candidates = bySkill.get(mistake.skillId) ?? [];
+    // v0.31.68: 复活流程优先用 **原错题** —— 旧实现随机抽同 skill 的 variant，
+    // 而 advance 只认 question_id，等于"做对 variant 推不动原错题"，焦点环死锁。
+    // 现在：原题在 pool 且没被本次用过 → 直接挑；否则 fallback 同 skill variant
+    // （variant 答对会被 service.ts 通过 propagate 路径推进同 skill 最早到期错题）。
+    const original = candidates.find(
+      (q) => q.question_id === mistake.questionId && !used.has(q.question_id),
+    );
+    if (original) {
+      picked.push(original);
+      used.add(original.question_id);
+      continue;
+    }
     const variants = candidates
       .filter((q) => !used.has(q.question_id))
       .sort(() => rng() - 0.5);

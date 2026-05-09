@@ -45,6 +45,7 @@
 - `bracket_instruction` — 题干嵌指令带括号注释（"(0.1 输 0.1)" 这类）
 - `cryptic_stem` — 题干含义混乱、4 年级读不懂
 - `weak_hint` — hints / solution_steps / common_errors 缺失或敷衍
+- `answer_leak` — 看拼音写字 / 听写题，目标字直接出现在 hints / solution_steps / common_errors / feedback 里（题面只给拼音 = 等于直接给答案；详见规范 4.6）
 - `bad_punctuation` — 中英标点混用 / 全角半角混乱
 - `name_violation` — 出现真实姓名 / 不当人名
 - `other` — 其他（reason 字段说清）

@@ -3,12 +3,12 @@
 
   "decimal_meaning_place": ["小数", "数位", "十分位", "百分位", "千分位"],
   "decimal_unit_conversion": ["米", "厘米", "千米", "克", "千克", "元", "角", "分", "平方", "换算", "化成"],
-  "decimal_compare": ["大小", "比较", ">", "<", "=", "大于", "小于"],
+  "decimal_compare": ["大小", "比较", ">", "<", "=", "大于", "小于", "最大", "最小", "排序", "排列", "排成", "大到小", "小到大", "从大", "从小", "哪个大", "哪个小", "一样大", "相等"],
   "decimal_add_sub_vertical": ["+", "-", "竖式", "对齐", "加", "减", "和", "差"],
   "decimal_add_sub_simplify": ["简便", "简算", "+", "-"],
   "decimal_inverse_problem": ["和", "差", "比", "多", "少", "原来"],
 
-  "decimal_mul_meaning": ["小数乘法", "意义", "几个", "倍"],
+  "decimal_mul_meaning": ["小数乘法", "意义", "几个", "倍", "相同加数", "几次", "累加", "相加", "表示", "看作", "0.", "×"],
   "decimal_point_shift": ["小数点", "移动", "扩大", "缩小", "倍", "1/10", "1/100"],
   "decimal_mul_vertical": ["小数乘", "竖式", "×"],
   "decimal_product_digits": ["位数", "积", "几位小数"],
@@ -26,9 +26,9 @@
   "observe_front_top_left": ["正面", "上面", "左面", "看", "观察", "立体", "正方体", "形状"],
 
   "letter_expression": ["字母", "表示", "用", "x", "a", "b", "n"],
-  "equation_meaning_balance": ["方程", "等式", "天平", "平衡", "等量"],
-  "equation_solve_simple": ["方程", "x", "解", "等式性质", "="],
-  "equation_one_step_word": ["方程", "解", "x", "应用", "求", "已知"],
+  "equation_meaning_balance": ["方程", "等式", "天平", "平衡", "等量", "未知数", "未知", "含字母", "判断", "下列"],
+  "equation_solve_simple": ["方程", "x", "解", "等式性质", "=", "未知数", "求", "两边", "同时减", "同时加", "同时乘", "同时除"],
+  "equation_one_step_word": ["方程", "解", "x", "应用", "求", "已知", "未知数", "设", "列", "题"],
   "equation_two_step_word": ["方程", "x", "两步", "比", "多", "少"],
   "equation_meeting_problem": ["相遇", "出发", "甲", "乙", "千米", "速度", "时间"],
   "equation_sum_difference": ["和", "差", "倍", "原来", "少", "多"],

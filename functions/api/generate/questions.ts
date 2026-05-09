@@ -73,6 +73,18 @@ interface GenerateRequest {
   /** v0.31.34: 调用上下文标签（"admin" / "session-retry" / "session-bump-up"）— 仅日志用 */
   callerTag?: string;
   /**
+   * v0.31.66: bench / 强制路由用 — 指定只用某个 provider（"dashscope-intl" 或
+   * "token-plan"），不传则按 getChatProviders 默认顺序（dashscope 优先）。
+   */
+  forceProvider?: "dashscope-intl" | "token-plan";
+  /**
+   * v0.31.66: bench / 大批量用 — 覆盖默认 SUB_BATCH_SIZE=2。
+   * 实测 count=20 想要 deepseek/qwen 一次出 20 道，sub-batch 必须开大才能一次性
+   * 出。否则拆成 10 个 2-道 sub-batch 会让 AI 出 10 个互相重复的小批。
+   * 上限 30（每个 sub-batch 最多 30 道）。
+   */
+  subBatchSize?: number;
+  /**
    * v0.31.35: D5 综合题用 — 额外注入这些 skill 的 scope。
    * 主 skill 仍是 skillId，落库 question.skill_id 也是 skillId。
    * 例：D5 平均数 + 小数乘法综合题：
@@ -333,7 +345,9 @@ function pickGameTypeSchema(args: GenerateRequest): { gameType: string; schema: 
  *   - 加 existing stems + recent mistakes（去重 + 巩固）
  */
 function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
-  const count = Math.max(1, Math.min(SUB_BATCH_SIZE, args.count ?? SUB_BATCH_SIZE));
+  // v0.31.66: 不再 hard-cap 到 SUB_BATCH_SIZE，让 onRequestPost 上游已经把 args.count
+  // 限到 effectiveSubBatchSize（≤30）。这里只兜底防 0/负数。
+  const count = Math.max(1, Math.min(30, args.count ?? 2));
   const subjectId = args.subjectId === "math" ? "math" : "chinese";
 
   // 难度：把 "2-4" 这种范围 pick 一个（按 batchIndex 轮询），单数字直接用
@@ -560,7 +574,7 @@ async function runSubBatch(
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const fail = checkAuth(request, env);
   if (fail) return fail;
-  const providers = getChatProviders(env);
+  let providers = getChatProviders(env);
   if (providers.length === 0) {
     return jsonResponse({ ok: false, error: "generator_not_configured" }, 503);
   }
@@ -576,6 +590,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
   const subjectId = body.subjectId === "math" ? "math" : "chinese";
   const requestedCount = Math.max(1, Math.min(MAX_TOTAL_COUNT, body.count ?? 5));
+
+  // v0.31.66: forceProvider — bench / 路由测试用
+  if (body.forceProvider) {
+    providers = providers.filter((p) => p.label === body.forceProvider);
+    if (providers.length === 0) {
+      return jsonResponse({ ok: false, error: "force_provider_not_available", detail: body.forceProvider }, 400);
+    }
+  }
+
+  // v0.31.66: subBatchSize override — 让 client 决定一次出多少
+  const effectiveSubBatchSize = body.subBatchSize
+    ? Math.max(1, Math.min(30, body.subBatchSize))
+    : SUB_BATCH_SIZE;
 
   const systemPrompt = buildSystemPrompt(subjectId);
 
@@ -610,12 +637,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
   }
 
-  // 拆 sub-batches: 每批 4 题，并发跑
-  const batchCount = Math.ceil(requestedCount / SUB_BATCH_SIZE);
+  // 拆 sub-batches: 默认 2 题/批，client 可通过 subBatchSize 覆盖
+  const batchCount = Math.ceil(requestedCount / effectiveSubBatchSize);
   const batches: Promise<Awaited<ReturnType<typeof runSubBatch>>>[] = [];
   let remaining = requestedCount;
   for (let i = 0; i < batchCount; i++) {
-    const thisBatch = Math.min(SUB_BATCH_SIZE, remaining);
+    const thisBatch = Math.min(effectiveSubBatchSize, remaining);
     remaining -= thisBatch;
     batches.push(
       runSubBatch(

@@ -61,14 +61,20 @@ const PRIO_RANK = {
   HIGH_SMALL: 5, NORMAL: 4, LOW_SMALL: 2, LOW: 1, EXTENSION: 0,
 };
 
-// v0.31.59+: 目标提到 30 — 每 skill 至少 30 道，给 scheduler 留足变化空间。
+// v0.31.59+: 目标 30 — 每 skill 至少 30 道（seed + AI 合计），给 scheduler 留足变化空间。
 const TARGET = Number(process.env.TARGET ?? 30);
+// v0.31.68: 单独的 AI 题数最低门槛 — 即使 SEED 已超 TARGET，AI 题太少也意味着多样性不够。
+//   - 下方 need 取 max(target_total - total, ai_target - ai_count)
+//   - 这样 SEED=30/AI=0 的 skill 也会被排进 priorities 补 AI
+const AI_TARGET = Number(process.env.AI_TARGET ?? 25);
 
 const rows = SKILLS.map(s => {
   const u = UNIT_BY.get(s.unitId);
   const c = counts[s.id] ?? { seed: 0, ai: 0 };
   const total = c.seed + c.ai;
-  const need = Math.max(0, TARGET - total);
+  const needByTotal = Math.max(0, TARGET - total);
+  const needByAi = Math.max(0, AI_TARGET - c.ai);
+  const need = Math.max(needByTotal, needByAi);
   return {
     skillId: s.id,
     skillName: s.name,
@@ -81,6 +87,8 @@ const rows = SKILLS.map(s => {
     ai: c.ai,
     total,
     need,
+    needByTotal,
+    needByAi,
   };
 }).sort((a, b) => b.need - a.need || b.priorityRank - a.priorityRank);
 
@@ -92,6 +100,8 @@ console.log(JSON.stringify({
     totalSkills: rows.length,
     seedTotal: SEED_QUESTIONS.length,
     aiTotal: aiQs.length,
+    target: TARGET,
+    aiTarget: AI_TARGET,
     underTwenty: under20.length,
     ofWhichTermXia: under20.filter(r => r.term === "下册").length,
     ofWhichTermShang: under20.filter(r => r.term === "上册").length,
@@ -99,10 +109,9 @@ console.log(JSON.stringify({
     needTotal: under20.reduce((s, r) => s + r.need, 0),
   },
   under20,
-  // 全部 skill 当前题量 (供检查)
   allCounts: rows.map(r => ({ skillId: r.skillId, total: r.total, seed: r.seed, ai: r.ai })),
 }, null, 2));
 
-// 命名保留 under20.json 以兼容老脚本 — 实际 threshold 取决于 TARGET env
-writeFileSync("/tmp/under20.json", JSON.stringify({ topToFill: under20, target: TARGET }, null, 2));
-process.stderr.write(`\n▶ TARGET=${TARGET}, ${under20.length} skill 需补题，总缺 ${under20.reduce((s, r) => s + r.need, 0)} 道\n`);
+// 命名保留 under20.json 以兼容老脚本 — 实际 threshold 取决于 TARGET / AI_TARGET env
+writeFileSync("/tmp/under20.json", JSON.stringify({ topToFill: under20, target: TARGET, aiTarget: AI_TARGET }, null, 2));
+process.stderr.write(`\n▶ TARGET=${TARGET}, AI_TARGET=${AI_TARGET}, ${under20.length} skill 需补题，总缺 ${under20.reduce((s, r) => s + r.need, 0)} 道\n`);

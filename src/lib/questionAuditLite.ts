@@ -28,6 +28,88 @@ export interface AuditResult {
   issues: AuditIssue[];
 }
 
+/** 带声调的拼音字符（含 ü/ǖ 系列）— 用来判定 stem 是否"主要由拼音组成"（看拼音写字）。 */
+const PINYIN_TONE_RE = /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜüńňǹ]/;
+
+/** 汉字范围（基本汉字平面，含繁简）。 */
+const HANZI_RE = /[一-鿿]/g;
+
+/** 判断 skill_id 是不是"看拼音写字 / 听写"类。匹配 *_PINYIN / *_DICTATION 后缀。 */
+function isPinyinWriteSkill(skillId: string | undefined): boolean {
+  if (!skillId) return false;
+  return /_(?:PINYIN|DICTATION)$/i.test(skillId);
+}
+
+/**
+ * 看拼音写字答案泄露检测。
+ *
+ * 触发条件（必须同时满足）：
+ *   1. subjectId="chinese"（避免误伤数学题）
+ *   2. skill_id 命中拼音 / 听写类（_PINYIN / _DICTATION 后缀）
+ *   3. stem 里有拼音声调字符（说明这就是"读拼音写字"题面，而不是"宿字读音是？"那种 stem 已经写出目标字的题）
+ *   4. answer.value 对应的选项 text 里包含汉字（即 target chars）
+ *   5. 这些 target 汉字 **没出现在 stem**（避免把 stem 已含汉字的辨字题也误判）
+ *   6. target 汉字 **出现在** hints / solution_steps / common_errors / feedback 里
+ *
+ * 返回命中的字 + 命中字段；没问题时返回 null。
+ */
+export function detectPinyinAnswerLeak(
+  q: Question,
+): { chars: string[]; fields: string[] } | null {
+  if (q.subjectId !== "chinese") return null;
+  if (!isPinyinWriteSkill(q.skill_id)) return null;
+
+  const stem = q.stem ?? "";
+  if (!PINYIN_TONE_RE.test(stem)) return null;
+
+  // 取 answer.value 对应的选项 text；非 choice 题（fill_blank 文字答案）退而用 audio_text。
+  const ans = (q as { answer?: { type?: string; value?: unknown } }).answer;
+  const opts = (q as { options?: { id?: string; text?: string }[] }).options;
+  let answerText = "";
+  if (ans?.type === "choice" && Array.isArray(opts) && typeof ans.value === "string") {
+    answerText = opts.find((o) => o?.id === ans.value)?.text ?? "";
+  }
+  if (!answerText) {
+    answerText = (q as { audio_text?: string }).audio_text ?? "";
+  }
+  if (!answerText) return null;
+
+  const targetChars = Array.from(new Set(answerText.match(HANZI_RE) ?? []));
+  if (targetChars.length === 0) return null;
+
+  // stem 已含的字不算泄露（辨字题）
+  const stemChars = new Set(stem.match(HANZI_RE) ?? []);
+  const checkChars = targetChars.filter((c) => !stemChars.has(c));
+  if (checkChars.length === 0) return null;
+
+  const buckets: { name: string; text: string }[] = [];
+  for (const h of q.hints ?? []) {
+    if (h?.text) buckets.push({ name: "hints", text: h.text });
+  }
+  for (const s of q.solution_steps ?? []) {
+    if (s) buckets.push({ name: "solution_steps", text: s });
+  }
+  for (const e of q.common_errors ?? []) {
+    if (e?.error) buckets.push({ name: "common_errors", text: e.error });
+    if (e?.remediation) buckets.push({ name: "common_errors", text: e.remediation });
+  }
+  if (q.feedback_correct) buckets.push({ name: "feedback_correct", text: q.feedback_correct });
+  if (q.feedback_wrong) buckets.push({ name: "feedback_wrong", text: q.feedback_wrong });
+
+  const leakedChars = new Set<string>();
+  const leakedFields = new Set<string>();
+  for (const ch of checkChars) {
+    for (const b of buckets) {
+      if (b.text.includes(ch)) {
+        leakedChars.add(ch);
+        leakedFields.add(b.name);
+      }
+    }
+  }
+  if (leakedChars.size === 0) return null;
+  return { chars: [...leakedChars], fields: [...leakedFields] };
+}
+
 /**
  * 单道题审计 — 返回所有问题。空数组 = 完美。
  *
@@ -128,6 +210,17 @@ export function auditQuestion(q: Question): AuditResult {
   const m1q = q as { feedback_correct?: string; feedback_wrong?: string };
   if (!m1q.feedback_correct || !m1q.feedback_wrong) {
     add("minor", "M1", "feedback_correct / feedback_wrong 有缺失");
+  }
+
+  // L5: 看拼音写字答案泄露 — 拼音写字题的目标字不能在 hint / 解析 / common_errors / feedback 里直接出现
+  const leak = detectPinyinAnswerLeak(q);
+  if (leak) {
+    add(
+      "likely-broken",
+      "L5",
+      `看拼音写字答案泄露：「${leak.chars.join("")}」出现在 ${leak.fields.join(" / ")}（题面只给拼音，等于直接告诉答案）`,
+      "把提示 / 解析 / common_errors / feedback 里的目标字换成部首描述、笔画位置等线索",
+    );
   }
 
   // M3 + M4: estimated_time_seconds 范围 + 长 stem 时间相关性（v0.31.51 已加）
