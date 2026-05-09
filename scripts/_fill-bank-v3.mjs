@@ -304,31 +304,61 @@ if (skipped.length > 0) {
   process.stderr.write(`▶ 因连续 vfail 被跳过的 skill：${skipped.map(s => s.skillName).join(", ")}\n`);
 }
 
-// Push to D1 if any new
+// Push to D1 via 新独立端点 /api/sync/ai-questions（v0.31.65）
+//   每行一道题 ~2-3 KB，单批 50 道，避开主 sync 2MB 上限
 if (allAccepted.length > 0) {
-  process.stderr.write(`▶ Pull D1…\n`);
-  const dl = await fetch(`${PROD}/api/sync/download`, { headers: { Authorization: auth } });
-  const dj = await dl.json();
-  const payload = dj.latest.payload;
-  const existingAi = Array.isArray(payload.aiQuestions) ? payload.aiQuestions : [];
-  const existingIds = new Set(existingAi.map(q => q.question_id));
-  const newOnes = allAccepted.filter(q => !existingIds.has(q.question_id));
-  const merged = [...existingAi, ...newOnes];
+  process.stderr.write(`▶ Push 经 /api/sync/ai-questions 端点 (按行 upsert)…\n`);
+  // 兜底：失败保存到 pending
+  writeFileSync("/tmp/fillbank-pending.json", JSON.stringify({
+    rows: allAccepted, ts: Date.now(),
+  }));
 
-  process.stderr.write(`▶ Push: 总 aiQuestions ${merged.length}（新增 ${newOnes.length}）…\n`);
-  const up = await fetch(`${PROD}/api/sync/upload`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: auth },
-    body: JSON.stringify({
-      payload: { ...payload, aiQuestions: merged },
-      attemptsCount: payload.attempts?.length ?? 0,
-      sessionsCount: payload.sessions?.length ?? 0,
-      totalXp: dj.latest.totalXp ?? 0,
-      clientId: "fill-bank-v3",
-    }),
-  });
-  const uj = await up.json();
-  process.stderr.write(`✓ uploaded version=${uj.version}\n`);
+  const BATCH_SIZE = 30;  // 服务端 MAX_BATCH=50，留点余量
+  let pushedTotal = 0;
+  let failedTotal = 0;
+
+  for (let i = 0; i < allAccepted.length; i += BATCH_SIZE) {
+    const batch = allAccepted.slice(i, i + BATCH_SIZE);
+    const waits = [0, 3_000, 15_000, 60_000];
+    let batchPushed = false;
+    for (let attempt = 0; attempt < waits.length && !batchPushed; attempt++) {
+      if (waits[attempt] > 0) await sleep(waits[attempt]);
+      try {
+        const up = await fetch(`${PROD}/api/sync/ai-questions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: auth },
+          body: JSON.stringify({ rows: batch }),
+        });
+        if (!up.ok) {
+          process.stderr.write(`  batch ${i / BATCH_SIZE + 1} attempt ${attempt + 1}: HTTP ${up.status}\n`);
+          continue;
+        }
+        const txt = await up.text();
+        if (!txt.startsWith("{")) {
+          process.stderr.write(`  batch ${i / BATCH_SIZE + 1} attempt ${attempt + 1}: non-JSON\n`);
+          continue;
+        }
+        const uj = JSON.parse(txt);
+        pushedTotal += uj.accepted ?? 0;
+        if (uj.rejected?.length) {
+          failedTotal += uj.rejected.length;
+          process.stderr.write(`  batch ${i / BATCH_SIZE + 1} rejected ${uj.rejected.length} 道\n`);
+        }
+        batchPushed = true;
+        process.stderr.write(`  batch ${i / BATCH_SIZE + 1}/${Math.ceil(allAccepted.length / BATCH_SIZE)}: ✓ accepted ${uj.accepted}\n`);
+      } catch (e) {
+        process.stderr.write(`  batch ${i / BATCH_SIZE + 1} attempt ${attempt + 1} threw: ${e.message?.slice(0, 80)}\n`);
+      }
+    }
+    if (!batchPushed) {
+      failedTotal += batch.length;
+      process.stderr.write(`✗ batch ${i / BATCH_SIZE + 1} 全部重试失败\n`);
+    }
+  }
+  process.stderr.write(`✓ Push 完成：accepted ${pushedTotal}, failed ${failedTotal}\n`);
+  if (failedTotal === 0) {
+    try { rmSync("/tmp/fillbank-pending.json", { force: true }); } catch {}
+  }
 }
 
 // vfail summary for prompt review

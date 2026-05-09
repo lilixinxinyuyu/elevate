@@ -43,7 +43,7 @@
 | `game_type` / `play_as` | 见对应 schema 文件，与文件名同名（如 `"plain_choice"`） | 不要乱起 |
 | `difficulty` | 整数 1 / 2 / 3 / 4 / 5 | ❌ `"3"` / `3.5` |
 | `grade` | 数字 4 | ❌ `"4"` / `"四年级"` |
-| `answer.type` | `"choice"` / `"numeric"` / `"text"` / `"multi_step"` | 与 game_type 配对 |
+| `answer.type` | `"choice"` / `"number"` / `"multi_step"` | 与 game_type 配对。**注意**：是 `"number"` 不是 `"numeric"`（"numeric" 是 question_format 的值，不能放这里）；schema 也没有 `"text"` |
 
 ⚠️ **`concept` vs `conceptual` 容易写错**：
 - `ability_dimension` 用 `"concept"`（概念力）

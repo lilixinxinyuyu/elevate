@@ -30,7 +30,7 @@
   "ability_dimension": ["modeling", "calculation"],
   "estimated_time_seconds": 50,
   "tags": ["ai_generated", "eq:2x+3|x+5"],
-  "answer": {"type": "numeric", "value": 2}
+  "answer": {"type": "number", "value": 2}
 }
 ```
 

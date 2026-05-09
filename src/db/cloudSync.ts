@@ -108,21 +108,9 @@ async function dumpLocal(): Promise<SnapshotPayload> {
   for (const t of PUSH_TABLES) {
     bag[t] = await db.table(t).toArray();
   }
-  // v0.31.52: AI 生成的题单独 dump（seed 不上传），跨设备同步
-  try {
-    const allQs = (await db.questions.toArray()) as Array<{
-      question_id?: string;
-      tags?: string[];
-    }>;
-    bag.aiQuestions = allQs.filter(
-      (q) =>
-        (q.tags ?? []).includes("ai_generated") ||
-        (q.question_id ?? "").startsWith("AI_"),
-    );
-  } catch (e) {
-    console.warn("[dumpLocal] aiQuestions dump failed (continuing):", e);
-    bag.aiQuestions = [];
-  }
+  // v0.31.65: aiQuestions 不再放主 snapshot — 走 /api/sync/ai-questions 独立端点
+  // 旧 snapshot 还可能含有 payload.aiQuestions，pull 时会 merge 进 db.questions
+  bag.aiQuestions = [];
   return bag as unknown as SnapshotPayload;
 }
 
@@ -478,6 +466,18 @@ export async function pushToCloud(): Promise<SyncResult> {
     console.warn("[pushToCloud] trophyImages push threw:", e);
   }
 
+  // v0.31.65: 单独 push aiQuestions（每行一道题，避免主 sync payload > 2MB）
+  try {
+    const r = await pushAiQuestions();
+    if (!r.ok) {
+      console.warn("[pushToCloud] aiQuestions push failed:", r.error);
+    } else if (r.pushed > 0) {
+      console.log(`[pushToCloud] pushed ${r.pushed} AI question(s)`);
+    }
+  } catch (e) {
+    console.warn("[pushToCloud] aiQuestions push threw:", e);
+  }
+
   return { ok: true, version: mainVersion };
 }
 
@@ -516,6 +516,7 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
   if (opts.force) {
     try {
       localStorage.removeItem(TROPHY_LAST_PULL_KEY);
+      localStorage.removeItem(AI_QS_LAST_PULL_KEY);
     } catch {
       /* */
     }
@@ -530,6 +531,19 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
     }
   } catch (e) {
     console.warn("[pullFromCloud] trophyImages pull threw:", e);
+  }
+
+  // v0.31.65: 拉 ai_questions（独立端点，避免主 sync payload 过大）
+  try {
+    const r = await pullAiQuestions();
+    if (r.ok && r.pulled > 0) {
+      console.log(`[pullFromCloud] pulled ${r.pulled} AI question(s)`);
+      changed = true;
+    } else if (!r.ok) {
+      console.warn("[pullFromCloud] aiQuestions pull failed:", r.error);
+    }
+  } catch (e) {
+    console.warn("[pullFromCloud] aiQuestions pull threw:", e);
   }
 
   return { ok: true, changed, version };
@@ -649,6 +663,75 @@ async function pullTrophyImages(): Promise<{ ok: boolean; pulled: number; error?
       } catch {
         /* */
       }
+    }
+    return { ok: true, pulled: j.rows.length };
+  } catch (e) {
+    return { ok: false, pulled: 0, error: "network: " + (e as Error).message };
+  }
+}
+
+// v0.31.65: 独立 aiQuestions 同步（避免主 sync payload 过 2MB → D1 拒收）
+const AI_QS_BATCH = 30;
+const AI_QS_LAST_PUSH_KEY = "selena.cloud.aiQuestionsLastPush";
+const AI_QS_LAST_PULL_KEY = "selena.cloud.aiQuestionsLastPull";
+
+interface AiQuestionRow {
+  question_id: string;
+  [k: string]: unknown;
+}
+
+async function pushAiQuestions(): Promise<{ ok: boolean; pushed: number; error?: string }> {
+  const pwd = getStoredPassword();
+  if (!pwd) return { ok: false, pushed: 0, error: "no_password" };
+  const all = (await db.questions.toArray()) as Array<{ question_id?: string; tags?: string[] }>;
+  const aiOnly = all.filter(
+    (q) =>
+      (q.tags ?? []).includes("ai_generated") || (q.question_id ?? "").startsWith("AI_"),
+  ) as AiQuestionRow[];
+  if (aiOnly.length === 0) return { ok: true, pushed: 0 };
+
+  let pushed = 0;
+  for (let i = 0; i < aiOnly.length; i += AI_QS_BATCH) {
+    const batch = aiOnly.slice(i, i + AI_QS_BATCH);
+    try {
+      const r = await fetch("/api/sync/ai-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${pwd}` },
+        body: JSON.stringify({ rows: batch }),
+      });
+      if (!r.ok) return { ok: false, pushed, error: `http_${r.status}` };
+      const j = (await r.json()) as { ok: boolean; accepted?: number };
+      if (!j.ok) return { ok: false, pushed, error: "server_error" };
+      pushed += j.accepted ?? 0;
+    } catch (e) {
+      return { ok: false, pushed, error: "network: " + (e as Error).message };
+    }
+  }
+  try { localStorage.setItem(AI_QS_LAST_PUSH_KEY, String(Date.now())); } catch {}
+  return { ok: true, pushed };
+}
+
+async function pullAiQuestions(): Promise<{ ok: boolean; pulled: number; error?: string }> {
+  const pwd = getStoredPassword();
+  if (!pwd) return { ok: false, pulled: 0, error: "no_password" };
+  const since = Number(localStorage.getItem(AI_QS_LAST_PULL_KEY) ?? 0);
+  try {
+    const r = await fetch(`/api/sync/ai-questions?since=${since}`, {
+      headers: { Authorization: `Bearer ${pwd}` },
+    });
+    if (!r.ok) return { ok: false, pulled: 0, error: `http_${r.status}` };
+    const j = (await r.json()) as { ok: boolean; rows?: AiQuestionRow[]; latestVersion?: number };
+    if (!j.ok || !Array.isArray(j.rows)) return { ok: false, pulled: 0, error: "bad_payload" };
+    if (j.rows.length > 0) {
+      // union by question_id — 题不可变，本地已有 ID 不覆盖
+      const localIds = new Set(
+        ((await db.questions.toArray()) as Array<{ question_id?: string }>).map((q) => q.question_id),
+      );
+      const toAdd = j.rows.filter((r) => r.question_id && !localIds.has(r.question_id));
+      if (toAdd.length > 0) await db.questions.bulkPut(toAdd as never);
+    }
+    if (j.latestVersion) {
+      try { localStorage.setItem(AI_QS_LAST_PULL_KEY, String(j.latestVersion)); } catch {}
     }
     return { ok: true, pulled: j.rows.length };
   } catch (e) {
