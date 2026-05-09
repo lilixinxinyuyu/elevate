@@ -113,8 +113,17 @@ const PER_PROVIDER_BUDGET_MS = 35_000;
 
 function buildSystemPrompt(subjectId: string): string {
   // 模板从 prompts/questions/system.md 读，运行时只替换占位符
+  // v0.31.72: subject-aware — 数学 prompt 不再混入语文段落
   const subjLabel = subjectId === "math" ? "数学" : "语文";
-  return PROMPTS.questionsSystem.replace(/\{\{subjectLabel\}\}/g, subjLabel);
+  const subjKey = subjectId === "math" ? "math" : "chinese";
+  const sys = PROMPTS.questionsSystem as unknown as
+    | string
+    | { math?: string; chinese?: string; raw?: string };
+  const template =
+    typeof sys === "string"
+      ? sys
+      : (sys[subjKey as "math" | "chinese"] ?? sys.raw ?? "");
+  return template.replace(/\{\{subjectLabel\}\}/g, subjLabel);
 }
 
 interface QwenChatResponse {

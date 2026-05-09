@@ -105,6 +105,71 @@ export function renderGameTypeSchema(gameType: string): string {
   return schema;
 }
 
+/**
+ * v0.31.72：按 game_type + difficulty 查 estimated_time_seconds 表（与 quality-rubric.md §3 一致）。
+ * 不在表里的 game_type 走 fallback（中等估值）。
+ */
+const TIME_TABLE: Record<string, [number, number, number]> = {
+  // game_type: [diff 1-2, diff 3, diff 4-5]
+  speed_match: [10, 15, 20],
+  plain_choice: [20, 30, 40],
+  decimal_shifter: [18, 25, 35],
+  cube_view: [25, 35, 50],
+  triangle_judge: [22, 30, 40],
+  vertical_repair: [25, 35, 45],
+  balance_lab: [35, 50, 65],
+  shop_counter: [35, 50, 70],
+  clue_finder: [35, 45, 60],
+  word_problem_lab: [70, 90, 130],
+};
+export function estimatedTimeFor(
+  gameType: string,
+  difficulty: 1 | 2 | 3 | 4 | 5,
+): number {
+  const row = TIME_TABLE[gameType] ?? [25, 35, 45];
+  if (difficulty <= 2) return row[0]!;
+  if (difficulty === 3) return row[1]!;
+  return row[2]!;
+}
+
+/**
+ * v0.31.72：按 game_type 推 question_format。固定映射，不走 AI。
+ */
+const FORMAT_BY_GAME_TYPE: Record<string, string> = {
+  plain_choice: "single_choice",
+  speed_match: "single_choice",
+  cube_view: "single_choice",
+  triangle_judge: "single_choice",
+  vertical_repair: "fill_blank",
+  decimal_shifter: "single_choice",
+  balance_lab: "numeric_choice",
+  shop_counter: "multi_step",
+  clue_finder: "single_choice",
+  word_problem_lab: "multi_step",
+  equation_builder: "fill_blank",
+};
+export function questionFormatFor(gameType: string): string {
+  return FORMAT_BY_GAME_TYPE[gameType] ?? "single_choice";
+}
+
+/**
+ * v0.31.72：按 skill scope 推 cognitive_level（默认 procedural；和倍/差倍 / 应用题倾向 application）。
+ */
+export function cognitiveLevelFor(
+  skillId: string,
+  gameType?: string,
+): "recall" | "procedural" | "application" | "reasoning" {
+  if (gameType === "word_problem_lab" || gameType === "shop_counter") return "application";
+  if (skillId.includes("compare") || skillId.includes("judge")) return "reasoning";
+  if (skillId.includes("read") || skillId.includes("recognize")) return "recall";
+  return "procedural";
+}
+
+/** v0.31.72: existingStem 可以带难度 + skill_id（用于 [Dx] 显示 + 同 skill 真实样题挑选）。 */
+export type ExistingStemEntry =
+  | string
+  | { stem: string; difficulty?: number; skillId?: string; questionId?: string };
+
 export interface ComposeQuestionInput {
   /** "math" / "chinese" */
   subjectId: "math" | "chinese";
@@ -142,14 +207,33 @@ export interface ComposeQuestionInput {
   gameType?: string;
   /** 本批要出几道 */
   count: number;
-  /** 已有题干，用于去重 */
-  existingStems?: string[];
+  /** 已有题干，用于去重 + 难度参考 */
+  existingStems?: ExistingStemEntry[];
   /** 最近做错的题（用于"再出一题"场景） */
   recentMistakeStems?: string[];
   /** 出题角度种子（不同批次的并发去重） */
   batchAngle?: string;
   /** 调用上下文标签（仅日志用） */
   callerTag?: string;
+  /**
+   * v0.31.72 (B + C)：caller-known 字段预填。让 AI 不再自己造 enum 值。
+   * 调用方根据 skill_id + game_type + difficulty 计算后传入；composer 直接渲染到
+   * "已确定的元数据"段，AI 原样抄进每道题。
+   */
+  prefilledFields?: {
+    grade?: number;
+    examPriority?: string;
+    abilityDimension?: string[];
+    cognitiveLevel?: string;
+    questionFormat?: string;
+    estimatedTimeSeconds?: number;
+    status?: string;
+  };
+  /**
+   * v0.31.72 (C)：当前 skill 的高质量样题（从 SEED 选 1 道）。
+   * 注入到 schema 块下方作为"参考真实结构"，比固定的 basketball/football example 贴。
+   */
+  skillExampleQuestion?: Record<string, unknown>;
 }
 
 /**
@@ -179,6 +263,8 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
     existingStems,
     recentMistakeStems,
     batchAngle,
+    prefilledFields,
+    skillExampleQuestion,
   } = args;
 
   const subjectLabel = subjectId === "math" ? "数学" : "语文";
@@ -218,6 +304,45 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
     lines.push(`- **变化角度**：${batchAngle}（同批次不同情境/不同数字/不同字词）`);
   }
   lines.push(``);
+
+  // 1.5 v0.31.72 (B): 已确定的元数据 — 直接抄进每道题
+  if (prefilledFields) {
+    lines.push(`## 已确定的元数据（**原样抄进每道题，不要改、不要造、不要凭直觉换值**）`);
+    lines.push(``);
+    lines.push("```jsonc");
+    lines.push(`{`);
+    lines.push(`  "subjectId": "${subjectId}",`);
+    lines.push(`  "term": "${actualTerm}",`);
+    lines.push(`  "unit_id": "${unitId}",`);
+    if (unitName) lines.push(`  "unit_name": "${unitName}",`);
+    lines.push(`  "skill_id": "${skillId}",`);
+    if (skillName) lines.push(`  "skill_name": "${skillName}",`);
+    lines.push(`  "grade": ${prefilledFields.grade ?? 4},`);
+    lines.push(`  "difficulty": ${difficulty},`);
+    if (prefilledFields.examPriority)
+      lines.push(`  "exam_priority": "${prefilledFields.examPriority}",`);
+    if (prefilledFields.abilityDimension && prefilledFields.abilityDimension.length > 0)
+      lines.push(
+        `  "ability_dimension": ${JSON.stringify(prefilledFields.abilityDimension)},`,
+      );
+    if (prefilledFields.cognitiveLevel)
+      lines.push(`  "cognitive_level": "${prefilledFields.cognitiveLevel}",`);
+    if (prefilledFields.questionFormat)
+      lines.push(`  "question_format": "${prefilledFields.questionFormat}",`);
+    if (prefilledFields.estimatedTimeSeconds)
+      lines.push(
+        `  "estimated_time_seconds": ${prefilledFields.estimatedTimeSeconds},`,
+      );
+    lines.push(`  "status": "${prefilledFields.status ?? "approved"}",`);
+    lines.push(`  "version": 1`);
+    lines.push(`}`);
+    lines.push("```");
+    lines.push(``);
+    lines.push(
+      `> 这些值由系统按 skill_id + game_type + difficulty 精确推出，AI 不再自行决定（避免 "term=G4B" / "cognitive_level=conceptual" 这类 enum vfail）。`,
+    );
+    lines.push(``);
+  }
 
   // 2. Skill scope（主 skill）
   if (scope) {
@@ -285,16 +410,35 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
   lines.push(renderGameTypeSchema(gameType));
   lines.push(``);
 
-  // 6. existing stems
-  // v0.31.66: 不再裁切 — 全量传给 AI。
-  //   - 1000 道 × ~50 字 = 50KB ≈ 12K token，现代模型 context 100K+ 完全不在意
-  //   - 之前 slice(0, 12) + slice(0, 60) 是过早优化，导致 AI 看不到第 13+ 条 → 重复
-  //   - 唯一防爆的兜底：万一 stem 超长（>200 字），单条截 200 — 防异常数据，不为省 token
-  if (existingStems && existingStems.length > 0) {
-    lines.push(`## 已有题干 (${existingStems.length} 道, 必须避免重复 — 换情境/换数字/换字词)`);
+  // 5.5 v0.31.72 (C): 当前 skill 的高质量真实样题 — 比固定 schema example 更贴
+  if (skillExampleQuestion) {
+    lines.push(`## 当前 skill 的真实样题（参考结构 — 不要照抄题面）`);
     lines.push(``);
-    for (const s of existingStems) {
-      lines.push(`- ${s.length > 200 ? s.slice(0, 200) + "…" : s}`);
+    lines.push(
+      `> 下面是题库里这个 skill 的一道高质量题，注意它的 \`subquestions\` / \`distractors\` / \`hints\` 风格。**只参考结构，不要复用题面**。`,
+    );
+    lines.push(``);
+    lines.push("```json");
+    lines.push(JSON.stringify(skillExampleQuestion, null, 2));
+    lines.push("```");
+    lines.push(``);
+  }
+
+  // 6. existing stems — v0.31.72 (D)：带 [Dx] 难度标，不再裁切
+  //   - existingStems 现在可以是 string | { stem, difficulty }，对象形式渲染 [Dx]
+  //   - 1000 道 × ~50 字 = 50KB ≈ 12K token，现代模型 context 100K+ 不在意
+  //   - 唯一防爆兜底：单条 stem 超长（>200 字）截 200 — 防异常数据，不为省 token
+  if (existingStems && existingStems.length > 0) {
+    lines.push(
+      `## 已有题干 (${existingStems.length} 道, **避免重复** — 换情境/换数字/换字词；前面 \`[Dx]\` 是该题难度，给你校准当前批次难度感)`,
+    );
+    lines.push(``);
+    for (const entry of existingStems) {
+      const stem = typeof entry === "string" ? entry : entry.stem;
+      const d = typeof entry === "string" ? undefined : entry.difficulty;
+      const truncated = stem.length > 200 ? stem.slice(0, 200) + "…" : stem;
+      const prefix = d ? `[D${d}] ` : ``;
+      lines.push(`- ${prefix}${truncated}`);
     }
     lines.push(``);
   }
@@ -309,13 +453,7 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
     lines.push(``);
   }
 
-  // 8. 输出协议
-  lines.push(`## 输出协议`);
-  lines.push(``);
-  lines.push(
-    `输出顶层 \`{ "questions": [...] }\` JSON，**不要**包 markdown 代码块，不要写解释文字。每道题严格按上方 game-type schema 字段输出。`,
-  );
-
+  // v0.31.72：输出协议 已经在 system prompt 里讲过一次，不在 user 重复（去 redundancy）
   return lines.join("\n");
 }
 

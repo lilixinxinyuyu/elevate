@@ -67,7 +67,7 @@ await build({
   entryPoints: [join(PROJECT_ROOT, "functions/_promptComposer.ts")],
   bundle: true, format: "esm", platform: "node", outfile: t1, logLevel: "error",
 });
-const { composeQuestionUserPrompt } = await import(t1);
+const { composeQuestionUserPrompt, estimatedTimeFor, questionFormatFor, cognitiveLevelFor } = await import(t1);
 
 const t2 = join(tmpdir(), `fbv5pg-${Date.now()}.mjs`);
 await build({
@@ -98,21 +98,23 @@ if (TERM_FILTER) {
   process.stderr.write(`▶ term=${TERM_FILTER} 过滤后 ${skills.length} 个 skill\n`);
 }
 
-const sysPrompt = PROMPTS.questionsSystem.replace(/\{\{subjectLabel\}\}/g, "数学");
+// v0.31.72: subject-aware system prompt — 数学 prompt 不再混入语文段落
+const sysPrompt = (PROMPTS.questionsSystem.math ?? PROMPTS.questionsSystem.raw ?? PROMPTS.questionsSystem)
+  .replace(/\{\{subjectLabel\}\}/g, "数学");
 
 process.stderr.write(`▶ v5 直连 dashscope/qwen-plus: ${skills.length} skills, target ${TARGET_PER_SKILL}, passes ${PASSES}, concurrency ${CONCURRENCY}, batch ${BATCH_SIZE}\n`);
 
 // ============================================================
-//  existingStems：SEED + D1 (per skill)
+//  existingStems：SEED + D1 (per skill) — v0.31.72 带 difficulty 标
 // ============================================================
-const existingAiStemsBySkill = new Map();
+const existingAiStemsBySkill = new Map();   // skillId → Array<{stem, difficulty}>
 try {
   const aj = JSON.parse(readFileSync("/tmp/aiqs.json", "utf8"));
   if (Array.isArray(aj.rows)) {
     for (const r of aj.rows) {
       if (r?.skill_id && typeof r?.stem === "string") {
         const arr = existingAiStemsBySkill.get(r.skill_id) ?? [];
-        arr.push(r.stem);
+        arr.push({ stem: r.stem, difficulty: r.difficulty, questionId: r.question_id });
         existingAiStemsBySkill.set(r.skill_id, arr);
       }
     }
@@ -125,13 +127,32 @@ try {
 function existingStemsFor(skillId, batchAccepted = []) {
   const out = [];
   for (const q of SEED_QUESTIONS) {
-    if (q.skill_id === skillId && typeof q.stem === "string") out.push(q.stem);
+    if (q.skill_id === skillId && typeof q.stem === "string") {
+      out.push({ stem: q.stem, difficulty: q.difficulty });
+    }
   }
-  for (const s of (existingAiStemsBySkill.get(skillId) ?? [])) out.push(s);
+  for (const e of (existingAiStemsBySkill.get(skillId) ?? [])) out.push(e);
   for (const q of batchAccepted) {
-    if (typeof q.stem === "string") out.push(q.stem);
+    if (typeof q.stem === "string") out.push({ stem: q.stem, difficulty: q.difficulty });
   }
   return out;
+}
+
+/**
+ * v0.31.72 (C): 选当前 skill 一道高质量样题作 schema example。
+ * 优先级：seed 题（更稳定）> AI 题（may have leak）。pick 与目标 game_type 匹配的；
+ * 没匹配上就 fallback 第一道 seed 题；都没有就 null（composer 不注入）。
+ */
+function pickSkillExample(skillId, gameType) {
+  const seed = SEED_QUESTIONS.filter((q) => q.skill_id === skillId);
+  if (seed.length === 0) return null;
+  // 优先 game_type 匹配
+  const matching = gameType ? seed.filter((q) => q.game_type === gameType) : [];
+  const pool = matching.length > 0 ? matching : seed;
+  // 选难度居中的 (D3 优先)
+  const d3 = pool.filter((q) => q.difficulty === 3);
+  const picked = d3[0] ?? pool[0];
+  return picked;
 }
 
 // ============================================================
@@ -222,6 +243,25 @@ function autoFix(rawQ, sk) {
 // ============================================================
 async function genBatchDirect(skill, batchAccepted = []) {
   const stems = existingStemsFor(skill.skillId, batchAccepted);
+  // v0.31.72: difficulty 必须是 1-5 单值（之前传 "2-4" 是 bug，无意义字符串），fix 为 D3 默认
+  const targetDiff = 3;
+  const skillDef = SKILL_BY.get(skill.skillId);
+  const gameType = (PROMPTS.gameTypeBySkill ?? {})[skill.skillId];
+
+  // B: caller 已知字段预填
+  const prefilledFields = {
+    grade: 4,
+    examPriority: skillDef?.examPriority ?? "NORMAL",
+    abilityDimension: skillDef?.ability ?? ["calculation"],
+    cognitiveLevel: cognitiveLevelFor(skill.skillId, gameType),
+    questionFormat: questionFormatFor(gameType ?? "plain_choice"),
+    estimatedTimeSeconds: estimatedTimeFor(gameType ?? "plain_choice", targetDiff),
+    status: "approved",
+  };
+
+  // C: 当前 skill 一道高质量样题
+  const example = pickSkillExample(skill.skillId, gameType);
+
   const userPrompt = composeQuestionUserPrompt({
     subjectId: "math",
     unitId: skill.unitId,
@@ -229,17 +269,18 @@ async function genBatchDirect(skill, batchAccepted = []) {
     skillId: skill.skillId,
     skillName: skill.skillName,
     term: skill.term === "综合复习" ? undefined : skill.term,
-    difficulty: "2-4",
+    difficulty: targetDiff,
     count: BATCH_SIZE,
     existingStems: stems,
     batchAngle: "数字换一组",
     callerTag: "fill-bank-v5",
+    prefilledFields,
+    skillExampleQuestion: example,
   });
 
   // 单道 token 估算：v0.31.68 实测 plain_choice 多步题也常超 800（如小数乘加），
   // 1500 默认更稳；word_problem_lab / shop_counter / balance_lab 应用题更长，给 2000
-  const skillDef = SKILL_BY.get(skill.skillId);
-  const gameType = (PROMPTS.gameTypeBySkill ?? {})[skill.skillId];
+  // v0.31.72: skillDef + gameType 上面已经声明了，复用
   const heavyTypes = new Set(["word_problem_lab", "shop_counter", "balance_lab"]);
   const perItemTokens = heavyTypes.has(gameType) ? 2000 : 1500;
   const estMaxTokens = Math.min(28000, Math.max(3000, BATCH_SIZE * perItemTokens + 500));
@@ -357,7 +398,10 @@ async function fillSkillOnce(skill, batchAccepted) {
 
   // 2. validate / off_topic / audit / dedup
   const passingValidation = [];
-  const existingSet = new Set(existingStemsFor(skill.skillId, batchAccepted));
+  // v0.31.72: existingStemsFor 现在返回 {stem, difficulty} 对象，dedup 仍按 stem 字符串
+  const existingSet = new Set(
+    existingStemsFor(skill.skillId, batchAccepted).map((e) => e.stem),
+  );
 
   for (const rawQ of questions) {
     const q = autoFix(rawQ, skill);

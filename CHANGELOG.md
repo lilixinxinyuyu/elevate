@@ -3,6 +3,54 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.72 — 2026-05-10 · Prompt 系统 5 大改造（D + B + C + A + E）
+
+针对果园那道 leak 题反查到的根因：prompt 系统多年累积的"反面示范"自己在教 AI 出 leak 题。爸爸提了 5 个改造点，全部 ship。
+
+### A. Subject 隔离
+
+- `prompts/quality-rubric.md` 用 `<!--SUBJ:MATH-->` / `<!--SUBJ:CHINESE-->` 标记包住学科特定段落
+- `scripts/build-prompts.mjs` 加 `filterBySubject()` —— 数学 prompt 不再混入语文段落（拼音听写/阅读理解/古诗），反之亦然
+- `PROMPTS.questionsSystem` / `qualityJudgeSystem` / `qualityRubric` 现在都是 `{ math, chinese, raw }` 三件套
+- `functions/api/generate/questions.ts` + `judge-questions.ts` 按 subject 选对应 system
+
+### B. Caller-known enum 字段预填
+
+- composer 新增 `prefilledFields` 入参：`grade / examPriority / abilityDimension / cognitiveLevel / questionFormat / estimatedTimeSeconds / status`
+- 这些字段 caller 已知（由 skill_id + game_type + difficulty 推出），AI 不再自行选 enum，避免 `term=G4B` / `cognitive_level=conceptual` 这类 vfail
+- composer 在 user prompt 输出"已确定的元数据"块，AI 原样抄
+- 新增 `estimatedTimeFor()` / `questionFormatFor()` / `cognitiveLevelFor()` helpers
+
+### C. 动态 skill example + word_problem_lab.md 重写
+
+- composer 新增 `skillExampleQuestion` 入参：fill-bank-v5 / dump-prompt 从 SEED 选当前 skill 一道高质量真实样题（D3 优先 + game_type 匹配）注入
+- 替代原来固定的"basketball/football"static example（跨 skill + 自带 leak 模式）
+- `prompts/questions/game-types/word_problem_lab.md` 完整重写：
+  - 删除"clue 标（无关）"和"option 挂 errorTag"两个反面示范
+  - 加 `_internal_option_diagnostics` 字段（admin-only）放 errorTag
+  - 新增「反例 vs 正例」对照段，明确演示 P1 leak 长什么样
+
+### D. existingStems 带 [Dx] 难度标 + 删 stale 截断
+
+- composer `existingStems` 现在接受 `Array<string | { stem, difficulty }>`，对象形式渲染 `[D{n}] {stem}` 让 AI 看到难度分布
+- fill-bank-v5 + dump-prompt 都换新格式，AI dedup 体验不变（Set 仍按 stem 字符串）
+- 删除 dump-prompt 里 stale 的 "server 截前 12" 警告（实际早已移除）+ 25-cap slice
+
+### E. 4 P 原则 + severity 只给 judge + 输出协议去重
+
+- 新建 `prompts/quality-principles.md` —— P1 题面纯净 / P2 数学闭合 / P3 干扰项独立 / P4 skill 真考，每条带反例 + 正例
+- `prompts/questions/system.md` + `quality-judge/system.md` 都 include 同一份 principles，出题端和质检端共享原则
+- 删除 `quality-rubric.md` 的 §1.5 enum dictionary（B 已覆盖）和 §9 severity（仅 judge 用，搬到 judge system）
+- judge 新增 `principle_violations: [{principle: "P1", evidence: "..."}]` 输出字段
+- 输出协议从 user prompt 末尾移除（已在 system 讲过一次，不重复）
+
+### 数据指标
+
+- prompt 总长 15828 字符 → 23597（+49%）
+  - system: 9257 → 8675（-582，subject filter 净效应）
+  - user: 6571 → 14922（+8351，元数据 + skill example + 全量 stems）
+- 增加都是"高信号"内容；之前的"通用 basketball example + 25 截断 + 跨 subject 噪音"占的位置都被替换成了"in-skill example + full stems with [Dx] + caller-known facts"
+
 ## v0.31.71 — 2026-05-10 · 同步实时化 + 巧算工具箱 + 正反馈密度引擎
 
 爸爸："我发现 Selena 做完的时候并没有实时把数据推到 D1 里面，我总是拉不到她最新的进度...希望无论怎么同步都不会删掉本地最新的记录"。同时希望加 4 年级巧算技巧；并把"游戏感从题量推动升级为正反馈密度"。

@@ -232,8 +232,17 @@ function summarizeQuestion(q: JudgeQuestion): Record<string, unknown> {
 }
 
 function buildSystemPrompt(subjectId: string): string {
+  // v0.31.72: subject-aware — 质检 prompt 也按 subject 过滤
   const subjLabel = subjectId === "math" ? "数学" : "语文";
-  return PROMPTS.qualityJudgeSystem.replace(/\{\{subjectLabel\}\}/g, subjLabel);
+  const subjKey = subjectId === "math" ? "math" : "chinese";
+  const sys = PROMPTS.qualityJudgeSystem as unknown as
+    | string
+    | { math?: string; chinese?: string; raw?: string };
+  const template =
+    typeof sys === "string"
+      ? sys
+      : (sys[subjKey as "math" | "chinese"] ?? sys.raw ?? "");
+  return template.replace(/\{\{subjectLabel\}\}/g, subjLabel);
 }
 
 function buildUserPrompt(args: JudgeRequest): string {

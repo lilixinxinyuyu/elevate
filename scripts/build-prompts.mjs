@@ -56,9 +56,36 @@ function expandIncludes(content, sourceLabel) {
   });
 }
 
-function readMd(relPath) {
+/**
+ * v0.31.72：subject 隔离 — 把 `<!--SUBJ:MATH-->...<!--/SUBJ:MATH-->`
+ * 和 `<!--SUBJ:CHINESE-->...<!--/SUBJ:CHINESE-->` 标记的段落，按目标 subject 过滤。
+ * 不带标记的段落保留（视为 shared）。
+ *
+ * keepSubject: "math" / "chinese" / null（保留全部，给原始 dump 用）
+ */
+function filterBySubject(content, keepSubject) {
+  if (!keepSubject) return content;
+  const otherSubject = keepSubject === "math" ? "chinese" : "math";
+  // 移除 OTHER subject 的整段（包括 marker 本身）
+  const otherUpper = otherSubject.toUpperCase();
+  const otherRe = new RegExp(
+    `<!--\\s*SUBJ:${otherUpper}\\s*-->[\\s\\S]*?<!--\\s*/SUBJ:${otherUpper}\\s*-->\\n?`,
+    "g",
+  );
+  let out = content.replace(otherRe, "");
+  // 把 KEEP subject 的 marker 标签去掉，但保留内容
+  const keepUpper = keepSubject.toUpperCase();
+  const keepRe = new RegExp(`<!--\\s*/?SUBJ:${keepUpper}\\s*-->\\n?`, "g");
+  out = out.replace(keepRe, "");
+  // 折叠多余空行
+  out = out.replace(/\n{3,}/g, "\n\n");
+  return out.trim();
+}
+
+function readMd(relPath, subject = null) {
   const raw = readFileSync(join(PROMPTS_DIR, relPath), "utf8").trim();
-  return expandIncludes(raw, relPath);
+  const expanded = expandIncludes(raw, relPath);
+  return filterBySubject(expanded, subject);
 }
 
 function readJson(relPath) {
@@ -108,7 +135,16 @@ try {
 }
 
 const data = {
-  questionsSystem: readMd("questions/system.md"),
+  /**
+   * v0.31.72: 按 subject 拆分两份 — 数学 prompt 不再混入语文规则，反之亦然。
+   * 调用方按 subjectId 选 .math 或 .chinese。
+   * 还保留 .raw 供审计 / 工具脚本用。
+   */
+  questionsSystem: {
+    math: readMd("questions/system.md", "math"),
+    chinese: readMd("questions/system.md", "chinese"),
+    raw: readMd("questions/system.md"),
+  },
   questionsUserTemplate: readMd("questions/user-template.md"),
   questionsSchemas,
   /** v0.31.34：每个难度的精确定义 */
@@ -117,9 +153,19 @@ const data = {
   formatRubrics,
   /** v0.31.34：每个 skill 的精确教学范围（in/out scope + key formulas + common mistakes） */
   skillScope,
-  /** 共享质量规范——出题和质检都内联了它，但保留一份原文方便审计 */
-  qualityRubric: readMd("quality-rubric.md"),
-  qualityJudgeSystem: readMd("quality-judge/system.md"),
+  /** v0.31.72：四原则 — 出题和质检共用 */
+  qualityPrinciples: readMd("quality-principles.md"),
+  /** 附加机械约束（题型字段 / 时间表 / 题干语言等），按 subject 过滤 */
+  qualityRubric: {
+    math: readMd("quality-rubric.md", "math"),
+    chinese: readMd("quality-rubric.md", "chinese"),
+    raw: readMd("quality-rubric.md"),
+  },
+  qualityJudgeSystem: {
+    math: readMd("quality-judge/system.md", "math"),
+    chinese: readMd("quality-judge/system.md", "chinese"),
+    raw: readMd("quality-judge/system.md"),
+  },
   qualityJudgeUserTemplate: readMd("quality-judge/user-template.md"),
   skillKeywords: readJson("skill-keywords.json"),
   gameTypeBySkill: readJson("game-type-by-skill.json"),
