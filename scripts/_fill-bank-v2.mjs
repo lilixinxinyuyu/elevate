@@ -44,9 +44,15 @@ rmSync(tmpFile, { force: true });
 
 const priorities = JSON.parse(readFileSync("/tmp/priorities.json", "utf8"));
 // v0.31.59: 不再 slice(0, 12) — 让 keep-filling.sh 决定多少个 skill 每轮跑
-//   单轮过多时间太长（19 skill × 20 题 × 8 pass × 30s = 5h）→ 上限 24
+//   单轮过多时间太长，所以 max 24 / 轮，剩下下一轮接力
 const skills = priorities.topToFill.slice(0, 24);
-console.error(`▶ v2: ${skills.length} skills × target ${TARGET_PER_SKILL}, max ${PASSES} passes`);
+console.error(`▶ v2: ${skills.length} skills, default per-skill target ${TARGET_PER_SKILL}, max ${PASSES} passes`);
+// 每 skill 的精确 need（来自 audit）— 避免对接近达标的 skill 浪费 token
+function targetFor(sk) {
+  const n = sk.need;
+  if (typeof n === "number" && n > 0) return Math.min(n, TARGET_PER_SKILL);
+  return TARGET_PER_SKILL;
+}
 
 const auth = `Bearer ${PWD}`;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -97,9 +103,10 @@ for (let pass = 1; pass <= PASSES; pass++) {
 
   for (const sk of skills) {
     const have = (acceptedBySkill.get(sk.skillId) ?? []).length;
-    if (have >= TARGET_PER_SKILL) continue;
+    const skillTarget = targetFor(sk);
+    if (have >= skillTarget) continue;
     skillsThisPass++;
-    process.stderr.write(`P${pass} ${sk.skillName.slice(0,8)}(${have}/${TARGET_PER_SKILL}): `);
+    process.stderr.write(`P${pass} ${sk.skillName.slice(0,8)}(${have}/${skillTarget}): `);
     try {
       const stems = allBatchStems.get(sk.skillId) ?? [];
       const q = await genOne(sk, stems);

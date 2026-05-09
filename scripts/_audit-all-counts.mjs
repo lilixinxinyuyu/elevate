@@ -52,11 +52,14 @@ const PRIO_RANK = {
   HIGH_SMALL: 5, NORMAL: 4, LOW_SMALL: 2, LOW: 1, EXTENSION: 0,
 };
 
+// v0.31.59+: 目标提到 30 — 每 skill 至少 30 道，给 scheduler 留足变化空间。
+const TARGET = Number(process.env.TARGET ?? 30);
+
 const rows = SKILLS.map(s => {
   const u = UNIT_BY.get(s.unitId);
   const c = counts[s.id] ?? { seed: 0, ai: 0 };
   const total = c.seed + c.ai;
-  const need = Math.max(0, 20 - total);
+  const need = Math.max(0, TARGET - total);
   return {
     skillId: s.id,
     skillName: s.name,
@@ -91,5 +94,6 @@ console.log(JSON.stringify({
   allCounts: rows.map(r => ({ skillId: r.skillId, total: r.total, seed: r.seed, ai: r.ai })),
 }, null, 2));
 
-writeFileSync("/tmp/under20.json", JSON.stringify({ topToFill: under20 }, null, 2));
-process.stderr.write(`\n▶ ${under20.length} skill 需补题，总缺 ${under20.reduce((s, r) => s + r.need, 0)} 道\n`);
+// 命名保留 under20.json 以兼容老脚本 — 实际 threshold 取决于 TARGET env
+writeFileSync("/tmp/under20.json", JSON.stringify({ topToFill: under20, target: TARGET }, null, 2));
+process.stderr.write(`\n▶ TARGET=${TARGET}, ${under20.length} skill 需补题，总缺 ${under20.reduce((s, r) => s + r.need, 0)} 道\n`);

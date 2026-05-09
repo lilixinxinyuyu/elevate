@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 持续运行 fill-bank-v2 直到所有 skill 题量 ≥ 20。
+# 持续运行 fill-bank-v2 直到所有 skill 题量 ≥ TARGET（默认 30）。
 # 一轮跑完后 audit + 如果还有 <20 → 再跑。budget 触底就长等再试。
 #
 # 用法：
@@ -33,8 +33,8 @@ while true; do
     continue
   fi
 
-  # 2. audit
-  node scripts/_audit-all-counts.mjs > /tmp/all-counts.json 2>>"$LOG"
+  # 2. audit (TARGET=30 by default; can be overridden via env)
+  TARGET=${TARGET:-30} node scripts/_audit-all-counts.mjs > /tmp/all-counts.json 2>>"$LOG"
   REMAINING=$(jq '.summary.underTwenty' /tmp/all-counts.json 2>/dev/null || echo "?")
   NEED=$(jq '.summary.needTotal' /tmp/all-counts.json 2>/dev/null || echo "?")
   AI_TOTAL=$(jq '.summary.aiTotal' /tmp/all-counts.json 2>/dev/null || echo "?")
@@ -49,7 +49,8 @@ while true; do
   # 4. swap priorities to under20 list
   cp /tmp/under20.json /tmp/priorities.json
 
-  # 5. run fill-bank-v2 (target 20, 8 passes)
+  # 5. run fill-bank-v2 — target=20 per script run, but v2 reads per-skill `need`
+  #    from priorities so won't overshoot. Cap 8 passes per round.
   echo "  filling round $ROUND…" >> "$LOG"
   node scripts/_fill-bank-v2.mjs 20 8 >> "$LOG" 2>&1 || \
     echo "  fill-bank-v2 exit nonzero (continuing)" >> "$LOG"
