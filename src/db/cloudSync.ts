@@ -74,17 +74,35 @@ export function getClientId(): string {
   }
 }
 
+// v0.31.71: 这些 getter 也要被 schedulePushToCloud 防抖逻辑用，
+// 测试环境下 localStorage 不存在 → 用 try/catch 防爆。
 export function getLastPushAt(): number {
-  return Number(localStorage.getItem(LAST_PUSH_KEY) ?? 0);
+  try {
+    return Number(localStorage.getItem(LAST_PUSH_KEY) ?? 0);
+  } catch {
+    return 0;
+  }
 }
 export function getLastPullAt(): number {
-  return Number(localStorage.getItem(LAST_PULL_KEY) ?? 0);
+  try {
+    return Number(localStorage.getItem(LAST_PULL_KEY) ?? 0);
+  } catch {
+    return 0;
+  }
 }
 function setLastPushAt(t: number) {
-  localStorage.setItem(LAST_PUSH_KEY, String(t));
+  try {
+    localStorage.setItem(LAST_PUSH_KEY, String(t));
+  } catch {
+    /* */
+  }
 }
 function setLastPullAt(t: number) {
-  localStorage.setItem(LAST_PULL_KEY, String(t));
+  try {
+    localStorage.setItem(LAST_PULL_KEY, String(t));
+  } catch {
+    /* */
+  }
 }
 
 interface SnapshotPayload {
