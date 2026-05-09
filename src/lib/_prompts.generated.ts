@@ -1810,9 +1810,7 @@ export const PROMPTS = {
       "排列",
       "排成",
       ">",
-      "<",
-      "万",
-      "亿"
+      "<"
     ],
     "large_rewrite_wan_yi": [
       "改写",
@@ -1904,7 +1902,6 @@ export const PROMPTS = {
       ",",
       ")",
       "坐标",
-      "第",
       "第几"
     ],
     "div_3_by_2_trial": [

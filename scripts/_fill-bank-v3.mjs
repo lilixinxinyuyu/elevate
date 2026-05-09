@@ -61,67 +61,44 @@ function* skillStems(skillId, extras = []) {
 }
 
 /**
- * v3 闭环核心：autoFix —— LLM 输出经常缺/错某些字段，但内容是好的。
- * 这里强制对齐我们已知的字段，避免 client validate 因小问题拒绝可用题目。
+ * autoFix —— 只动**纯元数据**字段，绝不动 IDs/term/difficulty/ability/exam_priority
+ * 这些"内容性"字段。爸爸明确反馈：force-overwrite IDs 等内容字段 = 把 AI 跑题
+ * 的问题埋进库里，将来发现就是大坑。
+ *
+ * 安全可改（无判断空间）：
+ *   - subjectId="math"            （这个 endpoint 只出 math）
+ *   - status="approved"           （工作流默认值）
+ *   - version=1                   （schema 字段）
+ *   - grade=4                     （Selena 上下文）
+ *   - skill_name / unit_name      （从 ID derive，不引入新事实）
+ *   - hints=[] / tags=[]          （空数组默认）
+ *
+ * 不动：
+ *   - skill_id / unit_id          （AI 跑题就让它 vfail，让我看到 prompt 问题）
+ *   - term                        （上下册不能猜）
+ *   - difficulty                  （AI 应该给，给错说明 prompt 不清楚）
+ *   - ability_dimension           （内容相关）
+ *   - exam_priority               （内容相关）
+ *   - game_type / question_format （由 prompt 决定）
+ *   - cognitive_level             （内容相关）
+ *   - estimated_time_seconds      （v0.31.51 已经在 runtime adjustedEstimatedTime 兜底了）
+ *
+ * 答案 type 字段也不动——如果 answer.type 错了，可能是答案结构错了，强制改 type
+ * 不会让答案变对。
  */
 function autoFix(rawQ, sk) {
   const q = { ...rawQ };
   const skillDef = SKILL_BY.get(sk.skillId);
   const unitDef = UNIT_BY.get(sk.unitId);
 
-  // 强制对齐 IDs（最常见的 vfail 原因）
-  q.skill_id = sk.skillId;
-  q.unit_id = sk.unitId;
-  if (unitDef?.term) q.term = unitDef.term;
-
-  // 必填字段补默认
+  // 仅这些字段：纯元数据 + derive
   if (!q.subjectId) q.subjectId = "math";
   if (!q.status) q.status = "approved";
   if (!q.version) q.version = 1;
   if (!q.grade) q.grade = 4;
   if (!q.skill_name && skillDef) q.skill_name = skillDef.name;
   if (!q.unit_name && unitDef) q.unit_name = unitDef.name;
-
-  // 难度合规
-  if (typeof q.difficulty !== "number" || q.difficulty < 1 || q.difficulty > 5) {
-    q.difficulty = skillDef?.difficultyBase ?? 3;
-  }
-
-  // ability_dimension 默认
-  if (!Array.isArray(q.ability_dimension) || q.ability_dimension.length === 0) {
-    q.ability_dimension = (skillDef?.ability ?? ["calculation"]).slice();
-  }
-  // 过滤非法值
-  const VALID_ABILITY = new Set(["calculation","concept","reasoning","modeling","spatial","data","strategy","habit"]);
-  q.ability_dimension = q.ability_dimension.filter((a) => VALID_ABILITY.has(a));
-  if (q.ability_dimension.length === 0) q.ability_dimension = ["calculation"];
-
-  // exam_priority 默认
-  if (!q.exam_priority) q.exam_priority = skillDef?.examPriority ?? "NORMAL";
-
-  // game_type / play_as / question_format
-  if (!q.game_type) q.game_type = "plain_choice";
-  if (!q.play_as) q.play_as = q.game_type;
-  if (!q.question_format) q.question_format = q.game_type === "plain_choice" ? "single_choice" : q.question_format;
-
-  // cognitive_level
-  const VALID_COG = new Set(["recall", "procedural", "application", "reasoning"]);
-  if (!q.cognitive_level || !VALID_COG.has(q.cognitive_level)) q.cognitive_level = "procedural";
-
-  // estimated_time_seconds
-  if (typeof q.estimated_time_seconds !== "number" || q.estimated_time_seconds < 5) {
-    q.estimated_time_seconds = q.difficulty <= 2 ? 25 : q.difficulty <= 3 ? 35 : 45;
-  }
-
-  // 多选题答案 type 修正
-  if (Array.isArray(q.options) && q.answer && typeof q.answer === "object" && q.answer.value && q.answer.type !== "choice") {
-    q.answer.type = "choice";
-  }
-
-  // hints 默认 []
   if (!Array.isArray(q.hints)) q.hints = [];
-
-  // tags 兜底
   if (!Array.isArray(q.tags)) q.tags = [];
 
   return q;
