@@ -17,7 +17,7 @@
  *   └─────────────────────────────────────┘
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { db } from "../db/dexie";
 import {
@@ -211,6 +211,24 @@ export function BossBattlePage() {
         const summary = await finalizeSession(studentId, session.id);
         const correct = results.filter((r) => r.isCorrect).length;
         const totalQs = questions.length;
+        // 计算 stars 一次（noRetry 模式 onAnswerLogged 不会双计）
+        const computedStars: 0 | 1 | 2 | 3 | 4 =
+          hearts === 0 ? 0 : starsFromAccuracy(correct, totalQs, hearts);
+
+        // v0.31.86: 把 hearts 和 stars 回写到 session.summary，让 Home 焦点环
+        // 直接读 bossStars，不用拿不到 hearts 的 starsFromAccuracy(correct, total)
+        // fallback（4 星会虚高）。
+        try {
+          const fresh = await db.sessions.get(session.id);
+          if (fresh && fresh.summary) {
+            fresh.summary.bossStars = computedStars;
+            fresh.summary.bossHeartsLeft = hearts;
+            await db.sessions.put(fresh);
+          }
+        } catch (writeErr) {
+          console.warn("[BossBattle] write bossStars to summary failed:", writeErr);
+        }
+
         // v0.31.83: 简化 defeat 条件 — hearts === 0 = defeat（不再 "&& correct < 4"，
         // 那个旧条件让"血没了但 retry 蒙对了 4 题"的题逃过 defeat）
         if (hearts === 0) {
@@ -222,7 +240,7 @@ export function BossBattlePage() {
           });
         } else {
           // 通关算 stars
-          const stars = starsFromAccuracy(correct, totalQs, hearts);
+          const stars = computedStars;
           const bestStarsBefore = stage.bossState.bestStars;
           const newState = await recordBossAttempt(studentId, unitId, stars);
           const unlocked = (() => {
@@ -601,7 +619,6 @@ function PhaseBreakScreen({ boss, phase }: { boss: BossPersona; phase: Phase }) 
       </div>
       <div className="font-display font-bold text-2xl mt-3 text-amber-100">{m.title}</div>
       <div className="text-sm text-slate-300 mt-2">{m.sub}</div>
-      <div className="mt-3 text-xs text-amber-300">+1 ❤️ 心数恢复</div>
     </div>
   );
 }

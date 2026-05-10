@@ -15,6 +15,7 @@ import { Link, useParams } from "react-router-dom";
 import { db } from "../db/dexie";
 import { getFluencyModule } from "../content/fluencyModules";
 import {
+  FLUENCY_TROPHY_DEFS,
   finalizeFluencySession,
   recordFluencyAttempt,
   startFluencySession,
@@ -131,6 +132,13 @@ export function FluencySessionPage() {
     window.setTimeout(() => setLastFlash(null), 200);
   }
 
+  // v0.31.86: hooks 必须在所有 early-return 之前调用，否则模块不存在分支命中后
+  // 下一次 render 顺序会变。useMemo 提前到 early-return 之前。
+  const optionPool = useMemo(() => {
+    if (!problem) return [] as number[];
+    return shuffle([problem.correctAnswer, ...problem.distractors]);
+  }, [problem]);
+
   if (!module) {
     return (
       <div className="text-center py-20">
@@ -141,11 +149,6 @@ export function FluencySessionPage() {
       </div>
     );
   }
-
-  const optionPool = useMemo(() => {
-    if (!problem) return [] as number[];
-    return shuffle([problem.correctAnswer, ...problem.distractors]);
-  }, [problem]);
 
   if (phase === "loading") {
     return <div className="text-slate-400 text-center py-20">加载中…</div>;
@@ -266,11 +269,19 @@ function FluencyResult({
         <div className="rounded-2xl border border-violet-400/50 bg-violet-500/10 p-4">
           <div className="text-sm font-bold text-violet-100 mb-2">✨ 解锁了：</div>
           <div className="flex flex-wrap gap-2 text-xs text-violet-200">
-            {result.unlockedTrophies.map((id) => (
-              <span key={id} className="px-2 py-1 rounded-full bg-violet-500/20">
-                {id}
-              </span>
-            ))}
+            {result.unlockedTrophies.map((id) => {
+              const meta = FLUENCY_TROPHY_DEFS.find((t) => t.id === id);
+              const label = meta ? `${meta.icon} ${meta.name}` : id;
+              return (
+                <span
+                  key={id}
+                  className="px-2 py-1 rounded-full bg-violet-500/20"
+                  title={meta?.description}
+                >
+                  {label}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}

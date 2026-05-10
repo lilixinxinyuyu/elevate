@@ -198,8 +198,10 @@ export function HomePage() {
     void spreadOverflowDueMistakes(student.id);
   }, [student?.id]);
 
-  // v0.31.58: 今日闯关获星总数 — 扫今日 mode=big_problems sessions 的 summary，
-  // 用 starsFromAccuracy 推星数。focus ring "闯关赢星" 闭环判定用这个。
+  // v0.31.58: 今日闯关获星总数 — 扫今日 mode=big_problems sessions 的 summary。
+  // v0.31.86: 优先读 summary.bossStars（BossBattle 写入，含 hearts 信息）；
+  // 老 session 没这字段时 fallback 到 starsFromAccuracy(correct,total) — 注意没 hearts
+  // 信息，最高只能 3 星（与 starsFromAccuracy heartsLeft===undefined 的旧分支一致）。
   const todayBossStars = useLiveQuery(async () => {
     if (!student) return 0;
     const startOfToday = new Date();
@@ -211,9 +213,13 @@ export function HomePage() {
       .toArray();
     let total = 0;
     for (const s of sessions) {
-      const correct = s.summary?.correct ?? 0;
-      const total_ = s.summary?.total ?? 0;
-      total += starsFromAccuracy(correct, total_);
+      if (typeof s.summary?.bossStars === "number") {
+        total += s.summary.bossStars;
+      } else {
+        const correct = s.summary?.correct ?? 0;
+        const total_ = s.summary?.total ?? 0;
+        total += starsFromAccuracy(correct, total_);
+      }
     }
     return total;
   }, [student?.id]);
@@ -420,7 +426,7 @@ export function HomePage() {
             今日已做 {todayAttempts.length}
           </span>
           {rating && rating.raw.totalAttempts > 0 && (
-            <span className="chip bg-cyan-500/20 text-cyan-100 border border-cyan-400/30" title="本学期答题正确率">
+            <span className="chip bg-emerald-500/20 text-emerald-100 border border-emerald-400/30" title="本学期答题正确率">
               🎯 {Math.round(rating.raw.accuracy * 100)}% 准
             </span>
           )}

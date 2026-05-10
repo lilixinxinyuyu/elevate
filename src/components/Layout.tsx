@@ -5,7 +5,8 @@ import { ORDERED_SUBJECT_IDS, SUBJECTS } from "../subjects";
 import { mathSubject } from "../subjects/math";
 import { BgGenIndicator } from "./BgGenIndicator";
 import { ensureMascotImage } from "../lib/mascot";
-import { migrateOldTierBadgeKeys } from "../lib/tierBadge";
+// v0.31.86: 移除 migrateOldTierBadgeKeys import — v0.30.3 的一次性迁移，
+// ack key 早已落库，每次 Layout 加载只是 noop 一次 read+early-return。
 import { runScheduledUnlocks, type ScheduledUnlockResult } from "../db/unitUnlock";
 import { UnitUnlockCelebration } from "./UnitUnlockCelebration";
 import { db } from "../db/dexie";
@@ -52,26 +53,31 @@ export function Layout() {
   // 让爸爸切回 Selena's Elevate 时立刻看到她最新进度，不用刷新页面。
   // 同时 pagehide / visibilitychange=hidden → flushPushNow，确保关 tab 前
   // pending 的防抖 push 立刻发出（fetch keepalive=true 让请求继续完成）。
+  // v0.31.86: 把 4 个 listener 全部用具名 handler 注册并在 cleanup 里成对移除，
+  // 避免 HMR / StrictMode 下叠加（之前只 cleanup 了 focus）。
   useEffect(() => {
-    function onVisible() {
-      if (document.visibilityState !== "visible") return;
-      void pullIfStale();
-    }
-    function onHidden() {
-      if (document.visibilityState === "hidden") {
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void pullIfStale();
+      } else if (document.visibilityState === "hidden") {
         flushPushNow();
       }
     }
-    document.addEventListener("visibilitychange", () => {
-      onVisible();
-      onHidden();
-    });
-    window.addEventListener("focus", onVisible);
-    window.addEventListener("pagehide", () => flushPushNow());
+    function onFocus() {
+      void pullIfStale();
+    }
+    function onPageHide() {
+      flushPushNow();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pagehide", onPageHide);
     // 进 layout 立刻拉一次（覆盖"刷新页面没拉新数据"的情况）
     void pullIfStale({ minIntervalMs: 0 });
     return () => {
-      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, []);
 
@@ -79,8 +85,6 @@ export function Layout() {
   // 缓存命中就立刻 return，缺失才 fetch image。失败 fallback emoji 不影响主流程。
   useEffect(() => {
     void ensureMascotImage().catch(() => void 0);
-    // v0.30.3 一次性清理 v0.30.2 的旧 _tier_badge_* 键（key 改为 math_tier_*）
-    void migrateOldTierBadgeKeys().catch(() => void 0);
     // v0.30.10: 检查 UNIT_UNLOCK_SCHEDULE，把"今天该解锁但还没解锁"的单元自动开放，
     // 弹庆祝弹窗。失败不影响主流程（catch 静默）。
     void (async () => {
@@ -227,8 +231,12 @@ export function Layout() {
       </main>
 
       {/* 移动端底部导航 — v0.31.1：压到 5 项最多（首页/闪电口算/今日挑战/闯关/
-          错题复活），desktopOnly 项目 (专项练/技能树) 在 Home CTA 卡片里访问。 */}
-      <nav className="sm:hidden sticky bottom-0 z-20 bg-ink-900/90 border-t border-ink-700/70 backdrop-blur-md">
+          错题复活），desktopOnly 项目 (专项练/技能树) 在 Home CTA 卡片里访问。
+          v0.31.86: 加 iPhone safe-area-inset-bottom，否则 home indicator 盖住 nav 文字。 */}
+      <nav
+        className="sm:hidden sticky bottom-0 z-20 bg-ink-900/90 border-t border-ink-700/70 backdrop-blur-md"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <div
           className="grid text-xs"
           style={{
@@ -256,7 +264,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.31.85
+        本地优先 · v0.31.86
       </footer>
 
       {/* v0.30.10: 自动解锁的单元庆祝（一次弹一个，关掉再弹下一个）*/}

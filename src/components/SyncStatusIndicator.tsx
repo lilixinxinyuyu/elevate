@@ -77,19 +77,21 @@ export function SyncStatusIndicator() {
     void pullIfStale({ minIntervalMs: 0 });
   }
 
+  // v0.31.86: 移动端从前用 `hidden sm:inline-flex` 完全隐藏 → Selena 在 iPhone 上
+  // 看不到"待同步/同步异常"。改成移动端只露小圆点（更紧凑），sm+ 露完整 chip。
   return (
     <button
       type="button"
       onClick={handleClick}
       title={title}
-      className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-ink-700/60 text-[11px] text-slate-300 transition-colors"
+      className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 border border-ink-700/60 text-[11px] text-slate-300 transition-colors"
       aria-label={`同步状态: ${label}, 点击立即同步`}
     >
       <span
         aria-hidden
         className={`w-1.5 h-1.5 rounded-full ${dotClass} shrink-0`}
       />
-      <span className="opacity-80">{label}</span>
+      <span className="opacity-80 hidden sm:inline">{label}</span>
     </button>
   );
 }

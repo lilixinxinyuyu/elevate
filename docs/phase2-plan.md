@@ -1,10 +1,21 @@
 # Phase 2 — 多步骤化 + Fluency + 自动化
 
-> 起草 2026-05-05，跟父亲讨论后确认。**立刻开始实施**（不等期中考完）。
-> Axis 4 build-only 零 runtime 影响今晚先动；Axis 3/1/2 涉及 runtime 用
-> feature flag 攒着，5/6 期中后给 Selena flip 开。
-> 触发：分析锦江 / 盐道街 2024-2025 期中真题，发现当前游戏化只覆盖单知识点，
-> 缺少多步应用题、画图操作题、跨单元基础功（fluency）。
+> **STATUS — 已 SHIPPED（v0.31.x）**。
+> 4 个 axis（CLI 自动化 / Fluency / 闯关 / Canvas）全部上线，feature flag 默认 ON。
+> 落地后的真实状态见 [feature-flags-and-rollout.md](./feature-flags-and-rollout.md)；
+> 期中后又叠了 v0.31.71-86 的运营优化（同步实时化 / 巧算 / 正反馈密度 / boss 难度
+> 收紧 / report→fix / 4P prompt 原则 / sanitize-at-door 等），见 docs/README 项目里程碑。
+>
+> 本文档保留作**当时的设计起点**（archived 起草版本，2026-05-05），帮助理解
+> 为什么走这条路；不要再当作 TODO。
+
+---
+
+## Axis 4 · CLI 自动化（最先做，是基建）
+
+**目标**：加新 skill 从"改 6+ 文件"压到"跑一条命令 + 审 git diff"。
+
+**脚本**：`scripts/add-skill.mjs`
 
 ---
 

@@ -9,7 +9,8 @@ import { checkPassword, clearPassword, getStoredPassword, pullFromCloud, storePa
  * 如果云端 API 不存在（本地 dev 没起 functions）→ 也直通，避免本地开发被卡住。
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<"checking" | "needpwd" | "ok" | "error">("checking");
+  // v0.31.86: state union 里的 "error" 永远不会被设置（cleanup 残留）
+  const [state, setState] = useState<"checking" | "needpwd" | "ok">("checking");
   const [pwd, setPwd] = useState("");
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);

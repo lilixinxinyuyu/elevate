@@ -109,15 +109,15 @@ v0.31.8 加 tutor_companion 勋章是这个原则的好例子（"问 + 之后真
 
 ## Phase 2 Feature Flag
 
-`PHASE2_LIVE` flag 控制新模式（Fluency / 闯关 / Canvas）UI 入口可见性。
-**期中考前给 Selena flip 不到** — 期中考完后翻。
+`PHASE2_LIVE` flag 历史上控制新模式（Fluency / 闯关 / Canvas）UI 入口可见性。
+**v0.31.26 起默认 ON**（期中后翻），现在仅作为**关闭开关**，正常情况下不需要碰。
 
-3 种打开方式（任一）：
-1. **localStorage**：`localStorage.setItem('phase2_live','true')` + 刷新（爸爸调试用）
-2. **URL param**：`?phase2=on`（首次访问写进 localStorage）
-3. **构建期**：`VITE_PHASE2_LIVE=true npm run build` → 全员默认开
+opt-out 方式（任一）：
+1. **localStorage**：`localStorage.setItem('phase2_live','false')` + 刷新（开发回归用）
+2. **URL param**：`?phase2=off`
 
-实现见 `src/lib/featureFlags.ts`。
+实现见 `src/lib/featureFlags.ts`，落地状态见
+[feature-flags-and-rollout.md](./feature-flags-and-rollout.md)。
 
 ## 常见错误 -> 解决
 
@@ -128,7 +128,7 @@ v0.31.8 加 tutor_companion 勋章是这个原则的好例子（"问 + 之后真
 | `Invalid commit message UTF-8` | git 中文 commit + wrangler 自动取 | `--commit-message="ascii fallback"` |
 | `tsc -b ... DOM types missing` | 用了 v12 node | `nvm use 22` |
 | `wan2.7-image-pro 429` | token-plan 限流 | 串行（脚本默认 concurrency=1） |
-| 页面看到 v0.31.X 但没新功能 | feature flag off | `?phase2=on` |
+| 页面看到 v0.31.X 但没新功能 | 老 PWA 缓存 | hard refresh / 清 service worker |
 
 ## 关键路径
 

@@ -8,7 +8,12 @@ import {
   type Env,
 } from "../../_shared";
 import { PROMPTS } from "../../_prompts.generated";
-import { composeQuestionUserPrompt } from "../../_promptComposer";
+import {
+  cognitiveLevelFor,
+  composeQuestionUserPrompt,
+  estimatedTimeFor,
+  questionFormatFor,
+} from "../../_promptComposer";
 
 /**
  * POST /api/generate/questions
@@ -371,6 +376,17 @@ function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
     : undefined;
   const gameType = args.gameType ?? fromSkill ?? "plain_choice";
 
+  // v0.31.86: 把 caller-known fields 提前算好喂给 composer（v0.31.72 4 P 原则的
+  // "已知字段不让 AI 反复猜"轴）。之前 composeQuestionUserPrompt 接 prefilledFields
+  // 但调用方从来不传，整段 prefilled 渲染块运行时不可达。现在补上 wiring。
+  const prefilledFields = {
+    grade: 4,
+    cognitiveLevel: cognitiveLevelFor(args.skillId ?? "", gameType),
+    questionFormat: questionFormatFor(gameType),
+    estimatedTimeSeconds: estimatedTimeFor(gameType, difficulty),
+    status: "approved",
+  };
+
   return composeQuestionUserPrompt({
     subjectId,
     unitId: args.unitId ?? "",
@@ -387,6 +403,7 @@ function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
     recentMistakeStems: args.recentMistakeStems,
     batchAngle,
     callerTag: args.callerTag,
+    prefilledFields,
   });
 }
 

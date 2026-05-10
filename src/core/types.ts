@@ -413,6 +413,14 @@ export interface SessionSummary {
   /** 跨段升档：第一次进入更高段位时填，触发解锁动画 */
   tierUpgrade?: { fromTierId: string; toTierId: string };
   /**
+   * v0.31.86: 闯关 session 的"剩余心数"和"实际所得星数"。
+   * 由 BossBattle.tsx 在 finalizeSession 之后回写（service 不知道 hearts）。
+   * Home 焦点环算今日 boss star 时直接读 bossStars，不再用 starsFromAccuracy(correct,total)
+   * 重算（旧调用没传 heartsLeft → 4 星全对的虚高显示）。
+   */
+  bossStars?: 0 | 1 | 2 | 3 | 4;
+  bossHeartsLeft?: number;
+  /**
    * v0.30.7: 本次 session 里"用了讲题才做对"的题数（独立答对的不算）。
    * 让家长看到"虽然全对，其中 X 道用了讲题"，避免统计撒谎。
    */

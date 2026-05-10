@@ -763,14 +763,7 @@ function masteryId(studentId: string, skillId: string): string {
   return `${studentId}::${skillId}`;
 }
 
-async function getRecentErrorTags(studentId: string, skillId: string): Promise<string[]> {
-  const recent = await db.attempts
-    .where({ studentId, skillId })
-    .reverse()
-    .limit(3)
-    .toArray();
-  return recent.flatMap((a) => a.errorTags);
-}
+// v0.31.86: getRecentErrorTags 删除 — 没有任何调用方。
 
 export async function finalizeSession(
   studentId: string,

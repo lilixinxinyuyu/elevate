@@ -1,7 +1,9 @@
-# Phase 2 — 特殊纪念勋章 (Commemorative Trophy) 待办清单
+# Phase 2 — 特殊纪念勋章 (Commemorative Trophy) 清单
 
-> 期中后 / 暑期实施。每个都走"顶级事件"盲盒生成流程（commemorative 类，
-> heirloom medallion AI prompt）。
+> **STATUS（v0.31.86）**：起草于 2026-05-05，期中后已**部分落地**。
+> 下面 10 类里：`subrank_up`（v0.30.11）、`new_semester` + `birthday_2026` (v0.31.x)、
+> `midterm_done` / `final_done`（v0.31.34+）已 ship；其余仍是 TODO。
+> 每个走"顶级事件"盲盒生成流程（commemorative 类，heirloom medallion AI prompt）。
 
 ## 当前已实现的盲盒触发（v0.29.2）
 

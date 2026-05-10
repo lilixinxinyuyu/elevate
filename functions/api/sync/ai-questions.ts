@@ -29,6 +29,7 @@
  */
 
 import { checkAuth, corsHeaders, jsonResponse, USER_KEY, type Env } from "../../_shared";
+import { sanitizeRow, type UploadRow } from "../../_sanitize";
 
 async function ensureSchema(db: D1Database) {
   await db.exec(
@@ -48,113 +49,8 @@ async function ensureSchema(db: D1Database) {
 const MAX_BATCH = 50;
 const MAX_ROW_BYTES = 30 * 1024; // 30 KB per question row（充分大，正常题 2-3KB）
 
-interface UploadRow {
-  question_id?: string;
-  [k: string]: unknown;
-}
-
-/**
- * v0.31.80：服务端 sanitize — 任何写入 D1 的题在落盘前都过这函数，
- * 把 P1 leak 模式自动 strip。这是终极防线 —— 即使 Selena 的 stale PWA 把
- * 旧 (无关) 数据 push 回来，server 也会自动剥掉，永远不会污染 D1。
- *
- * 处理：
- *   1. clue_pick 的 clues[] 字符串去掉"（无关）/（非已知）/（解题设定）/（错误干扰）/（干扰）/（混淆）/（提示）"
- *   2. choose 的 options[].errorTag 移到顶层 _internal_option_diagnostics（不在 student-visible）
- *   3. 顶层 options[].errorTag 同上
- *
- * 不动的：stem / answer / 其他字段 — 那些需要 AI 修题，机械 strip 只清显式标注。
- */
-const META_PATTERNS = [
-  "（解题设定，非已知）",
-  "（解题设定）",
-  "(解题设定)",
-  "（非已知）",
-  "(非已知)",
-  "（无关条件）",
-  "（无关）",
-  "(无关)",
-  "（错误干扰）",
-  "（干扰）",
-  "（混淆）",
-  "（提示）",
-];
-
-function stripMetaAnnotations(text: string): string {
-  let cleaned = text;
-  for (const p of META_PATTERNS) cleaned = cleaned.split(p).join("");
-  // 删除 annotation 后残留的尾部标点 + trim
-  return cleaned.replace(/[，,。、:：]\s*$/g, "").trim();
-}
-
-function sanitizeRow(row: UploadRow): UploadRow {
-  // 深 clone（避免改外部对象）
-  const cloned = JSON.parse(JSON.stringify(row)) as UploadRow;
-  const internalDiagnostics: Array<{ id: string; errorTag: string }> = [];
-
-  // subquestions 处理
-  const subqs = cloned.subquestions as Array<Record<string, unknown>> | undefined;
-  if (Array.isArray(subqs)) {
-    for (const sub of subqs) {
-      // clue_pick：strip（无关）等元注解
-      if (sub.kind === "clue_pick" && Array.isArray(sub.clues)) {
-        sub.clues = (sub.clues as unknown[]).map((c) =>
-          typeof c === "string" ? stripMetaAnnotations(c) : c,
-        );
-        // 过滤完全空的 clue（注解删掉后只剩空字符串的）— 同步调整 correct 索引
-        const oldClues = sub.clues as string[];
-        const keepIdx = oldClues
-          .map((c, i) => (c && typeof c === "string" && c.length > 0 ? i : -1))
-          .filter((i) => i >= 0);
-        if (keepIdx.length < oldClues.length) {
-          sub.clues = keepIdx.map((i) => oldClues[i]);
-          if (Array.isArray(sub.correct)) {
-            const idxMap = new Map<number, number>();
-            keepIdx.forEach((oldI, newI) => idxMap.set(oldI, newI));
-            sub.correct = (sub.correct as number[])
-              .map((oldI) => idxMap.get(oldI))
-              .filter((x): x is number => typeof x === "number");
-          }
-        }
-      }
-      // choose options：errorTag 移到 internal
-      if (sub.kind === "choose" && Array.isArray(sub.options)) {
-        for (const opt of sub.options as Array<Record<string, unknown>>) {
-          if (opt && typeof opt === "object" && "errorTag" in opt) {
-            internalDiagnostics.push({
-              id: String(opt.id),
-              errorTag: String(opt.errorTag),
-            });
-            delete opt.errorTag;
-          }
-        }
-      }
-    }
-  }
-
-  // 顶层 options（plain_choice 等）的 errorTag 也移
-  const topOpts = cloned.options as Array<Record<string, unknown>> | undefined;
-  if (Array.isArray(topOpts)) {
-    for (const opt of topOpts) {
-      if (opt && typeof opt === "object" && "errorTag" in opt) {
-        internalDiagnostics.push({
-          id: String(opt.id),
-          errorTag: String(opt.errorTag),
-        });
-        delete opt.errorTag;
-      }
-    }
-  }
-
-  if (internalDiagnostics.length > 0) {
-    const existing =
-      (cloned._internal_option_diagnostics as Array<{ id: string; errorTag: string }> | undefined) ??
-      [];
-    cloned._internal_option_diagnostics = [...existing, ...internalDiagnostics];
-  }
-
-  return cloned;
-}
+// v0.31.80：服务端 sanitize 抽到 functions/_sanitize.ts 共享。本文件只用 sanitizeRow。
+// v0.31.86：扩展 sanitize 覆盖 stem / subq.prompt / option.text。
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const fail = checkAuth(request, env);
@@ -180,6 +76,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const now = Date.now();
   const accepted: string[] = [];
   const rejected: { question_id: string; reason: string }[] = [];
+  const skippedStale: string[] = [];
+
+  // v0.31.86: keep-newer guard — Selena 的 stale PWA push 旧 row 不应该覆盖
+  //   server 上更新过的版本（之前 trophy_images 已加了平行守门，这里漏了）。
+  //   Question.version 在 fix-question 路径会 +1，作为对比依据。
+  //   没有 version 字段的（老题）走原来的覆盖语义（任何写入都接受）。
+  const qids = body.rows
+    .map((r) => (typeof r.question_id === "string" ? r.question_id : ""))
+    .filter((s) => s.length > 0);
+  const existingMap = new Map<string, { version: number; updated_at: number }>();
+  if (qids.length > 0) {
+    const placeholders = qids.map(() => "?").join(",");
+    const existRes = await env.DB
+      .prepare(
+        `SELECT question_id, payload, updated_at FROM ai_questions
+         WHERE user_key = ? AND question_id IN (${placeholders})`,
+      )
+      .bind(USER_KEY, ...qids)
+      .all<{ question_id: string; payload: string; updated_at: number }>();
+    for (const r of existRes.results ?? []) {
+      let version = 0;
+      try {
+        const parsed = JSON.parse(r.payload) as { version?: number };
+        version = typeof parsed.version === "number" ? parsed.version : 0;
+      } catch {
+        // 老 row 解不开就当 version=0
+      }
+      existingMap.set(r.question_id, { version, updated_at: r.updated_at });
+    }
+  }
 
   for (const rawRow of body.rows) {
     const qid = typeof rawRow.question_id === "string" ? rawRow.question_id : "";
@@ -189,6 +115,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
     // v0.31.80：服务端 sanitize — strip leak 模式（无关 / errorTag 等）
     const row = sanitizeRow(rawRow);
+    // v0.31.86: keep-newer 检查
+    const existing = existingMap.get(qid);
+    if (existing) {
+      const incomingVersion =
+        typeof row.version === "number" ? (row.version as number) : 0;
+      // 版本严格小于已存的 → stale，跳过；等于的允许（同版本可能补字段）；大于的接受
+      if (incomingVersion > 0 && existing.version > 0 && incomingVersion < existing.version) {
+        skippedStale.push(qid);
+        continue;
+      }
+    }
     const payloadJson = JSON.stringify(row);
     if (payloadJson.length > MAX_ROW_BYTES) {
       rejected.push({
@@ -214,7 +151,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
-  return jsonResponse({ ok: true, accepted: accepted.length, rejected, version: now });
+  return jsonResponse({
+    ok: true,
+    accepted: accepted.length,
+    rejected,
+    skippedStale,
+    version: now,
+  });
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {

@@ -29,6 +29,13 @@ export default {
         "glow-emerald": "0 0 24px -4px rgba(52,211,153,0.65)",
         "glow-rose": "0 0 22px -6px rgba(251,113,133,0.7)",
         "glow-amber": "0 0 22px -4px rgba(251,191,36,0.7)",
+        // v0.31.86: 之前 4 处 `shadow-glow-violet` 没注册，class 静默丢弃。
+        "glow-violet": "0 0 22px -4px rgba(167,139,250,0.7)",
+      },
+      // v0.31.86: 之前 `drop-shadow-glow` 在 UnitUnlockCelebration / TierCard 用到，
+      // 没在 dropShadow 注册（boxShadow 不够用 — drop-shadow 跟 svg/element 形状走）。
+      dropShadow: {
+        glow: ["0 0 18px rgba(251,191,36,0.7)", "0 0 6px rgba(251,191,36,0.5)"],
       },
       keyframes: {
         shake: {

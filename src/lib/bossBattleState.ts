@@ -88,14 +88,9 @@ export function starsFromAccuracy(
   return 1;
 }
 
-const G4B_UNIT_IDS = [
-  "G4B_U1_DECIMAL_ADD_SUB",
-  "G4B_U2_TRI_QUAD",
-  "G4B_U3_DECIMAL_MULTIPLY",
-  "G4B_U4_OBSERVE_OBJECTS",
-  "G4B_U5_EQUATIONS",
-  "G4B_U6_DATA",
-];
+// v0.31.86: 之前硬编码 6 个 unit id 字符串，跟 UNITS.filter(term="下册") 重复维护。
+// 现在直接从 UNITS 派生，加单元 / 改名都自动跟上，避免漂移。
+const G4B_UNIT_IDS = UNITS.filter((u) => u.term === "下册").map((u) => u.id);
 
 /** 获取所有单元的 boss 状态（用于 BossWorld 列表） */
 export async function loadAllBossStates(

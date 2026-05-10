@@ -50,7 +50,7 @@ jq -r '.allCounts | sort_by(.total) | .[0:25] | map("\(.total)\t\(.skillId)") | 
 ```bash
 cp /tmp/under20.json /tmp/priorities.json   # 把 audit 输出当 input
 rm -f /tmp/vfail-samples.jsonl /tmp/vfail-summary.json
-APP_PASSWORD=$APP_PASSWORD node scripts/_fill-bank-v3.mjs 5 1 > /tmp/pilot.log 2>&1
+APP_PASSWORD=$APP_PASSWORD node scripts/_fill-bank-v5.mjs 5 1 > /tmp/pilot.log 2>&1
 # 跑完 → tail /tmp/pilot.log 看结果
 ```
 
@@ -87,13 +87,15 @@ npx wrangler pages deploy dist --project-name=selena-elevate \
 
 再 pilot 验证修好了。**连续 2-3 个 pilot 都 0 vfail 才能 scale up**。
 
-### 阶段 4：Scale up 到 keep-filling.sh
+### 阶段 4：Scale up — 直接连续跑 fill-bank-v5
 
 ```bash
-APP_PASSWORD=$APP_PASSWORD TARGET=30 bash scripts/_keep-filling.sh > /tmp/keepfill-out.log 2>&1 &
+# 一次跑 30 道每 skill，3 pass。脚本自带 audit/skip-fill 已达 TARGET 的 skill。
+APP_PASSWORD=$APP_PASSWORD TARGET=30 node scripts/_fill-bank-v5.mjs 30 3 > /tmp/keepfill-out.log 2>&1 &
 ```
 
-后台跑直到所有 skill ≥ TARGET。会自动 audit → fill → push → 循环。预计 4-12 小时（看 token budget）。
+后台跑直到所有 skill ≥ TARGET。预计 4-12 小时（看 token budget）。
+（v0.31.86 起：`_keep-filling.sh` 已删除，`_fill-bank-v5.mjs` 自带 need-aware 逻辑直接重复跑即可。）
 
 ## 三大铁律（不能违反）
 
@@ -125,7 +127,7 @@ if (filtered.length > 0 && filtered.length < arr.length) q.field = filtered;
 
 ### 铁律 3：连续 N 次 vfail 不空转
 
-`_fill-bank-v3.mjs` 已实现：同 skill 连续 4 次 vfail → 跳过本 round + 写到 `vfail-summary.json`。下次 audit 后 Claude 应**亲自看这些 skill 的 prompt** + 决定怎么改。
+`_fill-bank-v5.mjs` 已实现：同 skill 连续 4 次 vfail → 跳过本 round + 写到 `vfail-summary.json`。下次 audit 后 Claude 应**亲自看这些 skill 的 prompt** + 决定怎么改。
 
 ## 历史 vfail 模式 + 修法（避免重复掉坑）
 
@@ -144,8 +146,7 @@ if (filtered.length > 0 && filtered.length < arr.length) q.field = filtered;
 
 ### 必看
 - `scripts/_audit-all-counts.mjs` — audit per-skill 题量
-- `scripts/_fill-bank-v3.mjs` — 闭环填题（autoFix + vfail 捕获）
-- `scripts/_keep-filling.sh` — 持续运行直到达 TARGET
+- `scripts/_fill-bank-v5.mjs` — 闭环填题（autoFix + vfail 捕获 + need-aware skip）
 - `scripts/_load-content-extended.ts` — esbuild bundle entry
 
 ### Prompts（改了要 `npm run build:prompts`！）
@@ -166,8 +167,11 @@ if (filtered.length > 0 && filtered.length < arr.length) q.field = filtered;
 - `src/core/schema.ts` — Zod schemas（**改这里要同步改 prompt**）
 - `src/lib/questionAuditLite.ts` — client-side audit (mirrors scripts/audit-questions.mjs)
 
-### 一次性脚本（已跑过，留作参考）
-- `scripts/_migrate-aiqs-to-perrow.mjs` — 把主 snapshot 的 aiQuestions 迁到 per-row
+### 历史脚本（已删除）
+v0.31.86 删了一批一次性脚本：`_migrate-aiqs-to-perrow`（v0.31.65 已跑）、
+`_fill-bank-v2/v3/v4`（被 v5 替代）、`_fix-decimal-shifter-answers` /
+`_fix-template-mismatch`（v0.31.75 一次性）、`_keep-filling.sh`（v5 内置 need-aware）。
+git log 里能找到历史。
 
 ## 容量监控
 

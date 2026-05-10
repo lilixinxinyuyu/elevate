@@ -139,47 +139,8 @@ async function dumpLocal(): Promise<SnapshotPayload> {
   return bag as unknown as SnapshotPayload;
 }
 
-/**
- * 紧急覆盖：清空本地表然后从云端整体写回。**会丢失本地未推送的所有数据**。
- *
- * 平时不要用！只在需要"全设备硬重置回云端最近一份快照"时用（admin 紧急恢复）。
- *
- * 默认 pullFromCloud 走 applyPayloadMerged 安全合并。
- */
-export async function applyPayloadOverwrite(payload: SnapshotPayload): Promise<void> {
-  await db.transaction(
-    "rw",
-    [db.attempts, db.mastery, db.mistakes, db.sessions, db.trophies, db.meta, db.students, db.tutorSessions, db.questions, db.fluencyAttempts, db.fluencyStats],
-    async () => {
-      for (const t of PUSH_TABLES) {
-        const rows = (payload[t] ?? []) as Record<string, unknown>[];
-        if (!Array.isArray(rows)) continue;
-        const tbl = db.table(t);
-        await tbl.clear();
-        if (rows.length > 0) await tbl.bulkPut(rows);
-      }
-      // v0.31.52: aiQuestions 单独覆盖（仅 AI 生成的题，seed 留着）
-      const remoteAi = (payload.aiQuestions ?? []) as Array<{ question_id?: string }>;
-      if (Array.isArray(remoteAi) && remoteAi.length > 0) {
-        // 先删本地所有 AI 题，再写云端的
-        const localQs = (await db.questions.toArray()) as Array<{
-          question_id?: string;
-          tags?: string[];
-        }>;
-        const localAiIds = localQs
-          .filter(
-            (q) =>
-              (q.tags ?? []).includes("ai_generated") ||
-              (q.question_id ?? "").startsWith("AI_"),
-          )
-          .map((q) => q.question_id!)
-          .filter(Boolean);
-        if (localAiIds.length > 0) await db.questions.bulkDelete(localAiIds);
-        await db.questions.bulkPut(remoteAi as never);
-      }
-    },
-  );
-}
+// v0.31.86: applyPayloadOverwrite 删除 — 没有任何调用方，紧急恢复走
+// pullFromCloud + applyPayloadMerged 即可。
 
 /**
  * 三方合并：云端 ⊕ 本地 → 写回本地。
@@ -626,7 +587,6 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;
 let pushDirtyAfterFlight = false;
-let lastPushAttemptAt = 0;
 const PUSH_DEBOUNCE_MS = 8000;
 
 const pushListeners = new Set<(state: SyncState) => void>();
@@ -690,7 +650,6 @@ async function runPushNow(): Promise<void> {
     lastSyncError = (e as Error).message;
   } finally {
     pushInFlight = false;
-    lastPushAttemptAt = Date.now();
     emitSyncState();
     if (pushDirtyAfterFlight) {
       pushDirtyAfterFlight = false;
@@ -753,16 +712,6 @@ export async function pullIfStale(opts: { minIntervalMs?: number } = {}): Promis
 export function hasPendingPush(): boolean {
   return pushTimer !== null || pushInFlight || pushDirtyAfterFlight;
 }
-
-// 暴露给 cleanup hook（虽然 SPA 一般不卸载，但类型完整）
-export function _resetPushStateForTest(): void {
-  if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = null;
-  pushInFlight = false;
-  pushDirtyAfterFlight = false;
-  lastPushAttemptAt = 0;
-}
-void lastPushAttemptAt; // 避免 lint unused
 
 /** 主页/管理页判定是否启用云同步：默认启用，用 localStorage 关掉。 */
 export function isCloudSyncEnabled(): boolean {

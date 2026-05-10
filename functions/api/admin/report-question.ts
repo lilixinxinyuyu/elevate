@@ -8,6 +8,7 @@ import {
 } from "../../_shared";
 import { PROMPTS } from "../../_prompts.generated";
 import { composeFixUserPrompt } from "../../_promptComposer";
+import { sanitizeRow } from "../../_sanitize";
 
 /**
  * POST /api/admin/report-question
@@ -168,7 +169,10 @@ function extractJsonObject(text: string): unknown {
   return null;
 }
 
-async function upsertToD1(env: Env, row: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+async function upsertToD1(env: Env, rawRow: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+  // v0.31.86: AI 修出来的题或 tagged 原题在写回 D1 前也走 sanitize（之前漏了）。
+  // AI fix 偶尔 reintroduce errorTag 或 meta 注解，sanitize 在这里再扫一遍。
+  const row = sanitizeRow(rawRow);
   const qid = typeof row.question_id === "string" ? row.question_id : null;
   if (!qid) return { ok: false, error: "missing_question_id" };
   const payloadJson = JSON.stringify(row);
@@ -306,16 +310,31 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // v0.31.85：pre-resolve choice id → option text，防 AI hallucinate（之前看到
   //   "0.069" 看成 "0.609"，把 D 当 B）。题面 options 已经在 question 里，但
   //   server 显式 lookup 一遍喂给 AI，更稳。
+  // v0.31.86：扩展处理数组（drag_drop / sort_ladder / clue_pick 等多选）和 number。
   let userAnswerLine = "";
   if (body.userAnswer !== undefined && body.userAnswer !== null) {
     const uaRaw = body.userAnswer;
     const opts = (q.options as Array<{ id?: string; text?: string }> | undefined) ?? [];
-    let resolved = JSON.stringify(uaRaw);
+    let resolved: string;
     if (typeof uaRaw === "string" && opts.length > 0) {
+      // 单选：id → text
       const matched = opts.find((o) => o?.id === uaRaw);
-      if (matched) {
-        resolved = `id="${uaRaw}", text="${matched.text}"`;
-      }
+      resolved = matched ? `id="${uaRaw}", text="${matched.text}"` : JSON.stringify(uaRaw);
+    } else if (Array.isArray(uaRaw) && opts.length > 0) {
+      // 多选 / 排序：每个 id 解析成 id+text
+      const parts = uaRaw.map((v) => {
+        if (typeof v === "string") {
+          const m = opts.find((o) => o?.id === v);
+          return m ? `id="${v}",text="${m.text}"` : JSON.stringify(v);
+        }
+        return JSON.stringify(v);
+      });
+      resolved = `[${parts.join(" | ")}]`;
+    } else if (typeof uaRaw === "number") {
+      // 数值题：直接给数字
+      resolved = String(uaRaw);
+    } else {
+      resolved = JSON.stringify(uaRaw);
     }
     userAnswerLine = `\n\n## userAnswer（必读 — 据此判定 userAnswerVerdict + 写 userAnswerExplanation）\n\n用户提交的答案：${resolved}`;
     // 也把全 options 单独再列一遍方便 AI 对照（防 lookup 时眼花）

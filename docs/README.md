@@ -136,5 +136,7 @@ node scripts/_judge-all.mjs
 - **v0.31.65-72** — Prompt 系统 5 大改造（subject 隔离 / 字段预填 / 动态 skill example / [Dx] stems / 4 P 原则）
 - **v0.31.71-79** — 同步实时化 + 巧算工具箱 + 正反馈密度 + 闯关 hint escalate + 怪物透明 + 报告→AI 修
 - **v0.31.80-81** — 服务端 sanitize at the door + PNG-over-JPEG 守门 + stale-client 隔离
+- **v0.31.82-85** — Boss 难度收紧（noRetry / 4 星=满血+全对 / hearts=2 / defeat=hearts 0）+ report→fix 加 userAnswer verdict + 选择题答案显示去 id 前缀
+- **v0.31.86** — 全项目 review + 一轮清理：用户可见 bug fix（Home 焦点环 4 星虚高 / phase break 假补血 / Fluency hooks / trophy id→name）+ UI 配置（tailwind 漏注册 4 个 glow class / mobile sync chip / iPhone safe-area）+ 服务端守门（ai-questions keep-newer / sanitize 扩展到 stem+subq+option.text / userAnswer 数组解析）+ 删 17 个一次性 scripts + 死代码清理 + composer prefilledFields wiring 接好
 
 详细 changelog 见 `CHANGELOG.md`（仓库根）。
