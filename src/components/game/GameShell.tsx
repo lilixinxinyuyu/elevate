@@ -9,6 +9,7 @@ import { FloatLayer, makeFloater, type Floater } from "./FloatPlus";
 import { StarterOverlay } from "./StarterOverlay";
 import { sfx } from "../../lib/sfx";
 import { TutorPanel } from "../tutor/TutorPanel";
+import { ReportQuestionButton } from "./ReportQuestionButton";
 import type { Question } from "../../core/types";
 import { SpeedMatchPanel } from "./templates/SpeedMatch";
 import { ShopCounterPanel } from "./templates/ShopCounter";
@@ -410,6 +411,16 @@ export function GameShell(props: GameShellProps) {
                 {t}
               </span>
             ))}
+          {/* v0.31.77：报告 bug button — 答完之前都能用 */}
+          <div className="ml-auto">
+            <ReportQuestionButton
+              question={question}
+              onReportSubmitted={() => {
+                // 报告完跳到下一题（不算对错）
+                onNext();
+              }}
+            />
+          </div>
         </div>
 
         <TemplatePanel key={`${resetKey}::${panelKey}`} {...common} />
