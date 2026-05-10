@@ -190,5 +190,56 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   return jsonResponse({ ok: true, rows, latestVersion: Date.now() });
 };
 
+/**
+ * v0.31.87: DELETE /api/sync/ai-questions
+ *   Body: { ids: ["AI_xxx", ...] }   // up to MAX_BATCH per call
+ *
+ * 用于：
+ *   - admin 删 AI 题（cull 过量 / 删除 user-reported 错题）
+ *   - cull 脚本（_cull-overpopulated-skills.mjs --apply）
+ *
+ * 注意：D1 删除是物理删（不写 deleted 列表 — 跨设备同步靠 PWA 下次 pull 时
+ * /api/sync/ai-questions GET 重新拉 = 不在结果集 = 客户端会自动从 IndexedDB
+ * 移除（applyPayloadMerged 走 union 但 questions 表会 merge by question_id）。
+ * 实际上需要客户端 explicit 看到这是"被删了"的状态——为了简单这里先物理删，
+ * 客户端 stale 的话 PWA 下次启动 pull 会自动同步。
+ */
+export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
+  const fail = checkAuth(request, env);
+  if (fail) return fail;
+  await ensureSchema(env.DB);
+
+  let body: { ids?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: "invalid_json" }, 400);
+  }
+  if (!Array.isArray(body.ids) || body.ids.length === 0) {
+    return jsonResponse({ ok: false, error: "missing_ids" }, 400);
+  }
+  if (body.ids.length > MAX_BATCH) {
+    return jsonResponse(
+      { ok: false, error: `batch_too_large: max ${MAX_BATCH}` },
+      400,
+    );
+  }
+
+  const ids = body.ids.filter((s): s is string => typeof s === "string" && s.length > 0);
+  if (ids.length === 0) {
+    return jsonResponse({ ok: false, error: "no_valid_ids" }, 400);
+  }
+
+  const placeholders = ids.map(() => "?").join(",");
+  await env.DB
+    .prepare(
+      `DELETE FROM ai_questions WHERE user_key = ? AND question_id IN (${placeholders})`,
+    )
+    .bind(USER_KEY, ...ids)
+    .run();
+
+  return jsonResponse({ ok: true, deleted: ids.length });
+};
+
 export const onRequestOptions: PagesFunction<Env> = async () =>
   new Response(null, { status: 204, headers: corsHeaders });

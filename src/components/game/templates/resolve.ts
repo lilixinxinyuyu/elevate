@@ -11,6 +11,13 @@ const GAME_TYPE_MAP: Record<string, GameTemplate> = {
   geometry_judge: "plain_choice",
   angle_shooter: "plain_choice",
   data_detective: "plain_choice",
+  // v0.31.87 — 5 个新玩法
+  discount_drift: "discount_drift",
+  coin_combo: "coin_combo",
+  time_heist: "time_heist",
+  number_hunt: "number_hunt",
+  // shape_builder 复用 dot_grid_draw 渲染
+  shape_builder: "dot_grid_draw",
 };
 
 const FORMAT_MAP: Record<string, GameTemplate> = {

@@ -62,6 +62,7 @@ function buildMathNavItems(): SubjectNavItem[] {
   base.push({ to: "skills", label: "技能树", desktopOnly: true });
   base.push({ to: "mistakes", label: "错题复活" });
   base.push({ to: "report", label: "周报", subtle: true });
+  base.push({ to: "playground", label: "试玩台", subtle: true });
   base.push({ to: "admin", label: "管理", subtle: true });
   return base;
 }

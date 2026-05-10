@@ -37,6 +37,7 @@ import type { Term } from "../core/types";
 import { useEffect, useState } from "react";
 import { ackMigrationNotice, getMigrationNoticeUnacked } from "../db/seed";
 import { currentExam, daysUntil, FINAL } from "../core/examDates";
+import { getTricksTodayCount } from "../lib/mathTricksProgress";
 
 /** 把毫秒时间戳格式成本地日期字符串 YYYY-MM-DD（与 todayKey 一致） */
 function localDayKey(ts: number): string {
@@ -53,6 +54,8 @@ function buildTodayRingsInput(args: {
   challengeTarget: number;
   /** v0.31.29：今日闪电口算 session 数（≥1 算闭环） */
   fluencyTodayCount: number;
+  /** v0.31.87：今日完成的巧算 trick 数（fluency 环双闭判定） */
+  tricksTodayCount: number;
   /** v0.31.58：今日闯关获星总数（boss session 完成 → starsFromAccuracy 之和） */
   todayBossStars: number;
   /** v0.31.68：今日已复活（advance 过的到期错题数）；用来在 chip 显示进度 */
@@ -127,6 +130,7 @@ function buildTodayRingsInput(args: {
 
   return {
     fluencyTodayCount,
+    tricksTodayCount: args.tricksTodayCount,
     challengeTodayCount: args.todayCount,
     challengeTarget: args.challengeTarget,
     focus,
@@ -183,6 +187,12 @@ export function HomePage() {
     if (!student) return 0;
     return await getMistakeRevivedToday(student.id);
   }, [student?.id, attempts?.length]);
+
+  // v0.31.87: 今日完成的巧算 trick 数（TodayRings fluency 环双闭判定）
+  const tricksTodayCount = useLiveQuery(async () => {
+    if (!student) return 0;
+    return await getTricksTodayCount(student.id);
+  }, [student?.id]);
 
   // v0.31.69: 今日复活"顺利度"——决定闭环后是否鼓励继续做。
   const reviveVitality = useLiveQuery(async () => {
@@ -405,6 +415,7 @@ export function HomePage() {
       {isPhase2Live() ? (
         <TodayRings {...buildTodayRingsInput({
           fluencyTodayCount: fluencyTodayCount ?? 0,
+          tricksTodayCount: tricksTodayCount ?? 0,
           todayBossStars: todayBossStars ?? 0,
           mistakesRevivedToday: mistakesRevivedToday ?? 0,
           reviveEncourageMore: reviveVitality?.encourageMore ?? false,

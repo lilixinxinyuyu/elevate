@@ -28,6 +28,11 @@ import { ChartDetectivePanel } from "./templates/ChartDetective";
 import { CubeViewerPanel } from "./templates/CubeViewer";
 import { TriangleJudgePanel } from "./templates/TriangleJudge";
 import { DotGridDrawPanel } from "./templates/DotGridDraw";
+// v0.31.87 — 5 个新玩法
+import { DiscountDriftPanel } from "./templates/DiscountDrift";
+import { CoinComboPanel } from "./templates/CoinCombo";
+import { TimeHeistPanel } from "./templates/TimeHeist";
+import { NumberHuntPanel } from "./templates/NumberHunt";
 import { resolveTemplate } from "./templates/resolve";
 import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAdaptive";
 
@@ -497,6 +502,16 @@ function pickPanel(id: string): (p: TemplateRenderProps) => JSX.Element {
       return TriangleJudgePanel;
     case "dot_grid_draw":
       return DotGridDrawPanel;
+    // v0.31.87 — 5 个新玩法（Discount Drift / Coin Combo / Time Heist / Number Hunt）
+    // shape_builder 复用 dot_grid_draw 不需要新 panel
+    case "discount_drift":
+      return DiscountDriftPanel;
+    case "coin_combo":
+      return CoinComboPanel;
+    case "time_heist":
+      return TimeHeistPanel;
+    case "number_hunt":
+      return NumberHuntPanel;
     default:
       return PlainNumericPanel;
   }
@@ -534,6 +549,15 @@ function templateTitle(id: string): string {
       return "立体观察";
     case "triangle_judge":
       return "三角形法庭";
+    // v0.31.87 5 个新玩法
+    case "discount_drift":
+      return "折扣漂移";
+    case "coin_combo":
+      return "凑钱挑战";
+    case "time_heist":
+      return "时间窃贼";
+    case "number_hunt":
+      return "数字寻宝";
     default:
       return "挑战";
   }

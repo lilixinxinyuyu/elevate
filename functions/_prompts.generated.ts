@@ -25,12 +25,16 @@ export const PROMPTS = {
   "questionsUserTemplate": "生成 {{count}} 道四年级{{term}}（{{termCode}}）{{subjectLabel}}题：\n\n⚠️ 内容必须是【{{term}}】，不要混【{{otherTerm}}】\n\n单元：{{unitName}} ({{unitId}})\n技能：{{skillName}} ({{skillId}})\n难度：{{difficulty}}（在该范围内分布）\n\n⚠️ **重点**：题干必须围绕「{{skillName}}」展开。不要因为其他 skill 更熟就生成不相关的题（比如让你出\"积的小数位数\"却生成\"求平均数\"——这是错的）。\n\n变化方向{{batchIndex}}：本批用 {{batchAngle}}（不同情境 / 不同数字 / 不同字词组合）\n\n{{existingStemsBlock}}\n\n{{recentMistakesBlock}}\n\n{{gameTypeSchema}}",
   "questionsSchemas": {
     "balance_lab": "## 题型：balance_lab（天平 / 等量代换）\n\n⏱️ **答题时间**：`estimated_time_seconds: 50`（要看懂图 + 列方程 + 解方程，难度 5 给 60）\n\n⚠️ 这种题用客户端 BalanceLab 组件渲染，**必须**在 `tags` 里给一个 `eq:` tag 描述天平两边。\n\n### tag 格式\n\n`eq:left|right` —— `left` 和 `right` 都是用 `+` 连接的项（比如 `2x+3`、`5+y`、`3a`）。\n\n例：`2x + 3 = x + 5` → `eq:2x+3|x+5`\n\n### stem 示例\n\n- \"天平两边平衡，左边是 ___，右边是 ___，请问 x 等于多少？\"\n- \"下图天平刚好平衡，求 x 的值。\"\n\n### 必须字段（**继承 plain_choice 的全部字段**，下面只列差异）\n\n⚠️ **完整 JSON 必须包含所有 plain_choice 必备字段**（question_id / subjectId / version / status / grade / term / unit_id / unit_name / skill_id / skill_name / cognitive_level / difficulty / estimated_time_seconds / stem / common_errors / feedback_correct / feedback_wrong / hints / tags / exam_priority）。**枚举值严格按 quality-rubric.md 第 1.5 节**。\n\n差异化字段：\n\n```json\n{\n  \"game_type\": \"balance_lab\",\n  \"play_as\": \"balance_lab\",\n  \"question_format\": \"numeric\",\n  \"cognitive_level\": \"application\",\n  \"ability_dimension\": [\"modeling\", \"calculation\"],\n  \"estimated_time_seconds\": 50,\n  \"tags\": [\"ai_generated\", \"eq:2x+3|x+5\"],\n  \"answer\": {\"type\": \"number\", \"value\": 2}\n}\n```\n\n只用一元一次方程，未知数 x 取值 1-20 整数。变量名固定 x（不要用 y/a 等让小学生迷惑）。\n\n### ⛔ 4 年级方程边界（必读）\n\n**只能 ax=b / x±a=b 类型**，未知数 x 必须**只在等号一边**：\n\n✅ 合法：\n- `2x = 16`、`x + 5 = 12`、`3x = 27`、`x ÷ 4 = 6`\n\n❌ **禁止 — 这些是 5 年级移项消元，4 年级不教**：\n- `2x + 3 = x + 5`（x 在两边）\n- `3x + 10 = 2x + 120`\n- `x + 40 = 2x`\n- `x + 20 = x + x + 5`\n- 任何形如 `ax + b = cx + d` / `kx + m = nx + p` 都禁止\n\n### ⛔ stem 表达必须明确（避免 cryptic）\n\n涉及\"x 个 X 克\"的天平题，**必须在 stem 里说清 x 是单个量还是总量**：\n\n❌ 模糊：`左边是 2 个相同的 x 克水杯，重 16 克` — x 是单个还是总？\n✅ 清晰：`左边是 2 个相同的水杯，每个 x 克，总重 16 克。求 x` — `eq:2x|16`\n✅ 也可以：`左边 1 个 x 克的盒子和 5 克砝码，右边 12 克砝码，求 x` — `eq:x+5|12`\n\nstem 必须自带\"每个\" / \"总\" / \"1 个 x 克的\" 等限定词，**不能让 4 年级孩子读题时还要猜 x 的物理含义**。",
+    "coin_combo": "## 题型：coin_combo（凑钱挑战）\n\n⏱️ **答题时间**：`estimated_time_seconds: 35`\n\n给 5 张面值 chip + 一个目标金额，玩家点击勾选凑出目标。**核心训练**：小数加法、元角分换算、组合思维。\n\n### 玩法（前端）\n\n5 张钱币 chip 横排显示（点击切换勾选/未勾选），上方实时累加 → 目标金额。点\"结算\"判对错。\n\n### stem 示例\n\n- \"用下面的钱凑出 ¥8.5 元\"\n- \"凑出 ¥12.3 元\"\n- \"凑出 ¥0.85\"（元角分练）\n\n### 必须字段\n\n```json\n{\n  \"game_type\": \"coin_combo\",\n  \"play_as\": \"coin_combo\",\n  \"question_format\": \"multi_choice\",\n  \"cognitive_level\": \"application\",\n  \"ability_dimension\": [\"calculation\", \"strategy\"],\n  \"estimated_time_seconds\": 35,\n  \"stem\": \"用下面的钱凑出 ¥8.5 元\",\n  \"coin_combo\": {\n    \"coins\": [0.5, 1, 2, 3, 5],\n    \"target\": 8.5,\n    \"correctIndices\": [0, 3, 4]\n  },\n  \"answer\": { \"type\": \"choice\", \"value\": \"0,3,4\" },\n  \"solution_steps\": [\n    \"0.5 + 3 + 5 = 8.5\",\n    \"正好凑出目标金额 ¥8.5\"\n  ],\n  \"hints\": [{ \"text\": \"看哪些数加起来正好等于目标\", \"penalty\": 1 }],\n  \"common_errors\": [\n    { \"tag\": \"coin_overshoot\", \"error\": \"总和超过目标\", \"remediation\": \"选少一些 / 看面值\" },\n    { \"tag\": \"coin_undershoot\", \"error\": \"总和不够\", \"remediation\": \"再多选一张\" }\n  ],\n  \"feedback_correct\": \"🪙 凑得真巧！\",\n  \"feedback_wrong\": \"提示：你选的总和 vs 目标，差多少？\",\n  \"tags\": [\"ai_generated\", \"decimal_add\", \"coin_combo\"]\n}\n```\n\n### coins 设计\n\n- 5 张面值，**单位元**\n- **必须只有一个正确组合**（验证：枚举所有 2^5-1=31 种组合，只有一种和等于 target）\n- 推荐面值池：`0.1 / 0.2 / 0.5 / 1 / 2 / 5 / 10`（元角分组合更好）\n- 不能出现 ¥0 或负数\n- correctIndices 至少 2 张，最多 5 张\n\n### 数字范围\n\n- target：0.5 - 50（4 年级元角分练）\n- 整数 target 用 1/2/5 一类纯整数面值\n- 含 0.X 的 target 至少有一张 0.X 面值（不然凑不出来）\n\n### answer.value 怎么写\n\n写成**字符串**，逗号分隔的 indices（顺序无所谓，前端按 set 比对）：\n- 选了 0、3、4 → `\"value\": \"0,3,4\"`\n- 选了 1、2 → `\"value\": \"1,2\"`\n\n但前端实际比对走 `coin_combo.correctIndices`，answer.value 只是为了 schema 兼容。\n\n### 干扰设计（不需要 options 字段，玩家从 coins 自由组合）\n\n确保 coins 里**有几个会让人误选的\"近似组合\"**，例如目标 8.5：\n- 正确：0.5 + 3 + 5 = 8.5\n- 容易误选：1 + 2 + 5 = 8（差 0.5，但很接近）\n\n### ❌ 禁止\n\n- coins 里有重复面值（必须 5 个唯一）\n- 多个组合能凑出 target（前端期望唯一解）\n- coins 里有 ≥ target 的单张（如 target=10 不能放 ¥20 的）\n- 前端展示用 options — coin_combo 不是 4 选 1",
     "cube_view": "## 题型：cube_view（立体观察 / 数小正方体）\n\n⏱️ **答题时间**：`estimated_time_seconds: 35`（立体空间想象需要时间，难度 4+ 给 45）\n\n⚠️ **关键**：这种题需要客户端渲染 3D 立体图，所以你**必须**在 `tags` 数组里给一个 `solid:` tag，描述每个小正方体的坐标。\n\n### tag 格式\n\n`solid:x,y,z|x,y,z|x,y,z` —— 每个 `|` 分隔一个小正方体，`x,y,z` 是该立方体的整数坐标（0-3 范围）。\n\n例：3 个排成 L 形 → `solid:0,0,0|1,0,0|1,1,0`\n\n### stem 题型示例（围绕\"几个小正方体\"或\"几个面\"）\n\n- \"下面这个图形由几个小正方体组成？\"\n- \"从正面看，能看到几个面？\"\n- \"从上面看是什么形状？\"\n- \"这个图形里有几个面是露出来的？\"\n\n### 必须字段（**继承 plain_choice 的全部字段**，下面只列差异）\n\n⚠️ **完整 JSON 必须包含所有 plain_choice 必备字段**（question_id / subjectId / version / status / grade / term / unit_id / unit_name / skill_id / skill_name / cognitive_level / difficulty / estimated_time_seconds / stem / common_errors / feedback_correct / feedback_wrong / hints / tags / exam_priority）。**枚举值严格按 quality-rubric.md 第 1.5 节**。\n\n差异化字段：\n\n```json\n{\n  \"game_type\": \"cube_view\",\n  \"play_as\": \"cube_view\",\n  \"question_format\": \"single_choice\",\n  \"cognitive_level\": \"reasoning\",\n  \"ability_dimension\": [\"spatial\"],\n  \"estimated_time_seconds\": 35,\n  \"tags\": [\"ai_generated\", \"solid:0,0,0|1,0,0|1,1,0\"],\n  \"options\": [\n    {\"id\": \"A\", \"text\": \"3\"},\n    {\"id\": \"B\", \"text\": \"4\"},\n    {\"id\": \"C\", \"text\": \"5\"},\n    {\"id\": \"D\", \"text\": \"6\"}\n  ],\n  \"answer\": {\"type\": \"choice\", \"value\": \"A\"}\n}\n```\n\n立方体数量在 2-8 之间，不要超过 8 个（视觉上会乱）。",
     "decimal_shifter": "## 题型：decimal_shifter（小数点移动）\n\n⏱️ **答题时间**：`estimated_time_seconds: 25`（程序化操作，应该熟练后较快）\n\n围绕\"小数点移动 → 数字变大或变小\"的核心知识点。\n\n⚠️ **重要**：DecimalShifter 是 **位移操作题** —— 前端给 Selena ← / → 按钮让她**直接拖动小数点**到正确位置。**不是 4 选 1**。`answer.value` 必须是位移后的**目标数字本身**（number 类型）。\n\n### stem 示例\n\n- \"把 3.45 的小数点向右移动一位，得到的数是 ___\"\n- \"5.678 缩小到原来的 1/100 后是 ___\"\n- \"0.07 的小数点向左移动一位，结果是 ___\"\n\n### 必须字段\n\n```json\n{\n  \"game_type\": \"decimal_shifter\",\n  \"play_as\": \"decimal_shifter\",\n  \"question_format\": \"numeric\",\n  \"cognitive_level\": \"procedural\",\n  \"ability_dimension\": [\"concept\", \"strategy\"],\n  \"estimated_time_seconds\": 25,\n  \"stem\": \"把 3.45 的小数点向右移动一位，得到的数是 ___\",\n  \"answer\": { \"type\": \"number\", \"value\": 34.5 },\n  \"tags\": [\"ai_generated\", \"shift:right:1\", \"start:3.45\"],\n  \"solution_steps\": [\"小数点向右移动一位 = ×10，3.45 × 10 = 34.5\"],\n  \"hints\": [{ \"text\": \"小数点向右移一位等于乘 10\", \"penalty\": 1 }],\n  \"common_errors\": [\n    { \"tag\": \"shift_direction_reversed\", \"error\": \"误把方向当左移\", \"remediation\": \"向右移 = 数变大；向左移 = 数变小\" },\n    { \"tag\": \"shift_count_off\", \"error\": \"位数算错\", \"remediation\": \"题面说几位就移几位，多一位 / 少一位都不对\" }\n  ],\n  \"feedback_correct\": \"操作准确！\",\n  \"feedback_wrong\": \"再想想：题里说移几位？方向是左还是右？\",\n  \"tags\": [\"ai_generated\", \"shift:right:1\", \"start:3.45\"]\n}\n```\n\n`tags` 里：\n- `start:N` 是起始数字（`N` 用原值，不带括号）\n- `shift:right:N` 或 `shift:left:N` 描述位移方向 + 位数\n- 客户端用这两个 tag 渲染动画 + 校验\n\n### ❌ 禁止（v0.31.75 之前 30 道题就栽在这）\n\n```jsonc\n\"answer\": { \"type\": \"choice\", \"value\": \"A\" }   // ❌ DecimalShifter 模板不识别 choice\n\"options\": [ {...}, {...} ]                     // ❌ 不要 options，这不是选择题\n\"question_format\": \"single_choice\"              // ❌ 应该是 \"numeric\"\n```\n\n如果你想出 4 选 1 风格的小数点移动题，**改用 game_type=plain_choice**（PlainChoice 模板），别用 decimal_shifter。\n\n### 数据校验自查\n\n出题前检查：\n1. `start:` tag 的值，乘以 `10^shift_count`（右移）或除以 `10^shift_count`（左移）= `answer.value`？\n2. `answer.type === \"number\"`？不是 \"choice\"？\n3. 没有 `options` 字段？",
+    "discount_drift": "## 题型：discount_drift（折扣漂移）\n\n⏱️ **答题时间**：`estimated_time_seconds: 30`\n\n模拟商场折扣场景，让 Selena 算折后价。**核心训练**：小数乘法、小数点移动（X 折 = X × 0.1）、单位换算。\n\n### 玩法（前端）\n\n商品图标 + 原价（带划线）+ 折扣 chip → 4 个候选价格 chip 让玩家选。\n\n### stem 示例\n\n- \"一件 ¥120 的连衣裙打 7 折，现价是？\"\n- \"一双 ¥85 的鞋子，今日满 ¥80 减 ¥10，要付多少钱？\"\n- \"买二送一活动，¥6 一支的笔，买 3 支花多少钱？\"\n\n### 必须字段\n\n```json\n{\n  \"game_type\": \"discount_drift\",\n  \"play_as\": \"discount_drift\",\n  \"question_format\": \"single_choice\",\n  \"cognitive_level\": \"application\",\n  \"ability_dimension\": [\"calculation\", \"modeling\"],\n  \"estimated_time_seconds\": 30,\n  \"stem\": \"一件 ¥120 的连衣裙打 7 折，现价是多少元？\",\n  \"discount\": {\n    \"itemName\": \"连衣裙\",\n    \"emoji\": \"👗\",\n    \"originalPrice\": 120,\n    \"discount\": { \"kind\": \"percent\", \"value\": 70 }\n  },\n  \"options\": [\n    { \"id\": \"A\", \"text\": \"84\" },\n    { \"id\": \"B\", \"text\": \"96\", \"errorTag\": \"calc_subtract_offset\" },\n    { \"id\": \"C\", \"text\": \"70\", \"errorTag\": \"discount_misread\" },\n    { \"id\": \"D\", \"text\": \"108\", \"errorTag\": \"calc_off_one\" }\n  ],\n  \"answer\": { \"type\": \"choice\", \"value\": \"A\" },\n  \"solution_steps\": [\n    \"7 折 = 7 × 0.1 = 0.7\",\n    \"120 × 0.7 = 84\"\n  ],\n  \"hints\": [{ \"text\": \"7 折 = 0.7 倍\", \"penalty\": 1 }],\n  \"common_errors\": [\n    { \"tag\": \"discount_misread\", \"error\": \"把 7 折当成减 70%（应该是付 70%）\", \"remediation\": \"X 折 = 付 X*10%。7 折 = 付 70%\" },\n    { \"tag\": \"calc_subtract_offset\", \"error\": \"误算 120 - 70 = 50（混淆减法 vs 乘法）\", \"remediation\": \"折扣是按比例打折，要乘不要减\" }\n  ],\n  \"feedback_correct\": \"💸 折扣高手！\",\n  \"feedback_wrong\": \"提示：X 折 = 付原价的 X × 10%\",\n  \"tags\": [\"ai_generated\", \"discount\", \"decimal_mul\"]\n}\n```\n\n### discount 字段三种 kind\n\n```jsonc\n// 1. 百分比折扣（最常用）— X 折用 value=X*10。例 7 折 → 70；半价 → 50\n{ \"kind\": \"percent\", \"value\": 70 }\n\n// 2. 满减\n{ \"kind\": \"yuan_off\", \"value\": 10 }\n\n// 3. 买 N 送 M（前端按 N+M 件平均价显示）\n{ \"kind\": \"buy_n_get_m\", \"n\": 2, \"m\": 1 }\n```\n\n### 数字范围\n\n- originalPrice：10-300，4 年级数字范围\n- 折扣：percent（30-90 整 10 倍数最佳，方便心算）；yuan_off（5-50）；buy_n_get_m（n+m ≤ 5）\n- 4 个候选价格之间差距合理（不要 4 个都接近，要拉开 5%-30%）\n\n### 干扰项设计（4 个 options）\n\n- A：正确答案\n- B：减法陷阱（120 - 70 = 50 这种）\n- C：算 70% 算成 70（漏乘原价）\n- D：折扣方向反了（120 × 0.3 = 36 当 7 折，其实是 3 折）\n\n每个干扰项必须配 `errorTag`，让 GameShell 反馈面板能给出针对性提示。\n\n### ❌ 禁止\n\n- 折扣超出 4 年级心算能力（如 13.5%、千位级原价）\n- options 给 5 个或更多\n- answer.type ≠ \"choice\"\n- discount.kind 用其他值",
     "dot_grid_draw": "## 题型：dot_grid_draw（点子图画图）\n\n**渲染**：网格点阵，孩子点击格点添加顶点，自动连线，闭合后判图形类别。\n\n### 适用 skill\n- 三角形 / 四边形构造（triangle_classification 进阶）\n- 三角形三边关系实操\n- 等腰 / 等边判断\n\n### 必填字段\n```json\n{\n  \"question_id\": \"AI_${skillId}_001\",\n  \"subjectId\": \"math\",\n  \"version\": 1,\n  \"status\": \"approved\",\n  \"grade\": 4,\n  \"term\": \"下册\",\n  \"unit_id\": \"G4B_U2_TRI_QUAD\",\n  \"unit_name\": \"三角形\",\n  \"skill_id\": \"triangle_classification\",\n  \"skill_name\": \"按角/边给三角形分类\",\n  \"ability_dimension\": [\"spatial\", \"concept\"],\n  \"exam_priority\": \"HIGH_SMALL\",\n  \"game_type\": \"geometry_judge\",\n  \"play_as\": \"dot_grid_draw\",\n  \"cognitive_level\": \"application\",\n  \"difficulty\": 3,\n  \"estimated_time_seconds\": 60,\n  \"stem\": \"在点子图上画一个等腰直角三角形。\",\n  \"question_format\": \"geometry_operation\",\n  \"answer\": {\n    \"type\": \"choice\",\n    \"value\": \"isosceles_right\"\n  },\n  \"dot_grid\": {\n    \"gridWidth\": 6,\n    \"gridHeight\": 6,\n    \"expectedShape\": \"isosceles_right_triangle\",\n    \"minVertices\": 3,\n    \"maxVertices\": 3\n  },\n  \"solution_steps\": [\"等腰直角三角形：两条直角边相等。在点子图上找两条相同长度的直角边即可。\"],\n  \"common_errors\": [\n    { \"tag\": \"non_isosceles\", \"error\": \"三边都不等，不是等腰\", \"remediation\": \"至少两边要相等\" },\n    { \"tag\": \"non_right_angle\", \"error\": \"三个角都不是直角\", \"remediation\": \"等腰直角三角形必须有一个 90° 角\" }\n  ],\n  \"feedback_correct\": \"画得很对！两条直角边相等～\",\n  \"feedback_wrong\": \"再试一次：等腰直角三角形要有 1 个 90° 角 + 两条相等的直角边。\",\n  \"hints\": [{ \"text\": \"先选一个直角顶点，再分别向两个方向选相等距离的点\", \"penalty\": 1 }],\n  \"tags\": [\"ai_generated\"]\n}\n```\n\n### 关键\n- expectedShape 必须是 schema 里支持的：parallelogram / rectangle / trapezoid / isosceles_triangle / equilateral_triangle / right_triangle / isosceles_right_triangle\n- gridWidth × gridHeight 通常 5×5 到 7×7\n- minVertices / maxVertices 三角形是 3，四边形是 4\n- 这个题型只用于\"画图\"操作，不要塞文字答案",
+    "number_hunt": "## 题型：number_hunt（数字寻宝）\n\n⏱️ **答题时间**：`estimated_time_seconds: 45`\n\n5×5 数字网格 + 一句规则 → 玩家挑出符合条件的格子（多选）。**核心训练**：找规律、数感、比较、快速心算。\n\n### 玩法（前端）\n\n25 个数字按 5×5 网格排列，stem 提示规则。玩家点击勾选 → 点\"确认\"判全选对错。\n\n### stem 示例\n\n- \"把所有大于 1.5 的小数都找出来\"\n- \"找出 3 个相加等于 1 的小数\"（注意：是\"找一组\"，不是\"找所有可能的组\")\n- \"选出含十分位数字 5 的数\"\n- \"把所有 4 的倍数找出来\"\n\n### 必须字段\n\n```json\n{\n  \"game_type\": \"number_hunt\",\n  \"play_as\": \"number_hunt\",\n  \"question_format\": \"multi_choice\",\n  \"cognitive_level\": \"reasoning\",\n  \"ability_dimension\": [\"concept\", \"reasoning\"],\n  \"estimated_time_seconds\": 45,\n  \"stem\": \"把所有大于 1.5 的小数都找出来\",\n  \"number_hunt\": {\n    \"grid\": [\n      0.8, 1.6, 2.3, 0.9, 1.2,\n      1.5, 1.7, 0.4, 2.1, 0.7,\n      1.0, 1.8, 0.6, 2.5, 1.4,\n      0.3, 1.9, 1.1, 2.0, 0.5,\n      1.3, 0.2, 2.4, 1.65, 0.95\n    ],\n    \"rule\": \"大于 1.5\",\n    \"targetIndices\": [1, 2, 6, 8, 11, 13, 16, 18, 22, 23]\n  },\n  \"answer\": { \"type\": \"choice\", \"value\": \"1,2,6,8,11,13,16,18,22,23\" },\n  \"solution_steps\": [\n    \"比 1.5 大：1.6 / 2.3 / 1.7 / 2.1 / 1.8 / 2.5 / 1.9 / 2.0 / 2.4 / 1.65\",\n    \"等于 1.5 的不算（rule 是严格大于）\"\n  ],\n  \"hints\": [{ \"text\": \"找十位是 1 且十分位 ≥ 6 的，以及 ≥ 2 的\", \"penalty\": 1 }],\n  \"common_errors\": [\n    { \"tag\": \"boundary_misread\", \"error\": \"把 1.5 也选上（应该严格大于）\", \"remediation\": \"看 rule 用'大于'还是'大于等于'\" },\n    { \"tag\": \"missed_target\", \"error\": \"漏选 1.65 这种额外的小数位\", \"remediation\": \"数位多的小数也要看清楚\" }\n  ],\n  \"feedback_correct\": \"💎 全找对了！\",\n  \"feedback_wrong\": \"提示：再扫一遍，少了几个？多了几个？\",\n  \"tags\": [\"ai_generated\", \"number_compare\"]\n}\n```\n\n### number_hunt 字段细节\n\n- `grid`：**正好 25 个数**（5×5）\n- `rule`：纯文字描述（前端渲染在 stem 下方提醒）\n- `targetIndices`：0-24 范围内的 indices（按行优先：第 0 行是 0-4，第 1 行是 5-9 ...）\n- **正确数量在 3-12 之间最有挑战**（太少没找头，太多变扫描而非判断）\n\n### 适合的题目模式\n\n✅ 推荐：\n- \"找所有大于/小于 X 的\"\n- \"找所有 X 的倍数\"\n- \"找出 3 个相加等于 X 的\"（前端只校验正好这 3 个）\n- \"选出含 X 数位的\"\n- \"选出最大的 3 个 / 最小的 3 个\"\n\n❌ 不推荐：\n- 需要排序 / 排列的（用 sort_ladder）\n- 只有 1 个答案（用 plain_choice）\n- 答案数 > 12（变扫描题）\n\n### grid 设计\n\n- 数字范围按 skill 来：小数 skill → 0.x ~ 9.x；整数 skill → 1-100\n- **避免重复**（每个数应该唯一，否则 indices 不能定位）\n- 让 target 散布在网格里（不集中在一行/一列）\n- 干扰数字接近边界（如 rule \"大于 1.5\" 时放 1.5 / 1.49 / 1.51 这种边界值）\n\n### 数据校验自查\n\n出题前自查：\n1. `grid.length === 25`？\n2. `targetIndices` 全部在 0-24？\n3. `targetIndices` 里每个 i，`grid[i]` 真的满足 `rule`？\n4. 不在 `targetIndices` 里的格子，**没有**满足 `rule`？\n5. 没有重复数字？\n\n### ❌ 禁止\n\n- grid 大小 ≠ 25\n- targetIndices 漏选 / 误选 / 重复\n- rule 模糊不清（如\"找特殊的\"）\n- 把这题做成\"找一个最大的\" — 改用 plain_choice",
     "plain_choice": "## 题型：plain_choice（4 选 1 标准选择题）\n\n> `subjectId / term / unit_id / skill_id / grade / difficulty / cognitive_level / ability_dimension / question_format / estimated_time_seconds / exam_priority / status` 这些字段由系统在 user prompt 的「已确定的元数据」段精确给出，**原样抄进**每道题，不要自己造值或改值。\n\n⏱️ **答题时间**已由系统按 game_type × difficulty × 阅读量在元数据里给出。如果你想给的题面长 / 选项含图示，超过元数据里的值 → 应该把题做更紧凑而不是改时间。\n\n---\n\n## 必填字段（**完整 schema** — 复制这个结构）\n\n```json\n{\n  \"stem\": \"题面文字（≥ 8 个汉字）\",\n  \"options\": [\n    { \"id\": \"A\", \"text\": \"选项 A\" },\n    { \"id\": \"B\", \"text\": \"选项 B\" },\n    { \"id\": \"C\", \"text\": \"选项 C\" },\n    { \"id\": \"D\", \"text\": \"选项 D\" }\n  ],\n  \"answer\": { \"type\": \"choice\", \"value\": \"A\" },\n  \"solution_steps\": [\"分析步骤一句话\"],\n  \"hints\": [{ \"text\": \"提示文字\", \"penalty\": 1 }],\n  \"common_errors\": [\n    { \"tag\": \"decimal_point_error\", \"error\": \"常见错误描述\", \"remediation\": \"怎么纠正\" }\n  ],\n  \"feedback_correct\": \"答对的反馈一句话\",\n  \"feedback_wrong\": \"答错的反馈一句话\",\n  \"tags\": [\"ai_generated\"]\n}\n```\n\n⚠️ `solution_steps` 是字符串数组（`[\"第一步\", \"第二步\"]`），不是对象数组。\n⚠️ `hints[].penalty` 是整数 1-3，不要浮点。\n\n---\n\n## 4 条原则（违反就 fail，详见 quality-principles.md）\n\n- **P1 题面纯净**：`stem` / `options[].text` / `hints` / `feedback` 不要写\"（无关）/（错答）/（误用）\"等元注解；options 上**不要**挂 `errorTag` 字段（错答归类放 `_internal_option_diagnostics`）\n- **P2 数学闭合**：答案在题面情境下必须合常识（果树/人数等可数实物 → 整数）\n- **P3 干扰项独立**：3 个错选项不能用题中数字的直接衍生（如 6x 的值），必须代表\"具体学生误解\"\n- **P4 skill 真考**：4 个选项量级一致；不让学生靠排除奇葩值就蒙对\n\n---\n\n## v0.31.73：竖式 / 数位对齐题用结构化 visual 字段（不要 ASCII art）\n\n⚠️ **重要 — visual 字段适用范围（v0.31.76 加强）**：\n\n`option.visual` 仅用于**对齐方式 / 数位排列 / 写法对错**这种\"4 个选项视觉**结构**不同\"的题。每个选项的 visual 必须**有差异**（不同的 a/b/op/align）。\n\n**禁止场景**：\n- ❌ \"求积是多少 / 计算结果\" 这类 4 选项**数值不同**的题 → 4 个 visual 完全相同 = 视觉退化，Selena 看到 4 个一样的竖式无法区分。这种题 **不要带 visual 字段**，让前端用 text 渲染（5.18 / 51.8 / 0.518 / 5.8 这种小数位数差异）。\n\n**正确场景**：\n- ✅ \"下面哪种小数点对齐方式正确？\" → A 末位对齐 / B 小数点对齐 / C 整数对齐 / D 错位 — 4 个 visual 不同 alignment\n- ✅ \"0.37 × 14 应该怎么列竖式？\" → A 末位对齐 / B 小数点对齐 / C 颠倒因子 / D ... — 4 个布局不同\n\n判定原则：**4 个选项的 visual 字段如果完全相同，就是错误用法，去掉 visual。**\n\n```json\n{\n  \"id\": \"A\",\n  \"text\": \"5.09 - 2.3（末位对齐 — 错位）\",\n  \"visual\": {\n    \"type\": \"vertical_arithmetic\",\n    \"a\": \"5.09\",\n    \"op\": \"−\",\n    \"b\": \"2.3\",\n    \"align\": \"right\"\n  }\n}\n```\n\n```json\n{\n  \"id\": \"B\",\n  \"text\": \"5.09 - 2.30（小数点对齐 — 正确）\",\n  \"visual\": {\n    \"type\": \"vertical_arithmetic\",\n    \"a\": \"5.09\",\n    \"op\": \"−\",\n    \"b\": \"2.30\",\n    \"align\": \"decimal\"\n  }\n}\n```\n\n`visual` 字段：\n- `type: \"vertical_arithmetic\"`（目前只有这一种结构化竖式，其他题型不需要 visual）\n- `a` / `op` / `b`：操作数 + 运算符（`+` / `−` / `×` / `÷`）\n- `align: \"decimal\"`（按小数点对齐 — 正确写法）/ `\"right\"`（按末位对齐 — 错误写法）\n\n**触发场景**：题面里出现\"小数加减竖式 / 对齐小数点 / 列竖式 / 数位对齐\"等关键词，且选项要展示具体的对齐效果。\n\n⛔ **不要再用 `\\n` 拼 ASCII art**（如 `\" 5.09\\n− 2.30\\n────\"`）—— 字体宽不一致 → 渲染对不齐。新结构化 visual 字段由前端 monospace + grid 精确对齐。\n\n`text` 字段仍保留（供 a11y 阅读 / 截图回退），但内容应是**简洁描述**（如 \"末位对齐\"），不要再粘 ASCII 竖式。\n\n---\n\n## 干扰项设计（P3 + P4 落地）\n\n每道选择题需要 **1 正确 + 3 高质量干扰项**：\n- 1 个 \"操作反了\"（比较时方向反 / 加减反 / 单位错）\n- 1 个 \"漏一步\"（少进位 / 少借位 / 少乘）\n- 1 个 \"接近但典型错误\"（小数点放错位 / 多个零少个零）\n\n⛔ 不要 4 个选项相邻 1（如 5/6/7/8）— 区分度太低\n⛔ 不要把题中数字直接放进 distractor（如题里\"6 倍\"，distractor 不能是 6 本身）",
     "shop_counter": "## 题型：shop_counter（购物 / 总价应用题）\n\n⏱️ **答题时间**：`estimated_time_seconds: 50`（应用题需要读题 + 列算式 + 算结果，难度 4-5 给 70）\n\n围绕：单价 × 数量 = 总价 / 已付钱找零 / 多种商品组合等。\n\n### stem 必备元素\n\n- 至少一个商品 + 单价 + 数量\n- 用人民币（元、角、分）单位，但**只用元**保留 2 位小数（不混分）\n- 数字不超过 100 元，单价 0.5-25.0 元\n\n### 干扰项设计\n\n4 个数字选项中：\n- 1 个正确\n- 1 个\"忘了乘数量\"\n- 1 个\"小数点放错位\"\n- 1 个\"加减号搞反\"\n\n### 必须字段（**继承 plain_choice 的全部字段**，下面只列差异）\n\n⚠️ **完整 JSON 必须包含所有 plain_choice 必备字段**（question_id / subjectId / version / status / grade / term / unit_id / unit_name / skill_id / skill_name / cognitive_level / difficulty / estimated_time_seconds / stem / question_format / options / answer / solution_steps / common_errors / feedback_correct / feedback_wrong / hints / tags / exam_priority）。**枚举值严格按 quality-rubric.md 第 1.5 节**。\n\n差异化字段：\n\n```json\n{\n  \"game_type\": \"shop_counter\",\n  \"play_as\": \"shop_counter\",\n  \"question_format\": \"single_choice\",\n  \"cognitive_level\": \"application\",\n  \"ability_dimension\": [\"modeling\", \"calculation\"],\n  \"estimated_time_seconds\": 50,\n  \"tags\": [\"ai_generated\", \"items:apple-3.5-2|book-12.8-1\"]\n}\n```\n\n`items:name-price-qty|...` 列出每个商品。",
     "speed_match": "## 题型：speed_match（口算 / 快速判断）\n\n**渲染**：4 个数字选项排成网格，孩子点选最快的那个。题目有 distractors 时也走这个模板。\n\n### 适用 skill\n- 口算（小数加减简便、积的小数位数）\n- 单位换算（厘米转米）\n- 数感判断（哪个最大 / 哪个最接近 1）\n\n### 必填字段\n```json\n{\n  \"question_id\": \"AI_${skillId}_001\",\n  \"subjectId\": \"${subjectId}\",\n  \"version\": 1,\n  \"status\": \"approved\",\n  \"grade\": 4,\n  \"term\": \"${term}\",\n  \"unit_id\": \"${unitId}\",\n  \"unit_name\": \"${unitName}\",\n  \"skill_id\": \"${skillId}\",\n  \"skill_name\": \"${skillName}\",\n  \"ability_dimension\": [\"calculation\"],\n  \"exam_priority\": \"MUST_SMALL\",\n  \"game_type\": \"speed_calc\",\n  \"play_as\": \"speed_match\",\n  \"cognitive_level\": \"procedural\",\n  \"difficulty\": 2,\n  \"estimated_time_seconds\": 15,\n  \"stem\": \"0.85 + 1.6 = ?\",\n  \"question_format\": \"numeric_choice\",\n  \"options\": [\n    { \"id\": \"A\", \"text\": \"2.45\" },\n    { \"id\": \"B\", \"text\": \"2.41\" },\n    { \"id\": \"C\", \"text\": \"1.0145\" },\n    { \"id\": \"D\", \"text\": \"0.245\" }\n  ],\n  \"answer\": { \"type\": \"choice\", \"value\": \"A\" },\n  \"solution_steps\": [\"小数点对齐相加：0.85 + 1.60 = 2.45\"],\n  \"common_errors\": [\n    { \"tag\": \"decimal_point_error\", \"error\": \"小数点错位算成 0.245\", \"remediation\": \"对齐小数点再相加\" },\n    { \"tag\": \"carry_missing\", \"error\": \"忘进位算成 2.41\", \"remediation\": \"5+0=5、8+6=14 进位\" }\n  ],\n  \"feedback_correct\": \"厉害！口算又快又准！\",\n  \"feedback_wrong\": \"再来一次，先把小数点对齐。\",\n  \"hints\": [{ \"text\": \"把两个数小数点对齐，逐位相加\", \"penalty\": 1 }],\n  \"tags\": [\"ai_generated\"]\n}\n```\n\n### 关键\n- stem 短（≤ 30 字）\n- 4 个 option 都是数字，区分度大（不要 4 个相邻整数）\n- 干扰项必须含小数点错位 / 漏进位 / 操作反 三类典型错误",
+    "time_heist": "## 题型：time_heist（时间窃贼）\n\n⏱️ **答题时间**：`estimated_time_seconds: 35`\n\n钟面 SVG + 起止时间 → 4 选 1。**核心训练**：时间换算（24h ↔ 12h）、持续时间计算、速度 × 时间。\n\n### 玩法（前端）\n\n钟面 + 三选一显示开始/结束/持续时间 → 4 个候选时间 chip 让玩家选。\n\n### 三种 mode\n\n| mode | 给定 | 问 |\n|---|---|---|\n| `duration` | 开始 + 结束时刻 | 持续时间 |\n| `start` | 结束时刻 + 持续时间 | 几点出发 |\n| `end` | 开始时刻 + 持续时间 | 几点到 |\n\n### stem 示例\n\n- \"Selena 7:30 开始练琴，8:15 结束。她练了多久？\"\n- \"电影 14:20 开始，放映 1 小时 50 分钟，几点结束？\"\n- \"高铁 9:45 到达，路上花了 2 小时 15 分钟，几点出发？\"\n\n### 必须字段\n\n```json\n{\n  \"game_type\": \"time_heist\",\n  \"play_as\": \"time_heist\",\n  \"question_format\": \"single_choice\",\n  \"cognitive_level\": \"application\",\n  \"ability_dimension\": [\"calculation\", \"modeling\"],\n  \"estimated_time_seconds\": 35,\n  \"stem\": \"Selena 7:30 开始练琴，8:15 结束。她练了多久？\",\n  \"time_heist\": {\n    \"mode\": \"duration\",\n    \"startTime\": \"07:30\",\n    \"endTime\": \"08:15\",\n    \"showOn\": \"start\"\n  },\n  \"options\": [\n    { \"id\": \"A\", \"text\": \"45 分钟\" },\n    { \"id\": \"B\", \"text\": \"1 小时 15 分钟\", \"errorTag\": \"time_carry_error\" },\n    { \"id\": \"C\", \"text\": \"30 分钟\", \"errorTag\": \"time_minute_off\" },\n    { \"id\": \"D\", \"text\": \"1 小时\", \"errorTag\": \"time_round_up\" }\n  ],\n  \"answer\": { \"type\": \"choice\", \"value\": \"A\" },\n  \"solution_steps\": [\n    \"8:15 - 7:30 = 45 分钟\",\n    \"（也可以分开算：分钟 15-30 不够减，借 1 小时变 75-30=45 分钟）\"\n  ],\n  \"hints\": [{ \"text\": \"分钟不够减时，借 1 小时 = 60 分钟\", \"penalty\": 1 }],\n  \"common_errors\": [\n    { \"tag\": \"time_carry_error\", \"error\": \"分钟借位算错\", \"remediation\": \"75 - 30 = 45，不是 75 - 30 = 1:15\" },\n    { \"tag\": \"time_minute_off\", \"error\": \"30 - 15 当成 15（搞反方向）\", \"remediation\": \"结束 - 开始 = 持续时间\" }\n  ],\n  \"feedback_correct\": \"⏰ 时间感超准！\",\n  \"feedback_wrong\": \"提示：用结束时刻减开始时刻，分钟不够借小时\",\n  \"tags\": [\"ai_generated\", \"time_calc\", \"duration\"]\n}\n```\n\n### time_heist 字段细节\n\n- `startTime` / `endTime`：24h 格式 `\"HH:MM\"`，必须 ≥ 起 < 终\n- `durationMinutes`：纯分钟整数（90 表示 1.5 小时）\n- `showOn`：钟面渲染哪个时刻（\"start\" | \"end\"）\n- 三种 mode 必填字段：\n  - `duration`：startTime + endTime（durationMinutes 由前端算 / AI 不填）\n  - `start`：endTime + durationMinutes\n  - `end`：startTime + durationMinutes\n\n### 数字范围\n\n- 时刻在 06:00 - 22:00（小学 4 年级日常作息）\n- 持续时间 5 分钟 - 4 小时\n- 分钟尽量是 5 的倍数（30/45/15 等），太精细的（如 23 分钟）少用\n- **避免跨午夜**（23:00 出发明早 7:00 到这种），4 年级未学\n\n### 干扰项设计（options 4 个）\n\n- A：正确答案\n- B：分钟借位算错（如 1:15 变 1:30）\n- C：方向反了（end - start 算成 start - end）\n- D：忽略小时部分只看分钟\n\n每个干扰必须配 `errorTag`。\n\n### ❌ 禁止\n\n- 跨午夜场景\n- 秒级精度（4 年级只到分钟）\n- 无效时间（如 25:70）\n- options 数 ≠ 4",
     "triangle_judge": "## 题型：triangle_judge（三角形判定）\n\n⏱️ **答题时间**：`estimated_time_seconds: 30`（规则套用 + 简单计算，难度 4-5 给 40）\n\n围绕：三边能否构成三角形 / 三角形分类（按角、按边）/ 内角和。\n\n### tag 格式\n\n判断三边能否构成三角形：`tri-sides:a,b,c`，例 `tri-sides:3,4,5`。\n\n按角分类：题干描述三个角，options 是\"锐角三角形 / 直角三角形 / 钝角三角形\"。\n\n### stem 示例\n\n- \"下面三条边长能围成三角形的是？\"\n- \"已知三角形两个内角是 60° 和 70°，第三个角是多少度？\"\n- \"三个内角分别是 30°、60°、90° 的三角形是什么三角形？\"\n\n### 必须字段（**继承 plain_choice 的全部字段**，下面只列差异）\n\n⚠️ **完整 JSON 必须包含所有 plain_choice 必备字段**（question_id / subjectId / version / status / grade / term / unit_id / unit_name / skill_id / skill_name / cognitive_level / difficulty / estimated_time_seconds / stem / question_format / options / answer / solution_steps / common_errors / feedback_correct / feedback_wrong / hints / tags / exam_priority）。**枚举值严格按 quality-rubric.md 第 1.5 节**。\n\n差异化字段：\n\n```json\n{\n  \"game_type\": \"triangle_judge\",\n  \"play_as\": \"triangle_judge\",\n  \"question_format\": \"single_choice\",\n  \"cognitive_level\": \"reasoning\",\n  \"ability_dimension\": [\"reasoning\", \"spatial\"],\n  \"estimated_time_seconds\": 30,\n  \"tags\": [\"ai_generated\", \"tri-sides:3,4,5\"]\n}\n```",
     "true_false_swipe": "## 题型：true_false_swipe（真假判断滑动）\n\n**渲染**：展示一句陈述，孩子滑动判断 \"对\" / \"错\"（或点选）。\n\n### 适用 skill\n- 概念辨析（\"等边三角形是特殊的等腰三角形 → 对\"）\n- 判断式子是否方程（letter_expression / equation_meaning_balance）\n- 单位换算判断（\"1 米 = 100 厘米 → 对\"）\n\n### 必填字段\n```json\n{\n  \"question_id\": \"AI_${skillId}_001\",\n  \"subjectId\": \"${subjectId}\",\n  \"version\": 1,\n  \"status\": \"approved\",\n  \"grade\": 4,\n  \"term\": \"${term}\",\n  \"unit_id\": \"${unitId}\",\n  \"unit_name\": \"${unitName}\",\n  \"skill_id\": \"${skillId}\",\n  \"skill_name\": \"${skillName}\",\n  \"ability_dimension\": [\"concept\", \"reasoning\"],\n  \"exam_priority\": \"HIGH_SMALL\",\n  \"game_type\": \"true_false\",\n  \"play_as\": \"true_false_swipe\",\n  \"cognitive_level\": \"recall\",\n  \"difficulty\": 2,\n  \"estimated_time_seconds\": 12,\n  \"stem\": \"等边三角形是特殊的等腰三角形。\",\n  \"question_format\": \"single_choice\",\n  \"options\": [\n    { \"id\": \"T\", \"text\": \"对\" },\n    { \"id\": \"F\", \"text\": \"错\" }\n  ],\n  \"answer\": { \"type\": \"choice\", \"value\": \"T\" },\n  \"solution_steps\": [\"等腰三角形定义：至少两边相等；等边三角形三边都相等，是特例。\"],\n  \"common_errors\": [\n    { \"tag\": \"category_misunderstand\", \"error\": \"把等边和等腰当成两类不相交\", \"remediation\": \"等边是等腰的子集\" },\n    { \"tag\": \"definition_confusion\", \"error\": \"记错等腰定义\", \"remediation\": \"至少两边相等就算等腰\" }\n  ],\n  \"feedback_correct\": \"对！等边三角形就是特殊的等腰三角形\",\n  \"feedback_wrong\": \"再想想：等腰要求'至少两边相等'\",\n  \"hints\": [{ \"text\": \"等腰要求至少两边相等，等边是不是满足？\", \"penalty\": 1 }],\n  \"tags\": [\"ai_generated\"]\n}\n```\n\n### 关键\n- options 永远是 `[{id:\"T\",text:\"对\"},{id:\"F\",text:\"错\"}]`（题干就是陈述本身）\n- stem 是一句完整的陈述句，不要带问号\n- 不要带\"输 1 输 0\"指令式说法\n- difficulty 一般 1-2（简单判断）",
     "vertical_repair": "## 题型：vertical_repair（竖式找错）\n\n**渲染**：展示一个有错的竖式，让孩子从 4 个候选竖式里挑出正确的（或挑出错处）。\n\n### 适用 skill\n- decimal_add_sub_vertical（小数加减竖式对齐）\n- decimal_mul_vertical（小数乘法竖式）\n- 整数竖式（数位对齐）\n\n### 必填字段\n```json\n{\n  \"question_id\": \"AI_${skillId}_001\",\n  \"subjectId\": \"${subjectId}\",\n  \"version\": 1,\n  \"status\": \"approved\",\n  \"grade\": 4,\n  \"term\": \"${term}\",\n  \"unit_id\": \"${unitId}\",\n  \"unit_name\": \"${unitName}\",\n  \"skill_id\": \"${skillId}\",\n  \"skill_name\": \"${skillName}\",\n  \"ability_dimension\": [\"calculation\"],\n  \"exam_priority\": \"MUST_BIG\",\n  \"game_type\": \"vertical_repair\",\n  \"play_as\": \"vertical_repair\",\n  \"cognitive_level\": \"procedural\",\n  \"difficulty\": 3,\n  \"estimated_time_seconds\": 35,\n  \"stem\": \"小红用竖式计算 3.07 + 2.9，下面哪种对齐方式正确？\",\n  \"question_format\": \"single_choice\",\n  \"options\": [\n    { \"id\": \"A\", \"text\": \"3.07\\n+2.9_\\n=5.97（小数点对齐，2.9 末位补 0）\" },\n    { \"id\": \"B\", \"text\": \"3.07\\n+ 2.9\\n=3.36（末位对齐：7+9=16 进 1，0+2=2 等）\", \"errorTag\": \"right_align_wrong\" },\n    { \"id\": \"C\", \"text\": \"3.07\\n+0.29\\n=3.36（把 2.9 当成 0.29）\", \"errorTag\": \"decimal_point_error\" },\n    { \"id\": \"D\", \"text\": \"3.07\\n+2.09\\n=5.16（把 2.9 当成 2.09）\", \"errorTag\": \"decimal_point_error\" }\n  ],\n  \"answer\": { \"type\": \"choice\", \"value\": \"A\" },\n  \"solution_steps\": [\"小数点对齐 = 相同数位对齐。2.9 末位（十分位）对齐 3.07 的十分位，百分位补 0。\"],\n  \"common_errors\": [\n    { \"tag\": \"right_align_wrong\", \"error\": \"把竖式末位对齐而非小数点对齐\", \"remediation\": \"记住：小数点对齐 ＝ 相同数位对齐\" },\n    { \"tag\": \"decimal_point_error\", \"error\": \"把 2.9 看成 0.29 或 2.09\", \"remediation\": \"保持原小数不动，只补末尾 0 让位数对齐\" }\n  ],\n  \"feedback_correct\": \"对！小数点对齐就是相同数位对齐～\",\n  \"feedback_wrong\": \"再看一次：小数点要对齐，不是末位对齐！\",\n  \"hints\": [{ \"text\": \"对齐小数点，位数不齐就在末尾补 0\", \"penalty\": 1 }],\n  \"tags\": [\"ai_generated\"]\n}\n```\n\n### 关键\n- options 用换行 `\\n` 模拟竖式视觉\n- 4 个候选必须包含一个 \"末位对齐\" 错（最常见错误）+ 至少一个 \"小数点错位\" 错\n- stem 简短，重点放在 options 上",
@@ -2025,23 +2029,638 @@ export const PROMPTS = {
     ]
   },
   "gameTypeBySkill": {
-    "observe_front_top_left": "cube_view",
-    "equation_meaning_balance": "balance_lab",
-    "equation_solve_simple": "balance_lab",
-    "decimal_point_shift": "decimal_shifter",
-    "triangle_inequality": "triangle_judge",
-    "triangle_angle_sum": "triangle_judge",
-    "triangle_classification": "triangle_judge",
-    "decimal_price_quantity": "shop_counter",
-    "decimal_speed_distance": "shop_counter",
-    "decimal_inverse_problem": "word_problem_lab",
-    "decimal_work_total": "word_problem_lab",
-    "decimal_segment_pricing": "word_problem_lab",
-    "equation_one_step_word": "word_problem_lab",
-    "equation_two_step_word": "word_problem_lab",
-    "equation_meeting_problem": "word_problem_lab",
-    "equation_sum_difference": "word_problem_lab",
-    "average_inverse_total": "word_problem_lab"
+    "_": "===== 上册（G4A）=====",
+    "large_place_value": [
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "memory_match",
+        "weight": 2
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 1
+      }
+    ],
+    "large_read_write": [
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "speed_match",
+        "weight": 2
+      },
+      {
+        "type": "vertical_repair",
+        "weight": 1
+      }
+    ],
+    "large_compare": [
+      {
+        "type": "sort_ladder",
+        "weight": 3
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "large_rewrite_wan_yi": [
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "speed_match",
+        "weight": 2
+      }
+    ],
+    "large_approx_rounding": [
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "number_hunt",
+        "weight": 2
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 1
+      }
+    ],
+    "angle_types": [
+      {
+        "type": "shape_court",
+        "weight": 3
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "angle_measure": [
+      {
+        "type": "plain_choice",
+        "weight": 3
+      },
+      {
+        "type": "shape_court",
+        "weight": 2
+      }
+    ],
+    "int_mul_3_by_2": [
+      {
+        "type": "vertical_repair",
+        "weight": 3
+      },
+      {
+        "type": "speed_match",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "int_mul_estimation": [
+      {
+        "type": "speed_match",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      }
+    ],
+    "mixed_ops_brackets": [
+      {
+        "type": "vertical_repair",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "equation_builder",
+        "weight": 1
+      }
+    ],
+    "distributive_law": [
+      {
+        "type": "equation_builder",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "speed_match",
+        "weight": 1
+      }
+    ],
+    "simplify_integer": [
+      {
+        "type": "speed_match",
+        "weight": 3
+      },
+      {
+        "type": "vertical_repair",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "grid_coordinates": [
+      {
+        "type": "plain_choice",
+        "weight": 3
+      },
+      {
+        "type": "shape_court",
+        "weight": 2
+      }
+    ],
+    "div_3_by_2_trial": [
+      {
+        "type": "vertical_repair",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      }
+    ],
+    "div_adjust_quotient": [
+      {
+        "type": "vertical_repair",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      }
+    ],
+    "speed_time_distance": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "time_heist",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "negative_temperature": [
+      {
+        "type": "plain_choice",
+        "weight": 3
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 2
+      }
+    ],
+    "zero_not_pos_neg": [
+      {
+        "type": "true_false_swipe",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      }
+    ],
+    "probability_compare": [
+      {
+        "type": "plain_choice",
+        "weight": 3
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 2
+      }
+    ],
+    "_2": "===== 下册（G4B）=====",
+    "decimal_meaning_place": [
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "decimal_shifter",
+        "weight": 3
+      },
+      {
+        "type": "memory_match",
+        "weight": 1
+      }
+    ],
+    "decimal_unit_conversion": [
+      {
+        "type": "coin_combo",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "speed_match",
+        "weight": 1
+      }
+    ],
+    "decimal_compare": [
+      {
+        "type": "sort_ladder",
+        "weight": 3
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_add_sub_vertical": [
+      {
+        "type": "vertical_repair",
+        "weight": 3
+      },
+      {
+        "type": "speed_match",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_add_sub_simplify": [
+      {
+        "type": "equation_builder",
+        "weight": 2
+      },
+      {
+        "type": "speed_match",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_inverse_problem": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "clue_finder",
+        "weight": 2
+      }
+    ],
+    "triangle_inequality": [
+      {
+        "type": "triangle_judge",
+        "weight": 3
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "triangle_angle_sum": [
+      {
+        "type": "triangle_judge",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      }
+    ],
+    "triangle_classification": [
+      {
+        "type": "shape_court",
+        "weight": 3
+      },
+      {
+        "type": "triangle_judge",
+        "weight": 2
+      },
+      {
+        "type": "dot_grid_draw",
+        "weight": 1
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_mul_meaning": [
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "decimal_shifter",
+        "weight": 2
+      },
+      {
+        "type": "memory_match",
+        "weight": 1
+      }
+    ],
+    "decimal_point_shift": [
+      {
+        "type": "decimal_shifter",
+        "weight": 3
+      },
+      {
+        "type": "discount_drift",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_mul_vertical": [
+      {
+        "type": "vertical_repair",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_product_digits": [
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 2
+      },
+      {
+        "type": "speed_match",
+        "weight": 1
+      }
+    ],
+    "decimal_mul_mix": [
+      {
+        "type": "equation_builder",
+        "weight": 2
+      },
+      {
+        "type": "vertical_repair",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_mul_simplify": [
+      {
+        "type": "equation_builder",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_price_quantity": [
+      {
+        "type": "shop_counter",
+        "weight": 3
+      },
+      {
+        "type": "discount_drift",
+        "weight": 2
+      },
+      {
+        "type": "word_problem_lab",
+        "weight": 1
+      }
+    ],
+    "decimal_speed_distance": [
+      {
+        "type": "word_problem_lab",
+        "weight": 2
+      },
+      {
+        "type": "time_heist",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "decimal_work_total": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "shop_counter",
+        "weight": 1
+      }
+    ],
+    "decimal_segment_pricing": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "discount_drift",
+        "weight": 2
+      },
+      {
+        "type": "shop_counter",
+        "weight": 1
+      }
+    ],
+    "observe_front_top_left": [
+      {
+        "type": "cube_view",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "letter_expression": [
+      {
+        "type": "plain_choice",
+        "weight": 3
+      },
+      {
+        "type": "memory_match",
+        "weight": 1
+      }
+    ],
+    "equation_meaning_balance": [
+      {
+        "type": "balance_lab",
+        "weight": 3
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 1
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "equation_solve_simple": [
+      {
+        "type": "balance_lab",
+        "weight": 3
+      },
+      {
+        "type": "equation_builder",
+        "weight": 2
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "equation_one_step_word": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "clue_finder",
+        "weight": 2
+      },
+      {
+        "type": "equation_builder",
+        "weight": 1
+      }
+    ],
+    "equation_two_step_word": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "clue_finder",
+        "weight": 2
+      }
+    ],
+    "equation_meeting_problem": [
+      {
+        "type": "word_problem_lab",
+        "weight": 2
+      },
+      {
+        "type": "time_heist",
+        "weight": 3
+      },
+      {
+        "type": "clue_finder",
+        "weight": 1
+      }
+    ],
+    "equation_sum_difference": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "clue_finder",
+        "weight": 2
+      }
+    ],
+    "data_bar_chart": [
+      {
+        "type": "chart_detective",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 1
+      }
+    ],
+    "average_meaning": [
+      {
+        "type": "plain_choice",
+        "weight": 2
+      },
+      {
+        "type": "true_false_swipe",
+        "weight": 2
+      },
+      {
+        "type": "memory_match",
+        "weight": 1
+      }
+    ],
+    "average_compute": [
+      {
+        "type": "speed_match",
+        "weight": 3
+      },
+      {
+        "type": "plain_choice",
+        "weight": 2
+      }
+    ],
+    "average_inverse_total": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "clue_finder",
+        "weight": 2
+      }
+    ],
+    "average_inverse_missing": [
+      {
+        "type": "word_problem_lab",
+        "weight": 3
+      },
+      {
+        "type": "clue_finder",
+        "weight": 2
+      }
+    ]
   },
   "tutorTextSystem": "你是 Selena（4 年级女生）的 AI 引导老师\"小进姐姐\"。当 Selena 答错时，你的任务是用苏格拉底式提问引导她自己想出来，而不是直接告诉答案。\n\n## 核心原则 - 必须严格执行\n\n1. **绝对不要在第一回合直接给答案**。直接给答案会让 Selena 放弃思考，毁掉学习。\n2. 第一回合必须是引导性提问，让她回顾自己的思路。\n3. 给答案是最后一步，只在她真的卡住或主动求答时才给。\n\n## 第一回合的回复结构（80-130 字）\n\n① **一句肯定她**（不超过 10 字）：\"没关系\" / \"这道题考点确实容易混\"\n\n② **一个反思性提问**，让她自己说出当时怎么想的：\n- \"你刚才填 ___ 的时候，是不是因为想到了 X？\"\n- \"你看到题目里的 ___ 字，第一反应是什么？\"\n- \"你选 ___ 是因为它读起来更顺，还是因为意思？\"\n\n③ **一个观察线索**（让她去看题目里的关键信息）：\n- \"再读一遍这一句，注意 ___ 这个词描绘的画面\"\n- \"想想这道题里 ___ 是什么时间 / 地点 / 情景\"\n\n④ **鼓励她回答你的问题**：\"你跟我说说你的想法\"。\n\n## 后续回合（60-100 字）\n\n- 顺着 Selena 的回应深入：如果她说出了部分正确的思路 → 肯定 + 追问\n- 如果她说\"不知道\" → 给更具体的线索（半步答案）\n- 如果她在第 3 回合还想不出 → 揭示答案，但要带上\"为什么是这个\"的解释\n- 任何回合都要保持口语化，不超过 130 字\n\n## 绝对禁忌\n\n- ❌ 不要说\"正确答案是 ___\"在第一回合\n- ❌ 不要列 1/2/3 步骤\n- ❌ 不要 Markdown / 编号\n- ❌ 不要\"作为 AI...\"等话头\n- ❌ 不要超过 130 字（TTS 念出来超过 30 秒就枯燥）\n\n## 风格\n\n口语，亲切，像比 Selena 大几岁的姐姐。读起来要像聊天，不像讲座。",
   "tutorVoiceSystem": "你叫小进姐姐，是 Selena（4 年级女生）的语音学习伴侣。她会用语音问你问题，你用 60-120 字的回复，朗读时间不超过 25 秒。\n\n## 核心教育理念\n\n你不是答疑机器，是引导思考的老师。即使她语音里直接问\"答案是什么\"，你也优先用一个反问引导她自己想出来。\n\n## 回复风格\n\n1. 先一句话回应她说的（\"嗯，你说得有意思\" / \"我懂你为什么这么想\"）\n2. 用一个反问回到她的思路上（\"那你觉得 ___ 和 ___ 哪个更合适？\"）\n3. 给一个具体的小线索（不是答案）让她继续想\n4. 鼓励她说出下一步的判断\n\n## 绝对禁忌\n\n- 不要直接说\"答案是 X\"，除非她已经主动求过答多次\n- 不要列编号 1/2/3\n- 不要用 Markdown\n- 不要说\"作为 AI\"\n- 不要超过 130 字\n- 如果录音听不清，说\"刚才声音有点小，再说一次好吗\"\n\n## 风格\n\n亲切口语，像姐姐和妹妹聊天。每句话都让她想跟你继续聊下去。\n\n你已经知道当前这道题的题目和参考答案（在 system prompt 上下文里），但你的目标是引导她自己想出来，而不是讲给她听。",

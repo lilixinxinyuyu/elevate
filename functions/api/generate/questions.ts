@@ -14,6 +14,7 @@ import {
   estimatedTimeFor,
   questionFormatFor,
 } from "../../_promptComposer";
+import { pickGameType } from "../../_gameTypePicker";
 
 /**
  * POST /api/generate/questions
@@ -338,9 +339,8 @@ function pickGameTypeSchema(args: GenerateRequest): { gameType: string; schema: 
   const explicit = args.gameType && PROMPTS.questionsSchemas[args.gameType as keyof typeof PROMPTS.questionsSchemas]
     ? args.gameType
     : null;
-  const fromSkill = args.skillId
-    ? (PROMPTS.gameTypeBySkill as Record<string, string>)[args.skillId]
-    : undefined;
+  // v0.31.86: 用 pickGameType 按权重抽（mapping 现在是 [{type,weight}]）
+  const fromSkill = args.skillId ? pickGameType(args.skillId) : undefined;
   const gameType = explicit ?? fromSkill ?? "plain_choice";
   const schema =
     PROMPTS.questionsSchemas[gameType as keyof typeof PROMPTS.questionsSchemas] ??
@@ -370,10 +370,8 @@ function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
   const angles = ["数字换一组", "情境换一种", "提问角度反一下", "增加一个干扰条件", "数字使用小数", "数字使用整数", "数字含 0", "数字相等"];
   const batchAngle = angles[batchIndex % angles.length]!;
 
-  // 自动选 game-type
-  const fromSkill = args.skillId
-    ? (PROMPTS.gameTypeBySkill as Record<string, string>)[args.skillId]
-    : undefined;
+  // 自动选 game-type — v0.31.86: 按 mapping 池权重抽（每次可能不同）
+  const fromSkill = args.skillId ? pickGameType(args.skillId) : undefined;
   const gameType = args.gameType ?? fromSkill ?? "plain_choice";
 
   // v0.31.86: 把 caller-known fields 提前算好喂给 composer（v0.31.72 4 P 原则的

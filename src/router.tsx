@@ -24,6 +24,7 @@ import { VoiceTestPage } from "./pages/VoiceTest";
 import { Mascot3DTestPage } from "./pages/Mascot3DTest";
 import { MascotComparePage } from "./pages/MascotCompare";
 import { MathTricksPage } from "./pages/MathTricks";
+import { PlaygroundPage } from "./pages/Playground";
 import { useSubject } from "./subjects/context";
 import { isPhase2Live } from "./lib/featureFlags";
 
@@ -133,6 +134,8 @@ export const router = createBrowserRouter([
       { path: "boss-battle/:unitId", element: <Phase2Route><BossBattlePage /></Phase2Route> },
       // v0.31.71: 巧算工具箱（math-only）
       { path: "tricks", element: <MathOnlyRoute><MathTricksPage /></MathOnlyRoute> },
+      // v0.31.87: 玩法试玩台（math-only，admin 用）
+      { path: "playground", element: <MathOnlyRoute><PlaygroundPage /></MathOnlyRoute> },
       { path: "voice-test", element: <MathOnlyRoute><VoiceTestPage /></MathOnlyRoute> },
       { path: "mascot3d", element: <MathOnlyRoute><Mascot3DTestPage /></MathOnlyRoute> },
       { path: "mascot-compare", element: <MathOnlyRoute><MascotComparePage /></MathOnlyRoute> },

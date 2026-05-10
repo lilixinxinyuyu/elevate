@@ -42,6 +42,11 @@ interface RingSpec {
 
 export interface TodayRingsInput {
   fluencyTodayCount: number;
+  /** v0.31.87：今日完成的巧算 trick 数量。fluency 环改为"双闭判定"：
+   *  fluencyTodayCount >= 1 AND tricksTodayCount >= 1 才算闭环。
+   *  设计思路：保持 3 环极简结构（避免 4 环目标稀释），把巧算融入"基本功"
+   *  内环；详细分析见 docs/today-rings-design.md。 */
+  tricksTodayCount: number;
   challengeTodayCount: number;
   challengeTarget: number;
   focus:
@@ -297,16 +302,28 @@ function ConcentricRings({
 }
 
 function buildRings(input: TodayRingsInput, phase2: boolean): RingSpec[] {
-  const fluencyDone = input.fluencyTodayCount >= 1;
+  // v0.31.87：fluency 环改双闭判定 — 速算 + 巧算两边都做今日才闭。
+  // 这里 progress 取两个进度的平均（双闭 = 1.0；只闭一个 = 0.5；都没 = 0）。
+  const fluencyHalfDone = input.fluencyTodayCount >= 1;
+  const tricksHalfDone = input.tricksTodayCount >= 1;
+  const fluencyDone = fluencyHalfDone && tricksHalfDone;
   const challengeDone = input.challengeTodayCount >= input.challengeTarget;
+  const fluencyProgress =
+    (fluencyHalfDone ? 0.5 : 0) + (tricksHalfDone ? 0.5 : 0);
+  const fluencyStatus = (() => {
+    if (fluencyDone) return "速算 ✓ × 巧算 ✓";
+    if (fluencyHalfDone) return "速算 ✓ × 巧算 ⏳";
+    if (tricksHalfDone) return "速算 ⏳ × 巧算 ✓";
+    return "今日基本功未开练";
+  })();
 
   const fluency: RingSpec = {
     id: "fluency",
-    icon: "⚡",
-    shortLabel: "闪电口算",
-    longLabel: "闪电口算",
-    progress: Math.min(1, input.fluencyTodayCount / 1),
-    statusText: fluencyDone ? "今日已练" : "60s 速算 · 今日还没",
+    icon: fluencyDone ? "⚡🪄" : fluencyHalfDone ? "🪄" : "⚡",
+    shortLabel: "基本功",
+    longLabel: "速算 + 巧算",
+    progress: fluencyProgress,
+    statusText: fluencyStatus,
     to: phase2 ? "/math/fluency" : "/math",
     // cyan
     hue: "#22d3ee",

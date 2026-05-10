@@ -1,9 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { MATH_TRICKS, type MathTrick, type TrickPractice } from "../content/mathTricks";
+import { db } from "../db/dexie";
+import { getCompletedTricks, markTrickDone } from "../lib/mathTricksProgress";
 
 /**
- * 巧算工具箱 v1（v0.31.71）：8 个核心心算技巧的展示 + 即时练习。
+ * 巧算工具箱（v0.31.71 起步，v0.31.87 上云）：
+ * 8 个核心心算技巧的展示 + 即时练习。
  *
  * 路由：/:subject/tricks（math-only）
  *
@@ -11,7 +14,7 @@ import { MATH_TRICKS, type MathTrick, type TrickPractice } from "../content/math
  *  - 8 张卡片纵列；每张卡：标语、原理、worked example（默认折叠 1 个）、3 道动手练习
  *  - 练习输入数字、回车或点检查 → 即时反馈（对/错 + hint）
  *  - 全部答对一张卡 → 卡顶变绿 + 一个小烟花（v1 简化为 emoji 飘）
- *  - localStorage 记 trick 完成状态（id → done），让 Selena 看到进度
+ *  - v0.31.87：进度从 localStorage 迁到 db.meta，跨设备同步 + 触发今日打卡内环
  *
  * 后续可加：
  *  - "巧算挑战赛" 模式（30s 内尽可能多）
@@ -19,40 +22,41 @@ import { MATH_TRICKS, type MathTrick, type TrickPractice } from "../content/math
  *  - 题目随机生成（现在是固定 3 道，做完就没了——刷新页面重置）
  */
 
-const COMPLETED_KEY = "selena.tricks.completed";
-
-function loadCompleted(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(COMPLETED_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, boolean>;
-  } catch {
-    return {};
-  }
-}
-
-function saveCompleted(state: Record<string, boolean>): void {
-  try {
-    localStorage.setItem(COMPLETED_KEY, JSON.stringify(state));
-  } catch {
-    /* */
-  }
-}
-
 export function MathTricksPage() {
-  const [completed, setCompleted] = useState<Record<string, boolean>>(loadCompleted());
+  const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
+  const [studentId, setStudentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const ss = await db.students.toArray();
+      const sid = ss[0]?.id;
+      if (!sid) return;
+      setStudentId(sid);
+      setCompletedSet(await getCompletedTricks(sid));
+    })();
+  }, []);
 
   const totalDone = useMemo(
-    () => MATH_TRICKS.filter((t) => completed[t.id]).length,
-    [completed],
+    () => MATH_TRICKS.filter((t) => completedSet.has(t.id)).length,
+    [completedSet],
   );
 
-  function markDone(trickId: string) {
-    if (completed[trickId]) return;
-    const next = { ...completed, [trickId]: true };
-    setCompleted(next);
-    saveCompleted(next);
+  async function markDone(trickId: string) {
+    if (!studentId || completedSet.has(trickId)) {
+      // 即使已完成，也记一次"今日有做"
+      if (studentId) await markTrickDone(studentId, trickId);
+      return;
+    }
+    await markTrickDone(studentId, trickId);
+    setCompletedSet((s) => new Set(s).add(trickId));
   }
+
+  // 转一份给老 Card 子组件用的 Record 形式
+  const completed: Record<string, boolean> = useMemo(() => {
+    const r: Record<string, boolean> = {};
+    for (const id of completedSet) r[id] = true;
+    return r;
+  }, [completedSet]);
 
   return (
     <div className="space-y-5">

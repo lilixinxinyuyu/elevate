@@ -76,6 +76,14 @@ await build({
 });
 const { PROMPTS } = await import(t2);
 
+// v0.31.86: 按权重抽 game_type 的 helper（mapping 是 [{type,weight}]）
+const t2b = join(tmpdir(), `fbv5gp-${Date.now()}.mjs`);
+await build({
+  entryPoints: [join(PROJECT_ROOT, "functions/_gameTypePicker.ts")],
+  bundle: true, format: "esm", platform: "node", outfile: t2b, logLevel: "error",
+});
+const { pickGameType } = await import(t2b);
+
 const t3 = join(tmpdir(), `fbv5lc-${Date.now()}.mjs`);
 await build({
   entryPoints: [join(PROJECT_ROOT, "scripts/_load-content-extended.ts")],
@@ -246,7 +254,9 @@ async function genBatchDirect(skill, batchAccepted = []) {
   // v0.31.72: difficulty 必须是 1-5 单值（之前传 "2-4" 是 bug，无意义字符串），fix 为 D3 默认
   const targetDiff = 3;
   const skillDef = SKILL_BY.get(skill.skillId);
-  const gameType = (PROMPTS.gameTypeBySkill ?? {})[skill.skillId];
+  // v0.31.86: 按权重抽 — 一个 skill 现在有多个候选 game_type 池（见 game-type-by-skill.json）
+  // 每次 batch 调一次抽一个，让题型分布到各种玩法，不再固定 plain_choice
+  const gameType = pickGameType(skill.skillId);
 
   // B: caller 已知字段预填
   const prefilledFields = {

@@ -1,26 +1,268 @@
 {
-  "_comment": "skill_id → game_type。用来决定加载哪个 game-types/{name}.md 作为 prompt 的 schema 片段。没列出的 fallback 到 plain_choice。v0.28.1 起 application 类 skill 走 word_problem_lab 多阶段 schema。",
+  "_comment": [
+    "skill_id → 该 skill 推荐的 game_type 池（带权重）。fill-bank 按权重抽，",
+    "让一个 skill 的题目分布到多种玩法 — 避免 plain_choice 占 78% 的失衡。",
+    "",
+    "格式：每个 entry 是 [{type: <game_type>, weight: <int>}]",
+    "  weight 3 = 该 skill 的主玩法（最贴训练性质）",
+    "  weight 2 = 副玩法（提供变化）",
+    "  weight 1 = 调味（偶尔来一次防腻）",
+    "",
+    "兼容：保留单字符串语法（旧 mapping 仍可用），兼容老 caller。",
+    "",
+    "v0.31.86 起 51 个 math skill 全覆盖，激活 10 种之前一题没有的 game_type。",
+    "新 game_type（discount_drift / coin_combo / time_heist / number_hunt）跟 panel 一起上线。"
+  ],
 
-  "observe_front_top_left": "cube_view",
+  "_": "===== 上册（G4A）=====",
 
-  "equation_meaning_balance": "balance_lab",
-  "equation_solve_simple": "balance_lab",
+  "large_place_value": [
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "memory_match", "weight": 2 },
+    { "type": "true_false_swipe", "weight": 1 }
+  ],
+  "large_read_write": [
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "speed_match", "weight": 2 },
+    { "type": "vertical_repair", "weight": 1 }
+  ],
+  "large_compare": [
+    { "type": "sort_ladder", "weight": 3 },
+    { "type": "true_false_swipe", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "large_rewrite_wan_yi": [
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "speed_match", "weight": 2 }
+  ],
+  "large_approx_rounding": [
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "number_hunt", "weight": 2 },
+    { "type": "true_false_swipe", "weight": 1 }
+  ],
 
-  "decimal_point_shift": "decimal_shifter",
+  "angle_types": [
+    { "type": "shape_court", "weight": 3 },
+    { "type": "true_false_swipe", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "angle_measure": [
+    { "type": "plain_choice", "weight": 3 },
+    { "type": "shape_court", "weight": 2 }
+  ],
 
-  "triangle_inequality": "triangle_judge",
-  "triangle_angle_sum": "triangle_judge",
-  "triangle_classification": "triangle_judge",
+  "int_mul_3_by_2": [
+    { "type": "vertical_repair", "weight": 3 },
+    { "type": "speed_match", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "int_mul_estimation": [
+    { "type": "speed_match", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 }
+  ],
 
-  "decimal_price_quantity": "shop_counter",
-  "decimal_speed_distance": "shop_counter",
+  "mixed_ops_brackets": [
+    { "type": "vertical_repair", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "equation_builder", "weight": 1 }
+  ],
+  "distributive_law": [
+    { "type": "equation_builder", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "speed_match", "weight": 1 }
+  ],
+  "simplify_integer": [
+    { "type": "speed_match", "weight": 3 },
+    { "type": "vertical_repair", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
 
-  "decimal_inverse_problem": "word_problem_lab",
-  "decimal_work_total": "word_problem_lab",
-  "decimal_segment_pricing": "word_problem_lab",
-  "equation_one_step_word": "word_problem_lab",
-  "equation_two_step_word": "word_problem_lab",
-  "equation_meeting_problem": "word_problem_lab",
-  "equation_sum_difference": "word_problem_lab",
-  "average_inverse_total": "word_problem_lab"
+  "grid_coordinates": [
+    { "type": "plain_choice", "weight": 3 },
+    { "type": "shape_court", "weight": 2 }
+  ],
+
+  "div_3_by_2_trial": [
+    { "type": "vertical_repair", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 }
+  ],
+  "div_adjust_quotient": [
+    { "type": "vertical_repair", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 }
+  ],
+  "speed_time_distance": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "time_heist", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+
+  "negative_temperature": [
+    { "type": "plain_choice", "weight": 3 },
+    { "type": "true_false_swipe", "weight": 2 }
+  ],
+  "zero_not_pos_neg": [
+    { "type": "true_false_swipe", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 }
+  ],
+
+  "probability_compare": [
+    { "type": "plain_choice", "weight": 3 },
+    { "type": "true_false_swipe", "weight": 2 }
+  ],
+
+  "_2": "===== 下册（G4B）=====",
+
+  "decimal_meaning_place": [
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "decimal_shifter", "weight": 3 },
+    { "type": "memory_match", "weight": 1 }
+  ],
+  "decimal_unit_conversion": [
+    { "type": "coin_combo", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "speed_match", "weight": 1 }
+  ],
+  "decimal_compare": [
+    { "type": "sort_ladder", "weight": 3 },
+    { "type": "true_false_swipe", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "decimal_add_sub_vertical": [
+    { "type": "vertical_repair", "weight": 3 },
+    { "type": "speed_match", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "decimal_add_sub_simplify": [
+    { "type": "equation_builder", "weight": 2 },
+    { "type": "speed_match", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "decimal_inverse_problem": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "clue_finder", "weight": 2 }
+  ],
+
+  "triangle_inequality": [
+    { "type": "triangle_judge", "weight": 3 },
+    { "type": "true_false_swipe", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "triangle_angle_sum": [
+    { "type": "triangle_judge", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 }
+  ],
+  "triangle_classification": [
+    { "type": "shape_court", "weight": 3 },
+    { "type": "triangle_judge", "weight": 2 },
+    { "type": "dot_grid_draw", "weight": 1 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+
+  "decimal_mul_meaning": [
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "decimal_shifter", "weight": 2 },
+    { "type": "memory_match", "weight": 1 }
+  ],
+  "decimal_point_shift": [
+    { "type": "decimal_shifter", "weight": 3 },
+    { "type": "discount_drift", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "decimal_mul_vertical": [
+    { "type": "vertical_repair", "weight": 3 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "decimal_product_digits": [
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "true_false_swipe", "weight": 2 },
+    { "type": "speed_match", "weight": 1 }
+  ],
+  "decimal_mul_mix": [
+    { "type": "equation_builder", "weight": 2 },
+    { "type": "vertical_repair", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "decimal_mul_simplify": [
+    { "type": "equation_builder", "weight": 3 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "decimal_price_quantity": [
+    { "type": "shop_counter", "weight": 3 },
+    { "type": "discount_drift", "weight": 2 },
+    { "type": "word_problem_lab", "weight": 1 }
+  ],
+  "decimal_speed_distance": [
+    { "type": "word_problem_lab", "weight": 2 },
+    { "type": "time_heist", "weight": 3 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "decimal_work_total": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "shop_counter", "weight": 1 }
+  ],
+  "decimal_segment_pricing": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "discount_drift", "weight": 2 },
+    { "type": "shop_counter", "weight": 1 }
+  ],
+
+  "observe_front_top_left": [
+    { "type": "cube_view", "weight": 3 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+
+  "letter_expression": [
+    { "type": "plain_choice", "weight": 3 },
+    { "type": "memory_match", "weight": 1 }
+  ],
+  "equation_meaning_balance": [
+    { "type": "balance_lab", "weight": 3 },
+    { "type": "true_false_swipe", "weight": 1 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "equation_solve_simple": [
+    { "type": "balance_lab", "weight": 3 },
+    { "type": "equation_builder", "weight": 2 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "equation_one_step_word": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "clue_finder", "weight": 2 },
+    { "type": "equation_builder", "weight": 1 }
+  ],
+  "equation_two_step_word": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "clue_finder", "weight": 2 }
+  ],
+  "equation_meeting_problem": [
+    { "type": "word_problem_lab", "weight": 2 },
+    { "type": "time_heist", "weight": 3 },
+    { "type": "clue_finder", "weight": 1 }
+  ],
+  "equation_sum_difference": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "clue_finder", "weight": 2 }
+  ],
+
+  "data_bar_chart": [
+    { "type": "chart_detective", "weight": 3 },
+    { "type": "plain_choice", "weight": 1 }
+  ],
+  "average_meaning": [
+    { "type": "plain_choice", "weight": 2 },
+    { "type": "true_false_swipe", "weight": 2 },
+    { "type": "memory_match", "weight": 1 }
+  ],
+  "average_compute": [
+    { "type": "speed_match", "weight": 3 },
+    { "type": "plain_choice", "weight": 2 }
+  ],
+  "average_inverse_total": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "clue_finder", "weight": 2 }
+  ],
+  "average_inverse_missing": [
+    { "type": "word_problem_lab", "weight": 3 },
+    { "type": "clue_finder", "weight": 2 }
+  ]
 }

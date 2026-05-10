@@ -76,8 +76,17 @@ await build({
   bundle: true, format: "esm", platform: "node", outfile: tmpFile2, logLevel: "error",
 });
 const { PROMPTS } = await import(tmpFile2);
+
+const tmpFile3 = join(tmpdir(), `dumpprompt3-${Date.now()}.mjs`);
+await build({
+  entryPoints: [join(PROJECT_ROOT, "functions/_gameTypePicker.ts")],
+  bundle: true, format: "esm", platform: "node", outfile: tmpFile3, logLevel: "error",
+});
+const { pickGameType } = await import(tmpFile3);
+
 rmSync(tmpFile, { force: true });
 rmSync(tmpFile2, { force: true });
+rmSync(tmpFile3, { force: true });
 
 const scope = getSkillScope(skillId);
 
@@ -86,7 +95,8 @@ const sysPrompt = (PROMPTS.questionsSystem.math ?? PROMPTS.questionsSystem.raw)
   .replace(/\{\{subjectLabel\}\}/g, "数学");
 
 // v0.31.72 (B)：caller 预填 enum 字段
-const effectiveGameType = gameType ?? (PROMPTS.gameTypeBySkill ?? {})[skillId] ?? "plain_choice";
+// v0.31.86: 用 pickGameType 按权重抽（mapping 现在是 [{type,weight}]）
+const effectiveGameType = gameType ?? pickGameType(skillId);
 const prefilledFields = {
   grade: 4,
   examPriority: skillDef?.examPriority ?? "NORMAL",

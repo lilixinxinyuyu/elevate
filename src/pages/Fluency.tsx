@@ -6,7 +6,7 @@
  */
 
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db } from "../db/dexie";
 import { FLUENCY_MODULES, getModulesForGrade } from "../content/fluencyModules";
 import {
@@ -17,12 +17,20 @@ import {
   type FluencyTrophyMeta,
 } from "../lib/fluencyEngine";
 import type { FluencyStatsRow } from "../core/fluencyTypes";
+import { MATH_TRICKS } from "../content/mathTricks";
+import {
+  getCompletedTricks,
+  getTricksTodayCount,
+} from "../lib/mathTricksProgress";
 
 export function FluencyPage() {
   const [studentId, setStudentId] = useState<string | null>(null);
   const [grade, setGrade] = useState<number>(4);
   const [stats, setStats] = useState<Map<string, FluencyStatsRow>>(new Map());
   const [unlockedTrophyIds, setUnlockedTrophyIds] = useState<Set<string>>(new Set());
+  // v0.31.87：巧算秘籍 — 进度上云后融入 fluency 页
+  const [tricksCompleted, setTricksCompleted] = useState<Set<string>>(new Set());
+  const [tricksTodayCount, setTricksTodayCount] = useState<number>(0);
 
   useEffect(() => {
     void (async () => {
@@ -34,10 +42,22 @@ export function FluencyPage() {
       const all = await getAllFluencyStats(s.id);
       setStats(new Map(all.map((r) => [r.moduleId, r])));
       setUnlockedTrophyIds(new Set(await getFluencyUnlockedTrophyIds()));
+      setTricksCompleted(await getCompletedTricks(s.id));
+      setTricksTodayCount(await getTricksTodayCount(s.id));
     })();
   }, []);
 
   const visibleModules = getModulesForGrade(grade);
+
+  // 今日推荐 trick：优先没掌握的，按 stable 顺序选第一个；全掌握就轮播
+  const todayRecommendedTrick = useMemo(() => {
+    const undone = MATH_TRICKS.filter((t) => !tricksCompleted.has(t.id));
+    if (undone.length > 0) return undone[0]!;
+    // 全掌握后：按今天日期 hash 选一个复习
+    const todayIdx =
+      Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % MATH_TRICKS.length;
+    return MATH_TRICKS[todayIdx]!;
+  }, [tricksCompleted]);
 
   return (
     <div className="space-y-6">
@@ -50,6 +70,80 @@ export function FluencyPage() {
           60 秒冲刺，刷速度 + 刷准确。跨单元的"基本功"，跟主线不冲突。
         </p>
       </header>
+
+      {/* v0.31.87：巧算秘籍区——纳入"基本功"叙事，与速算 module 平级。
+          完成一个 trick 也算每日打卡内环的一部分（双闭：速算 ✓ × 巧算 ✓）。 */}
+      <section className="card-glow border-violet-400/30 bg-gradient-to-br from-violet-500/15 via-pink-500/10 to-amber-500/5">
+        <div className="flex items-start gap-3 flex-wrap">
+          <div className="text-3xl shrink-0">🪄</div>
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex items-baseline justify-between gap-2 flex-wrap">
+              <h2 className="font-display font-bold text-violet-100 text-base">
+                巧算秘籍
+              </h2>
+              <div className="text-[11px] text-slate-400">
+                已掌握{" "}
+                <span className="font-bold text-violet-200">
+                  {tricksCompleted.size}
+                </span>
+                <span className="text-slate-500"> / {MATH_TRICKS.length}</span>
+                {tricksTodayCount > 0 && (
+                  <span className="ml-2 text-emerald-300">
+                    · 今日 ✓ {tricksTodayCount}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="text-xs text-slate-300 mt-1">
+              凑整、借十、折半乘倍 — 让心算更快的秘密武器，每天选一个练几道
+              就计入今日基本功打卡。
+            </div>
+          </div>
+        </div>
+
+        {/* 今日推荐 + 浏览全部 */}
+        <div className="mt-3 grid sm:grid-cols-2 gap-3">
+          <Link
+            to="../tricks"
+            state={{ scrollTo: todayRecommendedTrick.id }}
+            className={`relative overflow-hidden rounded-xl border p-3 transition-colors ${
+              tricksCompleted.has(todayRecommendedTrick.id)
+                ? "bg-emerald-500/15 border-emerald-400/40 hover:bg-emerald-500/20"
+                : "bg-amber-500/15 border-amber-400/40 hover:bg-amber-500/25"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-widest text-amber-200/70">
+              {tricksCompleted.has(todayRecommendedTrick.id)
+                ? "今日复习"
+                : "今日推荐"}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-2xl">{todayRecommendedTrick.emoji}</span>
+              <span className="font-display font-bold text-base text-amber-100">
+                {todayRecommendedTrick.name}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-300 mt-1 line-clamp-2">
+              {todayRecommendedTrick.tagline}
+            </div>
+          </Link>
+          <Link
+            to="../tricks"
+            className="rounded-xl border border-violet-400/30 bg-violet-500/10 hover:bg-violet-500/20 p-3 flex items-center gap-3 transition-colors"
+          >
+            <span className="text-2xl">📚</span>
+            <div className="flex-1 min-w-0">
+              <div className="font-display font-bold text-violet-100 text-sm">
+                浏览全部 {MATH_TRICKS.length} 个
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                凑整 / 借十 / 折半 / 拆数 / 估算 …
+              </div>
+            </div>
+            <div className="text-violet-300">→</div>
+          </Link>
+        </div>
+      </section>
 
       {/* 模块卡片列表 */}
       <section className="grid sm:grid-cols-2 gap-3">

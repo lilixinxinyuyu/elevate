@@ -84,7 +84,15 @@ export type GameTemplate =
   | "plain_numeric"
   | "plain_choice"
   /** Phase 2 Axis 2：点子图画图 — 点击格点构造多边形 */
-  | "dot_grid_draw";
+  | "dot_grid_draw"
+  /** v0.31.87：折扣计算 — 原价 + 折扣 chip → 算折后价（小数乘 / 百分比萌芽） */
+  | "discount_drift"
+  /** v0.31.87：凑钱 — 5 张面值勾选凑目标金额（小数加 / 元角分换算） */
+  | "coin_combo"
+  /** v0.31.87：时间窃贼 — 钟面 + 起止时间问持续时间或出发时刻 */
+  | "time_heist"
+  /** v0.31.87：数字寻宝 — 5×5 网格挑出符合条件的数（找规律 / 数感 / 比较） */
+  | "number_hunt";
 
 export interface CurriculumUnit {
   id: string;
@@ -285,6 +293,66 @@ export interface Question {
    * 判分逻辑见 src/components/game/templates/DotGridDraw.tsx。
    */
   dot_grid?: DotGridSpec;
+
+  /** v0.31.87 - Discount Drift（折扣计算） */
+  discount?: DiscountSpec;
+
+  /** v0.31.87 - Coin Combo（凑钱），玩家从 coins 里多选凑出 target */
+  coin_combo?: CoinComboSpec;
+
+  /** v0.31.87 - Time Heist（时间窃贼），钟面 + 起止时间 */
+  time_heist?: TimeHeistSpec;
+
+  /** v0.31.87 - Number Hunt（数字寻宝），5×5 网格里挑出符合条件的 N 个数 */
+  number_hunt?: NumberHuntSpec;
+}
+
+/** v0.31.87 — Discount Drift */
+export interface DiscountSpec {
+  /** 商品名 */
+  itemName: string;
+  /** 商品 emoji（可选） */
+  emoji?: string;
+  /** 原价（元） */
+  originalPrice: number;
+  /** 折扣方式 */
+  discount:
+    | { kind: "percent"; value: number /* 70 表示 7 折，50 表示半价 */ }
+    | { kind: "yuan_off"; value: number /* 减 N 元 */ }
+    | { kind: "buy_n_get_m"; n: number; m: number /* 买 n 送 m，按 n+m 件均价算 */ };
+}
+
+/** v0.31.87 — Coin Combo */
+export interface CoinComboSpec {
+  /** 5 张面值，单位元（小数允许 0.5/0.1） */
+  coins: number[];
+  /** 目标金额 */
+  target: number;
+  /** 正确组合的 indices（0-based） */
+  correctIndices: number[];
+}
+
+/** v0.31.87 — Time Heist */
+export interface TimeHeistSpec {
+  /** 题型：'duration' = 求持续时间；'start' = 求出发时刻；'end' = 求到达时刻 */
+  mode: "duration" | "start" | "end";
+  /** 起止时间（24h，"HH:MM"） */
+  startTime?: string;
+  endTime?: string;
+  /** 持续时长（分钟） */
+  durationMinutes?: number;
+  /** 钟面显示哪个时刻：start | end */
+  showOn?: "start" | "end";
+}
+
+/** v0.31.87 — Number Hunt */
+export interface NumberHuntSpec {
+  /** 5×5 网格的 25 个数（按行排列） */
+  grid: number[];
+  /** 目标条件文字描述（同时也是 stem） */
+  rule: string;
+  /** 满足条件的格子 indices（0-24） */
+  targetIndices: number[];
 }
 
 /** Phase 2 Axis 2：点子图画图题规格。 */
