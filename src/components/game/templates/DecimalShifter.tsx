@@ -121,11 +121,32 @@ interface Cfg {
 function parseConfig(q: Question): Cfg {
   let startStr = "0";
   let factor = "";
+  let shiftFromTag: number | null = null;
   for (const t of q.tags ?? []) {
     if (t.startsWith("start:")) startStr = t.slice(6);
     else if (t.startsWith("factor:")) factor = t.slice(7);
+    else if (t.startsWith("shift:right:")) shiftFromTag = Number(t.slice(12));
+    else if (t.startsWith("shift:left:")) shiftFromTag = -Number(t.slice(11));
   }
-  const target = q.answer.type === "number" ? q.answer.value : 0;
+  // v0.31.75：target 解析多源 fallback —
+  //   1. answer.type === "number" → answer.value（首选）
+  //   2. answer.type === "choice" → 从 options 找正确 text 解析成数字（兼容 AI 写错的题）
+  //   3. tags shift:right:N + start → 计算 target = start * 10^N（终极 fallback）
+  let target = 0;
+  const ans = q.answer;
+  if (ans.type === "number") {
+    target = ans.value;
+  } else if (ans.type === "choice" && q.options) {
+    const correctOpt = q.options.find((o) => o.id === ans.value);
+    if (correctOpt) {
+      const n = Number(correctOpt.text.replace(/[^\d.\-]/g, ""));
+      if (!Number.isNaN(n)) target = n;
+    }
+  }
+  if (target === 0 && shiftFromTag !== null) {
+    const startNum = Number(startStr);
+    if (!Number.isNaN(startNum)) target = startNum * Math.pow(10, shiftFromTag);
+  }
   const dotIdx = startStr.indexOf(".");
   const digits = startStr.replace(".", "").split("");
   const baseDotIndex = dotIdx === -1 ? digits.length : dotIdx;

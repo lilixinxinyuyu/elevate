@@ -3,6 +3,44 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.75 — 2026-05-10 · 模板/数据匹配深度修复 + 怪物透明重传
+
+爸爸报：1.28→128 系统判错；4.05×1000 答 4050 也错。后台调查发现 30 道 decimal_shifter 题 answer 全错（type=choice 但模板期 number → target=0 永远判错）。深度审计还发现 44 道 plain_choice/shop_counter 答案 type=number 但没 options（前端无法渲染选择题）。
+
+### 1. DecimalShifter 模板增强
+
+`parseConfig()` 多源 fallback 解析 target：
+- `answer.type=number` → `answer.value`（首选）
+- `answer.type=choice` + options → 找正确 option text 转 number
+- `tags shift:right:N + start:` → 计算 `start × 10^N`（终极 fallback）
+
+### 2. 深度题型/数据匹配 audit
+
+新工具 `scripts/_audit-question-template-match.mjs` 扫所有 D1 题，按 (play_as, answer.type) 检查匹配：
+- `decimal_shifter` + `answer.type=choice`：30 道（Bruce 撞到的就是这类）
+- `plain_choice/shop_counter` + `answer.type=number` 没 options：44 道
+- 其他：0 道
+
+### 3. D1 cleanup
+
+- `_fix-decimal-shifter-answers.mjs`：30 道 choice→number，从正确选项 text 解析数值
+  - 例：1.28 移右 2 位的题：`{type:choice, value:"A"}` → `{type:number, value:128}`
+- `_fix-template-mismatch.mjs`：44 道 plain_choice/shop_counter 改 `play_as=plain_numeric`
+  - 前端走 PlainNumeric 模板（数字输入框），不再期 options
+
+### 4. 怪物透明图重传
+
+之前 v0.31.74 报告"14 张透明图已 push"，但实际复检 D1 只有 3 张是 RGBA PNG（U2 / U6 / U6_enraged），其余 11 张还是原 RGB JPEG（黑背景）。
+
+根因不明（批量 upload 报 accepted=14 但 D1 没全更新）。这次单张串行 re-upload，全部 14 张确认 RGBA PNG 写入 D1 成功。
+
+### 5. decimal_shifter prompt 强化
+
+`prompts/questions/game-types/decimal_shifter.md` 重写：
+- 明示 "answer 必须 type=number"
+- 加 ❌ 反例段
+- 加自查清单（数学闭合验证）
+
 ## v0.31.74 — 2026-05-10 · 闯关难度调高 + 讲题升级 + 怪物透明 + 狂怒变体
 
 爸爸 6 件事，全部 ship：
