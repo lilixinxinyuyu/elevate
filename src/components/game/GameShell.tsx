@@ -82,6 +82,14 @@ export interface GameShellProps {
   /** 考试模拟模式：禁用提示、不允许 retry。 */
   examMode?: boolean;
   /**
+   * v0.31.83: 闯关 boss 战专用 — 禁用"1st 错答 silent + RetryHintPanel + 变式重做"
+   * 链路。1st 答错就是最终结果，没有第二次机会。
+   *
+   * 跟 examMode 的区别：noRetry 只关 retry 链路，hints / autoRevealHint / 救场
+   * 等 boss-specific 提示通道仍可用。examMode 还会禁用所有 inline hints + countdown。
+   */
+  noRetry?: boolean;
+  /**
    * v0.30.8: 1st 错答后异步搜一道同型同难度变式题给重做用。
    * 返回 null → fallback 到原题重做（向后兼容老行为）。
    * GameShell 在 1st 错答静默入库后立刻调用，等 RetryHintPanel 期间结果就绪；
@@ -114,7 +122,7 @@ export interface TriggerFx {
 }
 
 export function GameShell(props: GameShellProps) {
-  const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled, examMode, onRequestVariant, onInjectQuestion } = props;
+  const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled, examMode, noRetry, onRequestVariant, onInjectQuestion } = props;
   const resetKey = `${question.question_id}:${index}`;
   // v0.30.8: 当前在 TemplatePanel 里"渲染并接受答题"的题
   // - 默认 = props.question（原题）
@@ -215,7 +223,7 @@ export function GameShell(props: GameShellProps) {
       // 跟 v0.30.6 之前的区别：之前是 return 不入库，现在是 record + 进 retry 不显示 feedback。
       // v0.31.25：加 !wasRetriedRef.current —— 防止 retry 后第二次又错时再走 silent branch
       // 重新拉变式 + 重新 retry，造成"小进讲的题跟刚做的题对不上"等怪事。
-      if (!r.isCorrect && !examMode && retryStage === "none" && !wasRetriedRef.current) {
+      if (!r.isCorrect && !examMode && !noRetry && retryStage === "none" && !wasRetriedRef.current) {
         sfx.wrong();
         setShake(true);
         window.setTimeout(() => setShake(false), 450);
@@ -304,7 +312,7 @@ export function GameShell(props: GameShellProps) {
         setSubmitting(false);
       }
     },
-    [submitting, feedback, resetKey, startedAt, hintsOpened, onSubmit, question, examMode, retryStage, showedTutorInRetry, displayedQuestion, onRequestVariant],
+    [submitting, feedback, resetKey, startedAt, hintsOpened, onSubmit, question, examMode, noRetry, retryStage, showedTutorInRetry, displayedQuestion, onRequestVariant],
   );
 
   // 用户点击"再做一次"时调用：清掉提示状态，强制 panel 重新挂载
@@ -369,8 +377,8 @@ export function GameShell(props: GameShellProps) {
                   //   - 非考试模式 → retryStage="showing_hint" 弹"再做一次 / 让小进讲一讲"
                   //   - 考试模式 → handleFinish 直接入库判错（empty answer）
                   if (feedback || submitting || finishedResetKeyRef.current === resetKey) return;
-                  if (examMode) {
-                    // 考试模式：超时 = 错，立即入库
+                  if (examMode || noRetry) {
+                    // 考试模式 / 无重试模式：超时 = 错，立即入库
                     void handleFinish({
                       answer: null,
                       isCorrect: false,

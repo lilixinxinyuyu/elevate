@@ -62,10 +62,27 @@ export async function recordBossAttempt(
   return next;
 }
 
-/** correct / total → 星数 */
-export function starsFromAccuracy(correct: number, total: number): 0 | 1 | 2 | 3 | 4 {
+/**
+ * correct / total + heartsLeft → 星数。
+ *
+ * v0.31.83：4 星收紧 — 必须全对**且没掉过血**（heartsLeft === MAX_HEARTS=2）才算完美。
+ * 之前 hearts 参数缺失时 4 星条件只看 correct === total。配合 v0.31.83 boss noRetry
+ * 模式（去除每题双重 onAnswerLogged 双计），correct 数不再虚高，4 星才有"完美"含义。
+ *
+ * @param correct 答对题数
+ * @param total 题目总数
+ * @param heartsLeft battle 结束时剩余心数（不传则 fallback 到旧逻辑，向后兼容）
+ */
+export function starsFromAccuracy(
+  correct: number,
+  total: number,
+  heartsLeft?: number,
+): 0 | 1 | 2 | 3 | 4 {
   if (correct < 4) return 0;
-  if (correct === total) return 4;
+  // 4 星：全对 + 满血
+  if (correct === total && (heartsLeft === undefined || heartsLeft >= 2)) return 4;
+  // 全对但掉过血 → 3 星
+  if (correct === total) return 3;
   if (correct >= 6) return 3;
   if (correct >= 5) return 2;
   return 1;

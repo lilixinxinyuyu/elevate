@@ -22,8 +22,47 @@
 |---|---|---|
 | `MAX_HEARTS` | **2** (v0.31.74) | 之前 3 |
 | 阶段切换补血 | 不补 (v0.31.74) | 之前 +1 心 |
-| Defeat 条件 | hearts == 0 && correct < 4 | 不变 |
-| Stars 评分 | 1-4 颗，全对 + 用提示 = 4 ⭐ | 不变 |
+| `noRetry` 模式 | **true** (v0.31.83) | 之前 false（有 silent retry → 双计 bug） |
+| Defeat 条件 | `hearts === 0`（v0.31.83 简化） | 之前 `hearts === 0 && correct < 4`（漏判） |
+| Stars 评分 | 见下表（v0.31.83 收紧） | 之前 4 星只看 correct === total |
+
+### Stars 评分表（v0.31.83）
+
+| 星 | 条件 |
+|---|---|
+| ⭐⭐⭐⭐ | **全对 + 满血**（heartsLeft ≥ 2） |
+| ⭐⭐⭐ | 全对但掉过血 OR correct ≥ 6 |
+| ⭐⭐ | correct ≥ 5 |
+| ⭐ | correct ≥ 4 |
+| Defeat | correct < 4 OR hearts === 0 |
+
+## v0.31.83 修复历史（重要）
+
+爸爸："Selena 三点血都没有了，最后一道题也回答错误，还是闯关完成了，给了四颗星。中间点重做就是一样的题，直接根据做错显示的正确答案填好就算对了。"
+
+3 个 root cause：
+
+### Bug 1: 每题双重 onAnswerLogged
+
+老 GameShell 的 silent retry 路径：1st 错答静默入库 + RetryHintPanel 提示重做。BossBattle's `onSubmit` 每次调用 `onAnswerLogged` → 1st wrong + 2nd attempt 都触发 → results 数组每题 2 entry → correct 计数虚高。9 题 1st 全错 + 2nd retry 全对 → results 看起来 9 个 correct → 4 stars。
+
+**Fix**：GameShell 加 `noRetry` prop，BossBattle 传 `noRetry={true}`。boss 模式下 1st 错答即定终局。
+
+### Bug 2: defeat 条件漏判
+
+```ts
+// BUGGY (老):
+if (hearts === 0 && correct < 4) → defeat
+// 反例：hearts=0 但 retry 蒙对了 4 题 → correct=4 → 不 defeat → 上 stars 流程
+```
+
+**Fix**: `if (hearts === 0)` → defeat 不管 correct 多少。
+
+### Bug 3: 4 星条件只看 correct === total
+
+老逻辑：correct === total → 4 星。配合 Bug 1 双计，全对很容易达到 → 4 星骗局。
+
+**Fix**: `starsFromAccuracy(correct, total, heartsLeft)` 多收一个 heartsLeft 参数；4 星要求 `correct === total && heartsLeft >= 2`（满血）。掉过血但全对 = 3 星。
 
 ## Hint 流程（v0.31.74 重做）
 

@@ -211,8 +211,9 @@ export function BossBattlePage() {
         const summary = await finalizeSession(studentId, session.id);
         const correct = results.filter((r) => r.isCorrect).length;
         const totalQs = questions.length;
-        if (hearts === 0 && correct < 4) {
-          // 失败：心数 0 且对的 < 4
+        // v0.31.83: 简化 defeat 条件 — hearts === 0 = defeat（不再 "&& correct < 4"，
+        // 那个旧条件让"血没了但 retry 蒙对了 4 题"的题逃过 defeat）
+        if (hearts === 0) {
           setStage({
             kind: "defeat",
             boss,
@@ -221,7 +222,7 @@ export function BossBattlePage() {
           });
         } else {
           // 通关算 stars
-          const stars = starsFromAccuracy(correct, totalQs);
+          const stars = starsFromAccuracy(correct, totalQs, hearts);
           const bestStarsBefore = stage.bossState.bestStars;
           const newState = await recordBossAttempt(studentId, unitId, stars);
           const unlocked = (() => {
@@ -500,10 +501,15 @@ export function BossBattlePage() {
         combo={0}
         countdownEnabled={false}
         examMode={false}
+        // v0.31.83: 闯关 = 真挑战。1st 错答即定终局，不允许 silent + RetryHintPanel
+        // + 变式重做。这避免了：
+        //   1. 每题双重 onAnswerLogged 触发 → results 数组每题 2 entry → correct 计数膨胀
+        //   2. retry 后看到正确答案再填上算对 → 4 星骗局
+        noRetry={true}
         showStarter={false}
         onSubmit={async (result) => {
           const out = await handleSubmit(result);
-          // log result for boss progress
+          // log result for boss progress（noRetry=true 下 onSubmit 每题只触发一次）
           onAnswerLogged(result.isCorrect, (result.hintsOpened ?? 0) > 0 || autoRevealHint > 0);
           return out;
         }}
