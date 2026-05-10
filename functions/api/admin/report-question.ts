@@ -209,7 +209,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     : (REASON_TO_TEXT[reasonKey] ?? "用户报告：未指定");
 
   // 标记题被报告过（即使 fix 失败，原题也带上 tag）
-  const taggedOriginal = {
+  const taggedOriginal: Record<string, unknown> = {
     ...q,
     tags: Array.from(
       new Set([
@@ -220,35 +220,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ),
   };
 
-  // Compose fix prompt + call LLM
-  const subjectId = q.subjectId === "chinese" ? "chinese" : "math";
-  const sysFix = (PROMPTS.qualityJudgeSystem as unknown as Record<string, string>).math; // reuse math judge sys (has principles)
-  void sysFix;
-  // 用 fix-question 的 system prompt — 它专门修题
-  const FIX_SYS = `你是 Selena 题库的修题员。给你一道用户报告有问题的题 + 报告原因，请输出修好的题。
-
-任务：在保持 question_id / skill_id / unit_id / game_type / play_as / question_format / difficulty 不变的前提下，按报告原因修好题。
-
-输出顶层 \`{ "fixed": <整道题 JSON>, "changesSummary": "改了什么的中文一句话（≤ 30 字）" }\`，**不要** markdown 代码块。
-
-## 修题守则（按 reason 类型）
-
-- **answer_wrong**: 重新算一遍正确答案。如果原题数字本身不能算出整数（果树/人数等），改一组能整除的数。
-- **stem_unclear**: 重写 stem 用 4 年级孩子能懂的话。
-- **options_same**: 4 个选项区分度提升，每个 distractor 来自具体的学生误解。
-- **options_no_correct**: 检查 answer.value 是否真在 options 列表里；不在就重写选项让正确答案在内。
-- **math_error**: 重新核算所有数字。
-- **other**: 综合判断 + 修复明显问题。
-
-## 4 P 原则（必守）
-
-- **P1 题面纯净**：clue / option / hint 不带"（无关）/（解题设定）"等元注解；errorTag 不在 student-visible 字段。
-- **P2 数学闭合**：整数情境答必须整数，数字必须能闭合。
-- **P3 干扰项独立**：distractor 不能是题中数字直接衍生（如 6x 的值）。
-- **P4 skill 真考**：选项量级一致，不让蒙得到。
-
-如果 visual 字段在 4 个选项上完全相同（只为展示题面），删掉所有 visual 字段。
-`;
+  // v0.31.78: 用 prompts/fix/system.md 共享 prompt（与 fix-question.ts 一致）
+  const subjectId = (q.subjectId === "chinese" ? "chinese" : "math") as "math" | "chinese";
+  const subjLabel = subjectId === "math" ? "数学" : "语文";
+  const sysObj = PROMPTS.fixSystem as unknown as
+    | string
+    | { math?: string; chinese?: string; raw?: string };
+  const sysTemplate =
+    typeof sysObj === "string"
+      ? sysObj
+      : (sysObj[subjectId] ?? sysObj.raw ?? "");
+  const FIX_SYS = sysTemplate.replace(/\{\{subjectLabel\}\}/g, subjLabel);
 
   const userFix = composeFixUserPrompt({
     question: taggedOriginal,

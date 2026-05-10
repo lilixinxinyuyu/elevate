@@ -140,68 +140,19 @@ function extractJsonObject(text: string): unknown {
   return null;
 }
 
-const FIX_SYSTEM_PROMPT = `你是 Selena 题库的资深修题员。给你一道**有问题的**四年级数学/语文题，
-以及质检员标注的问题（issues + reason），请把题改好。
-
-## 任务
-
-读懂 issues 和 reason → 找到题中真正的问题 → 在**保持 question_id / unit_id / skill_id /
-unit_name / skill_name / subjectId / version / grade / term 不变**的前提下，输出一道修好的题。
-
-## 输出协议
-
-输出顶层 \`{ "fixed": <整道题 JSON>, "changesSummary": "改了什么的中文一句话（≤ 30 字）" }\`，
-**不要**包 markdown 代码块。
-
-## 修题原则（按 issues 标签查表）
-
-- \`forbidden_verb\` → 把"输/报/送/提交"改成"答/选/写出"
-- \`stem_too_short\` → 把题干扩到 ≥ 8 个汉字，但意思不变
-- \`stem_options_mismatch\` → 让 options 类型跟 stem 问的内容一致（数字题问数字、概念题问短句）
-- \`answer_invalid\` → 让 answer.value 指向真实存在的 option.id；options 不动则改 value，反过来同理
-- \`wrong_answer\` → **重算正确答案**，更新 options 中正确选项的 text + answer.value + solution_steps
-- \`low_distractor_quality\` → 重新设计 4 个 options，1 正确 + 3 高质量干扰（操作反 / 漏一步 / 小数点错位）
-- \`time_off\` → 调 estimated_time_seconds 到合理区间（参考下方时间表）
-- \`bracket_instruction\` → 把题干括号里的指令注释挪进自然语言中
-- \`cryptic_stem\` → 重写题干，让 4 年级孩子读 3 秒能懂
-- \`weak_hint\` → 补 ≥ 1 条 hint、≥ 2 条 common_errors、≥ 1 步 solution_steps
-- \`bad_punctuation\` → 中文标点 + 半角数字
-- \`name_violation\` → 真实姓名换成"小明"/"小红"
-- \`other\` → 看 reason 字段，针对性修
-
-## 修题硬约束
-
-1. **保留**：question_id / unit_id / unit_name / skill_id / skill_name / subjectId / version / grade / term
-2. **保留**：game_type / play_as / question_format（除非这正是要修的问题）
-3. **不要改 difficulty 太多**（最多 ±1）
-4. **answer 必须正确**：选择题 answer.value 必须是某个 option.id；数值题 answer.value 必须是有限数
-5. **保持 schema 完整**：feedback_correct / feedback_wrong / common_errors[] / hints[] / solution_steps[] / tags[] 都得有
-6. **tags** 保留原有 + 新增 \`"ai_fixed"\`
-
-## 时间表（estimated_time_seconds 参考）
-
-| game_type | 难度 1-2 | 难度 3 | 难度 4-5 |
-|---|---|---|---|
-| speed_match | 10 | 15 | 20 |
-| plain_choice | 20 | 30 | 40 |
-| decimal_shifter | 18 | 25 | 35 |
-| cube_view | 25 | 35 | 50 |
-| triangle_judge | 22 | 30 | 40 |
-| vertical_repair | 25 | 35 | 45 |
-| balance_lab | 35 | 50 | 65 |
-| shop_counter | 35 | 50 | 70 |
-| word_problem_lab | 70 | 90 | 130 |
-
-## 枚举字段（严格选值）
-
-- term：上册 / 下册 / 综合复习
-- cognitive_level：recall / procedural / application / reasoning
-- ability_dimension[]：calculation / concept / reasoning / modeling / spatial / data / strategy / habit
-- question_format：numeric / numeric_choice / single_choice / multi_choice / multi_step / fill_blank / drag_drop / sort_ladder / geometry_operation
-- exam_priority：MUST_BIG / HIGH_BIG / MUST_SMALL / VERY_HIGH_SMALL / HIGH_SMALL / NORMAL / LOW / LOW_SMALL / EXTENSION
-- difficulty：1 / 2 / 3 / 4 / 5（整数）
-
-只输出 JSON，不要解释、不要 markdown 代码块。`;
+// v0.31.78: FIX_SYSTEM_PROMPT 移到 prompts/fix/system.md，跟 report-question 端点共用
+function buildSystemPrompt(subjectId: string): string {
+  const subjLabel = subjectId === "math" ? "数学" : "语文";
+  const subjKey = subjectId === "math" ? "math" : "chinese";
+  const sys = PROMPTS.fixSystem as unknown as
+    | string
+    | { math?: string; chinese?: string; raw?: string };
+  const template =
+    typeof sys === "string"
+      ? sys
+      : (sys[subjKey as "math" | "chinese"] ?? sys.raw ?? "");
+  return template.replace(/\{\{subjectLabel\}\}/g, subjLabel);
+}
 
 function buildUserPrompt(req: FixRequest): string {
   // v0.31.34：用 composer 把 skill scope 注入修题 prompt，让 LLM 改完不跑出范围
@@ -236,7 +187,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const subjectId = body.subjectId === "chinese" ? "chinese" : "math";
-  const systemPrompt = FIX_SYSTEM_PROMPT;
+  const systemPrompt = buildSystemPrompt(subjectId);
   const userPrompt = buildUserPrompt(body);
 
   const tried: ProviderTryRecord[] = [];

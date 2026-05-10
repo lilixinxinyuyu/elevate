@@ -169,6 +169,15 @@ const data = {
   qualityJudgeUserTemplate: readMd("quality-judge/user-template.md"),
   /** v0.31.73：变式 prompt — 极简，给 retry 实时出题用 */
   variantSystem: readMd("variant/system.md"),
+  /**
+   * v0.31.78：修题 prompt — 给 fix-question / report-question 端点共用。
+   * 跟 variant 不同：fix 是改原题（保 question_id），不是出新题。
+   */
+  fixSystem: {
+    math: readMd("fix/system.md", "math"),
+    chinese: readMd("fix/system.md", "chinese"),
+    raw: readMd("fix/system.md"),
+  },
   skillKeywords: readJson("skill-keywords.json"),
   gameTypeBySkill: readJson("game-type-by-skill.json"),
   tutorTextSystem: readMd("tutor/text-system.md"),
