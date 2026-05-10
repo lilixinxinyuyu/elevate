@@ -7,20 +7,35 @@
 
 ## TL;DR — 标准操作
 
+### 普通 trophy（勋章 / 段位徽章）
+
 ```bash
-# 1) 一行跑完：生成 + 压缩 + 推 D1
 APP_PASSWORD=$(grep ^APP_PASSWORD /Users/yong/Desktop/xy/.dev.vars | cut -d= -f2) \
   node scripts/regenerate-trophies.mjs --missing
 
-# 2) 看图 QA
-ls /tmp/trophies/*.png   # 用 Read tool 看每张
-
-# 3) 不合格的改 motif spec → 单独重抽
-# 改 src/lib/trophyImages.ts 里 TROPHY_MOTIF_SPEC 或 COMMEMORATIVE_MOTIF_SPEC
+# 看图 QA → 不合格的单独重抽
 APP_PASSWORD=... node scripts/regenerate-trophies.mjs --ids math_xxx,math_yyy
-
-# 用户操作：刷新页面就完事，pullFromCloud 自动同步到 IndexedDB
 ```
+
+### Boss 怪物图（v0.31.74-81 增强：透明 + enraged 变体）
+
+```bash
+# 1) 生成 7 个 boss 原图（白底 JPEG）
+APP_PASSWORD=... node scripts/_generate-boss-images.mjs
+
+# 2) OpenCV 处理透明 + 生成 enraged 红化变体
+APP_PASSWORD=... python3 scripts/_make-boss-transparent.py
+# → 输出 7 主 + 7 enraged = 14 张 RGBA PNG (140-260KB / 张)
+# → 自动 push D1（每张单独上传，server 守门）
+
+# 3) Selena 刷新 → pull → 透明背景显示
+```
+
+**v0.31.79-81 关键 bug + 修**：
+- 客户端 `migrateCompressOversizedTrophyImages`（v0.29.7）会把 >200KB 的 trophy_images 自动 PNG → JPEG（黑底）。我的透明 PNG 280KB 触发它 → push 写回 D1 → 怪物背景又黑了。
+- v0.31.79：服务端 keep-newer-by-generatedAt guard
+- v0.31.80：服务端 ai-questions sanitize at the door
+- v0.31.81：服务端 trophy-images PNG-over-JPEG guard + 客户端 migration 跳过 < 500KB 的 PNG
 
 **用户只需做一件事：刷新 https://selena-elevate.pages.dev/math**
 

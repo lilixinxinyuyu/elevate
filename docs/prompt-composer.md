@@ -1,218 +1,124 @@
-# Prompt 编排器（v0.31.34）
+# Prompt 系统（v0.31.72-80）
 
-> 出题（generate） / 质检（judge） / 修题（fix）三个 LLM 端点的 prompt 都用同一个
-> composer 组合，按"轴"模块化注入精确上下文。Selena 的题库质量、难度一致性、不
-> 跑题、不重复，全靠这套。
+> 出题 / 变式 / 修题 / 质检 4 个端点的 prompt 共享同一份 4 P 原则文件，按"轴"模块化注入精确上下文。
 
-## 设计目标
+## 4 个端点 + 4 套 system prompt
 
-爸爸提的需求："出题 prompt 应该包含：四年级下册数学相遇问题的定义（避免超纲）+
-已有的难度 3 的相遇问题题目列表（避免重复）+ 难度 3 在系统里的定义（避免难度浮动）
-+ 选择题的要求（避免太多文字超时）+ 多步骤题的要求（避免每步逻辑不匹配）+ 样题
-（避免数据结构不正确）。"
-
-✅ Composer 现在按这五轴 + 一轴去重 = 六轴拼 prompt。
-
-## 六轴
-
-每个轴有自己的目录 / 文件，由 `scripts/build-prompts.mjs` 编进 `_prompts.generated.ts`。
-
-| 轴 | 文件路径 | 数量 | 用途 |
+| 端点 | system prompt | 用途 | 调用入口 |
 |---|---|---|---|
-| 1️⃣ Skill scope | `prompts/skills/scope.json` | 32 个 G4B 核心 skill | 定义 / in-scope / out-of-scope / 公式 / 典型情境 / 常见错误 / 例题 |
-| 2️⃣ Difficulty rubric | `prompts/difficulty/{1..5}.md` | 5 | 每个难度的特征 + 时间 + 反例 |
-| 3️⃣ Format rubric | `prompts/formats/*.md` | 6（核心）| 每个 question_format 的字段要求 + 设计原则 |
-| 4️⃣ Game-type schema | `prompts/questions/game-types/*.md` | 11 | 每个前端模板的 JSON schema 样板 |
-| 5️⃣ Existing stems | runtime（db.questions 查询） | dynamic | 防重复 |
-| 6️⃣ Quality rubric | `prompts/quality-rubric.md` | 1 共享 | 内联在 system prompt 里，作为 fallback |
+| `/api/generate/questions` | `prompts/questions/system.md` | 批量出题（5-30 道） | fill-bank / Admin AI 生成 |
+| `/api/generate/variant` | `prompts/variant/system.md` | 单道变式（用于 retry） | "再出一道类似的"按钮 |
+| `/api/agent/fix-question` | `prompts/fix/system.md` | 修题（保 question_id） | Admin 手动 fix / report 流程 |
+| `/api/admin/report-question` | `prompts/fix/system.md`（同上） | 用户报告 + 修题 | GameShell 🐛 报告按钮 |
+| `/api/agent/judge-questions` | `prompts/quality-judge/system.md` | 评判 verdict + severity | 出题闭环 / cleanup |
 
-## 用例 1：出"四年级下册相遇问题、难度 4、multi_step"题
+**共享真相**：所有 system prompt 都 `{{include:quality-principles.md}}` 引同一份 4 P 原则。改一处全生效。
 
-调用方（`/api/generate/questions` 或 `lib/sessionAdaptive`）传：
-
-```ts
-{
-  subjectId: "math",
-  unitId: "G4B_U5_EQUATIONS",
-  unitName: "认识方程",
-  skillId: "equation_meeting_problem",
-  skillName: "相遇问题",
-  term: "下册",
-  difficulty: 4,         // 单数字，不是范围
-  format: "multi_step",
-  gameType: "shop_counter",
-  count: 2,
-  existingStems: [...],  // 同 skill 的已有题
-}
-```
-
-Composer 拼出来的 prompt 包含：
+## 关键文件层级
 
 ```
-# 任务：生成 2 道四年级下册数学题
-
-## Skill 教学范围（必读 — 决定不跑题不超纲）
-
-### Skill 范围：相遇问题（equation_meeting_problem）
-
-**定义**：两个物体（人/车/船）从两地同时出发，相向而行，求相遇时间或某一方速度。
-
-**✅ 范围内（请只出这些方向）**：
-- 两人/两车从 A、B 两地同时出发，相向而行，求相遇时间
-- 已知相遇时间和总路程及一方速度，求另一方速度
-- ...
-
-**⛔ 超纲 / 跑题（绝对不要出）**：
-- ❌ 追及问题（同向追及，5 年级）
-- ❌ 流水问题（6 年级）
-- ...
-
-**🔑 关键公式 / 关系**：
-- （甲速度 + 乙速度）× 相遇时间 = 总路程
-- ...
-
-**🐛 4 年级常见错误（设干扰项时参考）**：
-- 把「速度和」用乘法（× 而非 +）
-- ...
-
-**📋 题干风格样例**：
-- 小明和小红从相距 600 米的两地同时出发相向而行...
-- ...
-
-## 难度规范（4）
-
-### 必须满足的特征
-- 多步运算（≥ 2 步含一次换算 / 或一次逆向）
-- 含一次"陷阱"（容易漏一步、错单位、混用法）
-- 题干 60-120 个汉字
-- ...
-
-## 答题格式规范（multi_step）
-
-### 必填字段（完整 schema）...
-### 设计要求 — 3 步必须形成完整推理链 + 逻辑一致性...
-
-## JSON Schema（按 game-type=shop_counter 输出每道题）
-
-{ "question_id": "...", "subquestions": [...], ... }
-
-## 已有题干（必须避免重复）
-- ...
-
-## 输出协议
-{ "questions": [...] }
+prompts/
+├── quality-principles.md    ← 4 P 原则，所有端点必 include
+├── quality-rubric.md        ← 附加机械约束（题型字段 / 时间表 / 题干语言）
+│
+├── questions/
+│   ├── system.md            ← 出题 system（subject filter math/chinese）
+│   ├── user-template.md
+│   └── game-types/*.md      ← 11 种 game_type 各自的 schema + 例子
+│
+├── variant/
+│   └── system.md            ← v0.31.73：极简变式 prompt（~600 字）
+│
+├── fix/
+│   └── system.md            ← v0.31.78：修题 prompt（fix-question + report 共用）
+│
+├── quality-judge/
+│   ├── system.md            ← 质检 system
+│   └── user-template.md
+│
+├── difficulty/{1..5}.md     ← 5 个难度档定义
+├── formats/*.md             ← 9 种 question_format 要求
+└── skills/scope.json        ← 45 个 skill 的精确教学范围
 ```
 
-总长 ~5000 字符（~1200 token），但每个字符都精确目标化——没有"出语文、出数学、什么
-都行"的混杂内容。
+## v0.31.72 5 大改造（D + B + C + A + E）
 
-## 用例 2：质检某批次题
+爸爸："规则加得越多模型越混乱，能否加原则？"
 
-`/api/agent/judge-questions` 拿到一批 20 道题，可能跨多个 skill。Composer 提取这批
-里涉及的 skill scope 列出来（最多 6 个，避免 prompt 爆），让 judge 模型按精确范围
-判定。
+| 改造 | 解决的痛点 |
+|---|---|
+| **A** Subject 隔离 | `<!--SUBJ:MATH-->...<!--/SUBJ:MATH-->` 标记 + build 时按 subject 过滤；数学 prompt 不再混入语文段落 |
+| **B** Caller-known enum 字段预填 | composer `prefilledFields` 入参（grade/cognitiveLevel/abilityDimension/questionFormat/estimatedTimeSeconds/examPriority/status/game_type/play_as）渲染成"已确定的元数据"块，AI 原样抄 → 一类 vfail 消失 |
+| **C** 动态 skill example | `skillExampleQuestion`：从 SEED 选当前 skill 一道高质量题作 schema 示范，比固定 basketball example 贴 |
+| **D** existing stems 带 `[Dx]` | 所有已有题干前缀 `[D{difficulty}]`，让 AI 看到难度分布 |
+| **E** 4 P 原则取代 23 条铁律 | quality-principles.md 唯一来源；severity 表只在 judge 用 |
 
-## 用例 3：会话内"再出一题"
+## 出题 prompt 总长
 
-`src/lib/sessionAdaptive.ts` 暴露：
+- system: ~8.7K（subject filter 后） — 4 P 原则 + 通用规范
+- user: ~14.9K — 任务 + 元数据预填 + skill scope + difficulty rubric + game-type schema + skill example + 全量 stems
+- 总计 ~23.6K（v0.31.71 之前是 15.8K，但全是低信号；现在虽然长但全是高信号）
 
-- `requestRetryQuestion(question)` — Selena 答错后，弹"🔄 再出一道类似的"按钮，调
-  composer 出同 skill / 同 difficulty / 同 format 的新题，写库（标
-  `session_adaptive` tag），下一题就用上。
-- `requestHarderQuestion(question)` — Selena 闪电速度答对后，弹"🚀 来道更难的"，
-  调 composer 出同 skill / +1 difficulty 的新题。
-
-UI 集成在 `src/components/game/GameShell.tsx` 的 `FeedbackPanel`：
-- 错答时显示 cyan "🔄 再出一道类似的"
-- 答对 + 闪电/迅速速度 + difficulty < 5 时显示 fuchsia "🚀 来道更难的"
-
-## 添加新 skill scope
-
-在 `prompts/skills/scope.json` 加一个 entry：
-
-```json
-{
-  "your_skill_id": {
-    "name": "中文 skill 名",
-    "term": "下册",
-    "unitId": "G4B_UX_XXX",
-    "definition": "一句话定义",
-    "inScope": ["...", "..."],
-    "outOfScope": ["❌ ..."],
-    "keyFormulas": ["公式 1", "公式 2"],
-    "typicalContexts": ["情境 1", "情境 2"],
-    "commonMistakes": ["错法 1", "错法 2"],
-    "exampleStems": ["样题 1", "样题 2"]
-  }
-}
+工具：
+```bash
+# 看实际发给模型的完整 prompt
+node scripts/_dump-prompt.mjs equation_sum_difference 4 word_problem_lab
+# → /tmp/dump-prompt-output.txt
 ```
 
-跑 `node scripts/build-prompts.mjs` 重新生成 `_prompts.generated.ts`。下次出题该
-skill 就会自动拿到新范围。
+## 变式 prompt（极简）
 
-⚠️ JSON 里的中文引用别用 `"`，用 `「」` 或转义（`\"`），否则 JSON 解析挂。
+`prompts/variant/system.md` ~600 字，只引入 4 条变式原则：
+1. 题面纯净（=P1）
+2. 数学闭合（=P2）
+3. distractor 独立（=P3）
+4. 保题型保结构（变式专用 — 同 game_type / question_format）
 
-## 添加新难度 rubric / format rubric
+输入：原题 JSON。输出：换数字+换情境的同结构新题（新 question_id）。
 
-直接在对应目录写 .md 文件，跑 build-prompts。
+实测 ~22s 返回，比全量 prompt 25-50s 快约 50%。Cloudflare 30s wallclock 内。
 
-## 缺 skill scope 时怎么办
+## 修题 prompt
 
-Composer 自动 fallback 到：
-- skillName + global rubric（仍然能限制不跑题，但范围模糊）
+`prompts/fix/system.md`：
 
-所以新 skill 上线时优先在 scope.json 补一条会显著提升出题质量。
+- 任务边界：明示"修题 ≠ 重出 ≠ 评判"
+- 引 4 P 原则
+- issues → 修题动作映射表（每个 issue tag 对应一种改法）
+- v0.31.76 visual 退化检测规则
+- 硬约束：保 stable 字段 + schema 完整 + answer 必须有效
+- 自查清单 5 条
 
-## 端到端流程
+`fix-question.ts` + `report-question.ts` 都 `PROMPTS.fixSystem.{math,chinese}`。
+
+## ChoiceOption.visual 字段（v0.31.73-76）
+
+`option.visual = { type: "vertical_arithmetic", a, op, b, align }` 给前端 grid 渲染竖式。
+
+**适用**：4 选项视觉**结构**不同（对齐方式 / 数位排列）的题。
+**禁用**：4 选项**数值**不同（求积 / 求差 / 求结果）的题 — visual 完全相同会视觉退化。
+
+v0.31.76：`PlainChoice` 检测 ≥2 个 visual 完全相同 → 自动 fall back 到 text，runtime 防御。
+
+## ChoiceOption.errorTag 处理（v0.31.71-80）
+
+errorTag 在 student-visible 字段（options[]）= P1 leak。正确做法：
+- 学生看到的 options 不挂 errorTag
+- 错答归类放顶层 `_internal_option_diagnostics: [{id, errorTag}]`（admin-only 命名约定）
+- 服务端 sanitize 自动迁移：incoming 有 errorTag → 服务端 strip + 移到 _internal
+
+详见 [quality-pipeline.md](quality-pipeline.md)。
+
+## 关键代码索引
 
 ```
-[admin / session]
-   │
-   ▼
-[client lib (qualityJudge / sessionAdaptive / ...)]
-   │ JSON request body { skillId, format, difficulty, ... }
-   ▼
-[functions/api/{generate|agent}/...]
-   │
-   ▼ uses
-[functions/_promptComposer]
-   │ assembles 6 axes
-   ▼
-[LLM (qwen-plus / qwen3 / ...)]
-   │
-   ▼ JSON response
-[validate + write db.questions]
+functions/_promptComposer.ts       # composer + helpers (estimatedTimeFor, questionFormatFor 等)
+functions/_prompts.generated.ts    # build 输出，运行时引用
+functions/api/generate/questions.ts
+functions/api/generate/variant.ts
+functions/api/agent/fix-question.ts
+functions/api/agent/judge-questions.ts
+functions/api/admin/report-question.ts
+scripts/build-prompts.mjs          # subject filter + include 处理
+scripts/_dump-prompt.mjs           # 调试用，复刻发给模型的完整 prompt
 ```
-
-## D5 跨 skill 综合题（v0.31.35）
-
-调用方传 `extraSkillIds: string[]`，composer 把每个额外 skill 的完整 scope 都列出来：
-
-```ts
-composeQuestionUserPrompt({
-  subjectId: "math",
-  skillId: "average_compute",            // 落库主 skill
-  extraSkillIds: ["decimal_speed_distance"],  // 额外考查
-  difficulty: 5,
-  format: "multi_step",
-  ...
-})
-```
-
-Prompt 自动加入：
-- 任务声明里把额外 skill 列出来
-- "## 综合考查的额外 Skill" 段落渲染所有 extraScopes 的完整 scope（同主 skill 同样详细）
-- "### 综合题设计要求" — 一道题、多阶段推理、同一情境、每个 skill 都真考到
-
-`sessionAdaptive.requestHarderQuestion()` 在 difficulty 升到 5 时自动从同 unit
-随机挑一个其他 skill 当 extraSkillId。
-
-## 升级路径
-
-未来可加（按优先级）：
-
-1. **答题历史驱动**：composer 拿到 student 在该 skill 的最近 N 个 attempt，自动
-   挑一个具体的 sub-error 当作"出题焦点"
-2. **C4A 上册 skill scope** — 期末后会用到
-3. **D5 综合题的 extraSkillIds 智能选择** — 当前是同 unit 随机，可改成"按
-   examPriority 高 + 跟主 skill 类型互补"挑选
