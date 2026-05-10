@@ -99,33 +99,51 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       continue;
     }
     try {
-      // v0.31.79：keep-newer-by-generatedAt 守门
-      // 之前：UPSERT 无条件覆盖。问题：客户端 push 包含 ALL local trophyImages，
-      //   如果 Selena 本地 Dexie 还有旧 JPEG（没 pull 新 PNG）→ push 覆盖 D1 PNG。
-      //   admin 用 OpenCV 处理后 push 的透明 PNG 被一次 Selena's session 写回。
-      // 修：incoming.generatedAt >= existing.generatedAt 才 UPSERT；否则保留 existing。
+      // v0.31.81：双重守门
+      //   1. keep-newer: incoming.generatedAt > existing → 允许覆盖；旧 incoming 拒绝
+      //   2. **PNG > JPEG**: 即使 generatedAt 相同 / 更新，JPEG 也不能覆盖 PNG
+      //      （v0.29.7 客户端 migrateCompressOversizedTrophyImages 会把 >200KB 的图
+      //      重压为 JPEG 黑底；admin 上传的透明 PNG 被自动转 JPEG → push → D1
+      //      → 怪物背景又黑了。强制 PNG 优先。）
       const incomingGenAt =
         typeof row.generatedAt === "number" ? row.generatedAt : 0;
+      const incomingIsPng =
+        typeof row.imageDataUrl === "string" &&
+        row.imageDataUrl.startsWith("data:image/png");
       const existing = await env.DB.prepare(
         `SELECT payload FROM trophy_images WHERE user_key = ? AND trophy_id = ?`,
       )
         .bind(USER_KEY, row.trophyId)
         .first<{ payload: string }>();
       let existingGenAt = 0;
+      let existingIsPng = false;
       if (existing?.payload) {
         try {
-          const parsed = JSON.parse(existing.payload);
+          const parsed = JSON.parse(existing.payload) as {
+            generatedAt?: number;
+            imageDataUrl?: string;
+          };
           existingGenAt =
             typeof parsed?.generatedAt === "number" ? parsed.generatedAt : 0;
+          existingIsPng =
+            typeof parsed?.imageDataUrl === "string" &&
+            parsed.imageDataUrl.startsWith("data:image/png");
         } catch {
           /* */
         }
       }
       if (existing && existingGenAt > incomingGenAt) {
-        // 旧的 incoming，跳过覆盖
         rejected.push({
           trophyId: row.trophyId,
           reason: `older_than_existing (incoming=${incomingGenAt} < existing=${existingGenAt})`,
+        });
+        continue;
+      }
+      if (existing && existingIsPng && !incomingIsPng) {
+        // 已经是 PNG（可能含 alpha 透明）→ 不允许 JPEG 覆盖
+        rejected.push({
+          trophyId: row.trophyId,
+          reason: "would_downgrade_png_to_jpeg",
         });
         continue;
       }

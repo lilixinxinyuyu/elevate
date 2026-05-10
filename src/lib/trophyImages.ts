@@ -634,8 +634,19 @@ export async function migrateCompressOversizedTrophyImages(): Promise<{ processe
   let processed = 0;
   let freedBytes = 0;
   let failed = 0;
+  let skippedPng = 0;
   for (const row of oversized) {
     try {
+      // v0.31.81：保留意图 PNG（admin 上传的透明 boss 图等）— 不再自动 JPEG 黑底化
+      // 透明 PNG 在深色背景上看起来好得多。500KB 以下的 PNG 都跳过。
+      if (
+        typeof row.imageDataUrl === "string" &&
+        row.imageDataUrl.startsWith("data:image/png") &&
+        row.imageDataUrl.length < 500 * 1024
+      ) {
+        skippedPng += 1;
+        continue;
+      }
       // data URL → blob → recompress
       const m = row.imageDataUrl!.match(/^data:([^;]+);base64,(.+)$/);
       if (!m) {
@@ -646,7 +657,6 @@ export async function migrateCompressOversizedTrophyImages(): Promise<{ processe
       const bin = atob(m[2]!);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      // v0.29.7 关键：blob 必须带 MIME type，否则 <img> 加载失败 → 整个迁移挂
       const blob = new Blob([bytes], { type: mime });
       const beforeLen = row.imageDataUrl!.length;
       const compressed = await compressBlobToDataUrl(blob);
@@ -657,6 +667,9 @@ export async function migrateCompressOversizedTrophyImages(): Promise<{ processe
       failed += 1;
       console.warn(`[trophyImages] compress migration failed for ${row.trophyId}`, e);
     }
+  }
+  if (skippedPng > 0) {
+    console.log(`[trophyImages] migration: skipped ${skippedPng} intentional PNG(s)`);
   }
 
   // 检查迁移后还剩多少大图（应该 = failed 数）
