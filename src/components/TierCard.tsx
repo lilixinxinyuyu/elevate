@@ -113,16 +113,32 @@ export function TierCard({
     return <>🏆 中华数学小状元 · 永远在涨</>;
   })();
 
-  // v0.31.50: 小段位徽章装饰层级（角标星已在上面 subRankStars，外框 + 光效在这里）。
-  // 5 档渐进精致，但保持主徽章 SVG 不变 — 只叠光环/外圈。
+  // v0.31.79: 小段位徽章装饰层级 — 重做，让 5 档渐进更明显（之前 ring 差异太弱）。
+  // 主徽章不变，只叠 ring / glow / emoji 角标。
   const subPolishClass = (() => {
     switch (rating.subRank) {
-      case 1: return ""; // 基础
-      case 2: return "ring-1 ring-amber-200/30"; // 微金圈
-      case 3: return "ring-2 ring-amber-300/45 shadow-glow-amber"; // 双圈 + 暖光
-      case 4: return "ring-2 ring-amber-300/70 shadow-glow-amber animate-pulse-soft"; // 强金光 + 微脉冲
-      case 5: return "ring-[3px] ring-amber-300/90 shadow-glow-amber"; // 顶级双层金圈
-      default: return "";
+      case 1:
+        return ""; // 基础 — 朴素初学者
+      case 2:
+        return "ring-2 ring-cyan-300/60 shadow-[0_0_18px_rgba(34,211,238,0.35)]"; // 青蓝圈
+      case 3:
+        return "ring-2 ring-violet-300/70 shadow-[0_0_24px_rgba(167,139,250,0.5)] animate-pulse-soft"; // 紫光呼吸
+      case 4:
+        return "ring-[3px] ring-amber-300/80 shadow-[0_0_30px_rgba(251,191,36,0.65)] animate-pulse-soft"; // 金圈强光
+      case 5:
+        return "ring-[4px] ring-amber-200 shadow-[0_0_40px_rgba(252,211,77,0.85)] animate-pulse-soft"; // 顶级金光环
+      default:
+        return "";
+    }
+  })();
+  // v0.31.79: 角标 emoji — 给 4 / 5 级加显眼标记
+  const subOrnamentEmoji = (() => {
+    switch (rating.subRank) {
+      case 2: return "✨";
+      case 3: return "💎";
+      case 4: return "🏅";
+      case 5: return "👑";
+      default: return null;
     }
   })();
 
@@ -215,6 +231,16 @@ export function TierCard({
               alt={equippedBadge.badgeName}
               className={`relative shadow-glow sm:!w-[150px] sm:!h-[150px] rounded-full ${subPolishClass}`}
             />
+            {/* v0.31.79：sub-rank 角标 emoji（rank 2-5 显示）*/}
+            {subOrnamentEmoji && (
+              <span
+                className="absolute -top-2 -right-2 text-2xl drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] pointer-events-none animate-pop"
+                aria-hidden
+                title={`${rating.subRankRoman} 段`}
+              >
+                {subOrnamentEmoji}
+              </span>
+            )}
           </div>
           <div className="text-center">
             <div className={`text-sm sm:text-base font-display font-bold ${theme.textColor} leading-tight`}>

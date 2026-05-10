@@ -188,6 +188,74 @@ async function upsertToD1(env: Env, row: Record<string, unknown>): Promise<{ ok:
   }
 }
 
+/**
+ * v0.31.79：question_reports 表保留 用户报告 + AI 修题前后状态。
+ * 用于后台诊断 prompt 质量、找 AI 反复犯错的模式。
+ */
+async function ensureReportsSchema(db: D1Database): Promise<void> {
+  await db.exec(
+    `CREATE TABLE IF NOT EXISTS question_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_key TEXT NOT NULL,
+      question_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      reason_text TEXT,
+      original_payload TEXT NOT NULL,
+      fixed_payload TEXT,
+      changes_summary TEXT,
+      ai_fix_succeeded INTEGER NOT NULL DEFAULT 0,
+      llm_error TEXT,
+      created_at INTEGER NOT NULL
+    )`.replace(/\s+/g, " ").trim(),
+  );
+  await db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_question_reports_qid ON question_reports (user_key, question_id)`,
+  );
+  await db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_question_reports_created ON question_reports (user_key, created_at)`,
+  );
+}
+
+async function logReport(
+  env: Env,
+  args: {
+    questionId: string;
+    reason: string;
+    reasonText?: string;
+    originalPayload: Record<string, unknown>;
+    fixedPayload: Record<string, unknown> | null;
+    changesSummary?: string;
+    aiFixSucceeded: boolean;
+    llmError?: string;
+  },
+): Promise<void> {
+  try {
+    await ensureReportsSchema(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO question_reports
+       (user_key, question_id, reason, reason_text, original_payload, fixed_payload,
+        changes_summary, ai_fix_succeeded, llm_error, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        USER_KEY,
+        args.questionId,
+        args.reason,
+        args.reasonText ?? null,
+        JSON.stringify(args.originalPayload),
+        args.fixedPayload ? JSON.stringify(args.fixedPayload) : null,
+        args.changesSummary ?? null,
+        args.aiFixSucceeded ? 1 : 0,
+        args.llmError ?? null,
+        Date.now(),
+      )
+      .run();
+  } catch (e) {
+    // 记日志失败不阻塞主流程
+    console.warn("[report-question] logReport failed:", (e as Error).message);
+  }
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const fail = checkAuth(request, env);
   if (fail) return fail;
@@ -243,6 +311,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (providers.length === 0) {
     // 无 LLM 可用 → 仅打 tag 入库
     const r = await upsertToD1(env, taggedOriginal);
+    await logReport(env, {
+      questionId: q.question_id as string,
+      reason: reasonKey,
+      reasonText: body.reasonText,
+      originalPayload: q,
+      fixedPayload: null,
+      aiFixSucceeded: false,
+      llmError: "no_llm_provider",
+    });
     return jsonResponse({
       ok: r.ok,
       tagged: true,
@@ -255,6 +332,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!llm.ok) {
     // LLM 失败 → 至少把 tagged 原题入库，让 admin 后续看
     await upsertToD1(env, taggedOriginal);
+    await logReport(env, {
+      questionId: q.question_id as string,
+      reason: reasonKey,
+      reasonText: body.reasonText,
+      originalPayload: q,
+      fixedPayload: null,
+      aiFixSucceeded: false,
+      llmError: `${llm.code}: ${llm.message}`,
+    });
     return jsonResponse({
       ok: true,
       tagged: true,
@@ -268,6 +354,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const summary = (parsed as { changesSummary?: string } | null)?.changesSummary ?? "";
   if (!fixed || typeof fixed !== "object") {
     await upsertToD1(env, taggedOriginal);
+    await logReport(env, {
+      questionId: q.question_id as string,
+      reason: reasonKey,
+      reasonText: body.reasonText,
+      originalPayload: q,
+      fixedPayload: null,
+      aiFixSucceeded: false,
+      llmError: "could_not_parse_fix",
+    });
     return jsonResponse({
       ok: true,
       tagged: true,
@@ -305,6 +400,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const r = await upsertToD1(env, merged);
   if (!r.ok) {
+    await logReport(env, {
+      questionId: q.question_id as string,
+      reason: reasonKey,
+      reasonText: body.reasonText,
+      originalPayload: q,
+      fixedPayload: merged,
+      changesSummary: summary,
+      aiFixSucceeded: false,
+      llmError: `d1_upsert_failed: ${r.error}`,
+    });
     return jsonResponse({
       ok: false,
       error: "d1_upsert_failed",
@@ -312,6 +417,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       fixed: merged,
     });
   }
+  // 成功路径：log report + 返回 fixed
+  await logReport(env, {
+    questionId: q.question_id as string,
+    reason: reasonKey,
+    reasonText: body.reasonText,
+    originalPayload: q,
+    fixedPayload: merged,
+    changesSummary: summary,
+    aiFixSucceeded: true,
+  });
   return jsonResponse({
     ok: true,
     fixed: merged,

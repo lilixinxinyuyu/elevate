@@ -19,6 +19,7 @@ import { generateAiQuestions, generateImage } from "../lib/tutor";
 import { TrophyImagesAdminPanel } from "../components/TrophyImagesAdminPanel";
 import { QuestionsAdminPanel } from "../components/QuestionsAdminPanel";
 import { SkillBankDashboard } from "../components/admin/SkillBankDashboard";
+import { ReportsPanel } from "../components/ReportsPanel";
 import type { Question } from "../core/types";
 
 type AdminTab = "bank" | "sync" | "assets" | "system";
@@ -307,6 +308,8 @@ export function AdminPage() {
       {/* ============ 系统 ============ */}
       {tab === "system" && (
         <div className="space-y-4 pt-2">
+          <ReportsPanel />
+
           <div className="card">
             <div className="font-semibold mb-2">📊 题库快速统计（按 unit）</div>
             <div className="text-sm text-slate-400 mb-2">

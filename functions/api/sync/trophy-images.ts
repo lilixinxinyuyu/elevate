@@ -99,6 +99,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       continue;
     }
     try {
+      // v0.31.79：keep-newer-by-generatedAt 守门
+      // 之前：UPSERT 无条件覆盖。问题：客户端 push 包含 ALL local trophyImages，
+      //   如果 Selena 本地 Dexie 还有旧 JPEG（没 pull 新 PNG）→ push 覆盖 D1 PNG。
+      //   admin 用 OpenCV 处理后 push 的透明 PNG 被一次 Selena's session 写回。
+      // 修：incoming.generatedAt >= existing.generatedAt 才 UPSERT；否则保留 existing。
+      const incomingGenAt =
+        typeof row.generatedAt === "number" ? row.generatedAt : 0;
+      const existing = await env.DB.prepare(
+        `SELECT payload FROM trophy_images WHERE user_key = ? AND trophy_id = ?`,
+      )
+        .bind(USER_KEY, row.trophyId)
+        .first<{ payload: string }>();
+      let existingGenAt = 0;
+      if (existing?.payload) {
+        try {
+          const parsed = JSON.parse(existing.payload);
+          existingGenAt =
+            typeof parsed?.generatedAt === "number" ? parsed.generatedAt : 0;
+        } catch {
+          /* */
+        }
+      }
+      if (existing && existingGenAt > incomingGenAt) {
+        // 旧的 incoming，跳过覆盖
+        rejected.push({
+          trophyId: row.trophyId,
+          reason: `older_than_existing (incoming=${incomingGenAt} < existing=${existingGenAt})`,
+        });
+        continue;
+      }
       await env.DB.prepare(
         `INSERT INTO trophy_images (user_key, trophy_id, payload, updated_at)
          VALUES (?, ?, ?, ?)
