@@ -465,6 +465,18 @@ async function fillSkillOnce(skill, batchAccepted) {
   }
 
   // 3. AI judge
+  // v0.31.74：调整判定 gating — judge LLM 偏紧，把"distractor 弱"等 P3/P4 也判 sev4-5。
+  //   只在以下 hard-bug 标签出现时才真删：
+  //     - wrong_answer / out_of_scope / off_topic / cryptic_stem / forbidden_verb
+  //     - stem_options_mismatch / answer_invalid / meta_annotation_leak / answer_leak
+  //     - bracket_instruction / math_not_closed
+  //   否则即使 verdict=delete 也降级 borderline (kept w/ needs_review tag)
+  const HARD_BUG_TAGS = new Set([
+    "wrong_answer", "out_of_scope", "off_topic", "cryptic_stem",
+    "forbidden_verb", "stem_options_mismatch", "answer_invalid",
+    "meta_annotation_leak", "answer_leak", "bracket_instruction",
+    "math_not_closed",
+  ]);
   process.stderr.write(`    ${skill.skillName}: judge ${passingValidation.length} 道…\n`);
   const judgments = await judgeBatch(passingValidation);
   const finalKept = [];
@@ -473,10 +485,26 @@ async function fillSkillOnce(skill, batchAccepted) {
     if (!j) {
       finalKept.push(q);
       stats.totalJudgeKeep++;
-    } else if (j.verdict === "delete") {
+      continue;
+    }
+    const issues = j.issues ?? [];
+    const hasHardBug = issues.some((i) => HARD_BUG_TAGS.has(i));
+    if (j.verdict === "delete" && hasHardBug) {
+      // 真删除：包含真 bug
       stats.totalJudgeDelete++;
       try {
         appendFileSync(JUDGE_DELETE_SAMPLES, JSON.stringify({ skillId: skill.skillId, judgment: j, q }) + "\n");
+      } catch { /* */ }
+    } else if (j.verdict === "delete") {
+      // judge 想删但 issues 都是 P3/P4 弱区分度类 — 降级 borderline
+      stats.totalJudgeBorderline++;
+      finalKept.push({
+        ...q,
+        status: "needs_review",
+        tags: Array.from(new Set([...(q.tags ?? []), "judge_borderline_downgraded"])),
+      });
+      try {
+        appendFileSync(JUDGE_DELETE_SAMPLES, JSON.stringify({ skillId: skill.skillId, judgment: j, q, kept: true, downgraded: true }) + "\n");
       } catch { /* */ }
     } else if (j.verdict === "borderline") {
       stats.totalJudgeBorderline++;
