@@ -53,6 +53,109 @@ interface UploadRow {
   [k: string]: unknown;
 }
 
+/**
+ * v0.31.80：服务端 sanitize — 任何写入 D1 的题在落盘前都过这函数，
+ * 把 P1 leak 模式自动 strip。这是终极防线 —— 即使 Selena 的 stale PWA 把
+ * 旧 (无关) 数据 push 回来，server 也会自动剥掉，永远不会污染 D1。
+ *
+ * 处理：
+ *   1. clue_pick 的 clues[] 字符串去掉"（无关）/（非已知）/（解题设定）/（错误干扰）/（干扰）/（混淆）/（提示）"
+ *   2. choose 的 options[].errorTag 移到顶层 _internal_option_diagnostics（不在 student-visible）
+ *   3. 顶层 options[].errorTag 同上
+ *
+ * 不动的：stem / answer / 其他字段 — 那些需要 AI 修题，机械 strip 只清显式标注。
+ */
+const META_PATTERNS = [
+  "（解题设定，非已知）",
+  "（解题设定）",
+  "(解题设定)",
+  "（非已知）",
+  "(非已知)",
+  "（无关条件）",
+  "（无关）",
+  "(无关)",
+  "（错误干扰）",
+  "（干扰）",
+  "（混淆）",
+  "（提示）",
+];
+
+function stripMetaAnnotations(text: string): string {
+  let cleaned = text;
+  for (const p of META_PATTERNS) cleaned = cleaned.split(p).join("");
+  // 删除 annotation 后残留的尾部标点 + trim
+  return cleaned.replace(/[，,。、:：]\s*$/g, "").trim();
+}
+
+function sanitizeRow(row: UploadRow): UploadRow {
+  // 深 clone（避免改外部对象）
+  const cloned = JSON.parse(JSON.stringify(row)) as UploadRow;
+  const internalDiagnostics: Array<{ id: string; errorTag: string }> = [];
+
+  // subquestions 处理
+  const subqs = cloned.subquestions as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(subqs)) {
+    for (const sub of subqs) {
+      // clue_pick：strip（无关）等元注解
+      if (sub.kind === "clue_pick" && Array.isArray(sub.clues)) {
+        sub.clues = (sub.clues as unknown[]).map((c) =>
+          typeof c === "string" ? stripMetaAnnotations(c) : c,
+        );
+        // 过滤完全空的 clue（注解删掉后只剩空字符串的）— 同步调整 correct 索引
+        const oldClues = sub.clues as string[];
+        const keepIdx = oldClues
+          .map((c, i) => (c && typeof c === "string" && c.length > 0 ? i : -1))
+          .filter((i) => i >= 0);
+        if (keepIdx.length < oldClues.length) {
+          sub.clues = keepIdx.map((i) => oldClues[i]);
+          if (Array.isArray(sub.correct)) {
+            const idxMap = new Map<number, number>();
+            keepIdx.forEach((oldI, newI) => idxMap.set(oldI, newI));
+            sub.correct = (sub.correct as number[])
+              .map((oldI) => idxMap.get(oldI))
+              .filter((x): x is number => typeof x === "number");
+          }
+        }
+      }
+      // choose options：errorTag 移到 internal
+      if (sub.kind === "choose" && Array.isArray(sub.options)) {
+        for (const opt of sub.options as Array<Record<string, unknown>>) {
+          if (opt && typeof opt === "object" && "errorTag" in opt) {
+            internalDiagnostics.push({
+              id: String(opt.id),
+              errorTag: String(opt.errorTag),
+            });
+            delete opt.errorTag;
+          }
+        }
+      }
+    }
+  }
+
+  // 顶层 options（plain_choice 等）的 errorTag 也移
+  const topOpts = cloned.options as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(topOpts)) {
+    for (const opt of topOpts) {
+      if (opt && typeof opt === "object" && "errorTag" in opt) {
+        internalDiagnostics.push({
+          id: String(opt.id),
+          errorTag: String(opt.errorTag),
+        });
+        delete opt.errorTag;
+      }
+    }
+  }
+
+  if (internalDiagnostics.length > 0) {
+    const existing =
+      (cloned._internal_option_diagnostics as Array<{ id: string; errorTag: string }> | undefined) ??
+      [];
+    cloned._internal_option_diagnostics = [...existing, ...internalDiagnostics];
+  }
+
+  return cloned;
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const fail = checkAuth(request, env);
   if (fail) return fail;
@@ -78,12 +181,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const accepted: string[] = [];
   const rejected: { question_id: string; reason: string }[] = [];
 
-  for (const row of body.rows) {
-    const qid = typeof row.question_id === "string" ? row.question_id : "";
+  for (const rawRow of body.rows) {
+    const qid = typeof rawRow.question_id === "string" ? rawRow.question_id : "";
     if (!qid) {
-      rejected.push({ question_id: String(row.question_id), reason: "missing_question_id" });
+      rejected.push({ question_id: String(rawRow.question_id), reason: "missing_question_id" });
       continue;
     }
+    // v0.31.80：服务端 sanitize — strip leak 模式（无关 / errorTag 等）
+    const row = sanitizeRow(rawRow);
     const payloadJson = JSON.stringify(row);
     if (payloadJson.length > MAX_ROW_BYTES) {
       rejected.push({
