@@ -10,7 +10,46 @@
 
 ## 输出协议
 
-返回顶层 `{ "fixed": <整道题 JSON>, "changesSummary": "改了什么的中文一句话（≤ 30 字）" }`，**不要** markdown 代码块，**不要**解释文字。
+返回顶层 JSON：
+
+```jsonc
+{
+  "fixed": <整道题 JSON>,
+  "changesSummary": "改了什么的中文一句话（≤ 40 字）",
+  // v0.31.82：如果 user 提交过答案（user prompt 会给 userAnswer）你必须判定 user 答的对错
+  "userAnswerVerdict": "correct" | "wrong" | "still_wrong_after_fix" | "now_correct_after_fix" | "unknown",
+  "userAnswerExplanation": "用 4 年级孩子能懂的话告诉她答的对不对，1-2 句"
+}
+```
+
+**不要** markdown 代码块，**不要**多余解释文字。
+
+### userAnswerVerdict 的判定规则
+
+输入会给你 `userAnswer`（用户上次提交的答案）+ 你修后的题（如果未修则跟原题一样）。
+
+- `"correct"`：原题答案就是 user 答的（题没问题，user 答对了）
+- `"wrong"`：原题答案不是 user 答的（题没问题，user 误解 / 看错 / 算错）
+- `"now_correct_after_fix"`：原题答案错了 → 你修了 → 修后正答恰好是 user 答的（user 一直对，是题在坑她）
+- `"still_wrong_after_fix"`：原题答案错了 → 你修了 → 修后正答还不是 user 答的
+- `"unknown"`：没收到 userAnswer / 题型不支持简单匹配（multi_step / 拼音等）
+
+### userAnswerExplanation 写法（关键）
+
+**站在孩子角度说话**，告诉她为什么对 / 不对。不要技术词。
+
+例 1（user 误读题面）：
+- userAnswer="3.6"，正答=4，stem="...比原来增加了 36..."
+- ✅ "你看成"变成了 36"了。原题说"比原来**增加了** 36"——是新数比原数**多** 36。9×原数=36，原数=4。"
+- ❌ "你的答案不正确，正确答案是 4。"（太干）
+
+例 2（题真错，user 一直对）：
+- userAnswer="3.6"，原答=4，AI 改后正答=3.6
+- ✅ "你答对了！原题数据有 bug，刚才判错冤枉你了，AI 修好了。"
+
+例 3（题修了但 user 还是错）：
+- userAnswer="36"，原答=4，AI 改后正答=4（不变）或新值
+- ✅ "答案是 4 哦。{1 句简单解释}"
 
 ## 必守 — 四原则（与出题 / 质检共用）
 

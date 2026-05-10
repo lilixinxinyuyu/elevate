@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Question } from "../../core/types";
 import { db } from "../../db/dexie";
 import { getStoredPassword } from "../../db/cloudSync";
@@ -44,9 +44,40 @@ export function ReportQuestionButton({ question, onReportSubmitted }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<
     | null
-    | { ok: true; fixed: boolean; summary?: string }
+    | {
+        ok: true;
+        fixed: boolean;
+        summary?: string;
+        verdict?: string;
+        explanation?: string;
+      }
     | { ok: false; detail: string }
   >(null);
+  // v0.31.82：拿到 user 上次提交过的答案（如果有），帮 AI 判定她对错
+  const [userAnswer, setUserAnswer] = useState<unknown>(undefined);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const recent = await db.attempts
+          .where("questionId")
+          .equals(question.question_id)
+          .reverse()
+          .limit(1)
+          .toArray();
+        if (cancelled) return;
+        if (recent.length > 0) {
+          setUserAnswer(recent[0]?.answer);
+        }
+      } catch {
+        /* */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, question.question_id]);
 
   async function submit() {
     if (!pickedReason) return;
@@ -64,6 +95,7 @@ export function ReportQuestionButton({ question, onReportSubmitted }: Props) {
           question,
           reason: pickedReason,
           reasonText: reasonText.trim() || undefined,
+          userAnswer,
         }),
       });
       const j = (await r.json()) as
@@ -71,21 +103,34 @@ export function ReportQuestionButton({ question, onReportSubmitted }: Props) {
             ok: true;
             fixed: Record<string, unknown> | false;
             changesSummary?: string;
+            userAnswerVerdict?: string;
+            userAnswerExplanation?: string;
             detail?: string;
           }
         | { ok: false; error: string; detail?: string };
       if (!j.ok) {
         setResult({ ok: false, detail: j.detail ?? j.error });
       } else if (j.fixed && typeof j.fixed === "object") {
-        // 把修好的题写进本地 questions 表，下次出题就用新版
         try {
           await db.questions.put(j.fixed as never);
         } catch {
           /* */
         }
-        setResult({ ok: true, fixed: true, summary: j.changesSummary });
+        setResult({
+          ok: true,
+          fixed: true,
+          summary: j.changesSummary,
+          verdict: j.userAnswerVerdict,
+          explanation: j.userAnswerExplanation,
+        });
       } else {
-        setResult({ ok: true, fixed: false, summary: j.detail });
+        setResult({
+          ok: true,
+          fixed: false,
+          summary: j.detail,
+          verdict: j.userAnswerVerdict,
+          explanation: j.userAnswerExplanation,
+        });
       }
     } catch (e) {
       setResult({ ok: false, detail: (e as Error).message });
@@ -182,30 +227,15 @@ export function ReportQuestionButton({ question, onReportSubmitted }: Props) {
             )}
 
             {result?.ok && result.fixed && (
-              <div className="text-center py-3">
-                <div className="text-4xl">✨</div>
-                <div className="font-display font-bold text-emerald-200 mt-2">
-                  AI 已修好了
-                </div>
-                {result.summary && (
-                  <div className="text-xs text-slate-300 mt-1">
-                    改动：{result.summary}
-                  </div>
-                )}
-                <div className="text-[11px] text-slate-400 mt-2">
-                  下次再做这道题，就是修好的新版了
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    close();
-                    onReportSubmitted?.();
-                  }}
-                  className="btn-primary mt-4 text-sm"
-                >
-                  跳到下一题
-                </button>
-              </div>
+              <VerdictPanel
+                verdict={result.verdict}
+                explanation={result.explanation}
+                summary={result.summary}
+                onClose={() => {
+                  close();
+                  onReportSubmitted?.();
+                }}
+              />
             )}
 
             {result?.ok && !result.fixed && (
@@ -253,5 +283,66 @@ export function ReportQuestionButton({ question, onReportSubmitted }: Props) {
         </div>
       )}
     </>
+  );
+}
+
+// ─── Verdict 面板（v0.31.82）─────────────────────────────────────────
+// 根据 AI 的 userAnswerVerdict 给 Selena 量身定做的反馈：
+//   - correct / now_correct_after_fix  → 你答对啦
+//   - wrong / still_wrong_after_fix    → 你答错了，原因…（不指责）
+//   - unknown                           → 通用 fallback
+function VerdictPanel({
+  verdict,
+  explanation,
+  summary,
+  onClose,
+}: {
+  verdict?: string;
+  explanation?: string;
+  summary?: string;
+  onClose: () => void;
+}) {
+  const v = verdict ?? "unknown";
+  const isCorrect = v === "correct" || v === "now_correct_after_fix";
+  const isWrong = v === "wrong" || v === "still_wrong_after_fix";
+  const titleEmoji = isCorrect ? "🎉" : isWrong ? "💡" : "✨";
+  const titleText = isCorrect
+    ? v === "now_correct_after_fix"
+      ? "你答对了！冤枉你了"
+      : "你答对了"
+    : isWrong
+      ? "再想想"
+      : "AI 已查看";
+  const titleColor = isCorrect
+    ? "text-emerald-200"
+    : isWrong
+      ? "text-amber-200"
+      : "text-slate-200";
+  const bgClass = isCorrect
+    ? "bg-emerald-500/10"
+    : isWrong
+      ? "bg-amber-500/10"
+      : "bg-slate-500/10";
+
+  return (
+    <div className={`text-center py-3 -m-3 px-3 ${bgClass} rounded-xl`}>
+      <div className="text-4xl">{titleEmoji}</div>
+      <div className={`font-display font-bold mt-2 ${titleColor}`}>
+        {titleText}
+      </div>
+      {explanation && (
+        <div className="text-sm text-slate-200 mt-2 px-2 leading-relaxed">
+          {explanation}
+        </div>
+      )}
+      {summary && summary !== explanation && (
+        <div className="text-[11px] text-slate-400 mt-2 px-2">
+          AI 改动：{summary}
+        </div>
+      )}
+      <button type="button" onClick={onClose} className="btn-primary mt-4 text-sm">
+        {isCorrect ? "继续下一题 🎉" : "明白了，下一题"}
+      </button>
+    </div>
   );
 }

@@ -38,6 +38,8 @@ interface ReportRequest {
   question?: Record<string, unknown>;
   reason?: string;
   reasonText?: string;
+  /** v0.31.82：用户提交过的答案（如有），让 AI 判 user 答的对错 + 给解释 */
+  userAnswer?: unknown;
 }
 
 const REASON_TO_ISSUES: Record<string, string[]> = {
@@ -300,12 +302,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       : (sysObj[subjectId] ?? sysObj.raw ?? "");
   const FIX_SYS = sysTemplate.replace(/\{\{subjectLabel\}\}/g, subjLabel);
 
-  const userFix = composeFixUserPrompt({
-    question: taggedOriginal,
-    issues,
-    reason: reasonText,
-    subjectId,
-  });
+  // v0.31.82: 把 userAnswer 注入 user prompt 末尾，让 AI 判她答的对错
+  const userAnswerSuffix =
+    body.userAnswer !== undefined && body.userAnswer !== null
+      ? `\n\n## userAnswer（必读 — 据此判定 userAnswerVerdict + 写 userAnswerExplanation）\n\n用户提交的答案是：\`${JSON.stringify(body.userAnswer)}\``
+      : "";
+
+  const userFix =
+    composeFixUserPrompt({
+      question: taggedOriginal,
+      issues,
+      reason: reasonText,
+      subjectId,
+    }) + userAnswerSuffix;
 
   const providers = getChatProviders(env);
   if (providers.length === 0) {
@@ -350,8 +359,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const parsed = extractJsonObject(llm.text);
-  const fixed = (parsed as { fixed?: Record<string, unknown> } | null)?.fixed;
-  const summary = (parsed as { changesSummary?: string } | null)?.changesSummary ?? "";
+  const parsedObj = parsed as
+    | {
+        fixed?: Record<string, unknown>;
+        changesSummary?: string;
+        userAnswerVerdict?: string;
+        userAnswerExplanation?: string;
+      }
+    | null;
+  const fixed = parsedObj?.fixed;
+  const summary = parsedObj?.changesSummary ?? "";
+  const userAnswerVerdict = parsedObj?.userAnswerVerdict ?? "unknown";
+  const userAnswerExplanation = parsedObj?.userAnswerExplanation ?? "";
   if (!fixed || typeof fixed !== "object") {
     await upsertToD1(env, taggedOriginal);
     await logReport(env, {
@@ -431,6 +450,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ok: true,
     fixed: merged,
     changesSummary: summary,
+    userAnswerVerdict,
+    userAnswerExplanation,
     model: "qwen-plus",
     provider: ctx.label,
   });
