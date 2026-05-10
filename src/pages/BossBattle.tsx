@@ -477,7 +477,7 @@ export function BossBattlePage() {
           ← 退出闯关
         </button>
         <div className="flex items-center gap-2">
-          <HeartsBar hearts={hearts} />
+          <HeartsBar hearts={hearts} max={MAX_HEARTS} />
           <LifelineButton
             remaining={rescuesRemaining}
             allowance={rescue}
