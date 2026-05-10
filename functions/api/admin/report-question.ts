@@ -303,10 +303,30 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const FIX_SYS = sysTemplate.replace(/\{\{subjectLabel\}\}/g, subjLabel);
 
   // v0.31.82: 把 userAnswer 注入 user prompt 末尾，让 AI 判她答的对错
-  const userAnswerSuffix =
-    body.userAnswer !== undefined && body.userAnswer !== null
-      ? `\n\n## userAnswer（必读 — 据此判定 userAnswerVerdict + 写 userAnswerExplanation）\n\n用户提交的答案是：\`${JSON.stringify(body.userAnswer)}\``
-      : "";
+  // v0.31.85：pre-resolve choice id → option text，防 AI hallucinate（之前看到
+  //   "0.069" 看成 "0.609"，把 D 当 B）。题面 options 已经在 question 里，但
+  //   server 显式 lookup 一遍喂给 AI，更稳。
+  let userAnswerLine = "";
+  if (body.userAnswer !== undefined && body.userAnswer !== null) {
+    const uaRaw = body.userAnswer;
+    const opts = (q.options as Array<{ id?: string; text?: string }> | undefined) ?? [];
+    let resolved = JSON.stringify(uaRaw);
+    if (typeof uaRaw === "string" && opts.length > 0) {
+      const matched = opts.find((o) => o?.id === uaRaw);
+      if (matched) {
+        resolved = `id="${uaRaw}", text="${matched.text}"`;
+      }
+    }
+    userAnswerLine = `\n\n## userAnswer（必读 — 据此判定 userAnswerVerdict + 写 userAnswerExplanation）\n\n用户提交的答案：${resolved}`;
+    // 也把全 options 单独再列一遍方便 AI 对照（防 lookup 时眼花）
+    if (opts.length > 0) {
+      const optList = opts
+        .map((o) => `  ${o?.id}: ${o?.text}`)
+        .join("\n");
+      userAnswerLine += `\n\n（题的 options 完整列表，对照 user 答的是哪个：\n${optList}\n）`;
+    }
+  }
+  const userAnswerSuffix = userAnswerLine;
 
   const userFix =
     composeFixUserPrompt({

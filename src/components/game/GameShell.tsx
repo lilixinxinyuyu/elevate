@@ -452,7 +452,7 @@ export function GameShell(props: GameShellProps) {
         {/* v0.31.25：传 displayedQuestion 而非原题 — 变式题流程下 Selena 答的是变式题，
             FeedbackPanel 内的"小进讲一讲"按钮也应该讲她刚答的那道，而不是原题。
             之前传 props.question 导致 tutor 打开看到的 stem 跟 feedback 显示的答案对不上。 */}
-        {feedback && <FeedbackPanel feedback={feedback} question={displayedQuestion} onNext={onNext} onInjectQuestion={onInjectQuestion} />}
+        {feedback && <FeedbackPanel feedback={feedback} question={displayedQuestion} onNext={onNext} onInjectQuestion={onInjectQuestion} noRetry={noRetry} />}
       </div>
 
       <FloatLayer
@@ -543,8 +543,11 @@ function describeAnswer(q: Question): string {
   const a = q.answer;
   if (a.type === "number") return `${a.value}`;
   if (a.type === "choice") {
+    // v0.31.85：只返回 option text。原来带 id 前缀（"C. 1.26"）但 PlainChoice
+    // 视觉洗牌后 user 看到的是 "A. 1.26"，前缀字母不一致 → 反馈"正确答案 C. 1.26"
+    // 跟视觉 "A" 高亮矛盾。只显示 text 完全避开这个错位。
     const opt = (q.options ?? []).find((o) => o.id === a.value);
-    return opt ? `${a.value}. ${opt.text}` : a.value;
+    return opt ? opt.text : a.value;
   }
   return a.steps.map((s) => `${s.step_id}=${s.expected}`).join("；");
 }
@@ -554,9 +557,9 @@ function describeUserAnswer(q: Question, answer: unknown): string {
   if (answer === null || answer === undefined) return "（未作答）";
   if (typeof answer === "number") return `${answer}`;
   if (typeof answer === "string") {
-    // choice 题：可能是 option id（"A"/"B"…），转成 "A. 选项文本"
+    // choice 题：answer 是 option id（"A"/"B"…），转成 option text（不带 id 前缀防错位）
     const opt = (q.options ?? []).find((o) => o.id === answer);
-    if (opt) return `${answer}. ${opt.text}`;
+    if (opt) return opt.text;
     return answer;
   }
   if (typeof answer === "object") {
@@ -575,6 +578,7 @@ function FeedbackPanel({
   question,
   onNext,
   onInjectQuestion,
+  noRetry,
 }: {
   feedback: {
     isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string;
@@ -589,6 +593,8 @@ function FeedbackPanel({
   question: Question;
   onNext: () => void;
   onInjectQuestion?: (q: Question) => void;
+  /** v0.31.85：boss 模式下不渲染"小进讲讲" + "再出一道类似" 这俩 CTA（boss 有自己的救场流） */
+  noRetry?: boolean;
 }) {
   const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, errorPattern } = feedback;
   const [showTutor, setShowTutor] = useState(false);
@@ -727,21 +733,24 @@ function FeedbackPanel({
         </div>
       )}
       <div className="flex justify-between items-center gap-2 flex-wrap">
-        {/* 错答时弹出"小进姐姐讲一讲"，答对也允许（学更深的解法 / 概念） */}
-        <button
-          type="button"
-          onClick={() => setShowTutor(true)}
-          className={`text-sm px-4 py-2 rounded-xl border transition-all hover:scale-105 ${
-            !isCorrect
-              ? "bg-amber-500/20 border-amber-400/40 text-amber-100 animate-pulse"
-              : "bg-violet-500/10 border-violet-400/30 text-violet-200 hover:bg-violet-500/20"
-          }`}
-        >
-          👩‍🏫 让小进讲一讲
-        </button>
+        {/* v0.31.85：boss 模式（noRetry）下不显示这俩 CTA — boss 有自己的救场流（顶部 chip） */}
+        {!noRetry && (
+          <>
+            {/* 错答时弹出"小进姐姐讲一讲"，答对也允许（学更深的解法 / 概念） */}
+            <button
+              type="button"
+              onClick={() => setShowTutor(true)}
+              className={`text-sm px-4 py-2 rounded-xl border transition-all hover:scale-105 ${
+                !isCorrect
+                  ? "bg-amber-500/20 border-amber-400/40 text-amber-100 animate-pulse"
+                  : "bg-violet-500/10 border-violet-400/30 text-violet-200 hover:bg-violet-500/20"
+              }`}
+            >
+              👩‍🏫 让小进讲一讲
+            </button>
 
-        {/* v0.31.34: 错答时显示"再出一道类似的"巩固训练 */}
-        {!isCorrect && (
+            {/* v0.31.34: 错答时显示"再出一道类似的"巩固训练 */}
+            {!isCorrect && (
           <button
             type="button"
             onClick={onRetrySimilar}
@@ -770,6 +779,8 @@ function FeedbackPanel({
                 ? "✓ 难题已加入"
                 : `🚀 来道更难的（D${question.difficulty + 1}）`}
           </button>
+        )}
+          </>
         )}
 
         <button type="button" className="btn-primary" onClick={onNext}>
