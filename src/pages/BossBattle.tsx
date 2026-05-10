@@ -30,6 +30,7 @@ import type {
   Question,
 } from "../core/types";
 import { GameShell, type AttemptResult } from "../components/game/GameShell";
+import { TutorPanel } from "../components/tutor/TutorPanel";
 import { BossAvatar } from "../components/boss/BossAvatar";
 import { sfx } from "../lib/sfx";
 import {
@@ -52,7 +53,9 @@ import { VictoryScreen } from "../components/boss/VictoryScreen";
 import { DefeatScreen } from "../components/boss/DefeatScreen";
 import { UNITS } from "../content/units";
 
-const MAX_HEARTS = 3;
+// v0.31.74: 3 → 2，且阶段切换不再 +1 心，整场 boss 只有 2 个生命，错 2 次 = defeat。
+// 之前 3 心 + 阶段奖励 +1 → 几乎不可能 game-over，挑战感弱。
+const MAX_HEARTS = 2;
 
 interface QuestionResult {
   questionId: string;
@@ -78,6 +81,18 @@ export function BossBattlePage() {
   const finalizingRef = useRef(false);
   // 临时存的 hint reveal 状态：lifeline 选了"看提示"后给 GameShell 自动展开提示
   const [autoRevealHint, setAutoRevealHint] = useState(0);
+  // v0.31.74：小进讲题 panel 打开。两条触发路径：
+  //   1. lifeline modal "听小进讲题" 直接选
+  //   2. 答错且用过 hint 后，下方 CTA "继续不会？让小进讲题"
+  const [tutorContext, setTutorContext] = useState<{
+    questionId: string;
+    stem: string;
+    skillId: string;
+    skillName?: string;
+    studentAnswer?: string;
+  } | null>(null);
+  // v0.31.74：上一题答错且用过 hint，下一题渲染前显示 escalate CTA
+  const [showTutorCta, setShowTutorCta] = useState(false);
 
   // 初始加载：拉 session + boss state + rescue 配额
   useEffect(() => {
@@ -242,10 +257,10 @@ export function BossBattlePage() {
       return;
     }
 
-    // 正常推进 — 如果切了阶段，先弹 1s phase break
+    // 正常推进 — 如果切了阶段，先弹 1.5s phase break
     if (nextPhase && nextPhase !== curPhase) {
-      // +1 心 (max 3) — 阶段奖励
-      const heartsAfter = Math.min(MAX_HEARTS, hearts + 1);
+      // v0.31.74: 阶段切换不再 +1 心 — 心数完全carry over，整场 boss 只有 MAX_HEARTS=2 条命
+      const heartsAfter = hearts;
       const breakStage: Stage = {
         kind: "phase_break",
         boss,
@@ -264,6 +279,8 @@ export function BossBattlePage() {
           results,
         }),
       };
+      // v0.31.74：阶段切换也清掉 escalate CTA（CTA 只针对刚才那道）
+      setShowTutorCta(false);
       setStage(breakStage);
       // 1.5s 后切到下一阶段
       setTimeout(() => {
@@ -273,6 +290,8 @@ export function BossBattlePage() {
     }
 
     // 同阶段下一题
+    // v0.31.74：进入下一题清掉 escalate CTA（CTA 只针对刚才那道）
+    setShowTutorCta(false);
     setStage({
       ...stage,
       index: nextIdx,
@@ -295,6 +314,11 @@ export function BossBattlePage() {
       if (!isCorrect) {
         sfx.wrong();
       }
+      // v0.31.74：答错且用过 hint → 升级到"让小进讲题"CTA
+      // 让 Selena 知道还有补救的方法，不只是 hint 一条路
+      if (!isCorrect && hintUsed) {
+        setShowTutorCta(true);
+      }
       setStage({
         ...stage,
         results: [...results, newResult],
@@ -303,6 +327,19 @@ export function BossBattlePage() {
     },
     [stage],
   );
+
+  // v0.31.74：从 escalate CTA 触发的"让小进讲题"——不消耗救场名额
+  const onEscalateToTutor = useCallback(() => {
+    if (stage.kind !== "playing") return;
+    const q = stage.questions[stage.index]!;
+    setTutorContext({
+      questionId: q.question_id,
+      stem: q.stem,
+      skillId: q.skill_id,
+      skillName: q.skill_name,
+    });
+    setShowTutorCta(false);
+  }, [stage]);
 
   const onUseLifeline = useCallback(
     (choice: LifelineChoice) => {
@@ -327,8 +364,21 @@ export function BossBattlePage() {
         setTimeout(() => {
           handleNext();
         }, 100);
+      } else if (choice === "explain") {
+        // v0.31.74：直接打开 TutorPanel — 让小进苏格拉底讲题，不只是展开 hint
+        setTutorContext({
+          questionId: q.question_id,
+          stem: q.stem,
+          skillId: q.skill_id,
+          skillName: q.skill_name,
+        });
+        // 消耗 1 个救场名额
+        setStage({
+          ...stage,
+          rescuesRemaining: rescuesRemaining - 1,
+        });
       } else {
-        // hint / explain：展开提示，给 GameShell 一个信号
+        // hint：展开提示，给 GameShell 一个信号
         setAutoRevealHint((n) => n + 1);
         setStage({
           ...stage,
@@ -408,7 +458,7 @@ export function BossBattlePage() {
   }
 
   // playing
-  const { boss, questions, index, hearts, rescuesRemaining, rescue, results } = stage;
+  const { boss, questions, index, hearts, rescuesRemaining, rescue, results, studentId } = stage;
   const q = questions[index]!;
   const phase = phaseFromIndex(index);
   const enraged = phase === "boss";
@@ -459,6 +509,44 @@ export function BossBattlePage() {
         }}
         onNext={handleNext}
       />
+
+      {/* v0.31.74：答错且用过 hint 的 escalate CTA — 让小进讲题（不消耗救场名额）*/}
+      {showTutorCta && !tutorContext && (
+        <div className="card-glow border-amber-400/40 bg-gradient-to-br from-amber-500/15 to-orange-500/10 animate-slide-up">
+          <div className="flex items-center gap-3">
+            <div className="text-3xl">🧙‍♀️</div>
+            <div className="flex-1">
+              <div className="font-display font-bold text-amber-100 text-sm">
+                继续不会？让小进讲题
+              </div>
+              <div className="text-xs text-slate-300 mt-0.5">
+                提示用了还卡 — 让小进苏格拉底式一步步带你想，**不消耗救场名额**
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onEscalateToTutor}
+              className="btn-primary text-sm px-4 py-2 shrink-0"
+            >
+              叫小进
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* v0.31.74：TutorPanel — 由 lifeline "讲题" 或 escalate CTA 触发 */}
+      {tutorContext && (
+        <TutorPanel
+          subjectId="math"
+          stem={tutorContext.stem}
+          skillName={tutorContext.skillName}
+          questionId={tutorContext.questionId}
+          skillId={tutorContext.skillId}
+          studentId={studentId}
+          context="wrong_retry"
+          onClose={() => setTutorContext(null)}
+        />
+      )}
     </div>
   );
 }

@@ -74,17 +74,16 @@ export function LifelineButton({
                   setOpen(false);
                 }}
               />
-              {allowance.fullExplain && (
-                <ChoiceCard
-                  emoji="🧙‍♀️"
-                  title="听小进完整解题（省级专属）"
-                  desc="小进会一步一步讲完这道题"
-                  onClick={() => {
-                    onUse("explain");
-                    setOpen(false);
-                  }}
-                />
-              )}
+              {/* v0.31.74：所有段位都能让小进讲题（之前只有省级解锁，限制太苛）*/}
+              <ChoiceCard
+                emoji="🧙‍♀️"
+                title="让小进讲题"
+                desc="小进苏格拉底式一步步引导，比 hint 详细"
+                onClick={() => {
+                  onUse("explain");
+                  setOpen(false);
+                }}
+              />
               <ChoiceCard
                 emoji="⏩"
                 title="跳过本题"

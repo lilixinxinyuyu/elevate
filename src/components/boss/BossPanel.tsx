@@ -29,6 +29,7 @@ export function BossPanel({
             size={64}
             className="rounded-xl"
             alt={boss.name}
+            state={enraged ? "enraged" : "normal"}
           />
         </div>
         <div className="flex-1 min-w-0">

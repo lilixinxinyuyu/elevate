@@ -280,6 +280,17 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
     if (sc) extraScopes.push({ skillId: sid, scope: sc });
   }
 
+  // v0.31.74: gameType 决定提前到 prefilled block 之前 — 元数据要带 game_type
+  const fromSkill = (PROMPTS.gameTypeBySkill as unknown as Record<string, string>)[skillId];
+  const gameType =
+    args.gameType ??
+    fromSkill ??
+    (format === "multi_step"
+      ? "shop_counter"
+      : format === "single_choice"
+        ? "plain_choice"
+        : "plain_choice");
+
   const lines: string[] = [];
 
   // 1. 任务声明
@@ -319,6 +330,8 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
     if (skillName) lines.push(`  "skill_name": "${skillName}",`);
     lines.push(`  "grade": ${prefilledFields.grade ?? 4},`);
     lines.push(`  "difficulty": ${difficulty},`);
+    lines.push(`  "game_type": "${gameType}",`);
+    lines.push(`  "play_as": "${gameType}",`);
     if (prefilledFields.examPriority)
       lines.push(`  "exam_priority": "${prefilledFields.examPriority}",`);
     if (prefilledFields.abilityDimension && prefilledFields.abilityDimension.length > 0)
@@ -396,15 +409,7 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
   }
 
   // 5. Game-type schema（决定 JSON 结构）
-  const fromSkill = (PROMPTS.gameTypeBySkill as unknown as Record<string, string>)[skillId];
-  const gameType =
-    args.gameType ??
-    fromSkill ??
-    (format === "multi_step"
-      ? "shop_counter"
-      : format === "single_choice"
-        ? "plain_choice"
-        : "plain_choice");
+  // gameType 已在函数顶部定义（用于 prefilled metadata block），这里直接复用
   lines.push(`## JSON Schema（按 game-type=${gameType} 输出每道题）`);
   lines.push(``);
   lines.push(renderGameTypeSchema(gameType));

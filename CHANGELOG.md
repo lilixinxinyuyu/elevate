@@ -3,6 +3,52 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.74 — 2026-05-10 · 闯关难度调高 + 讲题升级 + 怪物透明 + 狂怒变体
+
+爸爸 6 件事，全部 ship：
+
+### 1. 闯关 hint 流程升级
+
+之前: 求小进 → 看提示 → 没下文。
+现在:
+- 答错且用过 hint → 自动渲染 escalate CTA "🧙‍♀️ 继续不会？让小进讲题"（**不消耗救场名额**）
+- 救场 modal 的"听小进讲题"现在所有段位都解锁（之前只省级），且实际打开 `<TutorPanel>`（之前只是又开 hint）
+
+### 2. 闯关生命系统
+
+- `MAX_HEARTS` 3 → 2
+- 阶段切换不再 +1 心（之前 `Math.min(MAX_HEARTS, hearts+1)` 几乎让人永远满血）
+- 整场 boss 只有 2 条命，错 2 道 = defeat。挑战感回归。
+
+### 3. 怪物图白色背景 → 透明 PNG
+
+- 新工具 `scripts/_make-boss-transparent.py`：用 OpenCV flood-fill from 4 corners 移除白色背景
+- 输出 384×384 RGBA PNG，typically 140-260KB
+- 已 push 到 D1，覆盖原 7 张主 boss 图（math_boss_FINAL + 6 个 unit boss）
+
+### 4. 狂怒态独立变体图
+
+- BossAvatar 加 `state="normal"|"enraged"` prop
+- enraged 优先用 `math_boss_<unitId>_enraged` trophyId；找不到 fallback CSS hue-rotate + saturate（红色滤镜）
+- _enraged 变体图脚本同时生成（HSV shift + 红色 overlay）
+- BossPanel 从 `enraged` flag 自动 pass state 给 BossAvatar
+
+### 5. AI judge re-run
+
+- `scripts/_judge-all.mjs` 跑 1290 道 D1 AI 题，输出 verdict 报告到 /tmp/judge-results.json
+- 用 v0.31.72 的 4 P 原则 prompt
+- 不直接 delete — 留报告给爸爸过审
+
+### 6. v6 fill-bank
+
+- Composer fix: prefilled metadata 块缺 `game_type` 字段（v0.31.72 引入的 bug，导致 v6 第一轮 fill 全部 vfail）
+- 修后 game_type + play_as 都进 prefilled metadata 块
+- 重新跑 fill-bank 补 29 个 skill 的 AI 题缺口
+
+### Bug fix
+
+- `_promptComposer.ts`：gameType 决定提前到 prefilled metadata 渲染前，删了重复 `const gameType` 定义
+
 ## v0.31.73 — 2026-05-10 · 视觉化竖式 + 变式实时出题
 
 爸爸三个反馈：
