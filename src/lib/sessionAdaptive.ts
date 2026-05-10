@@ -137,11 +137,52 @@ export async function requestAdaptiveQuestion(
 
 /** 答错后：再出一道同 skill 同 difficulty 同 format 的"巩固题"。 */
 export function requestRetryQuestion(question: Question): Promise<Question[]> {
-  return requestAdaptiveQuestion({
-    question,
-    difficultyDelta: 0,
-    callerTag: "retry-after-wrong",
-  });
+  // v0.31.73: 走轻量 /api/generate/variant 路径（小 prompt + 单题 + max_tokens=1800
+  // → 实测 ~6-8s，相比旧 /api/generate/questions 的 25-50s 快 3-5 倍）。
+  return requestVariantQuestion(question, "retry-after-wrong");
+}
+
+/**
+ * v0.31.73: 调用 /api/generate/variant — 极简 prompt 出 1 道变式题。
+ * 用于 retry / 实时巩固。失败时降级到 requestAdaptiveQuestion（全量 prompt）。
+ */
+export async function requestVariantQuestion(
+  source: Question,
+  callerTag = "variant",
+): Promise<Question[]> {
+  try {
+    const r = await fetch("/api/generate/variant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader() },
+      body: JSON.stringify({ sourceQuestion: source, callerTag }),
+    });
+    type VariantResponse = { ok: boolean; question?: Question; error?: string; detail?: string };
+    let body: VariantResponse | null = null;
+    try {
+      body = (await r.json()) as VariantResponse;
+    } catch {
+      /* */
+    }
+    if (!r.ok || !body?.ok || !body.question) {
+      throw new Error(`variant_failed: ${body?.error ?? r.status} ${body?.detail ?? ""}`.trim());
+    }
+    const q: Question = {
+      ...body.question,
+      tags: Array.from(
+        new Set([...(body.question.tags ?? []), "ai_generated", "session_adaptive", "variant", callerTag]),
+      ),
+    };
+    await db.questions.bulkPut([q]);
+    return [q];
+  } catch (e) {
+    // 降级到全量 prompt（只在 variant 端点 fail 时）
+    console.warn("[sessionAdaptive] variant fast path failed, fall back to full prompt:", (e as Error).message);
+    return requestAdaptiveQuestion({
+      question: source,
+      difficultyDelta: 0,
+      callerTag: `${callerTag}-fallback`,
+    });
+  }
 }
 
 /** 太顺利了：再出一道 +1 difficulty 的同 skill 题。 */

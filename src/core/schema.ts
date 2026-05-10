@@ -67,10 +67,20 @@ export const AnswerSchema = z.discriminatedUnion("type", [
   MultiStepAnswerSchema,
 ]);
 
+/** v0.31.73：option.visual 给前端 grid-aligned 竖式渲染（取代 ASCII art） */
+export const OptionVisualSchema = z.object({
+  type: z.literal("vertical_arithmetic"),
+  a: z.string().min(1),
+  op: z.string().min(1),
+  b: z.string().min(1),
+  align: z.enum(["decimal", "right"]).optional(),
+});
+
 export const ChoiceOptionSchema = z.object({
   id: z.string().min(1),
   text: z.string().min(1),
   errorTag: z.string().optional(),
+  visual: OptionVisualSchema.optional(),
 });
 
 export const CommonErrorSchema = z.object({

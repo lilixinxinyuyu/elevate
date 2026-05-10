@@ -1,5 +1,47 @@
 import { useMemo, useState } from "react";
 import type { TemplateRenderProps } from "../GameShell";
+import { VerticalArithmetic } from "../VerticalArithmetic";
+import type { OptionVisual } from "../../../core/types";
+
+/**
+ * v0.31.73：option text 渲染分级。
+ *   1. 如果 option.visual = { type: "vertical_arithmetic", a, op, b, align } → 用结构化竖式组件
+ *   2. 如果 option.text 含 \n 或包含 ──── 等横线字符 → 用 whitespace-pre + font-mono 让 ASCII 竖式对齐
+ *   3. 否则普通文本
+ *
+ * 这样老题（option.text 已经是 ASCII art）立即看起来正常；新题用结构化字段更精确。
+ */
+function isAsciiVertical(text: string): boolean {
+  if (typeof text !== "string") return false;
+  return text.includes("\n") || /[─━━━]/.test(text);
+}
+
+function OptionContent({
+  text,
+  visual,
+}: {
+  text: string;
+  visual?: OptionVisual;
+}) {
+  if (visual && visual.type === "vertical_arithmetic" && visual.a && visual.op && visual.b) {
+    return (
+      <VerticalArithmetic
+        a={visual.a}
+        op={visual.op}
+        b={visual.b}
+        align={visual.align ?? "decimal"}
+      />
+    );
+  }
+  if (isAsciiVertical(text)) {
+    return (
+      <span className="font-mono text-base leading-snug whitespace-pre block">
+        {text}
+      </span>
+    );
+  }
+  return <>{text}</>;
+}
 
 export function PlainChoicePanel(props: TemplateRenderProps) {
   const { question, onFinish, triggerFx, disabled } = props;
@@ -49,7 +91,7 @@ export function PlainChoicePanel(props: TemplateRenderProps) {
           return (
             <button key={o.id} type="button" disabled={disabled || locked} onClick={(e) => pick(o.id, e)} className={klass}>
               <span className="mr-2 text-violet-200 font-bold">{displayLabel}.</span>
-              {o.text}
+              <OptionContent text={o.text} visual={o.visual} />
             </button>
           );
         })}

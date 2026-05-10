@@ -167,6 +167,8 @@ const data = {
     raw: readMd("quality-judge/system.md"),
   },
   qualityJudgeUserTemplate: readMd("quality-judge/user-template.md"),
+  /** v0.31.73：变式 prompt — 极简，给 retry 实时出题用 */
+  variantSystem: readMd("variant/system.md"),
   skillKeywords: readJson("skill-keywords.json"),
   gameTypeBySkill: readJson("game-type-by-skill.json"),
   tutorTextSystem: readMd("tutor/text-system.md"),

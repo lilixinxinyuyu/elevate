@@ -136,10 +136,30 @@ export interface MultiStepAnswer {
 }
 export type AnswerSpec = NumericAnswer | ChoiceAnswer | MultiStepAnswer;
 
+/**
+ * v0.31.73：option 可以带结构化 visual hint，让前端按数位对齐渲染竖式
+ * 而不是 fall back 到 ASCII art。
+ *
+ * 例：用竖式计算 5.09 - 2.30，每个 option 给：
+ *   { id: "A", text: "5.09 - 2.3 (末位对齐)",
+ *     visual: { type: "vertical_arithmetic", a: "5.09", op: "−", b: "2.3", align: "right" } }
+ *   { id: "B", text: "5.09 - 2.30 (小数点对齐)",
+ *     visual: { type: "vertical_arithmetic", a: "5.09", op: "−", b: "2.30", align: "decimal" } }
+ */
+export interface OptionVisual {
+  type: "vertical_arithmetic";
+  a: string;
+  op: string;
+  b: string;
+  align?: "decimal" | "right";
+}
+
 export interface ChoiceOption {
   id: string;
   text: string;
   errorTag?: string;
+  /** v0.31.73：可选结构化视觉，前端用 grid 对齐渲染（取代 ASCII art） */
+  visual?: OptionVisual;
 }
 
 export interface CommonError {

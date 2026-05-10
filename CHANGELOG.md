@@ -3,6 +3,42 @@
 > 给爸爸/妈妈看的版本演进历史。Selena 不需要看这个文件——升级了她直接刷新就好。
 > 所有版本号在 `package.json` + `src/components/Layout.tsx` 的 footer。
 
+## v0.31.73 — 2026-05-10 · 视觉化竖式 + 变式实时出题
+
+爸爸三个反馈：
+1. 小数点对齐题应该真实显示对齐效果（不是文字描述）
+2. 所有可以图像化的题都应该图像化
+3. 重做（retry）应该走极简 prompt 实时返回，不走全量出题流程
+
+### 1. 视觉化竖式
+
+- 新组件 `<VerticalArithmetic>` — CSS grid 按数位对齐（不靠 ASCII 空格）
+- `ChoiceOption.visual?: { type: "vertical_arithmetic", a, op, b, align }` 新字段
+- `PlainChoicePanel` 渲染优先级：
+  1. option.visual 结构化竖式 → grid 对齐组件
+  2. option.text 含 \n / `─` 等 ASCII 竖式字符 → `whitespace-pre font-mono`（兼容老题）
+  3. 普通文本
+
+旧题（如 `AI_decimal_add_sub_vertical_008` 5.09−2.3）现在 `\n + ────` 会正确换行 + monospace 渲染。新题用 visual 字段更精确。
+
+### 2. 变式实时出题 `/api/generate/variant`
+
+新端点专门给 retry / 重做用：
+- system prompt ~600 字（vs 全量 8.7K）
+- user prompt：原题 JSON + 1-2 行变式要求
+- count=1, max_tokens=1800
+- 直连 dashscope qwen-plus，目标 < 10s（vs 旧路径 25-50s）
+- 失败时自动 fallback 到全量 `/api/generate/questions`
+
+`requestRetryQuestion` 默认走快路径。enum 字段（subjectId/skill_id/term/difficulty/game_type 等）从 sourceQuestion 强制 merge，AI 不能改。
+
+### 3. plain_choice prompt 教 AI 用 visual
+
+`prompts/questions/game-types/plain_choice.md` 重写：
+- 删除冗余的 enum 字段提醒（B 阶段已 caller 预填）
+- 新增 v0.31.73 视觉化竖式段：触发场景 / visual 字段格式 / 反 ASCII art 警告
+- 引用 4 P 原则取代铺垫规则
+
 ## v0.31.72 — 2026-05-10 · Prompt 系统 5 大改造（D + B + C + A + E）
 
 针对果园那道 leak 题反查到的根因：prompt 系统多年累积的"反面示范"自己在教 AI 出 leak 题。爸爸提了 5 个改造点，全部 ship。
