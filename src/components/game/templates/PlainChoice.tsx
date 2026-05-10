@@ -55,6 +55,16 @@ export function PlainChoicePanel(props: TemplateRenderProps) {
   // 不动 option.id（id 仍用作 correctId 比较），只洗渲染顺序。
   const sessionSalt = useMemo(() => Math.random().toString(36).slice(2), [question.question_id]);
   const options = useMemo(() => shuffleSeeded(rawOptions, `${question.question_id}::${sessionSalt}`), [rawOptions, sessionSalt]);
+  // v0.31.76：检测 visual 重复退化 —— 当 ≥2 个选项的 visual 完全相同（AI 误把 visual
+  // 当题面用而不是选项差异），直接禁用 visual 渲染，强制 fallback 到 text。
+  // 否则 4 个选项视觉上一样，Selena 看不出区别。
+  const visualDegenerate = useMemo(() => {
+    const vstrings = options
+      .filter((o) => (o as { visual?: unknown }).visual)
+      .map((o) => JSON.stringify((o as { visual?: unknown }).visual));
+    if (vstrings.length < 2) return false;
+    return new Set(vstrings).size === 1; // 全相同 = 退化
+  }, [options]);
   const pick = (id: string, ev: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled || locked) return;
     const rect = ev.currentTarget.getBoundingClientRect();
@@ -91,7 +101,10 @@ export function PlainChoicePanel(props: TemplateRenderProps) {
           return (
             <button key={o.id} type="button" disabled={disabled || locked} onClick={(e) => pick(o.id, e)} className={klass}>
               <span className="mr-2 text-violet-200 font-bold">{displayLabel}.</span>
-              <OptionContent text={o.text} visual={o.visual} />
+              <OptionContent
+                text={o.text}
+                visual={visualDegenerate ? undefined : o.visual}
+              />
             </button>
           );
         })}
