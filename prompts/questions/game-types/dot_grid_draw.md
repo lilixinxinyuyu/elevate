@@ -57,3 +57,24 @@
 - gridWidth × gridHeight 通常 5×5 到 7×7
 - minVertices / maxVertices 三角形是 3，四边形是 4
 - 这个题型只用于"画图"操作，不要塞文字答案
+
+### v0.31.93 难度阶梯 + skill 映射
+
+按 skill 选 expectedShape：
+
+| skill | 推荐 expectedShape | 难度 |
+|---|---|---|
+| triangle_inequality | any_triangle | D2 |
+| triangle_classification | isosceles_triangle / right_triangle | D3 |
+| triangle_classification (高) | equilateral_triangle / isosceles_right_triangle | D4 |
+| (将来) 四边形 | parallelogram / rectangle / trapezoid | D3-D4 |
+
+gridWidth × gridHeight 按难度：
+- D2: 5×5（点少，构造容易看见）
+- D3: 6×6
+- D4: 7×7（更多选择 + 误导）
+
+### v0.31.93 严格要求
+- **顶点数严格**：三角形 minVertices=maxVertices=3；四边形 4
+- **stem 要带场景**："小明用木条搭..." / "在点子图上画..."；不只"画一个 X 三角形"
+- 难题猎人 / 难题加 hint 文字提示策略（"先找两条相等的边"等）

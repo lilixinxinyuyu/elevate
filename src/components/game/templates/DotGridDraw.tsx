@@ -74,8 +74,13 @@ export function DotGridDrawPanel(props: TemplateRenderProps) {
     const ok = checkShape(vertices, spec.targetShape);
     setSubmitted(true);
     const rect = ev.currentTarget.getBoundingClientRect();
-    if (ok) triggerFx.correctAt(rect.left + rect.width / 2, rect.top, "✓");
-    else triggerFx.wrongAt(rect.left + rect.width / 2, rect.top);
+    if (ok) {
+      triggerFx.correctAt(rect.left + rect.width / 2, rect.top, "✓");
+      // v0.31.93: 几何 burst — 建筑工地主题
+      triggerFx.burstAt(rect.left + rect.width / 2, rect.top, ["📐", "📏", "✨", "⭐", "🎯"], 8);
+    } else {
+      triggerFx.wrongAt(rect.left + rect.width / 2, rect.top);
+    }
     window.setTimeout(() => {
       onFinish({
         answer: vertices.map((v) => `(${v.x},${v.y})`).join(";"),

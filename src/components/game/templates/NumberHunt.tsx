@@ -45,6 +45,8 @@ export function NumberHuntPanel(props: TemplateRenderProps) {
     if (isCorrect) {
       setVerdict("ok");
       triggerFx.correctAt(rect.left + rect.width / 2, rect.top, "💎");
+      // v0.31.93: 宝石 burst
+      triggerFx.burstAt(rect.left + rect.width / 2, rect.top, ["💎", "💍", "✨", "⭐"], 8);
     } else {
       setVerdict("wrong");
       triggerFx.wrongAt(rect.left + rect.width / 2, rect.top);

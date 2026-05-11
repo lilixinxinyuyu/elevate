@@ -40,6 +40,8 @@ export function TimeHeistPanel(props: TemplateRenderProps) {
     const rect = ev.currentTarget.getBoundingClientRect();
     if (opt.correct) {
       triggerFx.correctAt(rect.left + rect.width / 2, rect.top, "⏰");
+      // v0.31.93: 时钟主题 burst
+      triggerFx.burstAt(rect.left + rect.width / 2, rect.top, ["⏰", "⌛", "✨", "⭐"], 8);
       window.setTimeout(() => {
         onFinish({
           answer: opt.id,

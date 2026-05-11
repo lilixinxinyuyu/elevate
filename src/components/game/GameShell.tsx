@@ -5,7 +5,7 @@ import { adjustedEstimatedTime } from "../../core/timing";
 import { ComboBadge } from "./ComboBadge";
 import { XpBar } from "./XpBar";
 import { HintLadder } from "./HintLadder";
-import { FloatLayer, makeFloater, type Floater } from "./FloatPlus";
+import { FloatLayer, makeBurst, makeFloater, type Floater } from "./FloatPlus";
 import { StarterOverlay } from "./StarterOverlay";
 import { sfx } from "../../lib/sfx";
 import { TutorPanel } from "../tutor/TutorPanel";
@@ -124,6 +124,8 @@ export interface TriggerFx {
   correctAt: (x: number, y: number, text?: string) => void;
   wrongAt: (x: number, y: number) => void;
   hintPenaltyAt: (x: number, y: number, amount: number) => void;
+  /** v0.31.93: 答对时的"放射 burst" — 5 个新玩法用，emoji 随玩法主题对齐 */
+  burstAt: (x: number, y: number, emojis: string[], count?: number) => void;
 }
 
 export function GameShell(props: GameShellProps) {
@@ -202,6 +204,10 @@ export function GameShell(props: GameShellProps) {
       },
       hintPenaltyAt: (x, y, amount) => {
         setFloaters((fs) => [...fs, makeFloater(`-${amount}`, x, y, "lose")]);
+      },
+      // v0.31.93: 放射 burst — 5 个新玩法答对时用
+      burstAt: (x, y, emojis, count = 6) => {
+        setFloaters((fs) => [...fs, ...makeBurst(x, y, emojis, count)]);
       },
     }),
     [],
