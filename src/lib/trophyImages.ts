@@ -103,6 +103,12 @@ const TROPHY_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
     palette: "fiery ruby red + warm amber + golden flame",
   },
 
+  // v0.31.92: 难题猎人（weekly D4 hunter）— 一周内完成 ≥N 道 D4 难题
+  math_weekly_d4_hunter: {
+    motif: "a cute cartoon archer's bow with a glowing arrow knocked, aimed at a tiny star-shaped target floating among small math symbol particles (×, ÷, %), dynamic action pose",
+    palette: "deep crimson bow + golden arrow + emerald target + cream backdrop",
+  },
+
   // === milestone（4 tier 变体）===
   math_answer_master: {
     motif: "a target with a perfectly placed arrow in the bullseye, surrounded by tiny burst sparkles and small ribbon flag",
@@ -288,8 +294,10 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
     .replace(/^math_/, "math_")
     .replace(/_(bronze|silver|gold|platinum)$/, "");
   const spec = TROPHY_MOTIF_SPEC[baseId];
+  // v0.31.92 fix：默认 fallback 不再传中文 name 给 AI（AI 会渲染成图里的中文字
+  // 违反 NO TEXT 规则，weekly_d4_hunter 第一次重生就栽这）。改用纯通用描述。
   const motif =
-    spec?.motif ?? `an iconic illustration that represents「${t.name}」 (${t.description ?? ""})`;
+    spec?.motif ?? "a generic award subject — a glowing star, ribbon, or trophy cup centered on a clean enamel face";
   const palette =
     spec?.palette ?? "rich 2-3 color signature palette";
   const tierFlavor = t.tier ? TIER_FLAVOR[t.tier] : "Tier finish: classic colorful enamel palette.";
