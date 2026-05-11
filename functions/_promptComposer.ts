@@ -281,7 +281,18 @@ export function composeQuestionUserPrompt(args: ComposeQuestionInput): string {
   }
 
   // v0.31.74: gameType 决定提前到 prefilled block 之前 — 元数据要带 game_type
-  const fromSkill = (PROMPTS.gameTypeBySkill as unknown as Record<string, string>)[skillId];
+  // v0.31.95：mapping 从 v0.31.86 起改成 array — 这里防御：如果 fromSkill 是 array
+  // 就拿第一个 type（caller 应该用 pickGameType 但这是兜底防 D1 入 [object Object]）
+  const fromSkillRaw = (PROMPTS.gameTypeBySkill as unknown as Record<string, unknown>)[skillId];
+  let fromSkill: string | undefined;
+  if (typeof fromSkillRaw === "string") {
+    fromSkill = fromSkillRaw;
+  } else if (Array.isArray(fromSkillRaw) && fromSkillRaw.length > 0) {
+    const first = fromSkillRaw[0];
+    fromSkill = typeof first === "string"
+      ? first
+      : (first as { type?: string } | undefined)?.type;
+  }
   const gameType =
     args.gameType ??
     fromSkill ??

@@ -286,6 +286,9 @@ async function genBatchDirect(skill, batchAccepted = []) {
     callerTag: "fill-bank-v5",
     prefilledFields,
     skillExampleQuestion: example,
+    // v0.31.95 bug fix：之前漏了 gameType → composer 回落到 fromSkill = mapping
+    // 数组 → template-string 出 "[object Object],..."，AI 复抄 → D1 入了 8 道烂题
+    gameType,
   });
 
   // 单道 token 估算：v0.31.68 实测 plain_choice 多步题也常超 800（如小数乘加），
