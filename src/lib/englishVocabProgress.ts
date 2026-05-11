@@ -23,6 +23,7 @@ import {
   type MasteryStat,
   type TierDistribution,
 } from "./masteryTier";
+import { recordDailyActivity } from "./dailyActivityLog";
 
 export type VocabProgress = Record<string, MasteryStat>;
 
@@ -61,6 +62,8 @@ export async function recordVocabAttempt(
   const next = transitionStat(cur, isCorrect);
   all[k] = next;
   await saveVocabProgress(studentId, all);
+  // v0.31.103：daily log（主页 summary 用）
+  void recordDailyActivity("english", studentId, k, isCorrect);
   return next;
 }
 

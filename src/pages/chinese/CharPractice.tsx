@@ -8,10 +8,12 @@
  *   2. 上下册切换 = student.currentTerm（赛季制；与数学一致）
  *   3. 游戏化命名：字词大冒险（不再叫"写字练习"）
  *
- * 三种模式：
+ * 两种模式（v0.31.103 移除"打字回忆"——IME 自动出字让它跟"辨字选择"等价无意义）：
  *   ✍️ 手写挑战：canvas 画 → LLM 视觉判
  *   🎯 辨字选择：4 选项中挑正确字
- *   👀 看拼音猜字：input 框（输入法不灵的字 / 没法画 canvas 的电脑端 fallback）
+ *
+ * v0.31.103 通关机制：1 轮 = 10 手写 + 10 辨字 = 20 答对。两边都满 → 庆祝
+ * 通关 + 自动重置 counters。下一轮继续。
  */
 
 import { Link } from "react-router-dom";
@@ -51,7 +53,8 @@ import { HandwriteCanvas } from "../../components/HandwriteCanvas";
 import { termToSemester } from "../../components/TermSwitcher";
 import type { Term } from "../../core/types";
 
-type Mode = "write" | "choose" | "type";
+type Mode = "write" | "choose";
+const ROUND_TARGET = 10; // 每轮各模式答对 10 道 → 通关
 const RECENT_WINDOW = 5;
 const REINFORCE_WINDOW = 2;
 
@@ -74,7 +77,6 @@ export function CharPracticePage() {
   const [mode, setMode] = useState<Mode>("write");
   const [current, setCurrent] = useState<G4Char | null>(null);
   const [chooseQ, setChooseQ] = useState<ReturnType<typeof generateChooseQuestion> | null>(null);
-  const [typeInput, setTypeInput] = useState("");
   const [feedback, setFeedback] = useState<{
     isCorrect: boolean;
     userInput: string;
@@ -97,6 +99,11 @@ export function CharPracticePage() {
   const [canvasResetKey, setCanvasResetKey] = useState(0);
   // v0.31.46: 词组提示作为付费 hint（-3 XP），与数学的 hint 机制一致
   const [hintOpened, setHintOpened] = useState(false);
+  // v0.31.103: 通关进度——本轮各模式答对次数（满 10+10 = 通关）
+  const [roundWrites, setRoundWrites] = useState(0);
+  const [roundChooses, setRoundChooses] = useState(0);
+  const [roundCleared, setRoundCleared] = useState<{ at: number; round: number } | null>(null);
+  const [roundCount, setRoundCount] = useState(1);
 
   const semester = termToSemester(currentTerm);
   // v0.31.43: 综合复习 (semester === null) → 上下册混合池
@@ -147,7 +154,6 @@ export function CharPracticePage() {
     setRecentWords([]);
     setReinforceQueue([]);
     setFeedback(null);
-    setTypeInput("");
     setCombo(0);
     setCanvasResetKey((k) => k + 1);
     setHintOpened(false);
@@ -211,6 +217,20 @@ export function CharPracticePage() {
       setSessionXp((x) => x + earned);
       setCombo((c) => c + 1);
       flashXp(earned);
+      // v0.31.103: 通关进度——同一字答对在两边都计（鼓励都做）
+      const nextWrites = mode === "write" ? roundWrites + 1 : roundWrites;
+      const nextChooses = mode === "choose" ? roundChooses + 1 : roundChooses;
+      if (mode === "write") setRoundWrites(nextWrites);
+      else setRoundChooses(nextChooses);
+      // 满 10+10 → 通关庆祝 + 重置 counter，开下一轮
+      if (nextWrites >= ROUND_TARGET && nextChooses >= ROUND_TARGET) {
+        setRoundCleared({ at: Date.now(), round: roundCount });
+        setTimeout(() => setRoundCleared(null), 4500);
+        setRoundWrites(0);
+        setRoundChooses(0);
+        setRoundCount((c) => c + 1);
+        setSessionXp((x) => x + 30); // 通关 +30 XP
+      }
       setReinforceQueue((q) =>
         q
           .filter((r) => r.word !== current.word)
@@ -249,7 +269,6 @@ export function CharPracticePage() {
     setRecentWords(nextRecent);
     const reinforceWords = reinforceQueue.map((r) => r.word);
     pickNew(curProgress, nextRecent, reinforceWords);
-    setTypeInput("");
     setFeedback(null);
     setCanvasResetKey((k) => k + 1);
     setHintOpened(false); // v0.31.46: 下一字重新隐藏提示
@@ -280,14 +299,6 @@ export function CharPracticePage() {
     } finally {
       setJudgingCanvas(false);
     }
-  }
-
-  function onSubmitType(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!current || feedback) return;
-    const trimmed = typeInput.trim();
-    if (!trimmed) return;
-    void recordResult(trimmed === current.word, trimmed);
   }
 
   function onPickChoose(opt: string) {
@@ -339,7 +350,7 @@ export function CharPracticePage() {
         </Link>
       </div>
 
-      {/* 模式切换 */}
+      {/* 模式切换（v0.31.103 删 ⌨️ 打字回忆——IME 自动出字让它跟 🎯 辨字选择重复无意义） */}
       <div className="flex gap-2">
         <ModeTab active={mode === "write"} onClick={() => setMode("write")}>
           ✍️ 手写挑战
@@ -347,9 +358,25 @@ export function CharPracticePage() {
         <ModeTab active={mode === "choose"} onClick={() => setMode("choose")}>
           🎯 辨字选择
         </ModeTab>
-        <ModeTab active={mode === "type"} onClick={() => setMode("type")}>
-          ⌨️ 打字回忆
-        </ModeTab>
+      </div>
+
+      {/* v0.31.103: 通关进度条——10 手写 + 10 辨字 = 1 轮 */}
+      <div className="card-glow grid grid-cols-2 gap-3">
+        <RoundProgressBar
+          label="✍️ 手写"
+          done={roundWrites}
+          target={ROUND_TARGET}
+          color="violet"
+        />
+        <RoundProgressBar
+          label="🎯 辨字"
+          done={roundChooses}
+          target={ROUND_TARGET}
+          color="amber"
+        />
+        <div className="col-span-2 text-[11px] text-slate-400 text-center">
+          本轮第 {roundCount} 关 · 双线满 10 通关 +30 XP
+        </div>
       </div>
 
       {/* 5-tier 分布 */}
@@ -399,7 +426,7 @@ export function CharPracticePage() {
           hintOpened={hintOpened}
           onOpenHint={() => setHintOpened(true)}
         />
-      ) : mode === "choose" ? (
+      ) : (
         <ChoosePanel
           char={current}
           chooseQ={chooseQ}
@@ -407,18 +434,6 @@ export function CharPracticePage() {
           stat={progress[current.word]}
           onPick={onPickChoose}
           onContinueWrong={() => advance(progress)}
-          hintOpened={hintOpened}
-          onOpenHint={() => setHintOpened(true)}
-        />
-      ) : (
-        <TypePanel
-          char={current}
-          input={typeInput}
-          onInput={setTypeInput}
-          feedback={feedback}
-          onSubmit={onSubmitType}
-          onContinueWrong={() => advance(progress)}
-          stat={progress[current.word]}
           hintOpened={hintOpened}
           onOpenHint={() => setHintOpened(true)}
         />
@@ -431,7 +446,6 @@ export function CharPracticePage() {
           if (target) {
             setCurrent(target);
             if (mode === "choose") setChooseQ(generateChooseQuestion(target, pool));
-            setTypeInput("");
             setFeedback(null);
             setCanvasResetKey((k) => k + 1);
             setHintOpened(false);
@@ -452,7 +466,7 @@ export function CharPracticePage() {
                   <span className="text-slate-400">{h.pinyin}</span>
                   <span className="ml-2"><TierChip level={h.newLevel} /></span>
                   <span className="ml-2 text-[10px] text-slate-500">
-                    {h.mode === "write" ? "手写" : h.mode === "choose" ? "辨字" : "打字"}
+                    {h.mode === "write" ? "手写" : "辨字"}
                   </span>
                 </span>
                 <span className={h.isCorrect ? "text-emerald-300" : "text-rose-300"}>
@@ -499,6 +513,55 @@ export function CharPracticePage() {
           </div>
         </div>
       )}
+
+      {/* v0.31.103: 通关庆祝（10 手写 + 10 辨字 → 进入下一关） */}
+      {roundCleared && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className="card-glow bg-gradient-to-br from-violet-500 to-pink-500 text-white text-center p-6 max-w-xs animate-slide-up shadow-2xl">
+            <div className="text-5xl">🗡️</div>
+            <div className="font-display font-bold text-2xl mt-2">
+              第 {roundCleared.round} 关 · 通关！
+            </div>
+            <div className="text-sm mt-1 opacity-90">
+              10 手写 + 10 辨字 完成 · +30 XP
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RoundProgressBar({
+  label,
+  done,
+  target,
+  color,
+}: {
+  label: string;
+  done: number;
+  target: number;
+  color: "violet" | "amber";
+}) {
+  const pct = Math.min(100, (done / target) * 100);
+  const fill =
+    color === "violet"
+      ? "bg-violet-400"
+      : "bg-amber-400";
+  return (
+    <div className="text-xs">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-slate-300 font-semibold">{label}</span>
+        <span className="text-slate-400 tabular-nums">
+          {Math.min(done, target)}/{target}
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+        <div
+          className={`h-full ${fill} transition-all`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -789,99 +852,6 @@ function ChoosePanel({
         </div>
       )}
     </div>
-  );
-}
-
-function TypePanel({
-  char,
-  input,
-  onInput,
-  feedback,
-  onSubmit,
-  onContinueWrong,
-  stat,
-  hintOpened,
-  onOpenHint,
-}: {
-  char: G4Char;
-  input: string;
-  onInput: (v: string) => void;
-  feedback: { isCorrect: boolean; userInput: string } | null;
-  onSubmit: (e?: React.FormEvent) => void;
-  onContinueWrong: () => void;
-  stat: MasteryStat | undefined;
-  hintOpened: boolean;
-  onOpenHint: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [char.word]);
-  const level: Level = (stat?.level ?? 0) as Level;
-  return (
-    <form onSubmit={onSubmit} className="card-glow space-y-3" autoComplete="off">
-      <div className="flex justify-between items-center text-xs">
-        <TierChip level={level} />
-        {stat && (stat.right > 0 || stat.wrong > 0) && (
-          <span className="text-slate-500 tabular-nums">对 {stat.right} · 错 {stat.wrong}</span>
-        )}
-      </div>
-      <div className="rounded-xl border border-amber-300/30 bg-amber-500/5 p-3 text-xs text-amber-200/70">
-        💡 注意：打字模式拼音 IME 会自动出字。仅推荐用 ✍️ 手写挑战 来真正练写字。
-      </div>
-      <div className="text-center">
-        <div className="text-xs text-slate-400 uppercase tracking-widest">拼音</div>
-        <div className="font-display text-3xl text-cyan-200 mt-1">{char.pinyin}</div>
-      </div>
-      <div className="rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4 text-center">
-        <div className="text-xs text-slate-400 mb-1">含义</div>
-        <div className="text-base text-slate-100 mt-1">{char.meaning}</div>
-        <HintRevealer
-          group={char.group}
-          target={char.word}
-          opened={hintOpened}
-          onOpen={onOpenHint}
-        />
-      </div>
-      <div>
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => onInput(e.target.value)}
-          placeholder="打字输入（仅作辅助）"
-          maxLength={6}
-          disabled={!!feedback}
-          className={`w-full text-center font-display text-3xl p-4 rounded-2xl border bg-ink-900/60 ${
-            feedback?.isCorrect
-              ? "border-emerald-400 text-emerald-200"
-              : feedback
-                ? "border-rose-400 text-rose-200"
-                : "border-ink-600 text-amber-100 focus:border-violet-400 focus:outline-none"
-          }`}
-        />
-      </div>
-      {feedback && !feedback.isCorrect && (
-        <>
-          <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
-            <div className="font-semibold mb-1">再来一次 — 正确字是：</div>
-            <div className="text-center font-display text-3xl text-amber-200 my-1">{char.word}</div>
-            <div className="text-xs text-rose-200/80">你写的：<span className="line-through">{feedback.userInput || "(空)"}</span></div>
-          </div>
-          <button type="button" onClick={onContinueWrong} className="btn-primary w-full">下一字 →</button>
-        </>
-      )}
-      {feedback && feedback.isCorrect && (
-        <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 text-center">
-          ✓ 太棒了！
-        </div>
-      )}
-      {!feedback && (
-        <button type="submit" disabled={!input.trim()} className="btn-primary w-full disabled:opacity-50">
-          提交
-        </button>
-      )}
-    </form>
   );
 }
 

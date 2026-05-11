@@ -39,9 +39,11 @@ import {
 import { loadDaily, tickDaily, type DailyState } from "../../lib/dailyTarget";
 import { MasteryTierBar, TierChip } from "../../components/MasteryTierBar";
 import { termToSemester } from "../../components/TermSwitcher";
+import { SpeakWordPanel } from "../../components/english/SpeakWordPanel";
 import type { Term } from "../../core/types";
 
-type Mode = "word2cn" | "cn2word" | "listen" | "sprint";
+// v0.31.103：加 "speak" 朗读模式（Qwen3-Omni 判分）。其他模式不变。
+type Mode = "word2cn" | "cn2word" | "listen" | "speak" | "sprint";
 const RECENT_WINDOW = 5;
 const REINFORCE_WINDOW = 2;
 const SPRINT_DURATION_SECONDS = 60;
@@ -306,11 +308,12 @@ export function VocabPracticePage() {
         </Link>
       </div>
 
-      {/* 4 模式 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+      {/* 5 模式（v0.31.103 加"📣 朗读"——Qwen Omni AI 判分） */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
         <ModeTab active={mode === "word2cn"} onClick={() => setMode("word2cn")}>看词 → 中文</ModeTab>
         <ModeTab active={mode === "cn2word"} onClick={() => setMode("cn2word")}>看中文 → 词</ModeTab>
         <ModeTab active={mode === "listen"} onClick={() => setMode("listen")}>🔊 听 → 词</ModeTab>
+        <ModeTab active={mode === "speak"} onClick={() => setMode("speak")}>📣 朗读 AI 判</ModeTab>
         <ModeTab active={mode === "sprint"} onClick={() => setMode("sprint")}>⚡ 闪电冲刺</ModeTab>
       </div>
 
@@ -334,7 +337,18 @@ export function VocabPracticePage() {
         }
       />
 
-      {mode === "sprint" ? (
+      {mode === "speak" && current ? (
+        <SpeakWordPanel
+          target={current.w}
+          hintMeaning={current.c}
+          mode="word"
+          onScore={(score, _transcript, _feedback) => {
+            // ≥70 算对，记 attempt + tickDaily（跟其他模式一致）
+            const isCorrect = score >= 70;
+            void recordResult(isCorrect, `🎤 ${score}/100`);
+          }}
+        />
+      ) : mode === "sprint" ? (
         <SprintPanel
           state={sprintState}
           word={current}

@@ -24,6 +24,7 @@ import {
   type MasteryStat,
   type TierDistribution,
 } from "./masteryTier";
+import { recordDailyActivity } from "./dailyActivityLog";
 
 export type CharProgress = Record<string, MasteryStat>;
 
@@ -58,6 +59,8 @@ export async function recordCharAttempt(
   const next = transitionStat(cur, isCorrect);
   all[word] = next;
   await saveCharProgress(studentId, all);
+  // v0.31.103：daily log（主页 summary 用）
+  void recordDailyActivity("chinese", studentId, word, isCorrect);
   return next;
 }
 

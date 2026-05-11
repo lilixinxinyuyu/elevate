@@ -16,6 +16,7 @@ import { ChineseAdminPage } from "./pages/chinese/ChineseAdmin";
 import { CharPracticePage } from "./pages/chinese/CharPractice";
 import { EnglishHomePage } from "./pages/english/EnglishHome";
 import { VocabPracticePage } from "./pages/english/VocabPractice";
+import { SentencePracticePage } from "./pages/english/SentencePractice";
 import { FluencyPage } from "./pages/Fluency";
 import { FluencySessionPage } from "./pages/FluencySession";
 import { BossWorldPage } from "./pages/BossWorld";
@@ -97,6 +98,13 @@ function VocabPracticeRoute() {
   return <ComingSoonPage />;
 }
 
+/** v0.31.103: 英语短句大冒险（朗读 + 造句） */
+function SentencePracticeRoute() {
+  const subject = useSubject();
+  if (subject.id === "english") return <SentencePracticePage />;
+  return <ComingSoonPage />;
+}
+
 /**
  * 路由结构（多学科 v2 / Phase 2 MVP）：
  *
@@ -144,6 +152,8 @@ export const router = createBrowserRouter([
       { path: "char-practice", element: <CharPracticeRoute /> },
       // v0.31.39：英语单词记忆
       { path: "vocab", element: <VocabPracticeRoute /> },
+      // v0.31.103：英语短句（朗读 AI 判 + 造句拼图）
+      { path: "sentence", element: <SentencePracticeRoute /> },
       { path: "*", element: <ComingSoonPage /> },
     ],
   },

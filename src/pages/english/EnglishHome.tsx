@@ -90,7 +90,7 @@ export function EnglishHomePage() {
       {/* 今日 3 环 */}
       <SubjectTodayRings rings={rings} />
 
-      {/* 词汇大冒险入口 */}
+      {/* 词汇大冒险入口（v0.31.103 加 📣 朗读 AI 判 模式） */}
       <Link
         to="/english/vocab"
         className="card-glow bg-gradient-to-br from-cyan-500/15 to-blue-500/10 border-cyan-400/40 hover:scale-[1.01] transition-transform block"
@@ -99,16 +99,38 @@ export function EnglishHomePage() {
           <div className="text-3xl">🌍</div>
           <div className="flex-1">
             <div className="font-display font-bold text-cyan-100">
-              词汇大冒险 · 4 种玩法
+              词汇大冒险 · 5 种玩法
             </div>
             <div className="text-xs text-slate-300 mt-0.5">
-              看词→中文 / 看中文→词 / 🔊 听→词 / ⚡ 闪电冲刺
+              看词→中文 / 看中文→词 / 🔊 听→词 / 📣 朗读 AI 判 / ⚡ 闪电冲刺
             </div>
             <div className="text-[11px] text-cyan-300/80 mt-1">
               5-tier 等级 · 间隔重现 · 答错的会强化
             </div>
           </div>
           <div className="text-cyan-300 text-2xl">→</div>
+        </div>
+      </Link>
+
+      {/* v0.31.103: 短句大冒险入口 */}
+      <Link
+        to="/english/sentence"
+        className="card-glow bg-gradient-to-br from-violet-500/15 to-pink-500/10 border-violet-400/40 hover:scale-[1.01] transition-transform block"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-3xl">🗣️</div>
+          <div className="flex-1">
+            <div className="font-display font-bold text-violet-100">
+              短句大冒险 · 2 种玩法
+            </div>
+            <div className="text-xs text-slate-300 mt-0.5">
+              📣 朗读 AI 判分 / 🔀 造句拼图
+            </div>
+            <div className="text-[11px] text-violet-300/80 mt-1">
+              30 句 G4 短句库 · 难度可选
+            </div>
+          </div>
+          <div className="text-violet-300 text-2xl">→</div>
         </div>
       </Link>
 
