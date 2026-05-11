@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import type { Question, GameTemplate } from "../core/types";
 import { GameShell } from "../components/game/GameShell";
 
@@ -224,7 +223,9 @@ const SAMPLES: Array<{
       play_as: "speed_match",
       cognitive_level: "procedural",
       difficulty: 2,
-      question_format: "numeric_choice",
+      // v0.31.88: speed_match panel 只在 single_choice 走 options 分支；
+      // numeric_choice 会进 numeric 分支但要求 answer.type=number → 都不命中 → 兜底 "OK"
+      question_format: "single_choice",
       estimated_time_seconds: 12,
       stem: "0.6 × 5 = ?",
       options: [
@@ -384,16 +385,25 @@ const SAMPLES: Array<{
       play_as: "vertical_repair",
       cognitive_level: "procedural",
       difficulty: 3,
-      question_format: "fill_blank",
+      // v0.31.88: vertical_repair panel 需要 single_choice + 4 options，或者 subquestions[choose]。
+      // fill_blank + answer.number 走兜底"继续"按钮。这里改成"找错"题型 — 给一个错竖式，4 选 1。
+      question_format: "single_choice",
       estimated_time_seconds: 40,
-      stem: "完成竖式：3.45 + 2.7 = ?",
-      answer: { type: "number", value: 6.15 },
-      solution_steps: ["对齐小数点，3.45 + 2.70 = 6.15"],
-      hints: [{ text: "小数点对齐再加", penalty: 1 }],
+      stem: "下面的竖式哪一步算错了？",
+      options: [
+        { id: "A", text: "进位忘了加 1" },
+        { id: "B", text: "5+7=12 但写了 11", errorTag: "carry_error" },
+        { id: "C", text: "小数点对齐错位", errorTag: "decimal_align" },
+        { id: "D", text: "没错", errorTag: "false_neg" },
+      ],
+      answer: { type: "choice", value: "B" },
+      // tags 里的 vert: / op: / result: 让 panel 渲染右侧竖式块
+      tags: ["sample", "vert:3.45", "op:+", "vert:2.70", "result:6.11", "hl:11"],
+      solution_steps: ["3.45 + 2.70 = 6.15，但题里写成 6.11，是 5+7 进位算错"],
+      hints: [{ text: "看个位数 5+7=12", penalty: 1 }],
       common_errors: [],
-      feedback_correct: "🔧 修好了",
-      feedback_wrong: "小数点对齐？",
-      tags: ["sample"],
+      feedback_correct: "🔧 火眼金睛",
+      feedback_wrong: "再核对每位",
     } as unknown as Question,
   },
   {
@@ -496,21 +506,19 @@ const SAMPLES: Array<{
       play_as: "chart_detective",
       cognitive_level: "application",
       difficulty: 2,
-      question_format: "single_choice",
+      // v0.31.88: chart_detective panel 是"拖动黄虚线到平均数位置"，不是 4 选 1。
+      // 之前样例题问"最高那天"跟 UI 完全不匹配。改成找平均数。
+      // bars: 5 天数据 (8, 12, 6, 10, 9)，平均 = 9。step=1。
+      question_format: "numeric",
       estimated_time_seconds: 30,
-      stem: "看条形图（演示）：周一 8、周二 5、周三 12，最高的是哪天？",
-      options: [
-        { id: "A", text: "周一" },
-        { id: "B", text: "周二" },
-        { id: "C", text: "周三" },
-      ],
-      answer: { type: "choice", value: "C" },
-      solution_steps: ["12 > 8 > 5"],
-      hints: [{ text: "找最大数", penalty: 1 }],
+      stem: "看条形图：5 天的数量分别是 8 / 12 / 6 / 10 / 9，把黄色虚线拖到平均数位置。",
+      answer: { type: "number", value: 9 },
+      tags: ["sample", "bars:8,12,6,10,9", "step:1"],
+      solution_steps: ["(8+12+6+10+9) ÷ 5 = 45 ÷ 5 = 9"],
+      hints: [{ text: "总和 ÷ 个数", penalty: 1 }],
       common_errors: [],
       feedback_correct: "📊 看图准",
       feedback_wrong: "比一下数",
-      tags: ["sample"],
     } as unknown as Question,
   },
   {
@@ -535,12 +543,20 @@ const SAMPLES: Array<{
       play_as: "equation_builder",
       cognitive_level: "procedural",
       difficulty: 3,
+      // v0.31.88: equation_builder 需要 word_problem_steps.equation_or_expression 或
+      // answer.multi_step 含 expression 步，否则会兜底到"500" 单数字（无拼装）。
+      // 这里提供完整表达式让 panel 拆 token → 拼装 25×(8+12) 的过程。
       question_format: "fill_blank",
       estimated_time_seconds: 30,
-      stem: "用乘法分配律：25 × 8 + 25 × 12 = ?",
+      stem: "用乘法分配律拼出等式：25 × 8 + 25 × 12 = ?\n下方拼出 25 × (8 + 12) 的表达式",
       answer: { type: "number", value: 500 },
+      word_problem_steps: {
+        question: "用乘法分配律算总和",
+        relationship: "(a+b)×c = a×c + b×c",
+        equation_or_expression: "25*(8+12)",
+      },
       solution_steps: ["25 × (8 + 12) = 25 × 20 = 500"],
-      hints: [{ text: "提公因数 25", penalty: 1 }],
+      hints: [{ text: "提公因数 25 出来", penalty: 1 }],
       common_errors: [],
       feedback_correct: "🧩 提得漂亮",
       feedback_wrong: "找两个加数都有的因数",
@@ -612,31 +628,29 @@ const SAMPLES: Array<{
       question_format: "multi_step",
       estimated_time_seconds: 50,
       stem: "苹果 ¥3.5/斤，香蕉 ¥2.8/斤。买 2 斤苹果 + 3 斤香蕉，一共多少钱？",
+      // v0.31.88: subquestion kind 必须是 "numeric" / "choose" / "clue_pick"
+      // （之前用了不存在的 "fill" → buildSubquestions 过滤掉 → 走 fallback）
       subquestions: [
         {
-          kind: "fill",
-          prompt: "苹果总价",
-          expected: 7,
+          kind: "numeric",
+          prompt: "第 1 步：苹果总价 = 3.5 × 2 = ?",
+          value: 7,
+          unit: "元",
         },
         {
-          kind: "fill",
-          prompt: "香蕉总价",
-          expected: 8.4,
+          kind: "numeric",
+          prompt: "第 2 步：香蕉总价 = 2.8 × 3 = ?",
+          value: 8.4,
+          unit: "元",
         },
         {
-          kind: "fill",
-          prompt: "合计",
-          expected: 15.4,
+          kind: "numeric",
+          prompt: "第 3 步：合计 = 苹果 + 香蕉 = ?",
+          value: 15.4,
+          unit: "元",
         },
       ],
-      answer: {
-        type: "steps",
-        steps: [
-          { step_id: "0", expected: "7" },
-          { step_id: "1", expected: "8.4" },
-          { step_id: "2", expected: "15.4" },
-        ],
-      },
+      answer: { type: "number", value: 15.4 },
       solution_steps: [
         "苹果 3.5×2=7",
         "香蕉 2.8×3=8.4",
@@ -703,22 +717,19 @@ const SAMPLES: Array<{
       play_as: "balance_lab",
       cognitive_level: "procedural",
       difficulty: 3,
-      question_format: "numeric_choice",
+      // v0.31.88: balance_lab 是"天平操作"题：tags.eq 是初始方程，answer.number 是 x 解。
+      // panel 通过等式两边操作（两边 -5、两边 ÷3）化简到 x=5。
+      // 之前用 choice + 没 eq tag → parseEq 退化为 x=0 → useEffect 立刻判完。
+      question_format: "numeric",
       estimated_time_seconds: 35,
-      stem: "解方程 3x + 5 = 20，x = ?",
-      options: [
-        { id: "A", text: "5" },
-        { id: "B", text: "4" },
-        { id: "C", text: "6" },
-        { id: "D", text: "15" },
-      ],
-      answer: { type: "choice", value: "A" },
-      solution_steps: ["3x = 20 - 5 = 15", "x = 15 / 3 = 5"],
-      hints: [{ text: "先减再除", penalty: 1 }],
+      stem: "解方程 3x + 5 = 20。用下方按钮操作两边，把它化简到 x = ?",
+      answer: { type: "number", value: 5 },
+      tags: ["sample", "eq:3x+5=20"],
+      solution_steps: ["两边 -5 → 3x = 15", "两边 ÷3 → x = 5"],
+      hints: [{ text: "先减后除", penalty: 1 }],
       common_errors: [],
       feedback_correct: "⚖️ 平衡了",
-      feedback_wrong: "等式两边都变",
-      tags: ["sample"],
+      feedback_wrong: "等式两边都要做同样操作",
     } as unknown as Question,
   },
   {
@@ -742,20 +753,20 @@ const SAMPLES: Array<{
       play_as: "cube_view",
       cognitive_level: "application",
       difficulty: 2,
-      question_format: "single_choice",
+      // v0.31.88: cube_view panel 需要 tags 里有 solid:x,y,z|... 或 grid-front/top/left:WxH:...
+      // 之前样例没 tag → 渲染空白。这里给一个 5 个方块的 L 形结构，问最少几个方块。
+      // numeric 答案让 panel 走 NumericCubeView 分支（带 3D 渲染）。
+      question_format: "numeric",
       estimated_time_seconds: 30,
-      stem: "(演示)从正面看一组立方体，应该看到什么？",
-      options: [
-        { id: "A", text: "■■\n■" },
-        { id: "B", text: "■\n■■" },
-      ],
-      answer: { type: "choice", value: "A" },
-      solution_steps: ["按正面投影"],
-      hints: [{ text: "想象眼睛在前面", penalty: 1 }],
+      stem: "下面立体图形从正面看到的形状如图。最少由几个正方体搭成？",
+      answer: { type: "number", value: 5 },
+      // solid 坐标 (x=右, y=上, z=后) — L 形：底部一排 3 个 + 上一排 2 个左侧
+      tags: ["sample", "solid:0,0,0|1,0,0|2,0,0|0,1,0|1,1,0", "grid-front:3x2:1,1,1|1,1,0"],
+      solution_steps: ["底排 3 + 上排 2 = 5 个"],
+      hints: [{ text: "前视看到的轮廓是底排长 3，上排长 2", penalty: 1 }],
       common_errors: [],
       feedback_correct: "🧊 空间感真好",
-      feedback_wrong: "看错方向了？",
-      tags: ["sample"],
+      feedback_wrong: "前视图只显示形状，后面遮的还要算",
     } as unknown as Question,
   },
   {
@@ -857,9 +868,7 @@ export function PlaygroundPage() {
               {SAMPLES.length} 种 game template 各一道示例题。**不计 attempt / 不存数据 / 不算 XP**，纯试玩。
             </div>
           </div>
-          <Link to="../" className="text-xs text-slate-400 hover:text-slate-200">
-            ← 回首页
-          </Link>
+          {/* v0.31.88: 从 admin 内 tab 渲染时不需要回首页，logo 一直在 */}
         </div>
       </section>
 

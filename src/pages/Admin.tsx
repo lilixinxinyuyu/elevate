@@ -20,9 +20,12 @@ import { TrophyImagesAdminPanel } from "../components/TrophyImagesAdminPanel";
 import { QuestionsAdminPanel } from "../components/QuestionsAdminPanel";
 import { SkillBankDashboard } from "../components/admin/SkillBankDashboard";
 import { ReportsPanel } from "../components/ReportsPanel";
+// v0.31.88: 周报 + 试玩台 改为 admin 内 tab（nav 上不再露面）
+import { ReportPage } from "./Report";
+import { PlaygroundPage } from "./Playground";
 import type { Question } from "../core/types";
 
-type AdminTab = "bank" | "sync" | "assets" | "system";
+type AdminTab = "bank" | "report" | "sync" | "assets" | "playground" | "system";
 
 // v0.31.55: hash → tab 映射，支持老的 deep link
 const HASH_TO_TAB: Record<string, AdminTab> = {
@@ -33,6 +36,8 @@ const HASH_TO_TAB: Record<string, AdminTab> = {
   "prompt-builder": "assets",
   "cloud-sync": "sync",
   "system": "system",
+  "report": "report",
+  "playground": "playground",
 };
 
 export function AdminPage() {
@@ -129,13 +134,15 @@ export function AdminPage() {
   //   - 导入题目 JSON 拆开：导入 textarea 留 题库 tab，重置/导出按钮 → 同步 tab
   return (
     <div className="space-y-3">
-      {/* Tab nav — 4 顶部 tabs */}
+      {/* Tab nav — v0.31.88：6 tabs（加了周报 + 试玩台） */}
       <nav className="flex gap-0.5 border-b border-white/10 -mb-px overflow-x-auto">
         {(
           [
             { id: "bank", label: "📋 题库 / 学情" },
+            { id: "report", label: "📈 周报" },
             { id: "sync", label: "☁️ 同步 / 备份" },
             { id: "assets", label: "🎨 资源生成" },
+            { id: "playground", label: "🧪 试玩台" },
             { id: "system", label: "🛠️ 系统" },
           ] as { id: AdminTab; label: string }[]
         ).map((t) => (
@@ -223,6 +230,13 @@ export function AdminPage() {
         </div>
       )}
 
+      {/* ============ 周报 — v0.31.88 从 nav 移入 ============ */}
+      {tab === "report" && (
+        <div className="pt-2">
+          <ReportPage />
+        </div>
+      )}
+
       {/* ============ 同步 / 备份 ============ */}
       {tab === "sync" && (
         <div className="space-y-4 pt-2">
@@ -302,6 +316,13 @@ export function AdminPage() {
             <div className="font-semibold mb-2">📝 AI 出题 Prompt 生成器</div>
             <PromptBuilder />
           </div>
+        </div>
+      )}
+
+      {/* ============ 试玩台 — v0.31.88 从 nav 移入 ============ */}
+      {tab === "playground" && (
+        <div className="pt-2">
+          <PlaygroundPage />
         </div>
       )}
 

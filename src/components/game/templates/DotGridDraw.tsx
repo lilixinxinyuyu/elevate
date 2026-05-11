@@ -117,22 +117,33 @@ export function DotGridDrawPanel(props: TemplateRenderProps) {
           className="max-w-full mx-auto block"
           style={{ touchAction: "manipulation" }}
         >
-          {/* 网格点 */}
+          {/* 网格点 — v0.31.88: 每个点叠一个透明 r=20 hit area 防"点不到" */}
           {dots.map((p) => {
             const { cx, cy } = dotPx(p);
             const isVertex = vertices.some((v) => v.x === p.x && v.y === p.y);
             const isFirst = vertices[0] && vertices[0].x === p.x && vertices[0].y === p.y;
             return (
-              <circle
-                key={`${p.x},${p.y}`}
-                cx={cx}
-                cy={cy}
-                r={isFirst ? 9 : isVertex ? 7 : 4}
-                fill={isFirst ? "#fbbf24" : isVertex ? "#a78bfa" : "#475569"}
-                opacity={isVertex ? 1 : 0.5}
-                style={{ cursor: disabled || submitted ? "default" : "pointer" }}
-                onClick={() => clickDot(p)}
-              />
+              <g key={`${p.x},${p.y}`}>
+                {/* 可见点 */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={isFirst ? 9 : isVertex ? 7 : 4}
+                  fill={isFirst ? "#fbbf24" : isVertex ? "#a78bfa" : "#475569"}
+                  opacity={isVertex ? 1 : 0.5}
+                  pointerEvents="none"
+                />
+                {/* 透明 hit area — 半径 20px 覆盖手指 44px 触摸目标。
+                    放后面让它覆盖可见点的点击。 */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={20}
+                  fill="transparent"
+                  style={{ cursor: disabled || submitted ? "default" : "pointer" }}
+                  onClick={() => clickDot(p)}
+                />
+              </g>
             );
           })}
           {/* 顶点连线 */}

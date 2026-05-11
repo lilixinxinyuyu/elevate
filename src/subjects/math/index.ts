@@ -46,10 +46,13 @@ const MATH_ABILITIES: SubjectAbilityDef[] = [
 // 移动底部 nav 压到 5 项（非 desktopOnly + 非 subtle）：
 //   首页 / 闪电口算 / 今日挑战 / 闯关 / 错题复活
 // 桌面 nav 全显示。专项练 + 技能树 移到首页 CTA 卡片让移动端可达。
+// v0.31.88: nav 精简
+//   - 删 "首页"（左上 logo / 学科切换器都能回首页，重复入口浪费一格）
+//   - "周报" 和 "试玩台" 移到 admin tab，不在 nav 露面（admin 内 tab 切换更轻）
+//   - "专项练" 和 "技能树" 都保留 (desktopOnly)，作为下一步技能图整合的过渡
+//     v0.31.89 计划：把技能树游戏化（星座/技能点图），完成后专项练并入
 function buildMathNavItems(): SubjectNavItem[] {
-  const base: SubjectNavItem[] = [
-    { to: "", label: "首页", exact: true },
-  ];
+  const base: SubjectNavItem[] = [];
   if (isPhase2Live()) {
     base.push({ to: "fluency", label: "闪电口算" });
   }
@@ -57,12 +60,11 @@ function buildMathNavItems(): SubjectNavItem[] {
   if (isPhase2Live()) {
     base.push({ to: "big-problems", label: "闯关" });
   }
-  // 这两个移动端不显示（首页 CTA 接走），桌面正常显示
+  // desktopOnly = mobile 不显示（首页 CTA 接走），桌面 nav 显示
   base.push({ to: "free-practice", label: "专项练", desktopOnly: true });
   base.push({ to: "skills", label: "技能树", desktopOnly: true });
   base.push({ to: "mistakes", label: "错题复活" });
-  base.push({ to: "report", label: "周报", subtle: true });
-  base.push({ to: "playground", label: "试玩台", subtle: true });
+  // 管理（包含周报 + 试玩台 + 题库管理 tabs）
   base.push({ to: "admin", label: "管理", subtle: true });
   return base;
 }
