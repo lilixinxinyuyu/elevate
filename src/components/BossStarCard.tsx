@@ -76,33 +76,46 @@ export function BossStarCard({ studentId }: { studentId: string }) {
   const progressPct = Math.round((grandTotal / grandMax) * 100);
   const nothingYet = grandTotal === 0;
 
+  // v0.31.94：紧凑模式 — 收起 6 单元 boss 详情到 <details>，默认只显示
+  //   一行 hero summary（星章 + 进度条 + 数字 + 跳闯关按钮）。
+  //   details 展开后看完整 boss 列表 + 期末解锁状态 + 底部统计。
+  //   Bruce 反馈："hero 区头重，BossStarCard 合并 / 缩小 OK"。
   return (
-    <section className="rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-rose-500/5 px-4 py-3">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-baseline gap-2">
-          <span className="text-base font-display font-bold text-amber-200">🏆 闯关星章</span>
-          <span className="text-xs text-amber-300/70">
-            {nothingYet ? "还没获得过星" : `${grandTotal} / ${grandMax} ⭐`}
-          </span>
+    <details className="group rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-rose-500/5 px-4 py-2.5">
+      <summary className="cursor-pointer list-none flex items-center gap-3 select-none">
+        <span className="text-lg">🏆</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-sm font-display font-bold text-amber-200">闯关星章</span>
+            <span className="text-xs text-amber-300/70 tabular-nums">
+              {nothingYet ? "还没拿过星" : `${grandTotal} / ${grandMax} ⭐`}
+            </span>
+            {data.unlock.perfectCount > 0 && (
+              <span className="text-[10px] text-amber-200/70">
+                · 完美 {data.unlock.perfectCount}/6
+              </span>
+            )}
+          </div>
+          {/* 紧凑进度条 */}
+          <div className="h-1 rounded-full bg-black/25 overflow-hidden mt-1.5 ring-1 ring-white/5">
+            <div
+              className="h-full bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 shadow-glow-amber transition-all duration-700"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
         </div>
         <Link
           to="/math/big-problems"
-          className="text-xs px-2 py-0.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-400/40 transition-colors"
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 text-xs px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-400/40 transition-colors"
         >
-          → 闯关
+          闯 →
         </Link>
-      </div>
+        <span className="text-amber-300/40 text-xs shrink-0 group-open:rotate-180 transition-transform">▾</span>
+      </summary>
 
-      {/* 进度条 */}
-      <div className="h-1.5 rounded-full bg-black/25 overflow-hidden mb-3 ring-1 ring-white/5">
-        <div
-          className="h-full bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 shadow-glow-amber transition-all duration-700"
-          style={{ width: `${progressPct}%` }}
-        />
-      </div>
-
-      {/* 6 个单元 boss + 期末 boss = 7 行（mobile 单列；sm+ 双列） */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+      {/* 展开内容：6 单元 boss + 期末 boss + 统计 */}
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         {G4B_UNITS.map((u) => {
           const persona = UNIT_BOSSES.find((b) => b.unitId === u.id);
           const s = data.states.get(u.id);
@@ -128,7 +141,6 @@ export function BossStarCard({ studentId }: { studentId: string }) {
             </div>
           );
         })}
-        {/* 期末大魔王 */}
         <div
           className={`flex items-center gap-2 sm:col-span-2 mt-1 pt-1.5 border-t border-amber-400/20 ${
             data.unlock.unlocked ? "text-amber-200" : "text-slate-500 grayscale opacity-70"
@@ -155,31 +167,25 @@ export function BossStarCard({ studentId }: { studentId: string }) {
             </span>
           )}
         </div>
-      </div>
-
-      {/* 底部统计 */}
-      {!nothingYet && (
-        <div className="mt-2 pt-2 border-t border-amber-400/15 text-[10px] text-amber-200/70 flex items-center gap-3 flex-wrap">
-          <span>
-            完美单元 <b className="font-display text-amber-100">{data.unlock.perfectCount}</b>
-            /6
-          </span>
-          <span>·</span>
-          <span>
-            期末门槛 <b className="font-display text-amber-100">{data.unlock.metCount}</b>
-            /6
-          </span>
-          {data.unlock.unlocked && finalStars < 4 && (
-            <span className="ml-auto text-rose-200/80">
-              👑 期末已解锁，全 4★ 才能拿满星章
+        {!nothingYet && (
+          <div className="sm:col-span-2 mt-2 pt-2 border-t border-amber-400/15 text-[10px] text-amber-200/70 flex items-center gap-3 flex-wrap">
+            <span>
+              完美单元 <b className="font-display text-amber-100">{data.unlock.perfectCount}</b>/6
             </span>
-          )}
-          {finalStars === 4 && data.unlock.perfectCount === 6 && (
-            <span className="ml-auto text-amber-100">🎉 全 28 星！传说级！</span>
-          )}
-        </div>
-      )}
-    </section>
+            <span>·</span>
+            <span>
+              期末门槛 <b className="font-display text-amber-100">{data.unlock.metCount}</b>/6
+            </span>
+            {data.unlock.unlocked && finalStars < 4 && (
+              <span className="ml-auto text-rose-200/80">👑 期末已解锁，全 4★ 才能拿满</span>
+            )}
+            {finalStars === 4 && data.unlock.perfectCount === 6 && (
+              <span className="ml-auto text-amber-100">🎉 全 28 星！传说级！</span>
+            )}
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 

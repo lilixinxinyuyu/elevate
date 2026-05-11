@@ -302,37 +302,62 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
     spec?.palette ?? "rich 2-3 color signature palette";
   const tierFlavor = t.tier ? TIER_FLAVOR[t.tier] : "Tier finish: classic colorful enamel palette.";
 
-  // v0.31.92 重新设计：AI 直接画完整奖章 + 边框 + 缎带（学 boss 透明化思路）。
+  // v0.31.94 重新设计（Bruce 反馈 v0.31.92 的 cream+flood-fill 不匹配老风格）：
   //
-  // 旧策略 (v0.31.14)：AI 不画外框 → CSS clip-path + CSS 金属环外贴。
-  // 问题：非 commemorative / 非 tier 类（如 weekly_d4_hunter / fluency 勋章）
-  // 既没 CSS 环也没 tier ring → 渲染出来是裸图，没有"勋章感"。Bruce 反馈。
+  // 历史：
+  //   - v0.31.14：AI 不画外框 → CSS clip-path + tier 环外贴。某些 motif AI 自发画框
+  //     (answer_master 有银框)，某些没画 (ability_data 完全无框) → 风格不一致。
+  //   - v0.31.92：cream bg + flood-fill 透明 + AI 画 frame → 但 cream 风格跟老的
+  //     深紫渐变完全不同，3 新 trophy 看着突兀；且金框 + 透明 + 80% canvas 比例 vs
+  //     老的银框 + 深紫 + 95% canvas 不一致。
   //
-  // 新策略：
-  //   1. prompt 要求 AI 画一个**完整 3D 浮雕奖章**，圆形金属外环 + 主图占内圈 +
-  //      奖章外有放射光晕。允许 AI 画 frame（之前明确禁止过）。
-  //   2. 背景仍用纯色（white / cream / 蓝紫渐变）→ 后处理 flood-fill 透明化
-  //      （脚本 _make-trophy-transparent.py，复用 boss 同款 OpenCV flood-fill）。
-  //   3. PNG 直接渲染，CSS 不再 clip-path。前端 TrophyIcon 简化。
+  // v0.31.94 策略：
+  //   1. 强制 AI 画"完整圆形金属外框"（之前老 prompt 禁止画 frame 是 root cause）
+  //   2. 背景**回到深紫径向渐变**（匹配老 90%+ 已存图风格）
+  //   3. 框颜色按 tier（铜银金钻），无 tier 默认银
+  //   4. 框占满 95%+ canvas，让 CSS clip-path + tier 薄环叠加效果好
+  //   5. **不再用 flood-fill**（深色渐变 bg 跟页面 dark bg 完美融合，无需透明化）
   return [
-    `Premium 3D rendered luxury medallion / award medal, fully designed as a complete commemorative medal — designed for a 4th-grade girl to treasure and show off proudly.`,
-    `**Medal anatomy (MUST include all parts):**`,
-    `  - Outer rim: ornate metallic frame (gold/silver/bronze depending on tier), polished beveled edge, raised relief, occupies ~10-15% of the medal width`,
-    `  - Inner medallion face: glossy enamel center where the subject motif sits, occupies ~70% of the medal diameter`,
+    `Premium 3D rendered luxury medal — designed for a 4th-grade girl to treasure. Must visually MATCH the existing trophy collection aesthetic precisely.`,
+    `**Medal anatomy (MUST include all parts, frame is REQUIRED):**`,
+    `  - Outer metallic frame ring: smooth polished ${frameColorFor(t.tier)} beveled rim with subtle highlights at top-left corner, simple clean (NOT overly ornate, NO heavy laurel/leaf engraving, NO ribbons, NO crests on top). Occupies outer ~10-12% of canvas width.`,
+    `  - Optional: a thin (~2px) lighter metallic inner accent ring just inside the outer rim for depth`,
+    `  - Inner medallion face: **DEEP VIOLET enamel center** (rich royal purple, glossy reflective surface — NEVER cream, NEVER ivory, NEVER white)`,
     `  - Subject motif (centered in inner face): ${motif}`,
-    `  - Optional small flourish at top: tiny ribbon loop / hanging tab / decorative crest (small, ~10% of medal height)`,
-    `  - Soft outer halo: faint glow extending 5-10% beyond the rim (atmospheric, not a hard ring)`,
-    `Signature palette for motif: ${palette}.`,
+    `  - Soft inner glow + tiny star sparkles around the motif (decorative, not text)`,
+    `Signature palette for motif (the motif itself, NOT the enamel background): ${palette}.`,
     tierFlavor,
-    `**Background requirements (CRITICAL for clean transparent post-processing):**`,
-    `  - Use a SOLID light cream / off-white / pale ivory background (#f5f0e6 to #ffffff range) ENTIRELY surrounding the medal`,
-    `  - NO gradient, NO scenery, NO decorative particles outside the medal — just flat solid pale background`,
-    `  - The medal occupies ~75-85% of the canvas, with ~15-25% solid background as margin around it`,
-    `  - This solid background will be flood-fill removed to produce a transparent PNG — keep it absolutely uniform`,
-    `**Medal style:** premium tactile 3D embossed relief, glossy enamel + polished metal frame, soft inner glow on motif, slightly playful and cute. A medal a child wants to keep forever.`,
-    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS** — entirely pictorial, zero typography.`,
-    `Output: 512×512 square, medal strictly centered, with clean uniform pale background around it for transparent processing.`,
+    `**Background (outside the medal rim):**`,
+    `  - DEEP SPACE-PURPLE radial gradient — deep violet center, fading to near-black at canvas edges`,
+    `  - **The medal completely fills the canvas — outer rim touches all 4 canvas edges** with at most 2-3 pixel margin`,
+    `  - The 4 canvas corners are part of the gradient (NOT empty black / NOT cream / NOT white)`,
+    `**Critical style requirements (matching collection):**`,
+    `  - Inner enamel = deep violet (matches answer_master_silver, ability_calculation_silver style)`,
+    `  - Frame = smooth polished metallic (not engraved laurel — too ornate)`,
+    `  - 95%+ canvas fill — NO large empty margins`,
+    `  - Premium 3D tactile feel with embossed relief on motif`,
+    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS, NO RIBBONS WITH WRITING** — entirely pictorial, zero typography.`,
+    `Output: 512×512 square. Centered.`,
   ].join(" ");
+}
+
+/**
+ * v0.31.94: tier → frame metal color hint。
+ * 没 tier 时默认 silver-tone（既不太亮也不太暗，配 enamel 都好看）。
+ */
+function frameColorFor(tier: TrophyMeta["tier"]): string {
+  switch (tier) {
+    case "bronze":
+      return "antique copper / bronze";
+    case "silver":
+      return "polished sterling silver";
+    case "gold":
+      return "rich yellow gold";
+    case "platinum":
+      return "iridescent rainbow platinum with subtle pearlescent shimmer";
+    default:
+      return "polished silver"; // 无 tier 默认银
+  }
 }
 
 /**
