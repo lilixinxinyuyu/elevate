@@ -90,8 +90,7 @@ function parseArgs(argv) {
         if (x.startsWith("--")) die(`Unknown flag: ${x}`);
     }
   }
-  if (!process.env.DASHSCOPE_API_KEY) die("DASHSCOPE_API_KEY env 必填（直走 dashscope-intl）");
-  if (a.pushD1 && !process.env.APP_PASSWORD) die("APP_PASSWORD env 必填（push D1 用）；--no-push 可豁免");
+  if (!process.env.APP_PASSWORD) die("APP_PASSWORD env 必填（Cloudflare Pages 那个，调 /api/generate/image 用）");
   return a;
 }
 
@@ -157,16 +156,19 @@ async function loadTrophyHelpers() {
 // ---------------------------------------------------------------------------
 
 /**
- * v0.31.96：token-plan upstream 经常 502，直接走 dashscope-intl 同步 endpoint。
- * 用 qwen-image-2.0-pro (sync) — 已实测稳定。
+ * v0.31.97：调 prod `/api/generate/image` —— 这是唯一可行路径。
  *
- * DASHSCOPE_API_KEY 从 env 取，绕过 prod /api/generate/image，节省一跳 + 不受
- * token-plan 死活影响。
+ * 原因（见 memory/token_plan_workflow.md）：
+ *   - dashscope-intl Free Tier 没有 image 模型（/v1/images/generations 返 404，
+ *     /api/v1/services/.../image-synthesis 报 InvalidParameter "Model not exist"）
+ *   - token-plan image gen 走 /compatible-mode/v1/chat/completions（chat 风格），
+ *     prod functions/api/generate/image.ts 已实现 4 model 顺序 walking 的兜底
+ *   - 直接 curl token-plan 也行但要复刻整个 walking 逻辑，没必要重写
+ *
+ * 重试策略：402(quota)/429(rate)/5xx 都 retry，3 次指数退避。
  */
-async function callDashscopeDirect(prompt, maxRetries = 3) {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
-  if (!apiKey) throw new Error("DASHSCOPE_API_KEY env 必填（在 ../.dev.vars 里）");
-
+async function callImageApi(apiBase, prompt, maxRetries = 3) {
+  const url = `${apiBase}/api/generate/image`;
   let lastErr;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
@@ -174,37 +176,36 @@ async function callDashscopeDirect(prompt, maxRetries = 3) {
       await new Promise((r) => setTimeout(r, backoff));
     }
     try {
-      // OpenAI-compatible sync endpoint —— qwen-image-2.0-pro / wan2.7-image-pro 都 work
-      const model = process.env.TROPHY_MODEL ?? "qwen-image-2.0-pro";
-      const r = await fetch(
-        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/images/generations",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            prompt,
-            n: 1,
-            size: "512x512",
-          }),
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.APP_PASSWORD}`,
         },
-      );
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j.error) {
-        const msg = j.error?.message ?? `HTTP ${r.status}`;
-        const err = new Error(`dashscope ${r.status}: ${msg}`);
-        if (r.status >= 500 || /timeout|busy/i.test(msg)) {
+        body: JSON.stringify({ prompt, size: "512*512", n: 1 }),
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        const err = new Error(`API ${r.status}: ${txt.slice(0, 200)}`);
+        // 5xx / no_model_worked / 网络抖动 → retry；4xx 业务错（含 401 quota）直接抛
+        if (r.status >= 500 || /no_model_worked|http_error/.test(txt)) {
           lastErr = err;
           continue;
         }
         throw err;
       }
-      const url = j.data?.[0]?.url;
-      if (!url) throw new Error(`dashscope no url: ${JSON.stringify(j).slice(0, 200)}`);
-      return { url, model, taskId: null };
+      const j = await r.json();
+      if (!j.ok) {
+        const err = new Error(`API ok=false: ${JSON.stringify(j).slice(0, 200)}`);
+        if (/no_model_worked|http_error|QuotaExhausted/.test(JSON.stringify(j))) {
+          lastErr = err;
+          continue;
+        }
+        throw err;
+      }
+      const u = (j.urls && j.urls[0]) ?? null;
+      if (!u) throw new Error("API 返回 ok=true 但无 urls");
+      return { url: u, model: j.model, taskId: j.taskId };
     } catch (e) {
       lastErr = e;
       if (e instanceof Error && /fetch failed|ECONN|ETIMEDOUT|timeout/i.test(e.message)) {
@@ -214,11 +215,6 @@ async function callDashscopeDirect(prompt, maxRetries = 3) {
     }
   }
   throw lastErr ?? new Error("retries exhausted");
-}
-
-async function callImageApi(apiBase, prompt) {
-  // v0.31.96: 直走 dashscope。apiBase 参数保留兼容（已不用）。
-  return await callDashscopeDirect(prompt);
 }
 
 async function downloadPng(url) {
