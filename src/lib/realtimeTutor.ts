@@ -64,6 +64,12 @@ export interface RealtimeTutorConfig {
   sampleRate?: number;
   /** AI 可以调的工具列表（function calling） */
   tools?: ToolDefinition[];
+  /**
+   * v0.31.104：限制 response.create 时的 modalities。
+   * 默认 ["text", "audio"]（讲题对话模式）。
+   * 英语朗读判分场景用 ["text"]——只要 JSON 文字评分，不需要 audio 回放。
+   */
+  responseModalities?: ("text" | "audio")[];
 }
 
 export interface RealtimeTutorCallbacks {
@@ -98,7 +104,7 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
 }
 
 export class RealtimeTutor {
-  private cfg: Required<Omit<RealtimeTutorConfig, "password" | "systemPrompt" | "tools">> &
+  private cfg: Required<Omit<RealtimeTutorConfig, "password" | "systemPrompt" | "tools" | "responseModalities">> &
     Pick<RealtimeTutorConfig, "password" | "systemPrompt" | "tools">;
   private cb: RealtimeTutorCallbacks;
   private ws: WebSocket | null = null;
@@ -123,7 +129,10 @@ export class RealtimeTutor {
   /** tool name → handler 映射，handler 接收已 parse 的 args */
   private toolMap = new Map<string, ToolDefinition>();
 
+  private responseModalities: ("text" | "audio")[];
+
   constructor(config: RealtimeTutorConfig, cb: RealtimeTutorCallbacks = {}) {
+    this.responseModalities = config.responseModalities ?? ["text", "audio"];
     this.cfg = {
       serverUrl: config.serverUrl,
       password: config.password,
@@ -190,7 +199,8 @@ export class RealtimeTutor {
 
     // 发 session.update — 配置 modalities / 音频格式 / 系统指令 / tools
     const sessionCfg: Record<string, unknown> = {
-      modalities: ["text", "audio"],
+      // v0.31.104：modalities 可配——讲题用 ["text","audio"]，判分用 ["text"]
+      modalities: this.responseModalities,
       instructions: this.cfg.systemPrompt ?? defaultSystemPrompt(),
       input_audio_format: "pcm16",
       output_audio_format: "pcm16",
@@ -289,7 +299,7 @@ export class RealtimeTutor {
     this.send({ type: "input_audio_buffer.commit" });
     this.send({
       type: "response.create",
-      response: { modalities: ["text", "audio"] },
+      response: { modalities: this.responseModalities },
     });
     this.setState("thinking");
   }

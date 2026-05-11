@@ -83,7 +83,7 @@ export default function Mascot3D({
 }: Mascot3DProps) {
   return (
     <div className={className ?? "w-full h-full"}>
-      <Canvas camera={{ position: [0, 0.3, 3.6], fov: 34 }} dpr={[1, 2]}>
+      <Canvas camera={{ position: [0, 0.15, 4.6], fov: 38 }} dpr={[1, 2]}>
         <Suspense fallback={null}>
           <ambientLight intensity={0.4} />
           <directionalLight position={[3, 5, 4]} intensity={1.0} color="#ffffff" />
@@ -102,7 +102,7 @@ export default function Mascot3D({
             enableZoom={false}
             minPolarAngle={Math.PI / 3}
             maxPolarAngle={Math.PI / 1.8}
-            target={[0, 0.2, 0]}
+            target={[0, 0.1, 0]}
           />
         </Suspense>
       </Canvas>
@@ -220,26 +220,28 @@ function XiaoJin({ audioLevel, skin, spin }: XiaoJinProps) {
         <mesh>
           <sphereGeometry
             args={[
-              0.628,  // 比头壳 0.62 略大，保证完全覆盖
+              0.628,        // 比头壳 0.62 略大，保证完全覆盖
               64,
               48,
-              -Math.PI / 2,  // phiStart：从 -90° 开始
-              Math.PI,        // phiLength：扫过 180° → 前半球
+              0,            // phiStart：Three.js 里 phi=PI/2 是 +z（前方），从 0 起
+              Math.PI,      // phiLength：扫到 PI → 覆盖 +z 前半球
               0,
               Math.PI,
             ]}
           />
+          {/* 低 metalness + 微暗紫蓝 emissive：在暗 scene 里依然能"读"出形状 */}
           <meshStandardMaterial
             color={VISOR_DARK}
-            roughness={0.05}
-            metalness={0.9}
-            envMapIntensity={1.5}
+            roughness={0.15}
+            metalness={0.45}
+            emissive="#1e293b"
+            emissiveIntensity={0.5}
           />
         </mesh>
-        {/* visor 与头壳交界处的浅色边线（plate seam） */}
-        <mesh rotation={[0, Math.PI / 2, 0]}>
-          <torusGeometry args={[0.628, 0.005, 6, 64]} />
-          <meshStandardMaterial color={SHELL_SHADOW} roughness={0.6} metalness={0.4} />
+        {/* visor 与头壳交界处的银色边线（plate seam）—— 竖直方向 */}
+        <mesh rotation={[0, 0, 0]}>
+          <torusGeometry args={[0.628, 0.006, 8, 64]} />
+          <meshStandardMaterial color={SHELL_SHADOW} roughness={0.4} metalness={0.7} />
         </mesh>
         {/* visor 顶部反光高光带 */}
         <mesh position={[0, 0.38, 0.45]} rotation={[0, 0, 0]} scale={[1.4, 0.06, 0.04]}>
@@ -466,20 +468,20 @@ function ChestSymbol({ color }: { color: string }) {
 
 function GraduationHat() {
   return (
-    <group position={[0, 0.85, 0]}>
+    <group position={[0, 0.75, 0]}>
       <mesh>
-        <boxGeometry args={[0.9, 0.04, 0.9]} />
+        <boxGeometry args={[0.85, 0.04, 0.85]} />
         <meshStandardMaterial color="#0f172a" roughness={0.4} metalness={0.3} />
       </mesh>
-      <mesh position={[0, -0.13, 0]}>
-        <cylinderGeometry args={[0.28, 0.3, 0.2, 24]} />
+      <mesh position={[0, -0.12, 0]}>
+        <cylinderGeometry args={[0.26, 0.28, 0.18, 24]} />
         <meshStandardMaterial color="#0f172a" roughness={0.4} metalness={0.3} />
       </mesh>
-      <mesh position={[0.32, 0.02, 0.32]} scale={[0.04, 0.22, 0.04]}>
+      <mesh position={[0.3, 0.02, 0.3]} scale={[0.04, 0.2, 0.04]}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
       </mesh>
-      <mesh position={[0.32, -0.1, 0.32]}>
+      <mesh position={[0.3, -0.08, 0.3]}>
         <sphereGeometry args={[0.04, 14, 12]} />
         <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
       </mesh>
@@ -489,38 +491,40 @@ function GraduationHat() {
 
 function WizardHat({ color, star }: { color: string; star: string }) {
   return (
-    <group position={[0, 0.78, 0]}>
+    <group position={[0, 0.55, 0]}>
+      {/* 帽檐 */}
       <mesh>
-        <cylinderGeometry args={[0.55, 0.6, 0.05, 24]} />
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.2} />
+        <cylinderGeometry args={[0.5, 0.56, 0.05, 24]} />
+        <meshStandardMaterial color={color} roughness={0.55} metalness={0.2} />
       </mesh>
-      <mesh position={[0, 0.55, 0]} rotation={[0, 0, -0.06]}>
-        <coneGeometry args={[0.28, 0.95, 18]} />
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.2} />
+      {/* 锥体（控制在视野内） */}
+      <mesh position={[0, 0.22, 0]} rotation={[0, 0, -0.08]}>
+        <coneGeometry args={[0.22, 0.42, 18]} />
+        <meshStandardMaterial color={color} roughness={0.55} metalness={0.2} />
       </mesh>
-      <FloatingSymbol position={[0.16, 0.6, 0.28]} symbol="★" color={star} small />
-      <FloatingSymbol position={[-0.18, 0.85, 0.18]} symbol="★" color={star} small />
+      <FloatingSymbol position={[0.18, 0.3, 0.22]} symbol="★" color={star} small />
+      <FloatingSymbol position={[-0.18, 0.35, 0.15]} symbol="★" color={star} small />
     </group>
   );
 }
 
 function Crown({ color, gem }: { color: string; gem: string }) {
   return (
-    <group position={[0, 0.78, 0]}>
+    <group position={[0, 0.66, 0]}>
       <mesh>
-        <cylinderGeometry args={[0.42, 0.46, 0.16, 20]} />
+        <cylinderGeometry args={[0.4, 0.44, 0.14, 20]} />
         <meshStandardMaterial color={color} metalness={0.95} roughness={0.18} />
       </mesh>
       {[...Array(6)].map((_, i) => {
         const a = (i / 6) * Math.PI * 2;
         return (
-          <mesh key={i} position={[Math.cos(a) * 0.42, 0.16, Math.sin(a) * 0.42]}>
-            <coneGeometry args={[0.06, 0.18, 10]} />
+          <mesh key={i} position={[Math.cos(a) * 0.4, 0.13, Math.sin(a) * 0.4]}>
+            <coneGeometry args={[0.055, 0.14, 10]} />
             <meshStandardMaterial color={color} metalness={0.95} roughness={0.18} />
           </mesh>
         );
       })}
-      <mesh position={[0, 0.06, 0.46]}>
+      <mesh position={[0, 0.04, 0.42]}>
         <sphereGeometry args={[0.05, 16, 14]} />
         <meshStandardMaterial
           color={gem}
