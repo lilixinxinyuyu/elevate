@@ -294,24 +294,36 @@ function buildRichTrophyPrompt(t: TrophyMeta): string {
     spec?.palette ?? "rich 2-3 color signature palette";
   const tierFlavor = t.tier ? TIER_FLAVOR[t.tier] : "Tier finish: classic colorful enamel palette.";
 
-  // v0.31.14: 跟 commemorative Plan B 同款架构 —— AI 不画外圆/外框/金属环。
-  // 理由：ability/skill/boss 的 CSS clip 是六边形 / 盾形 / V-盾，AI 默认画圆形勋章
-  // 会被 clip 切掉圆四角，露出空黑角（用户反馈数据分析师 vs 建模高手不一致）。
-  // 改：motif 占满整张方画布 + 深色径向渐变铺底，CSS clip 切出对应形状边界 + tier ring
-  // 由外层 CSS 提供。这样 AI 输出统一是"场景填充画布"，clip 任何形状都不漏空角。
+  // v0.31.92 重新设计：AI 直接画完整奖章 + 边框 + 缎带（学 boss 透明化思路）。
+  //
+  // 旧策略 (v0.31.14)：AI 不画外框 → CSS clip-path + CSS 金属环外贴。
+  // 问题：非 commemorative / 非 tier 类（如 weekly_d4_hunter / fluency 勋章）
+  // 既没 CSS 环也没 tier ring → 渲染出来是裸图，没有"勋章感"。Bruce 反馈。
+  //
+  // 新策略：
+  //   1. prompt 要求 AI 画一个**完整 3D 浮雕奖章**，圆形金属外环 + 主图占内圈 +
+  //      奖章外有放射光晕。允许 AI 画 frame（之前明确禁止过）。
+  //   2. 背景仍用纯色（white / cream / 蓝紫渐变）→ 后处理 flood-fill 透明化
+  //      （脚本 _make-trophy-transparent.py，复用 boss 同款 OpenCV flood-fill）。
+  //   3. PNG 直接渲染，CSS 不再 clip-path。前端 TrophyIcon 简化。
   return [
-    `Premium 3D rendered luxury award scene illustration, magical and rich — designed for a 4th-grade girl to treasure and show off proudly.`,
-    `Subject (rich illustrated motif, occupies ~75-85% of the canvas, strictly centered, vertically and horizontally balanced): ${motif}.`,
-    `Signature palette: ${palette}.`,
+    `Premium 3D rendered luxury medallion / award medal, fully designed as a complete commemorative medal — designed for a 4th-grade girl to treasure and show off proudly.`,
+    `**Medal anatomy (MUST include all parts):**`,
+    `  - Outer rim: ornate metallic frame (gold/silver/bronze depending on tier), polished beveled edge, raised relief, occupies ~10-15% of the medal width`,
+    `  - Inner medallion face: glossy enamel center where the subject motif sits, occupies ~70% of the medal diameter`,
+    `  - Subject motif (centered in inner face): ${motif}`,
+    `  - Optional small flourish at top: tiny ribbon loop / hanging tab / decorative crest (small, ~10% of medal height)`,
+    `  - Soft outer halo: faint glow extending 5-10% beyond the rim (atmospheric, not a hard ring)`,
+    `Signature palette for motif: ${palette}.`,
     tierFlavor,
-    // 关键：AI 不画外框
-    `**CRITICAL FRAMING INSTRUCTION:** DO NOT draw any circular medal frame, metallic rim, outer border, or shape boundary in this image. The final medal-shape framing will be applied externally by the rendering layer. This image must be a square illustration where the motif sits naturally on a deep gradient background that extends seamlessly to all four canvas edges and corners — the four corners must NOT be empty black space, they should be filled with the motif's atmospheric extension or the deep gradient itself.`,
-    `Background: deep space-purple to near-black radial gradient (the motif glows from the center), the gradient must fill the ENTIRE 512×512 canvas edge-to-edge with NO border, NO rim, NO frame, NO decorative ring of any kind. The four canvas corners are part of the same gradient as the rest — no empty void or black box at the corners.`,
-    `Allowed accents around the motif (NOT at canvas edges): tiny star sparkles, small light particles, motion lines — keep these < 60% radius from center, leaving outer ~40% as clean gradient background that smoothly extends to corners.`,
-    `Surface treatment: glossy 3D embossed relief on the motif itself + soft inner glow + dramatic light-and-shadow, premium tactile feel.`,
-    `Production style: high-end commemorative medallion vibe, magical, dreamy, sparkly, slightly playful and cute — a medal a child wants to keep forever.`,
+    `**Background requirements (CRITICAL for clean transparent post-processing):**`,
+    `  - Use a SOLID light cream / off-white / pale ivory background (#f5f0e6 to #ffffff range) ENTIRELY surrounding the medal`,
+    `  - NO gradient, NO scenery, NO decorative particles outside the medal — just flat solid pale background`,
+    `  - The medal occupies ~75-85% of the canvas, with ~15-25% solid background as margin around it`,
+    `  - This solid background will be flood-fill removed to produce a transparent PNG — keep it absolutely uniform`,
+    `**Medal style:** premium tactile 3D embossed relief, glossy enamel + polished metal frame, soft inner glow on motif, slightly playful and cute. A medal a child wants to keep forever.`,
     `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS** — entirely pictorial, zero typography.`,
-    `Output: 512×512 square, motif strictly centered, gradient background filling all 4 edges AND all 4 corners with no boundary visible.`,
+    `Output: 512×512 square, medal strictly centered, with clean uniform pale background around it for transparent processing.`,
   ].join(" ");
 }
 

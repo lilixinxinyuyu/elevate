@@ -251,6 +251,36 @@ export function TrophyIcon({
     inset: hasFrame ? `${ringPx}px` : 0,
   };
 
+  // v0.31.92: 自带 frame 的 trophy 走"裸贴 PNG"路径 — AI 图本身就是完整奖章
+  // （含金属外环 + 主题图 + 缎带），flood-fill 已经去掉浅色背景，直接 object-contain
+  // 渲染即可，不再套 clip-path / CSS 环。
+  //
+  // 路径判定：non-commemorative + non-tier + 有 AI 图 → 走 self-framed
+  // （commemorative 仍走 pentagram/hexagram CSS frame；tier 仍走圆 + tier ring）
+  const isSelfFramed =
+    !tierStyle && !commemorativeShape && !!row?.imageDataUrl;
+
+  if (isSelfFramed) {
+    return (
+      <div
+        className={`relative inline-flex shrink-0 ${sz.box} ${className} ${grayClass}`}
+        aria-label={`trophy-${trophyId}`}
+      >
+        <img
+          src={row!.imageDataUrl}
+          alt={`trophy-${trophyId}`}
+          className="w-full h-full object-contain"
+          draggable={false}
+          style={{
+            filter: unlocked
+              ? "drop-shadow(0 4px 12px rgba(0,0,0,0.4))"
+              : undefined,
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`relative inline-flex shrink-0 ${sz.box} ${className} ${grayClass}`}

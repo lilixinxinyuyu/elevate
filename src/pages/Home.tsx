@@ -536,9 +536,9 @@ export function HomePage() {
         />
       )}
 
-      {/* v0.31.89：3 卡 → 2 卡（专项练 + 技能树 合并为"技能图"）。
-          桌面 grid-cols-2；mobile col-span-2 横跨全宽 + 单独成行 */}
-      <div className="grid grid-cols-2 gap-2.5">
+      {/* v0.31.92：3 卡同行 — 考试冲刺 / 技能图 / 巧算工具箱。
+          mobile 仍能 2 列 + 1 占满（grid-cols-2 sm:grid-cols-3） */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {(() => {
           const exam = currentExam();
           const days = daysUntil(exam.date);
@@ -559,7 +559,7 @@ export function HomePage() {
               to={`/math/train?mode=${exam.mode}&fresh=${Date.now()}`}
               className={`card-glow hover:scale-[1.02] transition-transform col-span-2 sm:col-span-1 ${themeCls}`}
             >
-              <div className="text-lg">{icon}</div>
+              <div className="text-2xl">{icon}</div>
               <div className={`font-display font-bold mt-1.5 text-sm ${titleCls}`}>{exam.name}冲刺</div>
               <div className={`text-[11px] ${subCls} mt-0.5`}>{sub}</div>
             </Link>
@@ -567,32 +567,25 @@ export function HomePage() {
         })()}
         <Link
           to="/math/skills"
-          className="card-glow hover:scale-[1.02] transition-transform col-span-2 sm:col-span-1 border-violet-400/30 bg-gradient-to-br from-violet-500/20 via-indigo-500/15 to-pink-500/10"
+          className="card-glow hover:scale-[1.02] transition-transform border-violet-400/30 bg-gradient-to-br from-violet-500/20 via-indigo-500/15 to-pink-500/10"
         >
-          <div className="text-lg">🌌</div>
+          <div className="text-2xl">🌌</div>
           <div className="font-display font-bold mt-1.5 text-sm text-violet-100">技能图</div>
           <div className="text-[11px] text-violet-200/80 mt-0.5">
-            点节点直接练 · 开组合模式多选一起练
+            点节点直接练 / 组合多选
+          </div>
+        </Link>
+        <Link
+          to="/math/tricks"
+          className="card-glow hover:scale-[1.02] transition-transform border-amber-400/30 bg-gradient-to-br from-amber-500/20 via-pink-500/15 to-violet-500/10"
+        >
+          <div className="text-2xl">🪄</div>
+          <div className="font-display font-bold mt-1.5 text-sm text-amber-100">巧算工具箱</div>
+          <div className="text-[11px] text-amber-200/80 mt-0.5">
+            凑整 / 借十 / 折半 · 8 个秘技
           </div>
         </Link>
       </div>
-
-      {/* v0.31.71: 巧算工具箱入口（独立一行，强调"基本功"性质） */}
-      <Link
-        to="/math/tricks"
-        className="card-glow block border-violet-400/30 bg-gradient-to-br from-violet-500/15 via-pink-500/10 to-amber-500/5 hover:scale-[1.005] transition-transform"
-      >
-        <div className="flex items-center gap-3">
-          <div className="text-2xl">🪄</div>
-          <div className="flex-1">
-            <div className="font-display font-bold text-violet-100 text-sm">巧算工具箱</div>
-            <div className="text-[11px] text-slate-300 mt-0.5">
-              凑整、借十、折半乘倍 · 8 个让心算变快的秘密武器
-            </div>
-          </div>
-          <div className="text-violet-300 text-sm">→</div>
-        </div>
-      </Link>
 
       {/* ROI #2：每周一次的考试模拟 */}
       {mockExam && (
