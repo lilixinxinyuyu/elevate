@@ -62,8 +62,11 @@ function buildMathNavItems(): SubjectNavItem[] {
   }
   // 技能图 — 桌面 nav 显示；mobile 不显示（首页 CTA 接走）
   base.push({ to: "skills", label: "技能图", desktopOnly: true });
-  // v0.31.90: "错题复活" → "错题驯服" — 跟闯关里"驯服怪兽"叙事呼应，错题=要驯服的小怪
-  base.push({ to: "mistakes", label: "错题驯服" });
+  // v0.31.91: "错题驯服" → "驯龙营" — Bruce 不想强调"错题"两个字。
+  // 候选讨论过：驯龙营 / 反击战 / 回马枪 / 怪兽训练营 / 救场训练。
+  // 最终选"驯龙营" — 错的题是龙，做对了驯服它（保留"驯服"游戏化叙事 +
+  // 跟闯关怪兽体系呼应；不用"错"字降低被纠错的羞耻感）。
+  base.push({ to: "mistakes", label: "驯龙营" });
   // 管理（包含周报 + 试玩台 + 题库管理 tabs）
   base.push({ to: "admin", label: "管理", subtle: true });
   return base;

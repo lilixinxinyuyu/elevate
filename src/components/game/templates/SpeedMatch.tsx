@@ -22,7 +22,8 @@ export function SpeedMatchPanel(props: TemplateRenderProps) {
   const [locked, setLocked] = useState(false);
   const [wrongIds, setWrongIds] = useState<Set<string>>(new Set());
 
-  // v0.31.90: 实时计时 — 跟 PlainChoice 区分的关键
+  // v0.31.90-91: 实时计时 — 跟 PlainChoice 区分的关键
+  // v0.31.91 大改：闪电图标阶梯衰减视觉化 + 字号放大 + 蜗牛兜底
   const startMs = useRef<number>(Date.now());
   const [elapsedMs, setElapsedMs] = useState(0);
   useEffect(() => {
@@ -35,13 +36,33 @@ export function SpeedMatchPanel(props: TemplateRenderProps) {
     return () => window.clearInterval(id);
   }, [question.question_id, locked, disabled]);
   const elapsedSec = (elapsedMs / 1000).toFixed(1);
-  // 速度反馈色：< 5s 绿；5-10s 琥珀；> 10s 灰
-  const speedCls =
-    elapsedMs < 5000
-      ? "text-emerald-300 border-emerald-400/40 bg-emerald-500/15"
-      : elapsedMs < 10000
-        ? "text-amber-200 border-amber-400/40 bg-amber-500/15"
-        : "text-slate-400 border-slate-500/40 bg-slate-500/15";
+  // 速度阶梯（< 3s = 3⚡ / 3-6s = 2⚡ / 6-10s = 1⚡ / > 10s = 🐌）
+  // 配色相应递降：emerald → amber → orange → 灰
+  const speedTier =
+    elapsedMs < 3000
+      ? 3
+      : elapsedMs < 6000
+        ? 2
+        : elapsedMs < 10000
+          ? 1
+          : 0;
+  const speedIcon = speedTier === 0 ? "🐌" : "⚡".repeat(speedTier);
+  const speedTierCls =
+    speedTier === 3
+      ? "text-emerald-300 border-emerald-400/60 bg-emerald-500/20"
+      : speedTier === 2
+        ? "text-amber-200 border-amber-400/60 bg-amber-500/20"
+        : speedTier === 1
+          ? "text-orange-200 border-orange-400/60 bg-orange-500/20"
+          : "text-slate-400 border-slate-500/40 bg-slate-700/40";
+  const speedTextHint =
+    speedTier === 3
+      ? "闪电速度"
+      : speedTier === 2
+        ? "保持节奏"
+        : speedTier === 1
+          ? "加把劲"
+          : "慢了…再想想";
 
   const handlePick = (optId: string, ev: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled || lockedCorrect || locked) return;
@@ -75,16 +96,38 @@ export function SpeedMatchPanel(props: TemplateRenderProps) {
 
   return (
     <div className="relative">
-      {/* v0.31.90: 顶部速度 chip — SpeedMatch 跟 PlainChoice 区分的关键 */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs text-amber-300 font-display font-bold uppercase tracking-wider">
-          ⚡ 闪电匹配
-        </div>
-        <div
-          className={`chip text-xs border tabular-nums font-mono px-2.5 py-1 transition-colors ${speedCls}`}
-          aria-label={`已用 ${elapsedSec} 秒`}
-        >
-          ⏱ {elapsedSec}s
+      {/* v0.31.91：醒目速度面板 — 闪电图标随时间衰减（3⚡→2⚡→1⚡→🐌）+
+          大字号 timer。视觉上跟 PlainChoice 完全区分。*/}
+      <div
+        className={`relative overflow-hidden rounded-2xl border-2 p-3 mb-4 transition-all ${speedTierCls}`}
+      >
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className={`font-display font-bold text-3xl tabular-nums transition-all ${
+                speedTier === 0 ? "scale-110" : ""
+              }`}
+              aria-hidden
+            >
+              {speedIcon}
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wider opacity-70 font-display font-bold">
+                闪电匹配
+              </div>
+              <div className="text-[11px] mt-0.5 opacity-80">
+                {speedTextHint}
+              </div>
+            </div>
+          </div>
+          <div
+            className="font-display font-bold text-3xl tabular-nums shrink-0"
+            aria-label={`已用 ${elapsedSec} 秒`}
+          >
+            <span className="opacity-50 text-xl mr-1">⏱</span>
+            {elapsedSec}
+            <span className="text-base opacity-70 ml-0.5">s</span>
+          </div>
         </div>
       </div>
       <div className="font-display font-bold text-3xl leading-tight mt-1 mb-6 whitespace-pre-wrap text-slate-50">

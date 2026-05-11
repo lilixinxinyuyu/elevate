@@ -381,6 +381,35 @@ export function TutorPanel(props: TutorPanelProps) {
       realtimeRef.current = null;
       setRealtimeMode(false);
       setError(null);
+
+      // v0.31.91: TutorPanel XP 之前只在 realtime 成功路径触发（line 570+）。
+      // 但 realtime 经常 timeout/error → fallback to text → 永远不给 XP。
+      // 这是 Bruce "昨天聊了很多但小进没升级" bug 的真原因。
+      // 现在 fallback 路径也给 XP（一致的 reason 逻辑）。
+      const xpReason: MascotXpReason =
+        props.context === "review_session"
+          ? "session_review"
+          : props.context === "free_chat" || props.context === "skill_help"
+            ? "proactive_chat"
+            : "session_start";
+      void (async () => {
+        // 重新查 studentId（fallbackToText 可能在 realtime 路径定义 studentId
+        // 之前就被调用，避免 TDZ）
+        let sid = props.studentId;
+        if (!sid) {
+          const ss = await db.students.toArray();
+          sid = ss[0]?.id;
+        }
+        if (!sid) return;
+        const r1 = await awardMascotXp(sid, xpReason);
+        if (r1.leveledUp && r1.newLevel) {
+          showLevelUpToast(r1.newLevel.title, r1.newUnlocks);
+        }
+        const r2 = await awardMascotXp(sid, "daily_first");
+        if (r2.leveledUp && r2.newLevel) {
+          showLevelUpToast(r2.newLevel.title, r2.newUnlocks);
+        }
+      })();
       // 已经预取到文字了？直接渲染
       if (prefetchedText) {
         renderTextResult(prefetchedText);

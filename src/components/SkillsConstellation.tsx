@@ -106,24 +106,52 @@ export function SkillsConstellation() {
 
   return (
     <div className="space-y-5 pb-24">
-      {/* Header */}
+      {/* Header — v0.31.91：组合模式按钮放大 + 单独成行 hero CTA，
+          下方圆圈节点不再"抢眼"。组合按钮带主色调底 + 脉冲动效。 */}
       <header className="card-glow border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-indigo-500/10 to-pink-500/5">
         <div className="flex items-start gap-3 flex-wrap">
           <div className="text-3xl shrink-0">🌌</div>
           <div className="flex-1 min-w-[180px]">
             <h1 className="font-display font-bold text-xl text-brand">技能图</h1>
             <div className="text-xs text-slate-300 mt-0.5">
-              单击节点 → 直接练 · 开"组合"模式 → 选多个 skill 一起练
+              单击节点 → 直接练这一个 skill
             </div>
           </div>
-          <ComboToggle
-            mode={combo}
-            onSwitch={(m) => {
-              setCombo(m);
-              if (m === "off") setSelected(new Set());
-            }}
-          />
         </div>
+        {/* 组合模式 CTA — 占据整行宽，比小 chip 显眼很多 */}
+        <button
+          type="button"
+          onClick={() => {
+            const next: ComboMode = combo === "on" ? "off" : "on";
+            setCombo(next);
+            if (next === "off") setSelected(new Set());
+          }}
+          className={`mt-3 w-full rounded-xl border-2 px-4 py-3 flex items-center justify-between gap-3 transition-all ${
+            combo === "on"
+              ? "bg-gradient-to-r from-violet-500/30 to-pink-500/25 border-violet-300/70 text-violet-50 shadow-glow-violet"
+              : "bg-white/[0.04] border-violet-400/40 text-violet-100 hover:bg-violet-500/15 hover:border-violet-300/60"
+          }`}
+          aria-pressed={combo === "on"}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl shrink-0" aria-hidden>
+              {combo === "on" ? "🎯" : "⊕"}
+            </span>
+            <div className="text-left min-w-0">
+              <div className="font-display font-bold text-base">
+                {combo === "on"
+                  ? `组合模式 · 已选 ${selected.size} 个`
+                  : "开启组合模式"}
+              </div>
+              <div className="text-[11px] opacity-80 mt-0.5">
+                {combo === "on"
+                  ? `再点节点继续添加 · 底部「一起练 →」提交`
+                  : "想一次练多个 skill？开启后点节点变多选"}
+              </div>
+            </div>
+          </div>
+          <div className="text-xl shrink-0">{combo === "on" ? "✓" : "→"}</div>
+        </button>
       </header>
 
       <TermSwitcher term={term} onSwitch={handleSwitchTerm} />
@@ -212,30 +240,7 @@ export function SkillsConstellation() {
   );
 }
 
-function ComboToggle({
-  mode,
-  onSwitch,
-}: {
-  mode: ComboMode;
-  onSwitch: (m: ComboMode) => void;
-}) {
-  const on = mode === "on";
-  return (
-    <button
-      type="button"
-      onClick={() => onSwitch(on ? "off" : "on")}
-      className={`shrink-0 rounded-full px-3 py-1.5 text-xs border transition-colors ${
-        on
-          ? "bg-violet-500/30 border-violet-400/60 text-violet-100 shadow-glow-violet"
-          : "bg-white/5 border-ink-700/60 text-slate-300 hover:bg-white/10"
-      }`}
-      aria-pressed={on}
-      title={on ? "关闭组合模式" : "开启组合模式 — 多选 skill 一起练"}
-    >
-      {on ? "✓ 组合模式 (多选)" : "⊕ 组合模式"}
-    </button>
-  );
-}
+// v0.31.91: ComboToggle 删除 — 改为 header 内大 CTA 按钮
 
 // ────────────────────────────────────────────────────────────
 
