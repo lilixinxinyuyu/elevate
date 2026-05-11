@@ -525,12 +525,9 @@ export function HomePage() {
         />
       )}
 
-      {/* v0.31.2 视觉减负：CTA 从 5 张砍到 3 张。
-          - "当前考试冲刺" 横跨全宽（桌面 1/3）作为重点入口
-          - 删 "期末冲刺/期中复习"（跟当前考试冲刺逻辑重复）
-          - 错题复活 → focus ring 已覆盖，但 mobile 需要直接入口 → 保留为副卡片
-          - 专项练 + 技能树 mobile 需要（nav 是 desktopOnly），保留为副卡片 */}
-      <div className="grid grid-cols-3 gap-2.5">
+      {/* v0.31.89：3 卡 → 2 卡（专项练 + 技能树 合并为"技能图"）。
+          桌面 grid-cols-2；mobile col-span-2 横跨全宽 + 单独成行 */}
+      <div className="grid grid-cols-2 gap-2.5">
         {(() => {
           const exam = currentExam();
           const days = daysUntil(exam.date);
@@ -549,7 +546,7 @@ export function HomePage() {
           return (
             <Link
               to={`/math/train?mode=${exam.mode}&fresh=${Date.now()}`}
-              className={`card-glow hover:scale-[1.02] transition-transform col-span-3 sm:col-span-1 ${themeCls}`}
+              className={`card-glow hover:scale-[1.02] transition-transform col-span-2 sm:col-span-1 ${themeCls}`}
             >
               <div className="text-lg">{icon}</div>
               <div className={`font-display font-bold mt-1.5 text-sm ${titleCls}`}>{exam.name}冲刺</div>
@@ -557,15 +554,15 @@ export function HomePage() {
             </Link>
           );
         })()}
-        <Link to="/math/free-practice" className="card hover:bg-ink-700/60 transition-colors">
-          <div className="text-lg">🎯</div>
-          <div className="font-display font-bold mt-1.5 text-sm">专项练</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">挑薄弱 skill 集训</div>
-        </Link>
-        <Link to="/math/skills" className="card hover:bg-ink-700/60 transition-colors">
-          <div className="text-lg">🌳</div>
-          <div className="font-display font-bold mt-1.5 text-sm">技能树</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">每个 skill 熟练度</div>
+        <Link
+          to="/math/skills"
+          className="card-glow hover:scale-[1.02] transition-transform col-span-2 sm:col-span-1 border-violet-400/30 bg-gradient-to-br from-violet-500/20 via-indigo-500/15 to-pink-500/10"
+        >
+          <div className="text-lg">🌌</div>
+          <div className="font-display font-bold mt-1.5 text-sm text-violet-100">技能图</div>
+          <div className="text-[11px] text-violet-200/80 mt-0.5">
+            点节点直接练 · 开组合模式多选一起练
+          </div>
         </Link>
       </div>
 
