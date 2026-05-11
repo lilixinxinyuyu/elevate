@@ -39,45 +39,73 @@ function buildJudgePrompt(target: string, mode: "word" | "sentence"): string {
 
 她要读的目标 ${what}是：「${target}」
 
-你收到她的录音，要做：
-1. 转写她实际说出来的内容
-2. 跟目标对照打 0-100 分：
-   - 90-100 发音很准
-   - 70-89 基本对，但有 1-2 个音不标准
-   - 50-69 能听懂但错音多
-   - 30-49 勉强听懂
-   - 0-29 几乎听不出
-3. 一句中文反馈（10-40 字），温和鼓励，指出哪个音怎么改
+收到她的录音后：
+1. 听她读出来的内容
+2. 跟目标对照打 0-100 分（90+ 很准 / 70-89 基本对 / 50-69 能懂但错音多 / <50 勉强懂）
+3. 一句中文反馈（10-30 字），温和鼓励指出哪里改
 
-**严格只输出 JSON 一行，不要任何 markdown 包装，不要其他文字：**
-{"transcript":"...","score":88,"feedback":"..."}`;
+**输出格式（必须严格按这 3 行，每行一项，不要别的话，不要 markdown）：**
+转写：<你听到的英文原文>
+评分：<0-100 整数>
+反馈：<中文一句话>
+
+示例：
+转写：apple
+评分：88
+反馈：a 元音再饱满一点就更准了`;
 }
 
+/**
+ * 解析 AI 回复。先尝试老的 JSON 格式（兼容），fallback 到新的"转写/评分/反馈"3 行格式。
+ * 再 fallback 到正则抓任意数字 + 全部文字当 feedback。最差也能给出 score。
+ */
 function parseJudgeJSON(raw: string): {
   transcript: string;
   score: number;
   feedback: string;
 } | null {
-  const cleaned = raw
-    .replace(/```json\s*|\s*```/g, "")
-    .replace(/^[^{]*({)/, "$1") // 去 JSON 前的废话
-    .replace(/}\s*[^}]*$/, "}") // 去 JSON 后的废话
-    .trim();
-  try {
-    const j = JSON.parse(cleaned) as {
-      transcript?: string;
-      score?: number;
-      feedback?: string;
-    };
-    if (typeof j.score !== "number") return null;
-    return {
-      transcript: j.transcript ?? "",
-      score: Math.max(0, Math.min(100, Math.round(j.score))),
-      feedback: j.feedback ?? "",
-    };
-  } catch {
-    return null;
+  // 路径 1：严格 JSON（万一模型听话）
+  const jsonMatch = raw.match(/\{[^{}]*"score"[^{}]*\}/);
+  if (jsonMatch) {
+    try {
+      const j = JSON.parse(jsonMatch[0]) as { transcript?: string; score?: number; feedback?: string };
+      if (typeof j.score === "number") {
+        return {
+          transcript: j.transcript ?? "",
+          score: clampScore(j.score),
+          feedback: j.feedback ?? "",
+        };
+      }
+    } catch { /* */ }
   }
+
+  // 路径 2：3 行结构化输出 转写/评分/反馈
+  const tMatch = raw.match(/转\s*写[：:\s]+([^\n\r]+)/);
+  const sMatch = raw.match(/(?:评\s*分|分数)[：:\s]+(\d{1,3})/);
+  const fMatch = raw.match(/反\s*馈[：:\s]+([^\n\r]+)/);
+  if (sMatch) {
+    return {
+      transcript: tMatch?.[1]?.trim() ?? "",
+      score: clampScore(parseInt(sMatch[1]!, 10)),
+      feedback: fMatch?.[1]?.trim() ?? "",
+    };
+  }
+
+  // 路径 3：兜底 — 抓"X 分" or "X/100" 的数字
+  const looseScore = raw.match(/(\d{1,3})\s*(?:分|\/\s*100|points?|%)/);
+  if (looseScore) {
+    return {
+      transcript: "",
+      score: clampScore(parseInt(looseScore[1]!, 10)),
+      feedback: raw.trim().slice(0, 80),
+    };
+  }
+
+  return null;
+}
+
+function clampScore(n: number): number {
+  return Math.max(0, Math.min(100, Math.round(n)));
 }
 
 export function SpeakWordPanel({
@@ -159,7 +187,9 @@ export function SpeakWordPanel({
               setPhase("result");
               onScore(parsed.score, parsed.transcript, parsed.feedback);
             } else {
-              setError("AI 返回的不是 JSON，没法判分。再试一次。");
+              // 解析失败时把 AI 原话显示出来诊断（最多 200 字）
+              const raw = text.trim().slice(0, 200) || "(空)";
+              setError(`没解析出评分。AI 说："${raw}"——请告诉 Claude 调 prompt`);
               setPhase("error");
             }
             // 一次判分完就关掉连接，下次重连
