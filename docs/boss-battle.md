@@ -156,3 +156,22 @@ scripts/_make-boss-transparent.py  # OpenCV 透明 + 狂怒变体
 | FINAL | 数学大魔王 | 王冠 + 整合 |
 
 每个有 normal + `_enraged` 两种 PNG 变体存 D1 `trophy_images` 表。
+
+## v0.31.91+ Playground / 试玩模式
+
+`/math/playground`（`src/pages/Playground.tsx`）—— admin / 调试用的 game-template 试玩入口。
+
+- 列出所有 game template（plain_choice / speed_match / shop_counter / dot_grid_draw / discount_drift / coin_combo / time_heist / number_hunt 等 15 种）
+- 每种点一下能跑一道 demo 题，验证模板渲染 + onFinish 逻辑
+- 不计 XP、不计 mastery、不计 attempts —— 纯调试通道
+- 入口在桌面 admin 面板，移动端 nav 不显示
+
+`router.tsx::PlaygroundRoute` 没有 Phase2 gate，但只在 admin 链接里出现。
+
+## v0.31.96+ Trophy 视觉对齐
+
+Boss 拿到的"闯关印章"（11 枚 boss_*_master 系列）走老款 trophy 视觉（V 字盾 clip-path + 战斗橙色调），**没有**走 v0.31.96 的 CSS 银环统一管道——因为 boss 不是徽章语义。详 `trophy-image-pipeline.md` + `src/components/TrophyIcon.tsx::NEUTRAL_RING` 排除 `category === "boss"` 的判断。
+
+## v0.31.101 Mastery fragility 软 cap（间接影响 boss 解锁）
+
+Boss 解锁条件是 unit 平均 mastery ≥ 75。v0.31.101 把 fragility cap 从硬 45 改成跟 elo 挂钩的软 cap (elo 1500→cap 60 / 1700→cap 70)，所以即使最近 5 题挂了 3+，已经积累的 elo 高的 skill 不会一下回到 45（避免 boss 反复锁回）。详 `scoring-and-progression.md` + `src/core/mastery.ts::fragileCapByElo`。

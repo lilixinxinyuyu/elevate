@@ -57,6 +57,21 @@ flag on：`TodayRings` 同心 3 环（闪电口算 / 今日挑战 / 今日重点
 - 大题营 → 闯关（nav 短）/ 大题闯关（landing 大标题）
 - 口算 → 闪电口算
 
+## v0.31.10 之后的增量（截至 v0.31.102）
+
+flag flip 后 Phase 2 已是默认体验。后续主要演进：
+
+- **v0.31.85+ 玩法多样化**：5 个新 game template（discount_drift / coin_combo / time_heist / number_hunt / dot_grid_draw）+ speed_match 阈值跟 estimated time 对齐（⚡⚡⚡=lightning / ⚡⚡=quick / ⚡=on_time，gameplay 显示数量 = completion 拿到数量，v0.31.98）
+- **v0.31.91+ Trial Playground**：admin UI 加"试玩各题型"入口，所有 game-template 可在 dev 模式下点开演示
+- **v0.31.93 P2 Math City 沙箱**：见 `p2-math-city-plan.md`（已存档为设计参考，没翻 flag）
+- **v0.31.96 trophy 视觉统一**：AI 不画 frame + 深 navy bg + CV 透明化 + CSS 银环（详 `trophy-image-pipeline.md`）
+- **v0.31.98 多 bug fix**：错题复活 sticky-done flag（防回退）、巧算 mastered 重做触发打卡、speed_match ⚡ 数量对齐、ShopCounter 最后一步进度条
+- **v0.31.99 语文 U5**：第五单元（海上日出 + 双龙洞）入库
+- **v0.31.101 mastery fragility 软 cap**：fragile 时 cap 跟 elo 挂钩（不再硬 45）+ UI "待复习"标签
+- **v0.31.102 prompt + sanitize 加固**：禁止生成元注解（"（无关）/（多余）/（解题设定）"等），sanitize 覆盖扩展
+
+flag 上没新增——以上都是 PHASE2_LIVE 内的演进，不需要新 flag 切。
+
 ## 当前 Phase 2 进度（截至 v0.31.9）
 
 ### Axis 4 · 加 skill CLI（基建）✅ ship

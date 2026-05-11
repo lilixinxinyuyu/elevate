@@ -27,10 +27,10 @@
 
 | 文档 | 写给谁 | 何时看 |
 |---|---|---|
-| [Phase 2 plan](phase2-plan.md) | 整体路线图 | 想"接下来做什么" |
+| [Phase 2 plan ⏸ 存档](phase2-plan.md) | 整体路线图（设计起点，已执行进 production） | 看历史决策 / 不当 TODO |
 | [Dev ops](dev-ops.md) | 部署速查 | 跑命令 / 部署 / env 配置 / Cloudflare commit-msg bug |
-| [Trophy 图 pipeline](trophy-image-pipeline.md) | AI 图生成 → 压缩 → push D1 + 透明处理 | 加新勋章图 / 透明背景 / enraged 变体 |
-| [Phase 2 special trophies](phase2-special-trophies.md) | 历史 trophy 设计稿 | 历史参考 |
+| [Trophy 图 pipeline](trophy-image-pipeline.md) | AI 图生成（v0.31.96+ 深 navy + CV 透明 + CSS 银环 3 件套） | 加新勋章图 / 透明背景 / Selena 反馈视觉问题 |
+| [P2 Math City 沙箱设计](p2-math-city-plan.md) | 备选叙事方向（沙箱原则，无 flag） | 看历史方向 / 不当 TODO |
 
 ## 快速链接
 
@@ -138,5 +138,12 @@ node scripts/_judge-all.mjs
 - **v0.31.80-81** — 服务端 sanitize at the door + PNG-over-JPEG 守门 + stale-client 隔离
 - **v0.31.82-85** — Boss 难度收紧（noRetry / 4 星=满血+全对 / hearts=2 / defeat=hearts 0）+ report→fix 加 userAnswer verdict + 选择题答案显示去 id 前缀
 - **v0.31.86** — 全项目 review + 一轮清理：用户可见 bug fix（Home 焦点环 4 星虚高 / phase break 假补血 / Fluency hooks / trophy id→name）+ UI 配置（tailwind 漏注册 4 个 glow class / mobile sync chip / iPhone safe-area）+ 服务端守门（ai-questions keep-newer / sanitize 扩展到 stem+subq+option.text / userAnswer 数组解析）+ 删 17 个一次性 scripts + 死代码清理 + composer prefilledFields wiring 接好
+- **v0.31.87-90** — game type 多样化（speed_match weight 调高 + 5 新 panel：discount_drift / coin_combo / time_heist / number_hunt / dot_grid_draw 含 emoji burst 庆祝）+ 巧算工具箱内嵌到 Fluency + TodayRings fluency 环双闭判定
+- **v0.31.91-93** — Playground 试玩入口 + boss 难度细调 + p2 math city sandbox 设计存档
+- **v0.31.94-96** — Trophy 视觉 v94→v95→v96 三轮迭代（最终 v96 三件套：AI motif on deep navy bg + CV flood-fill 透明 PNG + CSS 统一银环。boss 排除）
+- **v0.31.97-99** — locked trophy 保留 ring (grayscale 化) / regenerate-trophies 改回 prod /api/generate/image 调用 / 语文加第五单元 · 妙笔写美景（海上日出 + 双龙洞 + 25 题）
+- **v0.31.100-101** — Footer 版本号从 package.json 自动注入（之前 hardcoded 不变） / mastery fragility 软 cap（cap 跟 elo 挂钩，1500→60 / 1700→70，不一下打回 45） + UI "待复习" badge
+- **v0.31.98 bug fix 四连**：错题复活 sticky-done 防回退 / 巧算 8 技巧死锁（mastered 也调 markDone）/ 闪电匹配 ⚡ 数量 gameplay vs completion 对齐（3⚡/2⚡/1⚡）/ 小数商店最后一步进度条 setStepOk + 400ms 延迟
+- **v0.31.102** — prompt 加"绝对禁止元注解"硬规 + sanitize META_PATTERNS 补"（多余）/（迷惑）/（备注）"等漏
 
 详细 changelog 见 `CHANGELOG.md`（仓库根）。

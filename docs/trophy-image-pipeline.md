@@ -5,17 +5,50 @@
 
 ---
 
+## v0.31.96 起新架构（三件事各管一件）
+
+之前老问题：AI 自画 frame + CSS clip 打架 + 白底泄漏到 app 深蓝 bg 上特别难看。Bruce 多次反馈"边框大小不一""紫色背景泄漏"。
+
+v0.31.96 重构后：
+
+1. **AI 只画 motif + 深 navy bg**（`src/lib/trophyImages.ts::buildRichTrophyPrompt`）— 强否定 medal/coin/badge 触发词，bg 用 deep navy radial gradient (#08091a → #1a1f3a)，motif 占 65-75% canvas
+2. **CV flood-fill 深色 bg → 透明 PNG**（`scripts/_make-trophy-transparent-v2.py`）— threshold ≤ 100 吃掉深色，seed inset=5 避开 AI 边缘 1-2px 亮色伪影
+3. **CSS 统一薄银环**（`src/components/TrophyIcon.tsx::NEUTRAL_RING`）— daily/milestone/ability/skill/commemorative 一刀切。**boss 排除**：V 字盾形是 Phase 2 战斗系统视觉，不当徽章
+
+详细见 [memory/trophy_pipeline.md](../../../.claude/projects/-Users-yong-Desktop-xy/memory/trophy_pipeline.md) + [memory/token_plan_workflow.md](../../../.claude/projects/-Users-yong-Desktop-xy/memory/token_plan_workflow.md)。
+
 ## TL;DR — 标准操作
 
-### 普通 trophy（勋章 / 段位徽章）
+### 普通 trophy（勋章 / 段位徽章）—— v0.31.96+ 2 步管道
 
 ```bash
-APP_PASSWORD=$(grep ^APP_PASSWORD /Users/yong/Desktop/xy/.dev.vars | cut -d= -f2) \
-  node scripts/regenerate-trophies.mjs --missing
+# 0. 先探活 token-plan（image gen 唯一可行路径）
+KEY=$(grep ^TOKEN_PLAN_API_KEY= /Users/yong/Desktop/xy/.dev.vars | cut -d= -f2-)
+curl -s -X POST 'https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions' \
+  -H "Authorization: Bearer ${KEY}" -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-v3.2","messages":[{"role":"user","content":"hi"}],"max_tokens":10}' \
+  | python3 -c "import json,sys;d=json.load(sys.stdin);e=d.get('error',{});print(e.get('code') or 'RECOVERED')"
+# 出 'RECOVERED' 才继续；'AccessDenied.QuotaExhausted' 别白跑
 
-# 看图 QA → 不合格的单独重抽
-APP_PASSWORD=... node scripts/regenerate-trophies.mjs --ids math_xxx,math_yyy
+# 1. 生成（深 navy bg，AI 不画 frame）
+APP_PASSWORD=$(grep ^APP_PASSWORD= /Users/yong/Desktop/xy/.dev.vars | cut -d= -f2-) \
+  node scripts/regenerate-trophies.mjs --ids math_xxx,math_yyy --no-push
+
+# 2. CV 吃深色 bg → 透明 PNG + push D1
+APP_PASSWORD=$(grep ^APP_PASSWORD= /Users/yong/Desktop/xy/.dev.vars | cut -d= -f2-) \
+  python3 scripts/_make-trophy-transparent-v2.py --input-dir /tmp/trophies --ids math_xxx,math_yyy
 ```
+
+### Trophy 视觉 QA 6 步严格检查（v0.31.96 起 Bruce 要求的固定流程）
+
+不能凭"应该差不多"就 ship——见 [memory/visual_qa_standard.md](../../../.claude/projects/-Users-yong-Desktop-xy/memory/visual_qa_standard.md)：
+
+1. 每张图独立 `Read /tmp/trophies/math_xxx.png` 看一遍
+2. 跟 3 张老 anchor (`answer_master_silver` / `combo_king_silver` / `ability_calculation_silver`) 对比是否风格一致
+3. 3 角度都过：边框（厚度/颜色/泄漏）、背景（深色完整/无白底）、motif（居中/无字数）
+4. 在 app 实际环境跑 `/math` 看 TrophyWall 整片效果，不只看 /tmp/
+5. locked + unlocked 两种状态都看
+6. 自查："Bruce 看到会说 OK 吗？"
 
 ### Boss 怪物图（v0.31.74-81 增强：透明 + enraged 变体）
 
