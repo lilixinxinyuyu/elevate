@@ -371,6 +371,16 @@ export class RealtimeTutor {
         }
         break;
       }
+      // v0.31.106：纯 text 输出（responseModalities=["text"]）走这条路。
+      // 老版只听 audio_transcript.delta → text-only 模式 buf 永远空 → 误判 AI 没说话
+      case "response.text.delta": {
+        const delta = (evt.delta as string) ?? "";
+        if (delta) {
+          this.assistantTextBuf += delta;
+          this.cb.onAssistantTranscriptDelta?.(delta);
+        }
+        break;
+      }
       case "response.audio.delta": {
         const audioB64 = evt.delta as string | undefined;
         if (audioB64) this.queueAudioChunk(audioB64);

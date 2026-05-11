@@ -146,8 +146,8 @@ export function Mascot3DTestPage() {
           🚧 小进 3D 形象（Phase C 实验）
         </div>
         <div className="text-xs text-amber-200/80 mt-1 leading-relaxed">
-          Procedural 几何拼出来的卡通版本，先把整条管线走通：模型 + idle 动画 + skin 切换 + 嘴型同步。
-          后续会换成 VRM 真模型；这页面先内部测试，nav 里看不到，只能直链 /math/mascot3d。
+          VRoid VRM 模型 + @pixiv/three-vrm 渲染 + HDRI envmap + viseme 嘴型同步。
+          副手红熊猫待 Phase 2 接入，现在右下角是占位光球。Nav 里看不到这页，只能直链 /math/mascot3d。
         </div>
       </div>
 
@@ -272,9 +272,9 @@ export function Mascot3DTestPage() {
       </div>
 
       <div className="text-[11px] text-slate-500 leading-relaxed">
-        ⚙️ 实现：procedural three.js 几何（球/胶囊/圆柱）+ react-three-fiber 渲染 +
-        useFrame 每帧同步嘴型 scale.y 到 audioLevel。整个 Mascot3D 模块走 lazy import，
-        不进主包；只有访问这一页才下载 ~250KB three+R3F+drei。
+        ⚙️ 实现：VRoid VRM 通过 @pixiv/three-vrm 加载，drei {`<Environment>`} 提供 HDRI envmap；
+        useFrame 每帧 vrm.expressionManager.setValue('aa', audioLevel * 4.5) 驱动嘴型 + blink 自动眨眼。
+        VRM 文件 (~11MB) 走 lazy import + Suspense；首次访问 /math/mascot3d 才下载。
       </div>
     </div>
   );

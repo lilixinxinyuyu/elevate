@@ -80,9 +80,11 @@ function parseJudgeJSON(raw: string): {
   }
 
   // 路径 2：3 行结构化输出 转写/评分/反馈
-  const tMatch = raw.match(/转\s*写[：:\s]+([^\n\r]+)/);
-  const sMatch = raw.match(/(?:评\s*分|分数)[：:\s]+(\d{1,3})/);
-  const fMatch = raw.match(/反\s*馈[：:\s]+([^\n\r]+)/);
+  // AI 实测会把 3 行用空格而非换行分隔（"转写：apple 评分：0 反馈：..."），
+  // 所以 transcript / feedback 用"到下一个字段名为止"匹配，不是抓到行尾
+  const tMatch = raw.match(/转\s*写[：:]\s*(.+?)(?=\s*(?:评\s*分|分数)[：:]|$)/);
+  const sMatch = raw.match(/(?:评\s*分|分数)[：:]\s*(\d{1,3})/);
+  const fMatch = raw.match(/反\s*馈[：:]\s*(.+?)$/);
   if (sMatch) {
     return {
       transcript: tMatch?.[1]?.trim() ?? "",

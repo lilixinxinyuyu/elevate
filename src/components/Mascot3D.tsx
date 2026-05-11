@@ -1,108 +1,74 @@
 /**
- * 小进 — 未来感 AI 数学老师 3D 形象（v0.31.26 重设计）。
+ * 小进 — 真正的 anime VRM avatar（v0.32 主线转向）。
  *
- * 设计灵感：Wall-E 里的 EVE + 一点点熊猫可爱元素。
- * 整体调性：sleek / futuristic / 漂浮 / 高光泽白壳 + 冷青蓝 LED + 暗黑面板。
+ * 主形象：VRoid Hub 短发蓝开衫小姐姐，通过 @pixiv/three-vrm 加载 .vrm 文件。
+ * 副手：暂用浮动光环占位，Phase 2 再做拟人红熊猫。
  *
- * 关键造型语言：
- *  - 椭蛋形身体 + 椭蛋形头，头身分离，悬浮姿态（没有腿）
- *  - 头部正面暗色弧面 visor（"屏幕"），visor 上两枚青蓝 LED 眼
- *  - 眼下小条状 LED audio bar 作"嘴"，跟 audioLevel 同步
- *  - 顶部小天线（含发光球，呼吸感）
- *  - 两只悬浮断臂（disconnected hands，EVE 招牌）
- *  - 底部反重力光环（cyan/violet 透明 ring 堆叠）
- *  - 胸前小 holo 圆环（数学符号当胸标）
+ * Pipeline：
+ *  - GLTFLoader + VRMLoaderPlugin 加载 /avatars/xiaojin.vrm
+ *  - drei <Environment preset="apartment" /> 提供 HDRI envmap → 头发/眼睛/衣服反光
+ *  - useFrame 每帧推 vrm.update(delta) + 嘴型同步 + idle 动画
+ *  - viseme 'aa' 跟 audioLevel；'blink' 自然眨眼
+ *  - skin 变体先用头顶 R3F 几何 accessory（帽子/皇冠）覆盖在头骨上
  *
- * 熊猫呼应（很 subtle，整体仍是 EVE）：
- *  - 头顶两侧小黑色圆盘 panel —— 熊猫耳的位置 cue
- *  - 双颊小粉色 LED dot —— 熊猫腮红 cue
- *
- * Skin 切换在头顶悬浮一顶帽子（hover-above，不真戴）：
- *  default(无装饰) / graduation(博士帽) / wizard(巫师帽) / legendary(金皇冠+金边)。
+ * 加载失败 / 文件缺失 fallback：显示一个友好提示卡片，不挡其他功能。
  */
 
-import { Suspense, forwardRef, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import type { Group, Mesh } from "three";
+import { Environment, OrbitControls } from "@react-three/drei";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { VRM, VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
+import * as THREE from "three";
+import type { Group, Object3D } from "three";
 
 export type MascotSkin = "default" | "graduation" | "wizard" | "legendary";
-
-const SKIN_THEMES: Record<MascotSkin, {
-  hatStyle: "none" | "graduation" | "wizard" | "crown";
-  ledMain: string;
-  ledAccent: string;
-  haloColor: string;
-  trim?: string;
-}> = {
-  default: {
-    hatStyle: "none",
-    ledMain: "#67e8f9",
-    ledAccent: "#a5f3fc",
-    haloColor: "#7dd3fc",
-  },
-  graduation: {
-    hatStyle: "graduation",
-    ledMain: "#67e8f9",
-    ledAccent: "#fbbf24",
-    haloColor: "#fbbf24",
-  },
-  wizard: {
-    hatStyle: "wizard",
-    ledMain: "#c4b5fd",
-    ledAccent: "#fde047",
-    haloColor: "#a78bfa",
-  },
-  legendary: {
-    hatStyle: "crown",
-    ledMain: "#fde68a",
-    ledAccent: "#fbbf24",
-    haloColor: "#fbbf24",
-    trim: "#f59e0b",
-  },
-};
-
-const SHELL_WHITE = "#f5f7fb";
-const SHELL_SHADOW = "#cbd5e1";
-const VISOR_DARK = "#0b1220";
-const PANDA_BLACK = "#1c1917";
-const PANDA_BLUSH = "#f9a8d4";
 
 interface Mascot3DProps {
   audioLevel?: number;
   skin?: MascotSkin;
   spin?: boolean;
   className?: string;
+  /** 默认 /avatars/xiaojin.vrm，外面可以覆写换 outfit */
+  vrmUrl?: string;
 }
+
+const DEFAULT_VRM_URL = "/avatars/xiaojin.vrm";
 
 export default function Mascot3D({
   audioLevel = 0,
   skin = "default",
   spin = false,
   className,
+  vrmUrl = DEFAULT_VRM_URL,
 }: Mascot3DProps) {
   return (
     <div className={className ?? "w-full h-full"}>
-      <Canvas camera={{ position: [0, 0.15, 4.6], fov: 38 }} dpr={[1, 2]}>
+      <Canvas
+        camera={{ position: [0, 1.35, 1.8], fov: 30 }}
+        dpr={[1, 2]}
+        gl={{ alpha: true, antialias: true }}
+      >
         <Suspense fallback={null}>
-          <ambientLight intensity={0.4} />
-          <directionalLight position={[3, 5, 4]} intensity={1.0} color="#ffffff" />
-          <directionalLight position={[-3, 2, 3]} intensity={0.5} color="#7dd3fc" />
-          <pointLight
-            position={[0, -1.5, 2]}
-            intensity={0.4}
-            color={SKIN_THEMES[skin].ledMain}
-          />
-          <hemisphereLight args={["#bae6fd", "#1e1b4b", 0.35]} />
+          <ambientLight intensity={0.45} />
+          <directionalLight position={[2, 4, 3]} intensity={0.9} color="#ffffff" />
+          <directionalLight position={[-3, 2, 1]} intensity={0.35} color="#bae6fd" />
+          {/* HDRI envmap：质感的灵魂；apartment 给柔和暖白 */}
+          <Environment preset="apartment" />
 
-          <XiaoJin audioLevel={audioLevel} skin={skin} spin={spin} />
+          <VRMScene
+            url={vrmUrl}
+            audioLevel={audioLevel}
+            skin={skin}
+            spin={spin}
+          />
 
           <OrbitControls
             enablePan={false}
             enableZoom={false}
+            target={[0, 1.25, 0]}
             minPolarAngle={Math.PI / 3}
             maxPolarAngle={Math.PI / 1.8}
-            target={[0, 0.1, 0]}
           />
         </Suspense>
       </Canvas>
@@ -110,526 +76,309 @@ export default function Mascot3D({
   );
 }
 
-interface XiaoJinProps {
+interface VRMSceneProps {
+  url: string;
   audioLevel: number;
   skin: MascotSkin;
   spin: boolean;
 }
 
-function XiaoJin({ audioLevel, skin, spin }: XiaoJinProps) {
+function VRMScene({ url, audioLevel, skin, spin }: VRMSceneProps) {
   const rootRef = useRef<Group>(null);
-  const bodyRef = useRef<Group>(null);
-  const headRef = useRef<Group>(null);
-  const leftHandRef = useRef<Group>(null);
-  const rightHandRef = useRef<Group>(null);
-  const mouthRef = useRef<Mesh>(null);
-  const leftEyeRef = useRef<Mesh>(null);
-  const rightEyeRef = useRef<Mesh>(null);
-  const haloRef = useRef<Group>(null);
-  const antennaTipRef = useRef<Mesh>(null);
-  const theme = SKIN_THEMES[skin];
-
+  const [vrm, setVrm] = useState<VRM | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const blinkRef = useRef({ phase: 0, next: 3 + Math.random() * 2 });
 
+  // 加载 VRM
+  useEffect(() => {
+    let cancelled = false;
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+    loader.load(
+      url,
+      (gltf) => {
+        if (cancelled) return;
+        const loaded: VRM = gltf.userData.vrm;
+        // 清理优化
+        VRMUtils.removeUnnecessaryVertices(loaded.scene);
+        VRMUtils.combineSkeletons(loaded.scene);
+        // 朝向相机（VRoid 默认朝 -Z，翻过来）
+        VRMUtils.rotateVRM0(loaded);
+        // 关闭 frustum culling（小屏幕里抠骨容易误判）
+        loaded.scene.traverse((obj: Object3D) => {
+          obj.frustumCulled = false;
+        });
+        // 一次性把 T-pose 改成自然站姿（双臂下垂 + 微微弯肘）
+        applyRestPose(loaded);
+        setVrm(loaded);
+      },
+      undefined,
+      (err) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[mascot3d] VRM load failed:", msg);
+        setLoadError(msg);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  // 每帧更新 VRM + idle 动画 + lipsync + blink
   useFrame((state, delta) => {
-    if (!rootRef.current || !bodyRef.current || !headRef.current || !mouthRef.current) return;
+    if (!vrm) return;
     const t = state.clock.getElapsedTime();
 
-    rootRef.current.position.y = -0.15 + Math.sin(t * 1.3) * 0.04;
-    if (spin) {
-      rootRef.current.rotation.y += delta * 0.45;
-    } else {
-      rootRef.current.rotation.y = Math.sin(t * 0.45) * 0.16;
+    // 整体浮动
+    if (rootRef.current) {
+      rootRef.current.position.y = Math.sin(t * 1.2) * 0.012;
+      if (spin) rootRef.current.rotation.y += delta * 0.35;
+      else rootRef.current.rotation.y = Math.sin(t * 0.4) * 0.08;
     }
 
-    headRef.current.rotation.z = Math.sin(t * 0.7) * 0.05;
-    headRef.current.rotation.x = Math.sin(t * 0.55) * 0.04;
-    headRef.current.position.y = 0.72 + Math.sin(t * 1.6 + 0.5) * 0.02;
-
-    bodyRef.current.scale.y = 1 + Math.sin(t * 1.0) * 0.012;
-
-    if (leftHandRef.current) {
-      leftHandRef.current.position.y = -0.05 + Math.sin(t * 1.5) * 0.05;
-      leftHandRef.current.rotation.z = Math.sin(t * 0.9) * 0.12 - 0.12;
+    // 呼吸：胸腔轻微缩放（找 chest 骨）
+    const chest = vrm.humanoid?.getNormalizedBoneNode("chest");
+    if (chest) {
+      const breath = 1 + Math.sin(t * 1.3) * 0.012;
+      chest.scale.setScalar(breath);
     }
-    if (rightHandRef.current) {
-      rightHandRef.current.position.y = -0.05 + Math.sin(t * 1.5 + Math.PI / 2) * 0.05;
-      rightHandRef.current.rotation.z = -Math.sin(t * 0.9) * 0.12 + 0.12;
+    // 头：微微左右晃 + 上下点头节奏
+    const head = vrm.humanoid?.getNormalizedBoneNode("head");
+    if (head) {
+      head.rotation.z = Math.sin(t * 0.7) * 0.04;
+      head.rotation.x = Math.sin(t * 0.55) * 0.03;
     }
 
-    if (haloRef.current) {
-      haloRef.current.rotation.z += delta * 0.6;
-    }
+    // 嘴型：audioLevel → 'aa' viseme
+    const em = vrm.expressionManager;
+    if (em) {
+      const aa = Math.min(0.95, audioLevel * 4.5);
+      em.setValue("aa", aa);
 
-    if (antennaTipRef.current) {
-      const pulse = 1 + Math.sin(t * 3.2) * 0.18;
-      antennaTipRef.current.scale.setScalar(pulse);
-    }
-
-    // 嘴 LED bar 跟 audioLevel
-    const mouthXTarget = 0.6 + Math.min(1.5, audioLevel * 4.0);
-    mouthRef.current.scale.x =
-      mouthRef.current.scale.x + (mouthXTarget - mouthRef.current.scale.x) * 0.4;
-    mouthRef.current.scale.y = 0.6 + Math.min(0.9, audioLevel * 3.0);
-
-    // 眨眼
-    blinkRef.current.phase += delta;
-    let eyeScaleY = 1;
-    if (blinkRef.current.phase > blinkRef.current.next) {
-      const local = blinkRef.current.phase - blinkRef.current.next;
-      if (local < 0.18) {
-        eyeScaleY = local < 0.09 ? 1 - local / 0.09 : (local - 0.09) / 0.09;
-        eyeScaleY = Math.max(0.06, eyeScaleY);
-      } else {
-        blinkRef.current.phase = 0;
-        blinkRef.current.next = 3 + Math.random() * 3;
-        eyeScaleY = 1;
+      // 眨眼调度
+      blinkRef.current.phase += delta;
+      if (blinkRef.current.phase > blinkRef.current.next) {
+        const local = blinkRef.current.phase - blinkRef.current.next;
+        if (local < 0.16) {
+          // 0..0.08 闭 / 0.08..0.16 开
+          const v = local < 0.08 ? local / 0.08 : 1 - (local - 0.08) / 0.08;
+          em.setValue("blink", Math.max(0, Math.min(1, v)));
+        } else {
+          em.setValue("blink", 0);
+          blinkRef.current.phase = 0;
+          blinkRef.current.next = 3 + Math.random() * 3;
+        }
       }
+
+      // 默认微笑（让她看起来友好）
+      em.setValue("happy", 0.25);
+
+      em.update();
     }
-    if (leftEyeRef.current) leftEyeRef.current.scale.y = eyeScaleY;
-    if (rightEyeRef.current) rightEyeRef.current.scale.y = eyeScaleY;
+
+    vrm.update(delta);
   });
+
+  if (loadError) {
+    return <FallbackPlaceholder reason={loadError} />;
+  }
+  if (!vrm) {
+    return <LoadingPlaceholder />;
+  }
 
   return (
     <group ref={rootRef}>
-      {/* 背景柔光环 */}
-      <mesh position={[0, 0.5, -0.7]}>
-        <ringGeometry args={[1.35, 1.6, 64]} />
-        <meshBasicMaterial color={theme.haloColor} transparent opacity={0.18} />
-      </mesh>
-
-      {/* === 头部 === */}
-      <group ref={headRef} position={[0, 0.72, 0]}>
-        {/* 主头壳 */}
-        <mesh>
-          <sphereGeometry args={[0.62, 64, 48]} />
-          <meshStandardMaterial
-            color={SHELL_WHITE}
-            roughness={0.18}
-            metalness={0.25}
-            envMapIntensity={1.2}
-          />
-        </mesh>
-        {/* 头壳底面伪 AO 暗环 */}
-        <mesh position={[0, -0.55, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.08, 0.18, 24]} />
-          <meshBasicMaterial color={SHELL_SHADOW} transparent opacity={0.35} />
-        </mesh>
-
-        {/* 暗色 visor 屏幕 —— 覆盖头壳前半球的 hemisphere（EVE 招牌脸罩） */}
-        <mesh>
-          <sphereGeometry
-            args={[
-              0.628,        // 比头壳 0.62 略大，保证完全覆盖
-              64,
-              48,
-              0,            // phiStart：Three.js 里 phi=PI/2 是 +z（前方），从 0 起
-              Math.PI,      // phiLength：扫到 PI → 覆盖 +z 前半球
-              0,
-              Math.PI,
-            ]}
-          />
-          {/* 低 metalness + 微暗紫蓝 emissive：在暗 scene 里依然能"读"出形状 */}
-          <meshStandardMaterial
-            color={VISOR_DARK}
-            roughness={0.15}
-            metalness={0.45}
-            emissive="#1e293b"
-            emissiveIntensity={0.5}
-          />
-        </mesh>
-        {/* visor 与头壳交界处的银色边线（plate seam）—— 竖直方向 */}
-        <mesh rotation={[0, 0, 0]}>
-          <torusGeometry args={[0.628, 0.006, 8, 64]} />
-          <meshStandardMaterial color={SHELL_SHADOW} roughness={0.4} metalness={0.7} />
-        </mesh>
-        {/* visor 顶部反光高光带 */}
-        <mesh position={[0, 0.38, 0.45]} rotation={[0, 0, 0]} scale={[1.4, 0.06, 0.04]}>
-          <sphereGeometry args={[0.28, 24, 12]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.22} />
-        </mesh>
-
-        {/* 双 LED 眼（贴在 visor 表面） */}
-        <LedEye ref={leftEyeRef} position={[-0.18, 0.04, 0.6]} color={theme.ledMain} />
-        <LedEye ref={rightEyeRef} position={[0.18, 0.04, 0.6]} color={theme.ledMain} />
-
-        {/* 嘴 LED bar */}
-        <mesh ref={mouthRef} position={[0, -0.22, 0.6]} rotation={[0, 0, Math.PI / 2]}>
-          <capsuleGeometry args={[0.014, 0.12, 6, 16]} />
-          <meshStandardMaterial
-            color={theme.ledAccent}
-            emissive={theme.ledAccent}
-            emissiveIntensity={2.4}
-            roughness={0.4}
-          />
-        </mesh>
-
-        {/* 头顶两侧小黑圆盘（熊猫耳 cue）—— 稍稍外突，落在头壳后上方 */}
-        <PandaEarDisc position={[-0.5, 0.42, -0.02]} />
-        <PandaEarDisc position={[0.5, 0.42, -0.02]} />
-
-        {/* 双颊粉 LED dot —— 落在 visor 下方两侧（小诊断灯 + 熊猫腮红 cue） */}
-        <CheekDot position={[-0.36, -0.2, 0.48]} />
-        <CheekDot position={[0.36, -0.2, 0.48]} />
-
-        {/* 头顶天线 */}
-        <group position={[0, 0.6, 0.02]}>
-          <mesh position={[0, 0.06, 0]}>
-            <cylinderGeometry args={[0.012, 0.016, 0.16, 12]} />
-            <meshStandardMaterial color={SHELL_SHADOW} roughness={0.4} metalness={0.7} />
-          </mesh>
-          <mesh ref={antennaTipRef} position={[0, 0.18, 0]}>
-            <sphereGeometry args={[0.038, 20, 16]} />
-            <meshStandardMaterial
-              color={theme.ledMain}
-              emissive={theme.ledMain}
-              emissiveIntensity={2.2}
-              roughness={0.3}
-            />
-          </mesh>
-        </group>
-
-        {/* 头顶悬浮装饰 */}
-        {theme.hatStyle === "graduation" && <GraduationHat />}
-        {theme.hatStyle === "wizard" && <WizardHat color="#5b21b6" star={theme.ledAccent} />}
-        {theme.hatStyle === "crown" && <Crown color="#fbbf24" gem={theme.ledAccent} />}
-      </group>
-
-      {/* === 身体 === */}
-      <group ref={bodyRef} position={[0, -0.18, 0]}>
-        <mesh scale={[0.95, 1.05, 0.92]}>
-          <sphereGeometry args={[0.5, 64, 48]} />
-          <meshStandardMaterial
-            color={SHELL_WHITE}
-            roughness={0.2}
-            metalness={0.22}
-            envMapIntensity={1.2}
-          />
-        </mesh>
-
-        {theme.trim && (
-          <>
-            <mesh position={[-0.46, 0, 0]} scale={[0.04, 0.85, 0.04]}>
-              <sphereGeometry args={[0.5, 16, 12]} />
-              <meshStandardMaterial
-                color={theme.trim}
-                emissive={theme.trim}
-                emissiveIntensity={0.6}
-                metalness={0.8}
-                roughness={0.25}
-              />
-            </mesh>
-            <mesh position={[0.46, 0, 0]} scale={[0.04, 0.85, 0.04]}>
-              <sphereGeometry args={[0.5, 16, 12]} />
-              <meshStandardMaterial
-                color={theme.trim}
-                emissive={theme.trim}
-                emissiveIntensity={0.6}
-                metalness={0.8}
-                roughness={0.25}
-              />
-            </mesh>
-          </>
-        )}
-
-        {/* 胸前 holo 圆环 + π */}
-        <group position={[0, 0.08, 0.46]}>
-          <mesh>
-            <torusGeometry args={[0.13, 0.012, 12, 36]} />
-            <meshStandardMaterial
-              color={theme.ledMain}
-              emissive={theme.ledMain}
-              emissiveIntensity={1.6}
-              roughness={0.35}
-            />
-          </mesh>
-          <ChestSymbol color={theme.ledMain} />
-        </group>
-
-        {/* 身体底部缝隙线 */}
-        <mesh position={[0, -0.48, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.32, 0.34, 32]} />
-          <meshBasicMaterial color={VISOR_DARK} transparent opacity={0.5} />
-        </mesh>
-      </group>
-
-      {/* === 悬浮双手 === */}
-      <group ref={leftHandRef} position={[-0.7, -0.05, 0.12]}>
-        <FloatingHand color={SHELL_WHITE} />
-      </group>
-      <group ref={rightHandRef} position={[0.7, -0.05, 0.12]}>
-        <FloatingHand color={SHELL_WHITE} mirror />
-      </group>
-
-      {/* === 反重力光环 === */}
-      <group ref={haloRef} position={[0, -0.82, 0]}>
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.42, 0.5, 64]} />
-          <meshBasicMaterial color={theme.ledMain} transparent opacity={0.55} />
-        </mesh>
-        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -0.04, 0]}>
-          <ringGeometry args={[0.55, 0.62, 64]} />
-          <meshBasicMaterial color={theme.ledMain} transparent opacity={0.25} />
-        </mesh>
-        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -0.08, 0]}>
-          <ringGeometry args={[0.7, 0.76, 64]} />
-          <meshBasicMaterial color={theme.ledMain} transparent opacity={0.12} />
-        </mesh>
-      </group>
-
-      {/* === 飘浮数学符号 === */}
-      <FloatingSymbol position={[1.12, 0.7, 0.2]} symbol="π" color={theme.ledMain} />
-      <FloatingSymbol position={[-1.18, 0.95, 0.1]} symbol="+" color={theme.ledAccent} />
-      <FloatingSymbol position={[0.95, -0.55, 0.3]} symbol="★" color={theme.ledAccent} small />
-      <FloatingSymbol position={[-0.95, -0.35, 0.4]} symbol="=" color={theme.ledMain} small />
+      <primitive object={vrm.scene} />
+      {/* skin 配饰挂在头骨上 */}
+      <SkinAccessory skin={skin} vrm={vrm} />
+      {/* AI 副手占位光环（Phase 2 替换成红熊猫）*/}
+      <SidekickPlaceholder />
     </group>
   );
 }
 
-/** LED 椭圆眼 */
-const LedEye = forwardRef<Mesh, { position: [number, number, number]; color: string }>(
-  function LedEye({ position, color }, ref) {
-    return (
-      <mesh ref={ref} position={position} scale={[1, 1, 0.4]}>
-        <sphereGeometry args={[0.075, 32, 24]} />
+/** 把 VRM 默认 T-pose 改成自然站姿 —— 双臂下垂、微弯肘 */
+function applyRestPose(vrm: VRM) {
+  const h = vrm.humanoid;
+  if (!h) return;
+  const deg = THREE.MathUtils.degToRad;
+  // 上臂 Z 旋转把手臂从平举（+X / -X）放下来
+  const lU = h.getNormalizedBoneNode("leftUpperArm");
+  const rU = h.getNormalizedBoneNode("rightUpperArm");
+  if (lU) lU.rotation.z = deg(72);
+  if (rU) rU.rotation.z = deg(-72);
+  // 小臂略弯（让手肘不死板）
+  const lL = h.getNormalizedBoneNode("leftLowerArm");
+  const rL = h.getNormalizedBoneNode("rightLowerArm");
+  if (lL) lL.rotation.y = deg(-10);
+  if (rL) rL.rotation.y = deg(10);
+  // 手轻微往前合（更自然）
+  const lH = h.getNormalizedBoneNode("leftHand");
+  const rH = h.getNormalizedBoneNode("rightHand");
+  if (lH) lH.rotation.z = deg(-5);
+  if (rH) rH.rotation.z = deg(5);
+}
+
+/** Phase 2 placeholder：AI 副手位置悬浮一个发光小球 */
+function SidekickPlaceholder() {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    if (!ref.current) return;
+    const t = state.clock.getElapsedTime();
+    ref.current.position.y = 1.0 + Math.sin(t * 1.6) * 0.06;
+    ref.current.position.x = 0.55 + Math.sin(t * 0.8) * 0.04;
+    ref.current.rotation.y += 0.02;
+  });
+  return (
+    <group>
+      {/* 主光球 */}
+      <mesh ref={ref} position={[0.55, 1.0, 0.2]}>
+        <sphereGeometry args={[0.07, 24, 18]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={2.8}
+          color="#f97316"
+          emissive="#f97316"
+          emissiveIntensity={1.6}
+          roughness={0.4}
+        />
+      </mesh>
+      {/* 外圈柔光环 */}
+      <mesh position={[0.55, 1.0, 0.2]}>
+        <sphereGeometry args={[0.11, 24, 18]} />
+        <meshBasicMaterial color="#fed7aa" transparent opacity={0.18} />
+      </mesh>
+    </group>
+  );
+}
+
+/** skin 头顶配饰 —— 挂在 VRM head 骨上 */
+function SkinAccessory({ skin, vrm }: { skin: MascotSkin; vrm: VRM }) {
+  const groupRef = useRef<Group>(null);
+  const headBone = useMemo(() => vrm.humanoid?.getNormalizedBoneNode("head"), [vrm]);
+
+  // 每帧把配饰位置跟到 head 骨上
+  useFrame(() => {
+    if (!groupRef.current || !headBone) return;
+    headBone.getWorldPosition(groupRef.current.position);
+    headBone.getWorldQuaternion(groupRef.current.quaternion);
+  });
+
+  if (!headBone || skin === "default") return null;
+
+  return (
+    <group ref={groupRef}>
+      {skin === "graduation" && <GraduationCap />}
+      {skin === "wizard" && <WizardHat />}
+      {skin === "legendary" && <Crown />}
+    </group>
+  );
+}
+
+function GraduationCap() {
+  return (
+    <group position={[0, 0.18, 0]}>
+      <mesh>
+        <boxGeometry args={[0.32, 0.018, 0.32]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.5} metalness={0.2} />
+      </mesh>
+      <mesh position={[0, -0.05, 0]}>
+        <cylinderGeometry args={[0.1, 0.11, 0.08, 20]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.5} metalness={0.2} />
+      </mesh>
+      <mesh position={[0.11, 0.01, 0.11]} scale={[0.015, 0.08, 0.015]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
+      </mesh>
+      <mesh position={[0.11, -0.04, 0.11]}>
+        <sphereGeometry args={[0.018, 12, 10]} />
+        <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
+function WizardHat() {
+  return (
+    <group position={[0, 0.16, 0]}>
+      <mesh>
+        <cylinderGeometry args={[0.17, 0.2, 0.02, 20]} />
+        <meshStandardMaterial color="#5b21b6" roughness={0.6} metalness={0.15} />
+      </mesh>
+      <mesh position={[0, 0.16, 0]} rotation={[0, 0, -0.08]}>
+        <coneGeometry args={[0.1, 0.32, 16]} />
+        <meshStandardMaterial color="#5b21b6" roughness={0.6} metalness={0.15} />
+      </mesh>
+      <mesh position={[0.05, 0.2, 0.08]}>
+        <sphereGeometry args={[0.018, 12, 10]} />
+        <meshStandardMaterial color="#fde047" emissive="#fde047" emissiveIntensity={1.2} />
+      </mesh>
+    </group>
+  );
+}
+
+function Crown() {
+  return (
+    <group position={[0, 0.17, 0]}>
+      <mesh>
+        <cylinderGeometry args={[0.14, 0.16, 0.05, 16]} />
+        <meshStandardMaterial color="#fbbf24" metalness={0.95} roughness={0.18} />
+      </mesh>
+      {[...Array(6)].map((_, i) => {
+        const a = (i / 6) * Math.PI * 2;
+        return (
+          <mesh key={i} position={[Math.cos(a) * 0.14, 0.05, Math.sin(a) * 0.14]}>
+            <coneGeometry args={[0.02, 0.06, 8]} />
+            <meshStandardMaterial color="#fbbf24" metalness={0.95} roughness={0.18} />
+          </mesh>
+        );
+      })}
+      <mesh position={[0, 0.015, 0.14]}>
+        <sphereGeometry args={[0.018, 14, 12]} />
+        <meshStandardMaterial
+          color="#dc2626"
+          emissive="#dc2626"
+          emissiveIntensity={0.6}
+          metalness={0.4}
           roughness={0.25}
         />
       </mesh>
-    );
-  },
-);
-
-function PandaEarDisc({ position }: { position: [number, number, number] }) {
-  return (
-    <group position={position}>
-      <mesh>
-        <sphereGeometry args={[0.12, 24, 18]} />
-        <meshStandardMaterial color={PANDA_BLACK} roughness={0.35} metalness={0.4} />
-      </mesh>
-      <mesh position={[0, 0, 0.05]} scale={[0.6, 0.6, 0.2]}>
-        <sphereGeometry args={[0.12, 18, 14]} />
-        <meshStandardMaterial color="#374151" roughness={0.5} metalness={0.3} />
-      </mesh>
     </group>
   );
 }
 
-function CheekDot({ position }: { position: [number, number, number] }) {
+/** VRM 还在加载时的占位（简单旋转圈） */
+function LoadingPlaceholder() {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    if (!ref.current) return;
+    ref.current.rotation.z = state.clock.getElapsedTime() * 1.5;
+  });
   return (
-    <mesh position={position} scale={[1, 1, 0.5]}>
-      <sphereGeometry args={[0.05, 18, 14]} />
+    <mesh ref={ref} position={[0, 1.3, 0]}>
+      <torusGeometry args={[0.18, 0.012, 8, 32, Math.PI * 1.4]} />
       <meshStandardMaterial
-        color={PANDA_BLUSH}
-        emissive={PANDA_BLUSH}
-        emissiveIntensity={1.3}
-        roughness={0.5}
+        color="#a78bfa"
+        emissive="#a78bfa"
+        emissiveIntensity={1.5}
       />
     </mesh>
   );
 }
 
-function FloatingHand({ color, mirror }: { color: string; mirror?: boolean }) {
-  return (
-    <group rotation={[0, 0, mirror ? -0.2 : 0.2]}>
-      <mesh rotation={[0, 0, Math.PI / 2]}>
-        <capsuleGeometry args={[0.085, 0.12, 12, 24]} />
-        <meshStandardMaterial color={color} roughness={0.2} metalness={0.22} />
-      </mesh>
-      <mesh position={[mirror ? 0.1 : -0.1, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <ringGeometry args={[0.04, 0.08, 24]} />
-        <meshBasicMaterial color={VISOR_DARK} />
-      </mesh>
-    </group>
-  );
-}
-
-function ChestSymbol({ color }: { color: string }) {
+/** 加载失败时的占位 + 提示 */
+function FallbackPlaceholder({ reason }: { reason: string }) {
+  console.warn("[mascot3d] showing fallback because:", reason);
   return (
     <group>
-      <mesh position={[0, 0.03, 0]}>
-        <boxGeometry args={[0.12, 0.018, 0.018]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.8} />
-      </mesh>
-      <mesh position={[-0.035, -0.025, 0]}>
-        <boxGeometry args={[0.018, 0.1, 0.018]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.8} />
-      </mesh>
-      <mesh position={[0.035, -0.025, 0]}>
-        <boxGeometry args={[0.018, 0.1, 0.018]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.8} />
-      </mesh>
-    </group>
-  );
-}
-
-function GraduationHat() {
-  return (
-    <group position={[0, 0.75, 0]}>
-      <mesh>
-        <boxGeometry args={[0.85, 0.04, 0.85]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.4} metalness={0.3} />
-      </mesh>
-      <mesh position={[0, -0.12, 0]}>
-        <cylinderGeometry args={[0.26, 0.28, 0.18, 24]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.4} metalness={0.3} />
-      </mesh>
-      <mesh position={[0.3, 0.02, 0.3]} scale={[0.04, 0.2, 0.04]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
-      </mesh>
-      <mesh position={[0.3, -0.08, 0.3]}>
-        <sphereGeometry args={[0.04, 14, 12]} />
-        <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
-      </mesh>
-    </group>
-  );
-}
-
-function WizardHat({ color, star }: { color: string; star: string }) {
-  return (
-    <group position={[0, 0.55, 0]}>
-      {/* 帽檐 */}
-      <mesh>
-        <cylinderGeometry args={[0.5, 0.56, 0.05, 24]} />
-        <meshStandardMaterial color={color} roughness={0.55} metalness={0.2} />
-      </mesh>
-      {/* 锥体（控制在视野内） */}
-      <mesh position={[0, 0.22, 0]} rotation={[0, 0, -0.08]}>
-        <coneGeometry args={[0.22, 0.42, 18]} />
-        <meshStandardMaterial color={color} roughness={0.55} metalness={0.2} />
-      </mesh>
-      <FloatingSymbol position={[0.18, 0.3, 0.22]} symbol="★" color={star} small />
-      <FloatingSymbol position={[-0.18, 0.35, 0.15]} symbol="★" color={star} small />
-    </group>
-  );
-}
-
-function Crown({ color, gem }: { color: string; gem: string }) {
-  return (
-    <group position={[0, 0.66, 0]}>
-      <mesh>
-        <cylinderGeometry args={[0.4, 0.44, 0.14, 20]} />
-        <meshStandardMaterial color={color} metalness={0.95} roughness={0.18} />
-      </mesh>
-      {[...Array(6)].map((_, i) => {
-        const a = (i / 6) * Math.PI * 2;
-        return (
-          <mesh key={i} position={[Math.cos(a) * 0.4, 0.13, Math.sin(a) * 0.4]}>
-            <coneGeometry args={[0.055, 0.14, 10]} />
-            <meshStandardMaterial color={color} metalness={0.95} roughness={0.18} />
-          </mesh>
-        );
-      })}
-      <mesh position={[0, 0.04, 0.42]}>
-        <sphereGeometry args={[0.05, 16, 14]} />
+      <mesh position={[0, 1.3, 0]}>
+        <sphereGeometry args={[0.18, 24, 16]} />
         <meshStandardMaterial
-          color={gem}
-          emissive={gem}
-          emissiveIntensity={0.8}
-          metalness={0.5}
-          roughness={0.2}
+          color="#94a3b8"
+          emissive="#475569"
+          emissiveIntensity={0.3}
+          roughness={0.6}
         />
       </mesh>
     </group>
-  );
-}
-
-function FloatingSymbol({
-  position,
-  symbol,
-  color,
-  small,
-}: {
-  position: [number, number, number];
-  symbol: string;
-  color: string;
-  small?: boolean;
-}) {
-  const ref = useRef<Group>(null);
-  useFrame((state) => {
-    if (!ref.current) return;
-    const t = state.clock.getElapsedTime();
-    ref.current.position.y = position[1] + Math.sin(t * 1.5 + position[0]) * 0.09;
-    ref.current.rotation.z = Math.sin(t * 0.8) * 0.22;
-  });
-  return (
-    <group ref={ref} position={position}>
-      <SymbolGlyph symbol={symbol} color={color} small={small} />
-    </group>
-  );
-}
-
-function SymbolGlyph({ symbol, color, small }: { symbol: string; color: string; small?: boolean }) {
-  const s = small ? 0.55 : 1;
-  if (symbol === "+") {
-    return (
-      <group scale={s}>
-        <mesh>
-          <boxGeometry args={[0.26, 0.055, 0.055]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-        </mesh>
-        <mesh>
-          <boxGeometry args={[0.055, 0.26, 0.055]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-        </mesh>
-      </group>
-    );
-  }
-  if (symbol === "=") {
-    return (
-      <group scale={s}>
-        <mesh position={[0, 0.06, 0]}>
-          <boxGeometry args={[0.24, 0.05, 0.05]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-        </mesh>
-        <mesh position={[0, -0.06, 0]}>
-          <boxGeometry args={[0.24, 0.05, 0.05]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-        </mesh>
-      </group>
-    );
-  }
-  if (symbol === "★") {
-    return (
-      <group scale={s}>
-        {[...Array(5)].map((_, i) => {
-          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
-          return (
-            <mesh key={i} rotation={[0, 0, a]}>
-              <boxGeometry args={[0.2, 0.042, 0.042]} />
-              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-            </mesh>
-          );
-        })}
-      </group>
-    );
-  }
-  if (symbol === "π") {
-    return (
-      <group scale={s}>
-        <mesh position={[0, 0.1, 0]}>
-          <boxGeometry args={[0.26, 0.046, 0.046]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-        </mesh>
-        <mesh position={[-0.075, -0.04, 0]}>
-          <boxGeometry args={[0.045, 0.22, 0.045]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-        </mesh>
-        <mesh position={[0.075, -0.04, 0]}>
-          <boxGeometry args={[0.045, 0.22, 0.045]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-        </mesh>
-      </group>
-    );
-  }
-  return (
-    <mesh scale={s}>
-      <sphereGeometry args={[0.08, 14, 10]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.2} />
-    </mesh>
   );
 }
