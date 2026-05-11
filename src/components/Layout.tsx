@@ -264,7 +264,7 @@ export function Layout() {
       </nav>
 
       <footer className="text-[11px] text-slate-500 text-center py-3">
-        本地优先 · v0.31.95
+        本地优先 · v{__APP_VERSION__}
       </footer>
 
       {/* v0.30.10: 自动解锁的单元庆祝（一次弹一个，关掉再弹下一个）*/}
