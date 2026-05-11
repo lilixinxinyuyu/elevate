@@ -250,15 +250,17 @@ export function TrophyIcon({
     ? { borderRadius: "50%" }
     : { clipPath };
 
-  // v0.31.96：勋章柜的 trophy 强制有金属环（daily/milestone/ability/skill/commemorative），
-  // 边框厚度统一 → 整集视觉一致。
-  // **boss 排除**：boss 是 Phase 2 闯关系统的关卡章，不是徽章；V 字盾形 + 无金属环是
-  //  本来的战斗视觉，加 ring 反而破坏体系区分。
+  // v0.31.96：勋章柜的 trophy 都强制有金属环（daily/milestone/ability/skill/commemorative），
+  // 边框厚度统一 → 整集视觉一致。锁住时仍保留 ring，靠 grayClass (grayscale + opacity)
+  // 把 ring 自然变成灰暗"待解锁"状态 → 跟已解锁的位置感对齐，不会"少一圈看着空"。
+  // **boss 排除**：V 字盾形 + 无金属环是 Phase 2 战斗系统本来的视觉，不当徽章。
+  // tierStyle/commemorativeRing 用 `unlocked && ...` 判断（这两类锁住时不显示 tier 色，
+  // 因为颜色本身就是"达成感"）；NEUTRAL_RING 是中性的所以 locked 也给。
   const ringSpec = tierStyle
     ? { bg: tierStyle.ringGradient ?? tierStyle.ring, glow: tierStyle.glowColor }
     : commemorativeRing
       ? { bg: commemorativeRing.ring, glow: commemorativeRing.glowColor }
-      : unlocked && category !== "boss"
+      : category !== "boss"
         ? { bg: NEUTRAL_RING.ring, glow: NEUTRAL_RING.glowColor }
         : null;
 
