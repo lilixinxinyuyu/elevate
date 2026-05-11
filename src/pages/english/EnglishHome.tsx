@@ -13,7 +13,6 @@ import { useEffect, useState } from "react";
 import { db } from "../../db/dexie";
 import { G4_WORDS } from "../../subjects/english/wordList";
 import {
-  calcOldStyleStats,
   calcTierDistribution,
   loadVocabProgress,
   type VocabProgress,
@@ -21,12 +20,15 @@ import {
 import { MasteryTierBar } from "../../components/MasteryTierBar";
 import { SubjectTodayRings, type RingSpec } from "../../components/SubjectTodayRings";
 import { TermSwitcher, termToSemester, ensureDefaultTerm } from "../../components/TermSwitcher";
-import { loadDaily, type DailyState } from "../../lib/dailyTarget";
+import { loadDaily, setDailyTarget, type DailyState } from "../../lib/dailyTarget";
 import type { Term } from "../../core/types";
 
 export function EnglishHomePage() {
   const [progress, setProgress] = useState<VocabProgress | null>(null);
-  const [daily, setDaily] = useState<DailyState | null>(null);
+  // v0.31.107：3 环对应 3 个 daily state（科学外语学习：input + output + 综合）
+  const [vocabDaily, setVocabDaily] = useState<DailyState | null>(null);
+  const [speakDaily, setSpeakDaily] = useState<DailyState | null>(null);
+  const [sentenceDaily, setSentenceDaily] = useState<DailyState | null>(null);
   const [currentTerm, setCurrentTerm] = useState<Term>("下册");
 
   useEffect(() => {
@@ -38,10 +40,33 @@ export function EnglishHomePage() {
       if (!s || cancelled) return;
       setCurrentTerm((s.currentTerm as Term) ?? "下册");
       const p = await loadVocabProgress(s.id);
-      const d = await loadDaily("english_vocab", s.id, 20);
+      const [vd, spd, snd] = await Promise.all([
+        loadDaily("english_vocab", s.id, 10),
+        loadDaily("english_speak", s.id, 3),
+        loadDaily("english_sentences", s.id, 3),
+      ]);
+      // v0.31.107：3 环目标统一（之前 SentencePractice/VocabPractice 默认 target
+      // 已经存进 db.meta，loadDaily 不会覆盖。这里强制对齐成新目标 10/3/3）
+      const TARGETS = { vocab: 10, speak: 3, sentence: 3 };
+      const aligned = await Promise.all([
+        vd.target === TARGETS.vocab
+          ? vd
+          : (await setDailyTarget("english_vocab", s.id, TARGETS.vocab),
+            await loadDaily("english_vocab", s.id, TARGETS.vocab)),
+        spd.target === TARGETS.speak
+          ? spd
+          : (await setDailyTarget("english_speak", s.id, TARGETS.speak),
+            await loadDaily("english_speak", s.id, TARGETS.speak)),
+        snd.target === TARGETS.sentence
+          ? snd
+          : (await setDailyTarget("english_sentences", s.id, TARGETS.sentence),
+            await loadDaily("english_sentences", s.id, TARGETS.sentence)),
+      ]);
       if (cancelled) return;
       setProgress(p);
-      setDaily(d);
+      setVocabDaily(aligned[0]);
+      setSpeakDaily(aligned[1]);
+      setSentenceDaily(aligned[2]);
     })();
     return () => {
       cancelled = true;
@@ -49,15 +74,17 @@ export function EnglishHomePage() {
   }, []);
 
   const semester = termToSemester(currentTerm);
-  // 综合复习 (semester=null) → 上下册混合
   const pool =
     semester === null
       ? G4_WORDS
       : G4_WORDS.filter((w) => w.semester === semester);
   const dist = progress ? calcTierDistribution(pool, progress) : null;
-  const stats = progress ? calcOldStyleStats(pool, progress) : null;
 
-  const rings: RingSpec[] = buildRings(daily, stats);
+  const rings: RingSpec[] = buildRings({
+    vocab: vocabDaily,
+    speak: speakDaily,
+    sentence: sentenceDaily,
+  });
 
   return (
     <div className="space-y-5">
@@ -147,9 +174,23 @@ export function EnglishHomePage() {
   );
 }
 
+/**
+ * v0.31.107：英语 3 环重设计（科学外语学习 + 游戏性）。
+ *
+ * 维度依据：
+ *  - Input（识别）：vocab 词汇识别 — 看词/听辨 → 10 词次
+ *  - Output（产出）：speak 朗读 — Qwen Omni 判 ≥70 分 → 3 次
+ *  - Integration（综合）：sentence 短句朗读 / 造句 → 3 次
+ *
+ * 设计灵感：Duolingo daily streak + Anki 间隔重现 + Krashen 输入输出假说。
+ * 3 环全闭 = 一天的语言学习完整闭环（看 + 说 + 用）。
+ */
 function buildRings(
-  daily: DailyState | null,
-  stats: ReturnType<typeof calcOldStyleStats> | null,
+  d: {
+    vocab: DailyState | null;
+    speak: DailyState | null;
+    sentence: DailyState | null;
+  },
 ): RingSpec[] {
   const cyanA = "#22d3ee";
   const cyanB = "#0891b2";
@@ -158,53 +199,42 @@ function buildRings(
   const amberA = "#fcd34d";
   const amberB = "#d97706";
 
-  // v0.31.48: 数据加载完之前，所有环 progress=0 / done=false。
-  // 这样数据到位后会触发 stroke-dashoffset transition (跟数学一样有"填充"动画)，
-  // 真闭合时 sparkle 也能正常 trigger（之前因为初始 done=true 没有 transition）
-  const loaded = daily !== null && stats !== null;
-  const targetCount = daily?.target ?? 20;
-  const todayCount = daily?.todayCount ?? 0;
-  const challengeProg = !loaded ? 0 : Math.min(1, todayCount / Math.max(1, targetCount));
-  const challengeDone = loaded && todayCount >= targetCount;
+  const loaded = d.vocab !== null && d.speak !== null && d.sentence !== null;
 
-  const weak = stats?.weak ?? 0;
-  const weakDone = loaded && weak === 0;
+  const ring = (
+    daily: DailyState | null,
+    id: string,
+    icon: string,
+    label: string,
+    to: string,
+    unit: string,
+    hue: string,
+    hue2: string,
+  ): RingSpec => {
+    const tgt = daily?.target ?? 1;
+    const cnt = daily?.todayCount ?? 0;
+    const prog = !loaded ? 0 : Math.min(1, cnt / Math.max(1, tgt));
+    const done = loaded && cnt >= tgt;
+    return {
+      id,
+      icon,
+      shortLabel: label,
+      progress: prog,
+      statusText: !loaded
+        ? "—"
+        : done
+          ? `今日完成 ${cnt} ${unit} ✓`
+          : `${cnt} / ${tgt} ${unit}`,
+      to,
+      hue,
+      hue2,
+      done,
+    };
+  };
 
   return [
-    {
-      id: "challenge",
-      icon: "🌍",
-      shortLabel: "词汇大冒险",
-      progress: challengeProg,
-      statusText: challengeDone
-        ? "今日完成 ✓"
-        : `${todayCount} / ${targetCount} 词次`,
-      to: "/english/vocab",
-      hue: cyanA,
-      hue2: cyanB,
-      done: challengeDone,
-    },
-    {
-      id: "sprint",
-      icon: "⚡",
-      shortLabel: "闪电冲刺",
-      progress: !loaded ? 0 : 0.05,
-      statusText: "60 秒看词选中文",
-      to: "/english/vocab?mode=sprint",
-      hue: violetA,
-      hue2: violetB,
-      done: false,
-    },
-    {
-      id: "review",
-      icon: "🪄",
-      shortLabel: "复习薄弱",
-      progress: !loaded ? 0 : weakDone ? 1 : Math.max(0.1, 1 - Math.min(weak / 20, 0.9)),
-      statusText: !loaded ? "—" : weakDone ? "无薄弱词 ✓" : `${weak} 个薄弱词`,
-      to: "/english/vocab",
-      hue: amberA,
-      hue2: amberB,
-      done: weakDone,
-    },
+    ring(d.vocab, "vocab", "🌍", "词汇识别", "/english/vocab", "词次", cyanA, cyanB),
+    ring(d.speak, "speak", "📣", "朗读 AI 判", "/english/vocab", "次", violetA, violetB),
+    ring(d.sentence, "sentence", "🔀", "短句应用", "/english/sentence", "次", amberA, amberB),
   ];
 }

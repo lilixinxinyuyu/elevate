@@ -193,6 +193,24 @@ export function Mascot3DTestPage() {
       {/* 嘴型同步测试 */}
       <div className="card space-y-3">
         <div className="font-display font-bold text-slate-200">嘴型同步测试</div>
+
+        {/* 手动 audioLevel slider —— 不连 mic / realtime 也能预览嘴型 */}
+        <div className="space-y-1">
+          <div className="text-[11px] text-slate-500 flex items-center justify-between">
+            <span>🎚️ 手动驱动 audioLevel（不开麦也能看嘴动）</span>
+            <span className="font-mono text-violet-300">{audioLevel.toFixed(3)}</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={audioLevel}
+            onChange={(e) => setAudioLevel(parseFloat(e.target.value))}
+            className="w-full accent-violet-400"
+          />
+        </div>
+
         <div className="text-xs text-slate-400">
           当前音量：
           <span className="font-mono text-amber-300 ml-1">{audioLevel.toFixed(3)}</span>

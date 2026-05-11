@@ -50,11 +50,15 @@ export default function Mascot3D({
         gl={{ alpha: true, antialias: true }}
       >
         <Suspense fallback={null}>
-          <ambientLight intensity={0.45} />
-          <directionalLight position={[2, 4, 3]} intensity={0.9} color="#ffffff" />
+          {/* 远景紫黑色雾 —— 让背景不是死黑，有"教室深处"的层次 */}
+          <fog attach="fog" args={["#1e1b4b", 3, 7]} />
+          {/* 三点布光：暖白 key + 冷蓝 fill + 后方紫粉 rim（头发轮廓）*/}
+          <ambientLight intensity={0.35} />
+          <directionalLight position={[2.5, 3.5, 3]} intensity={0.95} color="#fff7ed" />
           <directionalLight position={[-3, 2, 1]} intensity={0.35} color="#bae6fd" />
-          {/* HDRI envmap：质感的灵魂；apartment 给柔和暖白 */}
-          <Environment preset="apartment" />
+          <directionalLight position={[0, 2.5, -3]} intensity={0.55} color="#f5d0fe" />
+          {/* HDRI envmap：studio 给中性白基底（让肤色不偏色） */}
+          <Environment preset="studio" />
 
           <VRMScene
             url={vrmUrl}
@@ -137,11 +141,22 @@ function VRMScene({ url, audioLevel, skin, spin }: VRMSceneProps) {
       else rootRef.current.rotation.y = Math.sin(t * 0.4) * 0.08;
     }
 
-    // 呼吸：胸腔轻微缩放（找 chest 骨）
+    // 呼吸：胸腔轻微缩放（多频混合，看起来更生物）
     const chest = vrm.humanoid?.getNormalizedBoneNode("chest");
     if (chest) {
-      const breath = 1 + Math.sin(t * 1.3) * 0.012;
+      const breath = 1 + Math.sin(t * 1.3) * 0.01 + Math.sin(t * 0.41) * 0.005;
       chest.scale.setScalar(breath);
+    }
+    // 重心偏移：髋骨慢慢左右摆（自然 weight shift，约 20 秒周期）
+    const hips = vrm.humanoid?.getNormalizedBoneNode("hips");
+    if (hips) {
+      hips.rotation.z = Math.sin(t * 0.32) * 0.04;
+      hips.position.x = Math.sin(t * 0.32) * 0.015;
+    }
+    // 肩膀反向补偿（躯干稳定的错位 sway）
+    const spine = vrm.humanoid?.getNormalizedBoneNode("spine");
+    if (spine) {
+      spine.rotation.z = -Math.sin(t * 0.32) * 0.025;
     }
     // 头：微微左右晃 + 上下点头节奏
     const head = vrm.humanoid?.getNormalizedBoneNode("head");
@@ -150,18 +165,49 @@ function VRMScene({ url, audioLevel, skin, spin }: VRMSceneProps) {
       head.rotation.x = Math.sin(t * 0.55) * 0.03;
     }
 
-    // 嘴型：audioLevel → 'aa' viseme
+    // 说话时手部 micro-gesture：右手抬到胸前 + 节奏摆动（解说 / 介绍 的感觉）
+    const speakAmp = Math.min(1, audioLevel * 3.5);
+    const rUpper = vrm.humanoid?.getNormalizedBoneNode("rightUpperArm");
+    const rLower = vrm.humanoid?.getNormalizedBoneNode("rightLowerArm");
+    const lUpper = vrm.humanoid?.getNormalizedBoneNode("leftUpperArm");
+    if (rUpper) {
+      const base = THREE.MathUtils.degToRad(-72);
+      // peak speak 时再抬 32° → 角度变 -40°，肩膀打开，手肘斜向上
+      const lift = THREE.MathUtils.degToRad(32) * speakAmp;
+      const sway = Math.sin(t * 2.2) * 0.06 * speakAmp;
+      rUpper.rotation.z = base + lift + sway;
+      // 往前推（X 轴）+ Y 轴往中线收一点，避免手往身体外伸
+      rUpper.rotation.x = THREE.MathUtils.degToRad(-22) * speakAmp + Math.sin(t * 1.8) * 0.05 * speakAmp;
+      rUpper.rotation.y = THREE.MathUtils.degToRad(15) * speakAmp;
+    }
+    if (rLower) {
+      // 弯肘 70°，把前臂收到胸前
+      rLower.rotation.y = THREE.MathUtils.degToRad(10) + THREE.MathUtils.degToRad(-70) * speakAmp;
+      rLower.rotation.x = Math.sin(t * 2.4) * 0.08 * speakAmp;
+    }
+    if (lUpper) {
+      const base = THREE.MathUtils.degToRad(72);
+      const sway = Math.sin(t * 1.1 + 0.7) * 0.025;
+      lUpper.rotation.z = base + sway;
+    }
+
+    // 嘴型 + viseme 多样化（不只 aa）
     const em = vrm.expressionManager;
     if (em) {
-      const aa = Math.min(0.95, audioLevel * 4.5);
-      em.setValue("aa", aa);
+      // audioLevel 用 sin 波加调制，让嘴形看起来更"有节奏"，不死板
+      const rawAmp = Math.min(1, audioLevel * 4.0);
+      const aaWave = rawAmp * (0.7 + 0.3 * Math.sin(t * 18));
+      const ihWave = rawAmp * 0.45 * (0.5 + 0.5 * Math.sin(t * 14 + 1.2));
+      const ouWave = rawAmp * 0.35 * (0.5 + 0.5 * Math.sin(t * 11 + 2.4));
+      em.setValue("aa", Math.min(0.95, aaWave));
+      em.setValue("ih", Math.min(0.7, ihWave));
+      em.setValue("ou", Math.min(0.6, ouWave));
 
-      // 眨眼调度
+      // 眨眼调度（保留）
       blinkRef.current.phase += delta;
       if (blinkRef.current.phase > blinkRef.current.next) {
         const local = blinkRef.current.phase - blinkRef.current.next;
         if (local < 0.16) {
-          // 0..0.08 闭 / 0.08..0.16 开
           const v = local < 0.08 ? local / 0.08 : 1 - (local - 0.08) / 0.08;
           em.setValue("blink", Math.max(0, Math.min(1, v)));
         } else {
@@ -171,8 +217,11 @@ function VRMScene({ url, audioLevel, skin, spin }: VRMSceneProps) {
         }
       }
 
-      // 默认微笑（让她看起来友好）
-      em.setValue("happy", 0.25);
+      // 默认微笑：idle 0.55 暖暖；说话时拉到 0.8（开心交流）
+      const happyTarget = 0.55 + rawAmp * 0.3;
+      // 用一个小的平滑过渡，避免硬切
+      const currentHappy = em.getValue("happy") ?? happyTarget;
+      em.setValue("happy", currentHappy + (happyTarget - currentHappy) * 0.18);
 
       em.update();
     }
@@ -194,6 +243,68 @@ function VRMScene({ url, audioLevel, skin, spin }: VRMSceneProps) {
       <SkinAccessory skin={skin} vrm={vrm} />
       {/* AI 副手占位光环（Phase 2 替换成红熊猫）*/}
       <SidekickPlaceholder />
+      {/* 背景大气：漂浮光粒子（数学灵感的小火花） */}
+      <AmbientParticles count={14} />
+    </group>
+  );
+}
+
+/** 周围漂浮的微小光粒子 —— 增加"灵感火花"的氛围感 */
+function AmbientParticles({ count }: { count: number }) {
+  const groupRef = useRef<Group>(null);
+  // 给每颗粒子一个固定的"轨道"参数（在挂载时随机生成）
+  const particles = useMemo(() => {
+    return Array.from({ length: count }, () => ({
+      // 椭圆轨道半径
+      rX: 0.8 + Math.random() * 1.0,
+      rY: 0.4 + Math.random() * 0.6,
+      rZ: 0.4 + Math.random() * 0.6,
+      speed: 0.15 + Math.random() * 0.25,
+      phase: Math.random() * Math.PI * 2,
+      // 中心高度
+      cy: 0.5 + Math.random() * 1.2,
+      // 颜色：白 / 暖橙 / 浅青 三色随机
+      color: ["#fef3c7", "#fed7aa", "#a5f3fc"][Math.floor(Math.random() * 3)],
+      size: 0.008 + Math.random() * 0.012,
+      blink: Math.random() * Math.PI * 2,
+    }));
+  }, [count]);
+  const meshRefs = useRef<(THREE.Mesh | null)[]>([]);
+
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime();
+    particles.forEach((p, i) => {
+      const m = meshRefs.current[i];
+      if (!m) return;
+      const a = t * p.speed + p.phase;
+      m.position.x = Math.cos(a) * p.rX;
+      m.position.z = Math.sin(a) * p.rZ - 0.2;
+      m.position.y = p.cy + Math.sin(t * 0.5 + p.phase) * 0.15;
+      // emissive 强度脉冲（呼吸感）
+      const mat = m.material as THREE.MeshStandardMaterial;
+      mat.emissiveIntensity = 1.5 + Math.sin(t * 1.5 + p.blink) * 0.8;
+    });
+  });
+
+  return (
+    <group ref={groupRef}>
+      {particles.map((p, i) => (
+        <mesh
+          key={i}
+          ref={(el) => {
+            meshRefs.current[i] = el;
+          }}
+        >
+          <sphereGeometry args={[p.size, 8, 6]} />
+          <meshStandardMaterial
+            color={p.color}
+            emissive={p.color}
+            emissiveIntensity={1.5}
+            transparent
+            opacity={0.85}
+          />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -220,33 +331,80 @@ function applyRestPose(vrm: VRM) {
   if (rH) rH.rotation.z = deg(5);
 }
 
-/** Phase 2 placeholder：AI 副手位置悬浮一个发光小球 */
+/** Phase 2 placeholder：AI 副手光球 —— orbit 粒子 + pulse */
 function SidekickPlaceholder() {
-  const ref = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<Group>(null);
+  const coreRef = useRef<THREE.Mesh>(null);
+  const haloRef = useRef<THREE.Mesh>(null);
+  // 3 颗 orbit 粒子（不同相位、不同轨道半径/速度）
+  const orbitRefs = [useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null)];
+
   useFrame((state) => {
-    if (!ref.current) return;
+    if (!groupRef.current) return;
     const t = state.clock.getElapsedTime();
-    ref.current.position.y = 1.0 + Math.sin(t * 1.6) * 0.06;
-    ref.current.position.x = 0.55 + Math.sin(t * 0.8) * 0.04;
-    ref.current.rotation.y += 0.02;
+    // 群组整体浮动 —— 漂在她肩膀右侧
+    groupRef.current.position.y = 1.45 + Math.sin(t * 1.4) * 0.05;
+    groupRef.current.position.x = 0.45 + Math.sin(t * 0.5) * 0.03;
+    // 核心 pulse
+    if (coreRef.current) {
+      const pulse = 1 + Math.sin(t * 2.8) * 0.18;
+      coreRef.current.scale.setScalar(pulse);
+    }
+    // 柔光环 counter-pulse
+    if (haloRef.current) {
+      const p = 1 + Math.sin(t * 2.8 + Math.PI) * 0.12;
+      haloRef.current.scale.setScalar(p);
+    }
+    // orbit 粒子环绕
+    const orbitConfig = [
+      { r: 0.16, speed: 2.5, phase: 0, tilt: 0 },
+      { r: 0.19, speed: 1.7, phase: 2.1, tilt: 0.6 },
+      { r: 0.13, speed: 3.2, phase: 4.2, tilt: -0.4 },
+    ];
+    orbitRefs.forEach((ref, i) => {
+      if (!ref.current) return;
+      const cfg = orbitConfig[i];
+      if (!cfg) return;
+      const a = t * cfg.speed + cfg.phase;
+      ref.current.position.x = Math.cos(a) * cfg.r;
+      ref.current.position.z = Math.sin(a) * cfg.r * Math.cos(cfg.tilt);
+      ref.current.position.y = Math.sin(a) * cfg.r * Math.sin(cfg.tilt);
+    });
   });
+
   return (
-    <group>
-      {/* 主光球 */}
-      <mesh ref={ref} position={[0.55, 1.0, 0.2]}>
-        <sphereGeometry args={[0.07, 24, 18]} />
+    <group ref={groupRef} position={[0.45, 1.45, 0.15]}>
+      {/* 核心：暖琥珀色 emissive 球 */}
+      <mesh ref={coreRef}>
+        <sphereGeometry args={[0.06, 32, 24]} />
         <meshStandardMaterial
-          color="#f97316"
-          emissive="#f97316"
-          emissiveIntensity={1.6}
-          roughness={0.4}
+          color="#fb923c"
+          emissive="#fb923c"
+          emissiveIntensity={2.4}
+          roughness={0.3}
         />
       </mesh>
-      {/* 外圈柔光环 */}
-      <mesh position={[0.55, 1.0, 0.2]}>
-        <sphereGeometry args={[0.11, 24, 18]} />
-        <meshBasicMaterial color="#fed7aa" transparent opacity={0.18} />
+      {/* 内圈柔光 */}
+      <mesh ref={haloRef}>
+        <sphereGeometry args={[0.1, 24, 18]} />
+        <meshBasicMaterial color="#fed7aa" transparent opacity={0.28} />
       </mesh>
+      {/* 外圈淡光（让它看起来"有 aura"） */}
+      <mesh>
+        <sphereGeometry args={[0.16, 24, 18]} />
+        <meshBasicMaterial color="#fdba74" transparent opacity={0.1} />
+      </mesh>
+      {/* 3 颗 orbit 粒子 */}
+      {orbitRefs.map((ref, i) => (
+        <mesh key={i} ref={ref}>
+          <sphereGeometry args={[0.012, 12, 10]} />
+          <meshStandardMaterial
+            color="#fef3c7"
+            emissive="#fef3c7"
+            emissiveIntensity={2.2}
+          />
+        </mesh>
+      ))}
     </group>
   );
 }

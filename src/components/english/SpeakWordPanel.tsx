@@ -18,6 +18,12 @@ import {
   RealtimeTutor,
   type RealtimeState,
 } from "../../lib/realtimeTutor";
+import {
+  isTtsOn,
+  setTtsOn,
+  speakChinese,
+  speakEnglish,
+} from "../../lib/englishVocabProgress";
 
 const REALTIME_URL =
   (import.meta as unknown as { env: { VITE_REALTIME_URL?: string } }).env
@@ -123,6 +129,7 @@ export function SpeakWordPanel({
     feedback: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ttsOn, setTtsOnState] = useState(() => isTtsOn());
   const tutorRef = useRef<RealtimeTutor | null>(null);
   const accumulatedTextRef = useRef("");
   // 录音时长指示
@@ -188,13 +195,20 @@ export function SpeakWordPanel({
               setResult(parsed);
               setPhase("result");
               onScore(parsed.score, parsed.transcript, parsed.feedback);
+              // v0.31.107：TTS 开关 on 时自动朗读反馈（中文）+ 接着读正确单词（英文）
+              if (parsed.feedback && isTtsOn()) {
+                speakChinese(parsed.feedback);
+                // 反馈完后接读正确发音，间隔 ~等中文长度估算
+                const delay = Math.max(1500, parsed.feedback.length * 200);
+                window.setTimeout(() => {
+                  if (isTtsOn()) speakEnglish(target);
+                }, delay);
+              }
             } else {
-              // 解析失败时把 AI 原话显示出来诊断（最多 200 字）
               const raw = text.trim().slice(0, 200) || "(空)";
               setError(`没解析出评分。AI 说："${raw}"——请告诉 Claude 调 prompt`);
               setPhase("error");
             }
-            // 一次判分完就关掉连接，下次重连
             try { tutor.close(); } catch { /* */ }
             tutorRef.current = null;
           },
@@ -247,6 +261,31 @@ export function SpeakWordPanel({
 
   return (
     <div className="card-glow space-y-4">
+      {/* v0.31.107: TTS 开关 + 听正确发音按钮 */}
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <button
+          type="button"
+          onClick={() => speakEnglish(target, { force: true })}
+          className="px-3 py-1.5 rounded-md bg-amber-500/15 text-amber-100 border border-amber-400/30 hover:bg-amber-500/25 active:scale-95 transition-all"
+          title="点击听标准发音（女声）"
+        >
+          🔊 听正确发音
+        </button>
+        <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={ttsOn}
+            onChange={(e) => {
+              const v = e.target.checked;
+              setTtsOnState(v);
+              setTtsOn(v);
+            }}
+            className="w-3 h-3 accent-cyan-400"
+          />
+          <span>AI 反馈朗读</span>
+        </label>
+      </div>
+
       <div className="text-center">
         <div className="text-xs text-slate-400 uppercase tracking-widest mb-1">
           {mode === "sentence" ? "📣 读出这句话" : "📣 读出这个单词"}
@@ -305,16 +344,25 @@ export function SpeakWordPanel({
           {result.feedback && (
             <div className="text-sm leading-relaxed">{result.feedback}</div>
           )}
-          <button
-            type="button"
-            onClick={() => {
-              setPhase("idle");
-              setResult(null);
-            }}
-            className="w-full mt-2 py-2 rounded-lg bg-white/10 text-slate-100 text-sm border border-white/15 hover:bg-white/15"
-          >
-            再录一次
-          </button>
+          <div className="flex gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => speakEnglish(target, { force: true })}
+              className="flex-1 py-2 rounded-lg bg-amber-500/20 text-amber-100 text-sm border border-amber-400/40 hover:bg-amber-500/30 active:scale-95"
+            >
+              🔊 听一遍标准发音
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPhase("idle");
+                setResult(null);
+              }}
+              className="flex-1 py-2 rounded-lg bg-white/10 text-slate-100 text-sm border border-white/15 hover:bg-white/15"
+            >
+              再录一次
+            </button>
+          </div>
         </div>
       )}
 

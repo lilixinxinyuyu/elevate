@@ -343,9 +343,15 @@ export function VocabPracticePage() {
           hintMeaning={current.c}
           mode="word"
           onScore={(score, _transcript, _feedback) => {
-            // ≥70 算对，记 attempt + tickDaily（跟其他模式一致）
             const isCorrect = score >= 70;
             void recordResult(isCorrect, `🎤 ${score}/100`);
+            // v0.31.107：朗读 ≥70 分独立计入 english_speak daily（喂朗读环）
+            if (isCorrect && studentId) {
+              void (async () => {
+                const cur = await loadDaily("english_speak", studentId, 3);
+                await tickDaily("english_speak", studentId, cur);
+              })();
+            }
           }}
         />
       ) : mode === "sprint" ? (

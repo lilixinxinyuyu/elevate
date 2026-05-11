@@ -27,6 +27,8 @@ const ENGLISH_NAV_ITEMS: SubjectNavItem[] = [
   { to: "", label: "首页", exact: true },
   // v0.31.43: 词汇大冒险作为主菜单入口
   { to: "vocab", label: "词汇大冒险" },
+  // v0.31.107: 短句大冒险并列上 nav（Bruce 反馈：要顶部能切，不只是 home 里入口卡）
+  { to: "sentence", label: "短句大冒险" },
 ];
 
 export const englishSubject: Subject = {

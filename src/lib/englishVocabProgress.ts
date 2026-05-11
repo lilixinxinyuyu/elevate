@@ -183,8 +183,59 @@ export function buildOptions(
   return options.sort(() => rng() - 0.5);
 }
 
-export function speakEnglish(text: string): void {
+/**
+ * v0.31.107：TTS 开关——localStorage `selena.tts.on`，默认 true。
+ * SpeakWordPanel / 任意需要 AI 反馈朗读的地方都读这个。
+ */
+const TTS_KEY = "selena.tts.on";
+
+export function isTtsOn(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const v = localStorage.getItem(TTS_KEY);
+    return v == null ? true : v === "true"; // 默认 on
+  } catch {
+    return true;
+  }
+}
+
+export function setTtsOn(on: boolean): void {
   if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(TTS_KEY, on ? "true" : "false");
+    if (!on) window.speechSynthesis?.cancel();
+  } catch {
+    /* */
+  }
+}
+
+/** v0.31.107：中文 TTS（AI 反馈 / 提示用，跟 speakEnglish 平行） */
+export function speakChinese(text: string, opts: { force?: boolean } = {}): void {
+  if (typeof window === "undefined") return;
+  if (!opts.force && !isTtsOn()) return;
+  if (!("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const ut = new SpeechSynthesisUtterance(text);
+    ut.lang = "zh-CN";
+    ut.rate = 1.0;
+    ut.pitch = 1.0;
+    ut.volume = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    const zh =
+      voices.find((v) => v.name === "Tingting") ||
+      voices.find((v) => v.lang === "zh-CN") ||
+      voices.find((v) => v.lang.startsWith("zh"));
+    if (zh) ut.voice = zh;
+    window.speechSynthesis.speak(ut);
+  } catch {
+    /* */
+  }
+}
+
+export function speakEnglish(text: string, opts: { force?: boolean } = {}): void {
+  if (typeof window === "undefined") return;
+  if (!opts.force && !isTtsOn()) return;
   if (!("speechSynthesis" in window)) return;
   try {
     window.speechSynthesis.cancel();

@@ -139,6 +139,7 @@ export function SentencePracticePage() {
       ) : mode === "speak" ? (
         <SpeakModePanel
           sentence={current}
+          studentId={studentId}
           onScored={(score) => {
             void recordAttempt(score >= 70);
           }}
@@ -201,12 +202,13 @@ function SpeakModePanel({
   sentence,
   onScored,
   onNext,
+  studentId,
 }: {
   sentence: G4Sentence;
   onScored: (score: number) => void;
   onNext: () => void;
+  studentId: string | null;
 }) {
-  // 每次切句重置内部 panel 状态：通过 key 强制 unmount
   return (
     <div className="space-y-3">
       <SpeakWordPanel
@@ -214,7 +216,16 @@ function SpeakModePanel({
         target={sentence.en}
         hintMeaning={sentence.cn}
         mode="sentence"
-        onScore={(score) => onScored(score)}
+        onScore={(score) => {
+          onScored(score);
+          // v0.31.107：朗读 ≥70 分计入 english_speak daily（喂朗读环）
+          if (score >= 70 && studentId) {
+            void (async () => {
+              const cur = await loadDaily("english_speak", studentId, 3);
+              await tickDaily("english_speak", studentId, cur);
+            })();
+          }
+        }}
       />
       <button
         type="button"

@@ -20,8 +20,10 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { toPng } from "html-to-image";
 import { db } from "../db/dexie";
 import { SKILLS } from "../content/skills";
-import { G4_CHARS_ALL } from "../subjects/chinese/charLibrary";
+import { G4A_CHARS, G4B_CHARS, G4_CHARS_ALL } from "../subjects/chinese/charLibrary";
 import { loadDailyLog } from "../lib/dailyActivityLog";
+import { termToSemester } from "./TermSwitcher";
+import type { Term } from "../core/types";
 
 interface DailySummaryCardProps {
   studentId: string;
@@ -64,6 +66,12 @@ function todayHuman(): string {
 }
 
 export function DailySummaryCard({ studentId, studentName }: DailySummaryCardProps) {
+  // v0.31.107：按当前 term 过滤池 — 下册 250 / 上册 250 / 综合 500
+  // 不能全 500 算打卡目标，那等于让 Selena 学下册时被上册没碰过的字拖低进度
+  const liveStudent = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const currentTerm: Term = (liveStudent?.currentTerm as Term | undefined) ?? "下册";
+  const semester = termToSemester(currentTerm);
+
   // 数学：attempts + fluency + tutor + mistakes 今日
   const math = useLiveQuery(async () => buildMathSummary(studentId), [studentId]);
 
@@ -77,24 +85,33 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
     [studentId],
   );
 
-  // 中文/英文累计已掌握
+  // 中文累计已掌握 — 按 term 过滤池
   const chineseProgress = useLiveQuery(async () => {
     const row = await db.meta.get(`chinese_char_progress::${studentId}`);
     const map = (row?.value as Record<string, { level: number }> | undefined) ?? {};
+    const pool =
+      semester === "G4A" ? G4A_CHARS : semester === "G4B" ? G4B_CHARS : G4_CHARS_ALL;
     let mastered = 0;
-    for (const v of Object.values(map)) if (v.level >= 3) mastered += 1;
-    return { mastered, total: G4_CHARS_ALL.length };
-  }, [studentId]);
+    for (const c of pool) if ((map[c.word]?.level ?? 0) >= 3) mastered += 1;
+    return { mastered, total: pool.length, termLabel: currentTerm };
+  }, [studentId, semester, currentTerm]);
 
+  // 英语累计已掌握 — 按 term 过滤池
   const englishProgress = useLiveQuery(async () => {
     const row = await db.meta.get(`english_vocab_progress::${studentId}`);
     const map = (row?.value as Record<string, { level: number }> | undefined) ?? {};
-    let mastered = 0;
-    for (const v of Object.values(map)) if (v.level >= 3) mastered += 1;
-    // 词表总数从 wordList 读
     const { G4_WORDS } = await import("../subjects/english/wordList");
-    return { mastered, total: G4_WORDS.length };
-  }, [studentId]);
+    const pool =
+      semester === null
+        ? G4_WORDS
+        : G4_WORDS.filter((w) => w.semester === semester);
+    let mastered = 0;
+    for (const w of pool) {
+      const k = w.w.toLowerCase().trim();
+      if ((map[k]?.level ?? 0) >= 3) mastered += 1;
+    }
+    return { mastered, total: pool.length, termLabel: currentTerm };
+  }, [studentId, semester, currentTerm]);
 
   // streak
   const mathDaily = useLiveQuery(async () => {
@@ -167,7 +184,7 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           />
           <SubjectMiniCard
             emoji="📚"
-            label="语文"
+            label={`语文（${currentTerm}）`}
             primary={
               chineseDaily && chineseDaily.right + chineseDaily.wrong > 0
                 ? `${chineseDaily.right + chineseDaily.wrong} 字`
@@ -184,7 +201,7 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           />
           <SubjectMiniCard
             emoji="🔤"
-            label="英语"
+            label={`英语（${currentTerm}）`}
             primary={
               englishDaily && englishDaily.right + englishDaily.wrong > 0
                 ? `${englishDaily.right + englishDaily.wrong} 词`
@@ -245,12 +262,12 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           </div>
         )}
 
-        {/* 累计进度（中英文掌握度） */}
+        {/* 累计进度（中英文掌握度，按当前 term 范围） */}
         {(chineseProgress || englishProgress) && (
           <div className="grid grid-cols-2 gap-2 pt-1">
             {chineseProgress && (
               <ProgressBar
-                label="📚 语文写字"
+                label={`📚 语文写字（${chineseProgress.termLabel}）`}
                 done={chineseProgress.mastered}
                 total={chineseProgress.total}
                 color="emerald"
@@ -258,7 +275,7 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             )}
             {englishProgress && (
               <ProgressBar
-                label="🔤 英语单词"
+                label={`🔤 英语单词（${englishProgress.termLabel}）`}
                 done={englishProgress.mastered}
                 total={englishProgress.total}
                 color="cyan"
