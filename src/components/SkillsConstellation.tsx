@@ -413,7 +413,7 @@ function SkillNode({
 
   const fragileMark = fragile ? (
     <span
-      title="该复习了"
+      title="最近做错了几道，分数暂时被压低（不是真的退步）——再做对几道就能自动恢复。点节点去复习。"
       className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center border-2 border-ink-900"
     >
       ⚠
@@ -469,6 +469,14 @@ function SkillNode({
           </div>
           <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
             <span>{masteryLabel(score)}</span>
+            {fragile && (
+              <span
+                className="px-1 py-0 rounded bg-rose-500/15 text-rose-200 border border-rose-400/30 text-[10px]"
+                title="最近 5 题里错了 ≥3 题或 >21 天没碰过。分数暂时被压低提示复习，做对几道就能恢复——不是真的退步了。"
+              >
+                待复习
+              </span>
+            )}
             <span className="opacity-50">·</span>
             <span>{count} 题</span>
           </div>
@@ -567,7 +575,7 @@ function MasteryLegend() {
         </div>
         <ul className="list-disc list-inside space-y-0.5 text-slate-400 pl-1">
           <li>圆越大、颜色越亮 = 越熟练（节点尺寸跟 mastery 一起涨）</li>
-          <li>角标 ⚠️ = 21 天没碰 / 最近 5 题错 ≥3，该复习了</li>
+          <li>"待复习" / 角标 ⚠️ = 最近 5 题里错 ≥3 道 或 &gt;21 天没碰。分数暂时被压低提示复习（按 elo 软 cap，原本越熟练的 skill 这时分数还是越高），做对几道就能恢复——<b>不是真的退步</b>。</li>
           <li>角标 ⭐ = 必考大题，期末分高</li>
           <li>🔒 = 单元未解锁（按时间表或前置单元）</li>
         </ul>

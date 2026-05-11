@@ -50,8 +50,31 @@ const TIME_HALFLIFE_DAYS = 14;
 const FRAGILE_DAYS_THRESHOLD = 21;
 /** Fragility：最近 5 题错 ≥ K 题强制 mastery 上限 45 */
 const FRAGILE_RECENT_WRONG_THRESHOLD = 3;
-/** Fragility 触发后 mastery 上限 */
-const FRAGILE_CAP = 45;
+/** Fragility 触发后 mastery 上限——v0.31.100 改成 elo-挂钩的软 cap，见 fragileCapByElo */
+const FRAGILE_CAP_FLOOR = 45;
+const FRAGILE_CAP_CEIL = 80;
+
+/**
+ * v0.31.100：fragile 触发时的 cap 跟学生 elo 挂钩，不再硬 45。
+ *
+ * Bruce 反馈"小数加减简便计算 / 三角形内角和 之前熟练 (elo 1620+) 现在回到 45"——
+ * fragility false-positive：自适应升 D4 后挂 3+/5 题就被打回原形，把已经积累的
+ * 努力轨迹（152/111 attempts、elo 1623/1643）全抹掉。
+ *
+ * 软 cap 公式（线性）：
+ *   elo 1200 (起始) → cap 45 (老硬 cap = 进步中)
+ *   elo 1500 (完全掌握门槛) → cap 60 (较稳下沿)
+ *   elo 1800 → cap 75 (熟练下沿)
+ *
+ * 这样：
+ * - elo 高的 skill 即使虚高也保留"较稳/熟练"等位，不会一下被打回进步中
+ * - elo 低的 skill 该打回 45 还是打回（防真虚高）
+ * - 上限 80：再高的 elo 错了几题也不能假装"精通"
+ */
+function fragileCapByElo(studentElo: number): number {
+  const cap = 45 + (studentElo - 1200) / 20;
+  return Math.max(FRAGILE_CAP_FLOOR, Math.min(FRAGILE_CAP_CEIL, cap));
+}
 /** 题面不足惩罚：不同 questionId 数 < 3 时 mastery × 0.7 */
 const MIN_DIVERSITY = 3;
 /** 数据不足：attempts < 5 时 mastery 按比例打折 */
@@ -216,7 +239,8 @@ export function computeMasteryScore(
     last5Wrong >= FRAGILE_RECENT_WRONG_THRESHOLD;
 
   let final = raw * 100;
-  if (fragile) final = Math.min(final, FRAGILE_CAP);
+  // v0.31.100：fragile cap 软化——elo 高的 skill 保留较稳/熟练等位，不一下打回 45
+  if (fragile) final = Math.min(final, fragileCapByElo(studentElo));
 
   return {
     score: Math.max(0, Math.min(100, Math.round(final))),
