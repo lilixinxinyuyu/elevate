@@ -151,6 +151,23 @@ const COMMEMORATIVE_RING: Record<
   },
 };
 
+/**
+ * v0.31.96：无 tier / 无 commemorative 时（daily / boss / generic）也强制有薄
+ * 金属环，让全集勋章边框风格 100% 统一。中性银色 → 配深色 motif 都和谐。
+ * 跟 tier ring 厚度共享 RING_PX → 厚度也统一。
+ */
+const NEUTRAL_RING = {
+  ring: "linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #475569 100%)",
+  glowColor: "rgba(148, 163, 184, 0.5)",
+};
+
+/**
+ * v0.31.96：勋章 inner art layer 的 fallback 底色。
+ * 跟 app dark bg #0b0f1f 完全同色 — 即使透明 PNG 边缘 CV 没裁干净，残留也跟
+ * inner bg + app bg 三者融合，根本看不出来。
+ */
+const TROPHY_INNER_BG = "#0b0f1f";
+
 const TIER_STYLE: Record<TrophyTier, TierStyle> = {
   bronze: {
     ring: "#cd7f32",
@@ -233,22 +250,28 @@ export function TrophyIcon({
     ? { borderRadius: "50%" }
     : { clipPath };
 
-  // 外层 wrapper：tier 环色 + drop-shadow glow + 形状
-  // commemorative 优先用金属外框（普通纪念暖金 / 跨段纪念鎏金），无 tier 时也能有勋章感
-  const outerBg =
-    tierStyle?.ringGradient ?? tierStyle?.ring ?? commemorativeRing?.ring ?? "transparent";
-  const outerGlow = tierStyle?.glowColor ?? commemorativeRing?.glowColor;
+  // v0.31.96：勋章柜的 trophy 强制有金属环（daily/milestone/ability/skill/commemorative），
+  // 边框厚度统一 → 整集视觉一致。
+  // **boss 排除**：boss 是 Phase 2 闯关系统的关卡章，不是徽章；V 字盾形 + 无金属环是
+  //  本来的战斗视觉，加 ring 反而破坏体系区分。
+  const ringSpec = tierStyle
+    ? { bg: tierStyle.ringGradient ?? tierStyle.ring, glow: tierStyle.glowColor }
+    : commemorativeRing
+      ? { bg: commemorativeRing.ring, glow: commemorativeRing.glowColor }
+      : unlocked && category !== "boss"
+        ? { bg: NEUTRAL_RING.ring, glow: NEUTRAL_RING.glowColor }
+        : null;
+
   const outerStyle: React.CSSProperties = {
     ...shapeStyle,
-    background: outerBg,
-    filter: outerGlow ? `drop-shadow(0 0 ${glowPx}px ${outerGlow})` : undefined,
+    background: ringSpec?.bg ?? "transparent",
+    filter: ringSpec?.glow ? `drop-shadow(0 0 ${glowPx}px ${ringSpec.glow})` : undefined,
   };
 
-  // 内层 art：缩进 ringPx 让外环金属色露出 1-2px 边
-  const hasFrame = !!tierStyle || !!commemorativeRing;
+  // 内层 art：缩进 ringPx 让外环金属色露出 → 统一薄边
   const innerStyle: React.CSSProperties = {
     ...shapeStyle,
-    inset: hasFrame ? `${ringPx}px` : 0,
+    inset: ringSpec ? `${ringPx}px` : 0,
   };
 
   // v0.31.94 回滚 v0.31.92 self-framed 旁路：所有 trophy 都走 CSS clip-path +
@@ -260,13 +283,14 @@ export function TrophyIcon({
       className={`relative inline-flex shrink-0 ${sz.box} ${className} ${grayClass}`}
       style={outerStyle}
     >
-      {/* 内层 art：直接 <img> 渲染 AI 图（每枚独立精心生成），emoji 兜底 */}
+      {/* v0.31.96：有 AI 图时 inner bg 用 app dark 同色（透明 PNG 边缘融合），
+          emoji 兜底时用 tier/category gradient */}
       <div
         className="absolute flex items-center justify-center overflow-hidden"
         style={{
           ...innerStyle,
           background: row?.imageDataUrl
-            ? "#000"
+            ? TROPHY_INNER_BG
             : tierStyle?.innerGradient ?? CATEGORY_BG[category],
         }}
       >

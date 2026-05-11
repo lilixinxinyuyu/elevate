@@ -90,7 +90,8 @@ function parseArgs(argv) {
         if (x.startsWith("--")) die(`Unknown flag: ${x}`);
     }
   }
-  if (!process.env.APP_PASSWORD) die("APP_PASSWORD env 必填（Cloudflare Pages 那个）");
+  if (!process.env.DASHSCOPE_API_KEY) die("DASHSCOPE_API_KEY env 必填（直走 dashscope-intl）");
+  if (a.pushD1 && !process.env.APP_PASSWORD) die("APP_PASSWORD env 必填（push D1 用）；--no-push 可豁免");
   return a;
 }
 
@@ -155,32 +156,69 @@ async function loadTrophyHelpers() {
 // 调 API 生成
 // ---------------------------------------------------------------------------
 
+/**
+ * v0.31.96：token-plan upstream 经常 502，直接走 dashscope-intl 同步 endpoint。
+ * 用 qwen-image-2.0-pro (sync) — 已实测稳定。
+ *
+ * DASHSCOPE_API_KEY 从 env 取，绕过 prod /api/generate/image，节省一跳 + 不受
+ * token-plan 死活影响。
+ */
+async function callDashscopeDirect(prompt, maxRetries = 3) {
+  const apiKey = process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) throw new Error("DASHSCOPE_API_KEY env 必填（在 ../.dev.vars 里）");
+
+  let lastErr;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoff = Math.min(20000, 4000 * 2 ** (attempt - 1));
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+    try {
+      // OpenAI-compatible sync endpoint —— qwen-image-2.0-pro / wan2.7-image-pro 都 work
+      const model = process.env.TROPHY_MODEL ?? "qwen-image-2.0-pro";
+      const r = await fetch(
+        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/images/generations",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            prompt,
+            n: 1,
+            size: "512x512",
+          }),
+        },
+      );
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) {
+        const msg = j.error?.message ?? `HTTP ${r.status}`;
+        const err = new Error(`dashscope ${r.status}: ${msg}`);
+        if (r.status >= 500 || /timeout|busy/i.test(msg)) {
+          lastErr = err;
+          continue;
+        }
+        throw err;
+      }
+      const url = j.data?.[0]?.url;
+      if (!url) throw new Error(`dashscope no url: ${JSON.stringify(j).slice(0, 200)}`);
+      return { url, model, taskId: null };
+    } catch (e) {
+      lastErr = e;
+      if (e instanceof Error && /fetch failed|ECONN|ETIMEDOUT|timeout/i.test(e.message)) {
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr ?? new Error("retries exhausted");
+}
+
 async function callImageApi(apiBase, prompt) {
-  const url = `${apiBase}/api/generate/image`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.APP_PASSWORD}`,
-    },
-    body: JSON.stringify({
-      prompt,
-      // /api/generate/image 默认 wan2.7-image-pro 通过 token-plan
-      size: "512*512",
-      n: 1,
-    }),
-  });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error(`API ${r.status}: ${txt.slice(0, 200)}`);
-  }
-  const j = await r.json();
-  if (!j.ok) {
-    throw new Error(`API ok=false: ${JSON.stringify(j).slice(0, 200)}`);
-  }
-  const u = (j.urls && j.urls[0]) ?? null;
-  if (!u) throw new Error("API 返回 ok=true 但无 urls");
-  return { url: u, model: j.model, taskId: j.taskId };
+  // v0.31.96: 直走 dashscope。apiBase 参数保留兼容（已不用）。
+  return await callDashscopeDirect(prompt);
 }
 
 async function downloadPng(url) {

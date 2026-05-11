@@ -87,7 +87,10 @@ export function buildTrophyPrompt(t: TrophyMeta): string {
 const TROPHY_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
   // === daily（无 tier，1 张图）===
   math_daily_complete: {
-    motif: "a glowing checkmark sticker placed on a paper calendar page, with a soft happy aura",
+    // v0.31.96: 之前 motif "calendar page" → AI 一画 calendar 就忍不住塞 1-31 数字
+    // 违反 NO NUMBERS。换成纯视觉的"勾"+"日"概念，避开 calendar 触发词。
+    motif:
+      "a large luminous emerald checkmark embossed in 3D on a blank cream rounded card surface (NO numbers, NO grid, NO calendar dates visible), with a small floating golden ring loop at the top of the card and warm sun-ray sparkles radiating outward",
     palette: "fresh emerald green + golden yellow + cream highlights",
   },
   math_speed_demon: {
@@ -277,86 +280,65 @@ const TROPHY_MOTIF_SPEC: Record<string, { motif: string; palette: string }> = {
  * tier 金属调修饰：避开"24K GOLD"/"DIAMOND PLATINUM"等品牌词（wan2.7 会当文字漏入图）。
  * 用纯描述性语言。
  */
+// v0.31.96：tier flavor 现在只调整 motif/sparkle 的金属调，不再描述 frame（frame 由 CSS 加）。
 const TIER_FLAVOR: Record<TrophyTier, string> = {
   bronze:
-    "Tier finish: warm antique copper-bronze metallic surface, aged patina with hints of amber, weathered vintage charm, soft greenish oxidation in shadows.",
+    "Tier accent: motif highlights and surrounding sparkles tinted warm copper-bronze, hints of amber, weathered vintage charm.",
   silver:
-    "Tier finish: polished cool silver-white metallic mirror, crisp pearl highlights, brushed metal striations, faint prismatic shine on the edges.",
+    "Tier accent: motif highlights and surrounding sparkles tinted polished silver-white, crisp pearl glints, brushed metal sheen.",
   gold:
-    "Tier finish: warm honey-amber metallic shine, deep embossed relief, regal warm glow, sun-kissed edges that catch the light.",
+    "Tier accent: motif highlights and surrounding sparkles tinted warm honey-amber gold, regal warm glow.",
   platinum:
-    "Tier finish: iridescent rainbow-holographic metallic surface, crystalline prismatic facets, soft aurora glow, sparkly fairy-dust particles drifting around the medal.",
+    "Tier accent: motif highlights and surrounding sparkles iridescent rainbow-holographic, crystalline prismatic glints, soft aurora glow, drifting fairy-dust particles.",
 };
 
 function buildRichTrophyPrompt(t: TrophyMeta): string {
-  // 取出无 tier 后缀的 trophyId 用于查 spec
   const baseId = t.id
     .replace(/^math_/, "math_")
     .replace(/_(bronze|silver|gold|platinum)$/, "");
   const spec = TROPHY_MOTIF_SPEC[baseId];
-  // v0.31.92 fix：默认 fallback 不再传中文 name 给 AI（AI 会渲染成图里的中文字
-  // 违反 NO TEXT 规则，weekly_d4_hunter 第一次重生就栽这）。改用纯通用描述。
   const motif =
-    spec?.motif ?? "a generic award subject — a glowing star, ribbon, or trophy cup centered on a clean enamel face";
-  const palette =
-    spec?.palette ?? "rich 2-3 color signature palette";
+    spec?.motif ?? "a generic award subject — a glowing star, ribbon, or trophy cup, dynamic and richly detailed";
+  const palette = spec?.palette ?? "rich 2-3 color signature palette";
   const tierFlavor = t.tier ? TIER_FLAVOR[t.tier] : "Tier finish: classic colorful enamel palette.";
 
-  // v0.31.94 重新设计（Bruce 反馈 v0.31.92 的 cream+flood-fill 不匹配老风格）：
+  // v0.31.96 终极架构（Bruce 严格视觉 review 后定案）：
   //
-  // 历史：
-  //   - v0.31.14：AI 不画外框 → CSS clip-path + tier 环外贴。某些 motif AI 自发画框
-  //     (answer_master 有银框)，某些没画 (ability_data 完全无框) → 风格不一致。
-  //   - v0.31.92：cream bg + flood-fill 透明 + AI 画 frame → 但 cream 风格跟老的
-  //     深紫渐变完全不同，3 新 trophy 看着突兀；且金框 + 透明 + 80% canvas 比例 vs
-  //     老的银框 + 深紫 + 95% canvas 不一致。
+  // 历史 root cause：AI 自画外框 + CSS 再画一层 ring → 双框打架、宽度不齐
+  // + 任一漏裁 → 白色泄漏到 app 蓝紫 bg 上特别难看。
   //
-  // v0.31.94 策略：
-  //   1. 强制 AI 画"完整圆形金属外框"（之前老 prompt 禁止画 frame 是 root cause）
-  //   2. 背景**回到深紫径向渐变**（匹配老 90%+ 已存图风格）
-  //   3. 框颜色按 tier（铜银金钻），无 tier 默认银
-  //   4. 框占满 95%+ canvas，让 CSS clip-path + tier 薄环叠加效果好
-  //   5. **不再用 flood-fill**（深色渐变 bg 跟页面 dark bg 完美融合，无需透明化）
+  // v0.31.96 三件事各管一件：
+  //   1. AI 只画 motif 本体 + 深色 bg（跟 app #0b0f1f 同色系）。**完全不画外框**。
+  //   2. 后端 CV flood-fill 吃掉深色 bg → 透明 PNG（_make-trophy-transparent-v2.py）。
+  //      即使裁不干净，残留也是深色 ≈ app bg，融合不刺眼。
+  //   3. CSS 统一 thin metallic ring overlay（按 tier 染色，无 tier 默认银）。
+  //
+  // 关键：把"边框该多宽 + 该什么色"完全交给 CSS，AI 不再插手。
   return [
-    `Premium 3D rendered luxury medal — designed for a 4th-grade girl to treasure. Must visually MATCH the existing trophy collection aesthetic precisely (think: answer_master_silver, combo_king_silver, ability_calculation_silver).`,
-    `**Medal anatomy:**`,
-    `  - Outer metallic frame ring: **THIN smooth polished ${frameColorFor(t.tier)} beveled rim** with subtle top-left highlight. Width is ONLY ~5-7% of canvas (THIN, NOT thick). NO laurel leaves, NO scrollwork engraving, NO ribbons, NO crests, NO inner accent rings — just one clean smooth metallic ring.`,
-    `  - Inner medallion face: **DEEP VIOLET / DARK BURGUNDY enamel** glossy reflective surface, occupies ~85% of the medal diameter (large center). NEVER cream, NEVER ivory, NEVER white inside the medal.`,
-    `  - Subject motif (centered in enamel face): ${motif}`,
-    `  - Soft glow + tiny star sparkles within the enamel area (decorative, not text)`,
-    `Signature palette for motif (the motif itself, NOT the enamel): ${palette}.`,
-    tierFlavor,
-    `**Background OUTSIDE the medal (CRITICAL for CSS circle clipping):**`,
-    `  - **PURE WHITE / OFF-WHITE background** filling all 4 corners outside the medal circle`,
-    `  - NO dark purple bg outside the medal; NO gradient outside; NO decorative elements outside`,
-    `  - The medal is a circle centered in the square canvas; outside the circle = WHITE`,
-    `  - Medal diameter fills ~95% of canvas; 4 corners are pure white triangles`,
-    `**Critical style requirements (matching collection EXACTLY):**`,
-    `  - Outside medal: WHITE (so CSS circle clip-path renders clean, no purple bleed)`,
-    `  - Inside medal: thin metallic ring + deep violet enamel + motif`,
-    `  - Frame is THIN and SMOOTH (not wide laurel) — width ~5-7% of canvas`,
-    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS, NO RIBBONS WITH WRITING** — entirely pictorial, zero typography.`,
-    `Output: 512×512 square. Medal centered, ~95% diameter.`,
-  ].join(" ");
-}
+    // v0.31.96.1：v95 pilot 发现关键问题 —— prompt 里 "medal" 一词让 AI 强烈联想
+    // 到圆形金属外框（即使反复 NO FRAME 也无效）。换成 "iconic 3D illustration"
+    // 完全避开 medal/badge/coin/award 等触发词。
+    `A premium 3D rendered iconic illustration of a single subject floating freely on a dark backdrop, designed for a 4th-grade girl to treasure. Style: hyperrealistic 3D rendering, glossy enamel finish on the subject, dimensional dramatic lighting — Apple Fitness premium icon quality.`,
 
-/**
- * v0.31.94: tier → frame metal color hint。
- * 没 tier 时默认 silver-tone（既不太亮也不太暗，配 enamel 都好看）。
- */
-function frameColorFor(tier: TrophyMeta["tier"]): string {
-  switch (tier) {
-    case "bronze":
-      return "antique copper / bronze";
-    case "silver":
-      return "polished sterling silver";
-    case "gold":
-      return "rich yellow gold";
-    case "platinum":
-      return "iridescent rainbow platinum with subtle pearlescent shimmer";
-    default:
-      return "polished silver"; // 无 tier 默认银
-  }
+    // v0.31.96.1：3 重否定 + 给出"如果你想画框就画 sparkles 代替"的转移指令
+    `**ABSOLUTELY NO MEDAL FRAME, NO CIRCULAR PLAQUE, NO COIN, NO BADGE OUTLINE, NO METALLIC RING, NO ENAMEL DISC, NO ROUND DECORATIVE PLATFORM, NO BORDER OF ANY KIND.** The subject is a free-floating sculpted illustration on a deep navy backdrop. If you feel tempted to draw a circular boundary, instead replace it with scattered sparkles and stars. The final frame is added externally by CSS, not by you.`,
+
+    `**Composition:**`,
+    `  - Subject (centered, occupies ~65-75% of the canvas — large and prominent, NO disc/plaque/frame around or under it): ${motif}.`,
+    `  - Surface treatment: glossy 3D embossed relief on the subject, soft inner glow, premium depth and shine.`,
+    `  - Around the subject (within ~85% canvas radius from center): scattered decorative sparkles, tiny stars, and accent particles freely floating in the dark backdrop. The outer ~15% is clean dark backdrop with no decoration.`,
+    `  - Signature palette for the subject: ${palette}.`,
+    `  - ${tierFlavor}`,
+
+    `**Background:**`,
+    `  - Deep navy / dark slate radial gradient — outer edges at near-black #08091a, center subtly warmer dark slate-violet #1a1f3a`,
+    `  - The dark backdrop fills the ENTIRE 512×512 canvas edge-to-edge, all 4 corners are deep navy`,
+    `  - **ABSOLUTELY NO WHITE, NO CREAM, NO IVORY, NO LIGHT CORNERS, NO LIGHT RIM** anywhere in the image`,
+    `  - The dark backdrop will be flood-filled to transparent in post-processing — it MUST be uniformly deep dark`,
+
+    `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO DIGITS, NO DATES, NO SIGNATURES, NO WATERMARKS, NO STAMPS, NO RIBBONS WITH WRITING, NO CALENDAR GRID** — entirely pictorial, zero typography, zero numerals.`,
+    `Output: 512×512 square. Subject centered. Dark gradient edge-to-edge, no frame, no disc under subject.`,
+  ].join(" ");
 }
 
 /**
@@ -553,20 +535,22 @@ function buildTierBadgePrompt(t: TrophyMeta): string {
     rim: "polished gold",
     bg: "deep violet radial gradient",
   };
+  // v0.31.96：tier badge 也走统一管道 —— AI 不画外框，CSS 加边框。
+  // 内部主题色保留（school 蓝 / district 翠 / city 紫 / province 金 / country 红），
+  // 但外圈 rim 不画，bg 改成深色边角（深色 bg 外圈 → CV 可吃掉 → CSS overlay ring）。
   return [
-    // === 主体描述 ===
-    `A premium Apple Fitness style achievement medal, circular embossed relief, clean centered composition.`,
-    `Subject: ${theme.motif}.`,
-    // === 框架填满（修 v0.30.3 黑边大问题） ===
-    `**The circular medal fills the entire frame edge-to-edge — the rim touches all four sides of the square canvas with at most 1-2 pixel margin.** No visible empty background border, no thick padding, no halo of dark space around the medal.`,
-    `Rim: ${theme.rim}, smooth thin metallic ring 2-3% of the frame width, exactly at the canvas edge.`,
-    // === 内部背景，跟金属环呼应（不要纯黑！） ===
-    `Inside the rim: ${theme.bg}, soft and dimensional, makes the central motif glow naturally. Absolutely **NOT a flat black or near-black background** — the inner color should be saturated and rich.`,
-    `Surface: precise 3D embossed relief, silky inner glow, premium hyperrealistic detail, like the very best Apple Fitness award icons.`,
-    // === 严格禁止 ===
+    `A premium Apple Fitness style achievement emblem illustration, embossed relief, clean centered composition.`,
+    `Subject (centered, occupies ~70-75% of canvas, large and prominent): ${theme.motif}.`,
+
+    `**ABSOLUTELY NO FRAME — CRITICAL:** Do NOT draw any outer rim, metallic ring, gold/silver border, or shape outline. The emblem frame is added externally by CSS. This image is purely the emblem's inner art + background.`,
+
+    `Background: ${theme.bg} radiating from the center, transitioning to **deep navy / near-black (#08091a) at all four canvas corners**. The dark corner zone must occupy at least the outer ~15% radius — this dark zone will be flood-filled to transparent in post-processing, so it MUST be uniformly dark.`,
+
+    `Surface: precise 3D embossed relief on the motif, silky inner glow, premium hyperrealistic detail.`,
+
     `**ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO LOGOS, NO ENGLISH SCRIPT, NO CHINESE CHARACTERS, NO NUMBERS, NO SIGNATURES, NO WATERMARKS, NO STAMPS, NO TYPOGRAPHY, NO CALLIGRAPHY OF ANY KIND.**`,
-    // === 输出尺寸 ===
-    `Output: 512×512 square, the circular medal occupies 98%+ of the canvas with only a 1-2 pixel margin on each side.`,
+
+    `Output: 512×512 square, motif strictly centered, dark corners for transparent-PNG processing.`,
   ].join(" ");
 }
 
