@@ -34,7 +34,18 @@ export type MascotXpReason =
   /** 错题复活 (mistakes 页) 进入小进讲完 */
   | "mistake_revival"
   /** 隐藏技能首次解锁触发 */
-  | "talent_unlocked";
+  | "talent_unlocked"
+  /**
+   * v0.31.90: 完成 session（任意模式）— 不开口聊也涨。
+   *
+   * 之前 bug：所有 reason 都需要 TutorPanel 开口才触发，Selena 主要走 fluency /
+   * 闯关 / 挑战，从不打开 tutor，小进就一直不升级。爸爸反馈"最近小进都没升级"。
+   * 现在 finalizeSession 后给一点点经验，让小进跟随 Selena 一起成长。
+   *
+   * 经验值刻意做小（4 XP）— 不让小进单靠刷题就升到顶（那样会丢失"跟小进互动
+   * 才长技能"的叙事）。Selena 真正想升级还是要主动开口跟小进聊。
+   */
+  | "session_complete";
 
 const XP_PER_REASON: Record<MascotXpReason, number> = {
   session_start: 5,
@@ -44,6 +55,7 @@ const XP_PER_REASON: Record<MascotXpReason, number> = {
   daily_first: 15,
   mistake_revival: 25,
   talent_unlocked: 30,
+  session_complete: 4,
 };
 
 export interface MascotLevel {

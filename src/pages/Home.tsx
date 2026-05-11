@@ -165,20 +165,31 @@ export function HomePage() {
     [student?.id],
   );
   // v0.31.29：今日闪电口算 session 数（用于 3 环之一闭合判定）
+  // v0.31.90：通关 module（mastered）的 session 不计入今日打卡 — 鼓励 Selena 挑战
+  //   还没通关的 module，而不是在已经熟练的 module 上刷"完成感"
   const fluencyTodayCount = useLiveQuery(async () => {
     if (!student) return 0;
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const startMs = startOfToday.getTime();
-    const all = await db.fluencyAttempts
-      .where({ studentId: student.id })
-      .toArray();
-    // 按 sessionId 去重 —— 一个 session 算一次"完成口算"
-    const sessionsToday = new Set<string>();
+    const [all, stats] = await Promise.all([
+      db.fluencyAttempts.where({ studentId: student.id }).toArray(),
+      db.fluencyStats.where({ studentId: student.id }).toArray(),
+    ]);
+    const masteredModules = new Set(
+      stats.filter((s) => s.mastered).map((s) => s.moduleId),
+    );
+    // 按 sessionId 去重 —— 一个 session 算一次；过滤掉 mastered module
+    const sessionToModule = new Map<string, string>();
     for (const a of all) {
-      if (a.createdAt >= startMs && a.sessionId) sessionsToday.add(a.sessionId);
+      if (a.createdAt < startMs || !a.sessionId) continue;
+      sessionToModule.set(a.sessionId, a.moduleId);
     }
-    return sessionsToday.size;
+    let count = 0;
+    for (const moduleId of sessionToModule.values()) {
+      if (!masteredModules.has(moduleId)) count += 1;
+    }
+    return count;
   }, [student?.id]);
 
   // v0.31.68: 今日已复活（推进过的到期错题数 — 含原题直接 advance + variant

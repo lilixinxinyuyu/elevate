@@ -161,6 +161,17 @@ export async function finalizeFluencySession(input: {
     sessionP50: p50,
   });
 
+  // v0.31.90: 给小进 4 XP（修不升级 bug，跟主 finalizeSession 一致）
+  // 至少 3 题才给（防止"开了 0 秒就退出"刷 XP）
+  if (attemptsCount >= 3) {
+    try {
+      const { awardMascotXp } = await import("./mascotProgress");
+      await awardMascotXp(input.studentId, "session_complete");
+    } catch (e) {
+      console.warn("[finalizeFluencySession] mascot xp failed:", e);
+    }
+  }
+
   return {
     moduleId: input.moduleId,
     sessionId: input.sessionId,

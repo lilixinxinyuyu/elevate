@@ -62,7 +62,8 @@ function buildMathNavItems(): SubjectNavItem[] {
   }
   // 技能图 — 桌面 nav 显示；mobile 不显示（首页 CTA 接走）
   base.push({ to: "skills", label: "技能图", desktopOnly: true });
-  base.push({ to: "mistakes", label: "错题复活" });
+  // v0.31.90: "错题复活" → "错题驯服" — 跟闯关里"驯服怪兽"叙事呼应，错题=要驯服的小怪
+  base.push({ to: "mistakes", label: "错题驯服" });
   // 管理（包含周报 + 试玩台 + 题库管理 tabs）
   base.push({ to: "admin", label: "管理", subtle: true });
   return base;

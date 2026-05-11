@@ -1,7 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { TemplateRenderProps } from "../GameShell";
 import type { Question } from "../../../core/types";
 
+/**
+ * 闪电匹配 — v0.31.90 跟 PlainChoice 视觉差异化：
+ *   - 顶部右上角：实时计时 chip（毫秒级，强化"速度"感）
+ *   - 闪电图标 ⚡ 在 stem 旁边
+ *   - 选项 grid 用更大的字号 + 更窄间距，强调"反应"而非"阅读"
+ *   - 这个 panel 是 fluency 类训练的入口，整体节奏更快
+ *
+ * 跟 PlainChoice 的 schema 完全兼容（都 single_choice），只是渲染风格不同。
+ */
 export function SpeedMatchPanel(props: TemplateRenderProps) {
   const { question, onFinish, triggerFx, disabled } = props;
   // 防 memorize：每次进题用一个新随机 salt，让选项位置每次都洗。
@@ -12,6 +21,27 @@ export function SpeedMatchPanel(props: TemplateRenderProps) {
   const [lockedCorrect, setLockedCorrect] = useState(false);
   const [locked, setLocked] = useState(false);
   const [wrongIds, setWrongIds] = useState<Set<string>>(new Set());
+
+  // v0.31.90: 实时计时 — 跟 PlainChoice 区分的关键
+  const startMs = useRef<number>(Date.now());
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    startMs.current = Date.now();
+    setElapsedMs(0);
+    if (locked || disabled) return;
+    const id = window.setInterval(() => {
+      setElapsedMs(Date.now() - startMs.current);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [question.question_id, locked, disabled]);
+  const elapsedSec = (elapsedMs / 1000).toFixed(1);
+  // 速度反馈色：< 5s 绿；5-10s 琥珀；> 10s 灰
+  const speedCls =
+    elapsedMs < 5000
+      ? "text-emerald-300 border-emerald-400/40 bg-emerald-500/15"
+      : elapsedMs < 10000
+        ? "text-amber-200 border-amber-400/40 bg-amber-500/15"
+        : "text-slate-400 border-slate-500/40 bg-slate-500/15";
 
   const handlePick = (optId: string, ev: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled || lockedCorrect || locked) return;
@@ -44,7 +74,19 @@ export function SpeedMatchPanel(props: TemplateRenderProps) {
   };
 
   return (
-    <div>
+    <div className="relative">
+      {/* v0.31.90: 顶部速度 chip — SpeedMatch 跟 PlainChoice 区分的关键 */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs text-amber-300 font-display font-bold uppercase tracking-wider">
+          ⚡ 闪电匹配
+        </div>
+        <div
+          className={`chip text-xs border tabular-nums font-mono px-2.5 py-1 transition-colors ${speedCls}`}
+          aria-label={`已用 ${elapsedSec} 秒`}
+        >
+          ⏱ {elapsedSec}s
+        </div>
+      </div>
       <div className="font-display font-bold text-3xl leading-tight mt-1 mb-6 whitespace-pre-wrap text-slate-50">
         {question.stem}
       </div>

@@ -89,7 +89,11 @@ export function ShopCounterPanel(props: TemplateRenderProps) {
         ))}
       </div>
       <div className={`mt-4 ${shakeStep ? "animate-shake" : ""}`}>
+        {/* v0.31.90: key={cursor} 让 SubRenderer 在切步骤时彻底重建。
+            之前没 key → React 复用 instance → Numeric 内 useState 保留上一步答案
+            → 第 2 步输入框卡死显示第 1 步的答案 + locked 状态。 */}
         <SubRenderer
+          key={cursor}
           sub={current}
           onFinishStep={advance}
           triggerFx={triggerFx}

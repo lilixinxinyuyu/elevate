@@ -1017,6 +1017,19 @@ export async function finalizeSession(
     }
   }
 
+  // v0.31.90: 给小进 4 XP（任意 session 完成）— 修"小进不升级" bug。
+  // 之前 awardMascotXp 所有 reason 都需要 TutorPanel 开口才触发，Selena 主要
+  // 走 fluency / 闯关 / 挑战不开口跟小进聊 → 小进一直停在低等级。
+  // 现在 session 完成自动 +4 XP，主动跟小进聊仍是主要长经验途径。
+  if (total >= 3) {
+    try {
+      const { awardMascotXp } = await import("../lib/mascotProgress");
+      await awardMascotXp(studentId, "session_complete");
+    } catch (e) {
+      console.warn("[finalizeSession] award mascot xp failed:", e);
+    }
+  }
+
   return summary;
 }
 
