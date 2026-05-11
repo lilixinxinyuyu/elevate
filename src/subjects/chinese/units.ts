@@ -48,4 +48,14 @@ export const UNITS_CHINESE: CurriculumUnit[] = [
     description: "猫（老舍）+ 母鸡（老舍）+ 白鹅（丰子恺）。",
     priority: "VERY_HIGH",
   },
+  {
+    id: "C4B_U5_TRAVEL",
+    subjectId: "chinese",
+    term: "下册",
+    orderIndex: 5,
+    name: "第五单元 · 妙笔写美景（游记）",
+    description:
+      "海上日出（巴金）+ 记金华的双龙洞（叶圣陶）+ 习作例文：颐和园 / 七月的天山。重点：按游览/变化顺序写景 + 过渡句。",
+    priority: "HIGH",
+  },
 ];

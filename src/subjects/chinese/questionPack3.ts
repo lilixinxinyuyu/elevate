@@ -625,8 +625,100 @@ const SENTENCE_SHUFFLE: Question[] = [
   }),
 ];
 
+// ============================================================
+//  第五单元（U5 · 游记）扩展游戏题
+// ============================================================
+const U5_GAMES: Question[] = [
+  // 配对：游记词语 ↔ 出处
+  v({
+    question_id: "C4B_PAIR_U5_001",
+    unit_id: "C4B_U5_TRAVEL",
+    skill_id: "C4B_U5_VOCAB",
+    skill_name: "游记词语配对",
+    game_type: "pair_match",
+    difficulty: 2,
+    stem: "把词语配上《海上日出》/《双龙洞》里描写的对象：",
+    feedback_correct: "巴金写日出抓颜色变化，叶圣陶写洞抓空间变化——风格不同。",
+    feedback_wrong: '"突兀森郁"是写山的样子；"镶金边"是写黑云里的太阳。',
+    game_data: {
+      kind: "pair_match",
+      leftLabel: "词语",
+      rightLabel: "描写的对象",
+      pairs: [
+        { left: "镶了一道金边", right: "黑云中的太阳" },
+        { left: "突兀森郁", right: "双龙洞外的山" },
+        { left: "蜿蜒在洞顶", right: "石钟乳和石笋" },
+        { left: "明艳", right: "山上各色花和新绿" },
+      ],
+    },
+  }),
+
+  // 多音字配对：U5 重点
+  v({
+    question_id: "C4B_PAIR_U5_002",
+    unit_id: "C4B_U5_TRAVEL",
+    skill_id: "C4B_U5_VOCAB",
+    skill_name: "多音字配对",
+    game_type: "pair_match",
+    difficulty: 3,
+    stem: "把多音字 '刹' '荷' '调' '系' 配上《海上日出》/《双龙洞》里的读音：",
+    feedback_correct: "多音字看上下文。刹那读 chà，重荷读 hè——课文里都有原句对照。",
+    feedback_wrong: '"船两头都系着绳子"的"系"读 jì（系绳子），不是 xì。',
+    game_data: {
+      kind: "pair_match",
+      leftLabel: "句子里的字",
+      rightLabel: "读音",
+      pairs: [
+        { left: "刹那间（一瞬间）", right: "chà" },
+        { left: "负着重荷（扛）", right: "hè" },
+        { left: "变换调子（音调）", right: "diào" },
+        { left: "系着绳子（绑）", right: "jì" },
+      ],
+    },
+  }),
+
+  // 句子重排：游记过渡句
+  v({
+    question_id: "C4B_SHUFFLE_U5_001",
+    unit_id: "C4B_U5_TRAVEL",
+    skill_id: "C4B_U5_ORDER",
+    skill_name: "过渡句重排",
+    game_type: "sentence_shuffle",
+    difficulty: 3,
+    stem: "把词块按正确顺序点亮组成《双龙洞》的过渡句：",
+    feedback_correct: "'大约行了两三丈的水程吧，就登陆了。这就到了内洞。' —— 这种'就' 字过渡很自然。",
+    feedback_wrong: "时间 / 距离 + 就 + 动作，是游记过渡常用句式。",
+    game_data: {
+      kind: "sentence_shuffle",
+      tokens: ["大约行了", "两三丈的", "水程吧", "就", "登陆了"],
+      fullSentence: "大约行了两三丈的水程吧就登陆了",
+    },
+  }),
+
+  // 古诗补字：U5 没有古诗，但有课文背诵句，做成补字游戏（poem_cloze 复用）
+  v({
+    question_id: "C4B_POEM_CLOZE_U5_001",
+    unit_id: "C4B_U5_TRAVEL",
+    skill_id: "C4B_U5_ORDER",
+    skill_name: "课文补字",
+    game_type: "poem_cloze",
+    difficulty: 3,
+    stem: "把字塞进巴金《海上日出》经典句子：",
+    feedback_correct: "拟人写法 —— 太阳像人一样'负重荷'、'努力上升'，写出日出的力量感。",
+    feedback_wrong: "原句：太阳好像负着重荷似的一步一步，慢慢地努力上升。",
+    game_data: {
+      kind: "poem_cloze",
+      template:
+        "太阳好像___着重___似的一步一步，慢慢地___力上升，到了最后，终于冲___了云霞，完全跳出了海面。",
+      blanks: ["负", "荷", "努", "破"],
+      pool: ["负", "荷", "努", "破", "扛", "新", "进", "穿"],
+    },
+  }),
+];
+
 export const SEED_QUESTIONS_CHINESE_V3: Question[] = [
   ...POEM_CLOZE,
   ...PAIR_MATCH,
   ...SENTENCE_SHUFFLE,
+  ...U5_GAMES,
 ];

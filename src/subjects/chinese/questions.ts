@@ -14,6 +14,7 @@ const U1 = "C4B_U1_NATURE";
 const U2 = "C4B_U2_SCIENCE";
 const U3 = "C4B_U3_POETRY";
 const U4 = "C4B_U4_ANIMALS";
+const U5 = "C4B_U5_TRAVEL";
 
 const PINYIN_U1 = "C4B_U1_PINYIN";
 const POEM_U1 = "C4B_U1_POEM_RECITE";
@@ -30,6 +31,11 @@ const RHET_U3 = "C4B_U3_RHETORIC";
 const PINYIN_U4 = "C4B_U4_PINYIN";
 const VOCAB_U4 = "C4B_U4_VOCAB";
 const DICT_U4 = "C4B_U4_DICTATION";
+
+const PINYIN_U5 = "C4B_U5_PINYIN";
+const VOCAB_U5 = "C4B_U5_VOCAB";
+const ORDER_U5 = "C4B_U5_ORDER";
+const DICT_U5 = "C4B_U5_DICTATION";
 
 export const SEED_QUESTIONS_CHINESE: Question[] = [
   // ============================================================
@@ -1031,6 +1037,272 @@ export const SEED_QUESTIONS_CHINESE: Question[] = [
       { id: "b", text: "性情故怪", errorTag: "homophone_glyph" },
       { id: "c", text: "性请古怪", errorTag: "homophone_glyph" },
       { id: "d", text: "性情古拐", errorTag: "homophone_glyph" },
+    ],
+    correct: "a",
+  }),
+
+  // ============================================================
+  // 第五单元：字音字形（游记 · 海上日出 / 双龙洞）
+  // ============================================================
+  pickChoice({
+    id: "cn-u5-pinyin-001",
+    unit_id: U5,
+    skill_id: PINYIN_U5,
+    ability: ["phonics"],
+    difficulty: 2,
+    stem: '"刹那间"的"刹"读什么音？',
+    options: [
+      { id: "a", text: "chà（一瞬间）" },
+      { id: "b", text: "shā（停止）", errorTag: "polyphone_confusion" },
+      { id: "c", text: "shà", errorTag: "tone_confusion" },
+      { id: "d", text: "chá", errorTag: "tone_confusion" },
+    ],
+    correct: "a",
+    solution: ['"刹"是多音字：chà（刹那 / 古刹）/ shā（刹车 / 刹住）。"刹那间"= 极短时间，读 chà。'],
+  }),
+  pickChoice({
+    id: "cn-u5-pinyin-002",
+    unit_id: U5,
+    skill_id: PINYIN_U5,
+    ability: ["phonics"],
+    difficulty: 2,
+    stem: '"负着重荷"的"荷"读什么音？',
+    options: [
+      { id: "a", text: "hè（担负、扛）" },
+      { id: "b", text: "hé（荷花）", errorTag: "polyphone_confusion" },
+      { id: "c", text: "hē", errorTag: "tone_confusion" },
+      { id: "d", text: "hǎo", errorTag: "tone_confusion" },
+    ],
+    correct: "a",
+    solution: ['"荷"是多音字：hé（荷花 / 莲荷）/ hè（负荷 / 重荷）。这里指太阳像扛着重东西一样升起，读 hè。'],
+  }),
+  pickChoice({
+    id: "cn-u5-pinyin-003",
+    unit_id: U5,
+    skill_id: PINYIN_U5,
+    ability: ["phonics", "glyph"],
+    difficulty: 2,
+    stem: '下面哪一个"镶"字的写法是正确的？',
+    options: [
+      { id: "a", text: "镶嵌（xiāng qiàn）" },
+      { id: "b", text: "镶感", errorTag: "glyph_homophone" },
+      { id: "c", text: "镶碰", errorTag: "glyph_homophone" },
+      { id: "d", text: "镶感（xiǎng）", errorTag: "tone_confusion" },
+    ],
+    correct: "a",
+    solution: ['"镶"读 xiāng，"镶嵌"是把东西嵌进去（如金边镶在云上）。'],
+  }),
+  pickChoice({
+    id: "cn-u5-pinyin-004",
+    unit_id: U5,
+    skill_id: PINYIN_U5,
+    ability: ["glyph"],
+    difficulty: 3,
+    stem: "选出没有错别字的一组：",
+    options: [
+      { id: "a", text: "扩大 · 模范 · 努力 · 替换 · 紫色" },
+      { id: "b", text: "扩大 · 模犯 · 努力 · 替换 · 紫色", errorTag: "glyph_homophone" },
+      { id: "c", text: "括大 · 模范 · 努力 · 替换 · 紫色", errorTag: "glyph_homophone" },
+      { id: "d", text: "扩大 · 模范 · 努力 · 提换 · 紫色", errorTag: "glyph_homophone" },
+    ],
+    correct: "a",
+    solution: ['"扩"是提手旁，"范"是草字头，"替"是上下结构。这 5 个字是《海上日出》核心生字。'],
+  }),
+  pickChoice({
+    id: "cn-u5-pinyin-005",
+    unit_id: U5,
+    skill_id: PINYIN_U5,
+    ability: ["phonics", "glyph"],
+    difficulty: 2,
+    stem: '"突兀森郁"的"兀"读什么音？',
+    options: [
+      { id: "a", text: "wù" },
+      { id: "b", text: "wū", errorTag: "tone_confusion" },
+      { id: "c", text: "yuán", errorTag: "wrong_meaning" },
+      { id: "d", text: "yuàn", errorTag: "wrong_meaning" },
+    ],
+    correct: "a",
+    solution: ['"突兀"指山高耸的样子，《记金华的双龙洞》用来写双龙洞所在的山很有气势。'],
+  }),
+  pickChoice({
+    id: "cn-u5-pinyin-006",
+    unit_id: U5,
+    skill_id: PINYIN_U5,
+    ability: ["glyph"],
+    difficulty: 3,
+    stem: "选出全部字音正确的一组：",
+    options: [
+      { id: "a", text: "浙（zhè）江 · 杜鹃（juān）· 臀（tún）部 · 蜿（wān）蜒" },
+      { id: "b", text: "浙（zé）江 · 杜鹃（juān）· 臀（tún）部 · 蜿（wān）蜒", errorTag: "tone_confusion" },
+      { id: "c", text: "浙（zhè）江 · 杜鹃（quān）· 臀（tún）部 · 蜿（wān）蜒", errorTag: "tone_confusion" },
+      { id: "d", text: "浙（zhè）江 · 杜鹃（juān）· 臀（diàn）部 · 蜿（wān）蜒", errorTag: "tone_confusion" },
+    ],
+    correct: "a",
+    solution: ["《记金华的双龙洞》生字字音必考点。浙 zhè / 鹃 juān / 臀 tún / 蜿 wān。"],
+  }),
+
+  // ============================================================
+  // 第五单元：词语 / 多音字辨析
+  // ============================================================
+  pickChoice({
+    id: "cn-u5-vocab-001",
+    unit_id: U5,
+    skill_id: VOCAB_U5,
+    ability: ["vocabulary"],
+    difficulty: 2,
+    stem: '《海上日出》里"夺目的亮光"指什么意思？',
+    options: [
+      { id: "a", text: "光线非常强，使人无法直视" },
+      { id: "b", text: "把眼睛抢走", errorTag: "literal_reading" },
+      { id: "c", text: "光线很弱、看不清", errorTag: "antonym_picked" },
+      { id: "d", text: "颜色很多种", errorTag: "wrong_meaning" },
+    ],
+    correct: "a",
+    solution: ['"夺目"= 抢走视线 → 形容光彩极强。这里写日出冲破云霞那一刻的强烈亮光。'],
+  }),
+  pickChoice({
+    id: "cn-u5-vocab-002",
+    unit_id: U5,
+    skill_id: VOCAB_U5,
+    ability: ["vocabulary"],
+    difficulty: 2,
+    stem: '"明艳"的近义词是？',
+    options: [
+      { id: "a", text: "鲜艳" },
+      { id: "b", text: "暗淡", errorTag: "antonym_picked" },
+      { id: "c", text: "灰暗", errorTag: "antonym_picked" },
+      { id: "d", text: "朴素", errorTag: "wrong_meaning" },
+    ],
+    correct: "a",
+    solution: ['"明艳"= 鲜明艳丽，《双龙洞》写映山红 + 油桐 + 沙土 + 新绿合成的色彩。'],
+  }),
+  pickChoice({
+    id: "cn-u5-vocab-003",
+    unit_id: U5,
+    skill_id: VOCAB_U5,
+    ability: ["vocabulary", "phonics"],
+    difficulty: 3,
+    stem: '"溪流时而宽，时而窄"的"时而……时而……"表示什么关系？',
+    options: [
+      { id: "a", text: "并列关系，表示两种情况交替出现" },
+      { id: "b", text: "因果关系", errorTag: "relation_confusion" },
+      { id: "c", text: "转折关系", errorTag: "relation_confusion" },
+      { id: "d", text: "递进关系", errorTag: "relation_confusion" },
+    ],
+    correct: "a",
+  }),
+
+  // ============================================================
+  // 第五单元：游览顺序 / 过渡句
+  // ============================================================
+  pickChoice({
+    id: "cn-u5-order-001",
+    unit_id: U5,
+    skill_id: ORDER_U5,
+    ability: ["reading"],
+    difficulty: 2,
+    stem: '《记金华的双龙洞》作者游览的顺序是？',
+    options: [
+      { id: "a", text: "路上 → 洞口 → 外洞 → 孔隙 → 内洞 → 出洞" },
+      { id: "b", text: "内洞 → 孔隙 → 外洞 → 洞口 → 路上 → 出洞", errorTag: "reverse_order" },
+      { id: "c", text: "洞口 → 内洞 → 外洞 → 路上 → 孔隙 → 出洞", errorTag: "wrong_order" },
+      { id: "d", text: "路上 → 内洞 → 外洞 → 孔隙 → 洞口 → 出洞", errorTag: "wrong_order" },
+    ],
+    correct: "a",
+    solution: ["叶圣陶按游览实际行进的顺序写：先走山路 → 到洞口 → 进外洞 → 从孔隙挤进去 → 看内洞 → 出洞。"],
+  }),
+  pickChoice({
+    id: "cn-u5-order-002",
+    unit_id: U5,
+    skill_id: ORDER_U5,
+    ability: ["reading", "expression"],
+    difficulty: 3,
+    stem: '《海上日出》第 2-3 自然段是按什么顺序写的？',
+    options: [
+      { id: "a", text: "太阳颜色和动作变化的顺序（红霞 → 小半边脸 → 冲破云霞 → 完全跳出 → 亮光夺目）" },
+      { id: "b", text: "从地点变化写（天空 → 海面 → 远山 → 船舱）", errorTag: "wrong_dimension" },
+      { id: "c", text: "从人物心情变化写", errorTag: "wrong_dimension" },
+      { id: "d", text: "由近到远写", errorTag: "wrong_dimension" },
+    ],
+    correct: "a",
+    solution: ["巴金抓住日出时太阳颜色 + 动作的变化来写，这是写自然变化景象的常用方法。"],
+  }),
+
+  // ============================================================
+  // 第五单元：听写
+  // ============================================================
+  dictation({
+    id: "cn-u5-dict-001",
+    unit_id: U5,
+    skill_id: DICT_U5,
+    ability: ["phonics", "glyph"],
+    difficulty: 2,
+    audio_text: "扩大范围",
+    options: [
+      { id: "a", text: "扩大范围" },
+      { id: "b", text: "括大范围", errorTag: "homophone_glyph" },
+      { id: "c", text: "扩大泛围", errorTag: "homophone_glyph" },
+      { id: "d", text: "扩大范畏", errorTag: "homophone_glyph" },
+    ],
+    correct: "a",
+  }),
+  dictation({
+    id: "cn-u5-dict-002",
+    unit_id: U5,
+    skill_id: DICT_U5,
+    ability: ["phonics", "glyph"],
+    difficulty: 3,
+    audio_text: "突兀森郁",
+    options: [
+      { id: "a", text: "突兀森郁" },
+      { id: "b", text: "突屋森郁", errorTag: "homophone_glyph" },
+      { id: "c", text: "突兀森欲", errorTag: "homophone_glyph" },
+      { id: "d", text: "凸兀森郁", errorTag: "homophone_glyph" },
+    ],
+    correct: "a",
+  }),
+  dictation({
+    id: "cn-u5-dict-003",
+    unit_id: U5,
+    skill_id: DICT_U5,
+    ability: ["phonics", "glyph"],
+    difficulty: 3,
+    audio_text: "蜿蜒",
+    options: [
+      { id: "a", text: "蜿蜒" },
+      { id: "b", text: "宛延", errorTag: "homophone_glyph" },
+      { id: "c", text: "蜿延", errorTag: "homophone_glyph" },
+      { id: "d", text: "婉蜒", errorTag: "homophone_glyph" },
+    ],
+    correct: "a",
+  }),
+  dictation({
+    id: "cn-u5-dict-004",
+    unit_id: U5,
+    skill_id: DICT_U5,
+    ability: ["phonics", "glyph"],
+    difficulty: 2,
+    audio_text: "石钟乳",
+    options: [
+      { id: "a", text: "石钟乳" },
+      { id: "b", text: "石钟孺", errorTag: "homophone_glyph" },
+      { id: "c", text: "石中乳", errorTag: "homophone_glyph" },
+      { id: "d", text: "石钟儒", errorTag: "homophone_glyph" },
+    ],
+    correct: "a",
+  }),
+  dictation({
+    id: "cn-u5-dict-005",
+    unit_id: U5,
+    skill_id: DICT_U5,
+    ability: ["phonics", "glyph"],
+    difficulty: 3,
+    audio_text: "镶了一道金边",
+    options: [
+      { id: "a", text: "镶了一道金边" },
+      { id: "b", text: "嵌了一道金边", errorTag: "homophone_glyph" },
+      { id: "c", text: "镶了一到金边", errorTag: "homophone_glyph" },
+      { id: "d", text: "镶了一道紧边", errorTag: "homophone_glyph" },
     ],
     correct: "a",
   }),

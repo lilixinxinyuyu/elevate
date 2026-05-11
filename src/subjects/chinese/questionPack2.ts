@@ -34,6 +34,10 @@ const PINYIN_U3 = "C4B_U3_PINYIN";
 const RHET_U3 = "C4B_U3_RHETORIC";
 const PINYIN_U4 = "C4B_U4_PINYIN";
 const VOCAB_U4 = "C4B_U4_VOCAB";
+const U5 = "C4B_U5_TRAVEL";
+const PINYIN_U5 = "C4B_U5_PINYIN";
+const VOCAB_U5 = "C4B_U5_VOCAB";
+const ORDER_U5 = "C4B_U5_ORDER";
 
 export const SEED_QUESTIONS_CHINESE_V2: Question[] = [
   // =================================================================
@@ -863,6 +867,96 @@ export const SEED_QUESTIONS_CHINESE_V2: Question[] = [
     ],
     correct: "d",
     solution: ['"辨别"是用力分开两者；"辩论"是争论。'],
+  }),
+
+  // =================================================================
+  // 第五单元（U5 · 游记）扩展题
+  // =================================================================
+
+  // 近义词 / 反义词
+  pickChoice({
+    id: "cn-u5-syn-001",
+    unit_id: U5,
+    skill_id: VOCAB_U5,
+    ability: ["vocabulary"],
+    difficulty: 2,
+    stem: '"昏暗"的反义词是？',
+    options: [
+      { id: "a", text: "明亮" },
+      { id: "b", text: "暗淡", errorTag: "synonym_picked" },
+      { id: "c", text: "灰暗", errorTag: "synonym_picked" },
+      { id: "d", text: "幽暗", errorTag: "synonym_picked" },
+    ],
+    correct: "a",
+    solution: ['"昏暗"= 光线暗。反义词为"明亮"。《双龙洞》写内洞"一团漆黑"——昏暗。'],
+  }),
+  pickChoice({
+    id: "cn-u5-syn-002",
+    unit_id: U5,
+    skill_id: VOCAB_U5,
+    ability: ["vocabulary"],
+    difficulty: 2,
+    stem: '"狭窄"的反义词是？',
+    options: [
+      { id: "a", text: "宽阔" },
+      { id: "b", text: "拥挤", errorTag: "synonym_picked" },
+      { id: "c", text: "细小", errorTag: "synonym_picked" },
+      { id: "d", text: "短小", errorTag: "wrong_meaning" },
+    ],
+    correct: "a",
+    solution: ["《双龙洞》外洞宽阔（可容千人开会）vs 孔隙狭窄（只容一只小船）。"],
+  }),
+
+  // 多音字
+  pickChoice({
+    id: "cn-u5-poly-001",
+    unit_id: U5,
+    skill_id: VOCAB_U5,
+    ability: ["phonics"],
+    difficulty: 3,
+    stem: '"调"读 tiáo 还是 diào？《海上日出》"溪声也时时变换调子"里读哪个？',
+    options: [
+      { id: "a", text: "diào（调子、曲调）" },
+      { id: "b", text: "tiáo（调整、调节）", errorTag: "polyphone_confusion" },
+      { id: "c", text: "tiāo", errorTag: "tone_confusion" },
+      { id: "d", text: "diáo", errorTag: "tone_confusion" },
+    ],
+    correct: "a",
+    solution: ['"调"是多音字：tiáo（调整 / 调节 / 调皮）/ diào（调子 / 调动 / 强调）。"变换调子"= 声音音调变化，读 diào。'],
+  }),
+
+  // 课内填空 / 课文原句
+  pickChoice({
+    id: "cn-u5-fill-001",
+    unit_id: U5,
+    skill_id: ORDER_U5,
+    ability: ["accumulation"],
+    difficulty: 3,
+    stem: '巴金《海上日出》的最后一句是：',
+    options: [
+      { id: "a", text: "这不是很伟大的奇观吗？" },
+      { id: "b", text: "这真是太阳的奇迹。", errorTag: "wrong_recall" },
+      { id: "c", text: "这真是壮丽的景象啊！", errorTag: "wrong_recall" },
+      { id: "d", text: "这一切让我感动。", errorTag: "wrong_recall" },
+    ],
+    correct: "a",
+    solution: ["反问句收尾，强烈表达赞美之情。是这篇文章必背的标志句。"],
+  }),
+  pickChoice({
+    id: "cn-u5-fill-002",
+    unit_id: U5,
+    skill_id: ORDER_U5,
+    ability: ["accumulation"],
+    difficulty: 3,
+    stem: '叶圣陶《记金华的双龙洞》开头"4 月 14 日，我在浙江金华，___"，横线处是？',
+    options: [
+      { id: "a", text: "游北山的双龙洞" },
+      { id: "b", text: "去游览了金华双龙洞", errorTag: "paraphrase" },
+      { id: "c", text: "参观了双龙洞", errorTag: "paraphrase" },
+      { id: "d", text: "记录了双龙洞之行", errorTag: "paraphrase" },
+    ],
+    correct: "a",
+    solution: ["游记开篇先交代时间、地点、人物，简洁明了。"],
   }),
 ];
 
