@@ -25,14 +25,21 @@ export function ShopCounterPanel(props: TemplateRenderProps) {
       window.setTimeout(() => setShakeStep(false), 450);
     }
     if (cursor + 1 >= steps.length) {
-      // 最终步决定整题对错。前面线索/关系出错只是"过程提示"，不再降级整题分。
-      // （Elevate 风格：答案算出来了就是对的，前面的小错记录在 errorTags 里给后续诊断用。）
-      onFinish({
-        answer: nextAnswers,
-        isCorrect: ok,
-        partialCorrect: false,
-        matchedErrorTags: nextTags,
-      });
+      // v0.31.98 修：最后一步也要 setStepOk + setCursor，让进度条最末一格也能
+      // 着 emerald/rose 色 → 短延迟让 render 一帧后再 onFinish unmount。
+      // 之前直接 onFinish 没 setStepOk → 进度条最后一格永远是 violet "当前步"色。
+      setStepOk(nextStepOk);
+      setAnswers(nextAnswers);
+      setTags(nextTags);
+      setCursor(cursor + 1);
+      window.setTimeout(() => {
+        onFinish({
+          answer: nextAnswers,
+          isCorrect: ok,
+          partialCorrect: false,
+          matchedErrorTags: nextTags,
+        });
+      }, 400);
     } else {
       setStepOk(nextStepOk);
       setAnswers(nextAnswers);

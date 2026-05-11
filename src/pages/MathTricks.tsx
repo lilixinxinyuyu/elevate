@@ -144,11 +144,14 @@ function TrickCard({
         result === "ok" &&
         trick.practice.every((_, i) => (i === idx ? true : next[i] === "ok"))
       ) {
+        // v0.31.98: 去掉 `if (!isComplete)` gate —— mastered trick 重做也要触发，
+        // 否则 8 个 trick 全 mastered 后今日打卡环永远闭不上（巧算 + 速算双闭死锁）。
+        // markDone 内部已正确区分"首次掌握 vs 今日复习"两路。
         if (!isComplete) {
           setCelebrating(true);
           setTimeout(() => setCelebrating(false), 2000);
-          onAllCorrect();
         }
+        onAllCorrect();
       }
       return next;
     });

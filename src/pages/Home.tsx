@@ -8,6 +8,10 @@ import { MascotProfile } from "../components/MascotProfile";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { isPhase2Live } from "../lib/featureFlags";
+import {
+  isMistakeRingClosedToday,
+  markMistakeRingClosedToday,
+} from "../lib/dailyMistakeRing";
 import { starsFromAccuracy } from "../lib/bossBattleState";
 import {
   checkPoolHealth,
@@ -62,6 +66,8 @@ function buildTodayRingsInput(args: {
   mistakesRevivedToday: number;
   /** v0.31.69：今日复活是否"顺利"（>70% 准确率 + 比 estimated 快 ≥20%） */
   reviveEncourageMore: boolean;
+  /** v0.31.98：今日错题环是否已 sticky-闭过（防 due 反复涨缩导致打卡回退） */
+  mistakeRingStickyDone: boolean;
   mastery: { skillId: string; score: number }[];
   mistakes: { resolved: boolean; nextReviewAt: number; questionId: string }[];
   streak: number;
@@ -110,13 +116,15 @@ function buildTodayRingsInput(args: {
   const bossStarDone = (args.todayBossStars ?? 0) >= 1;
   if (phase2 && !bossStarDone) {
     focus = { kind: "boss_star_today", starsToday: args.todayBossStars, target: 1 };
-  } else if (dueMistakes > 0 || args.mistakesRevivedToday > 0) {
+  } else if (dueMistakes > 0 || args.mistakesRevivedToday > 0 || args.mistakeRingStickyDone) {
     // v0.31.69: revivedToday > 0 也展示 mistakes_due（让闭环 / 鼓励文案能露出来）
+    // v0.31.98: stickyDone 时即使 due/revived 都 0 也展示这个 ring，保持 done=true
     focus = {
       kind: "mistakes_due",
       count: dueMistakes,
       revivedToday: args.mistakesRevivedToday,
       encourageMore: args.reviveEncourageMore,
+      stickyDone: args.mistakeRingStickyDone,
     };
   } else if (examDays >= 0 && examDays <= 14) {
     focus = { kind: "exam_countdown", examName: exam.name, days: examDays };
@@ -211,6 +219,13 @@ export function HomePage() {
     return await getReviveSessionVitality(student.id);
   }, [student?.id, attempts?.length]);
 
+  // v0.31.98：错题环今日是否已 sticky-闭过。一旦 mark 过永不回退（直到明天 0:00 自然失效）。
+  // useLiveQuery 监听 db.meta 变化，markMistakeRingClosedToday 写入后自动重渲染。
+  const mistakeRingStickyDone = useLiveQuery(async () => {
+    if (!student) return false;
+    return await isMistakeRingClosedToday(student.id);
+  }, [student?.id]);
+
   // v0.31.69: Home 加载时若到期错题超过上限 (15)，自动把多余的推到未来 7 天，
   // 让 Selena 不被一次性 76 道吓到。idempotent — spread 后 dueCount 降到 ≤ 10
   // 不再触发。
@@ -218,6 +233,22 @@ export function HomePage() {
     if (!student) return;
     void spreadOverflowDueMistakes(student.id);
   }, [student?.id]);
+
+  // v0.31.98：检测到当天首次"完成今日复活目标"时 mark sticky 闭环
+  // 之后即使 spread 把新题推回 → 不让 done 回退（明天 key 自动换日期失效）
+  const dueMistakesNow = (mistakes ?? []).filter(
+    (m) => !m.resolved && m.nextReviewAt <= Date.now(),
+  ).length;
+  const revivedNow = mistakesRevivedToday ?? 0;
+  useEffect(() => {
+    if (!student) return;
+    if (mistakeRingStickyDone) return; // 已 mark 过，跳过
+    const totalToday = dueMistakesNow + revivedNow;
+    const targetToday = Math.min(10, totalToday); // DAILY_REVIVE_TARGET
+    if (revivedNow >= targetToday && targetToday > 0) {
+      void markMistakeRingClosedToday(student.id);
+    }
+  }, [student?.id, mistakeRingStickyDone, dueMistakesNow, revivedNow]);
 
   // v0.31.58: 今日闯关获星总数 — 扫今日 mode=big_problems sessions 的 summary。
   // v0.31.86: 优先读 summary.bossStars（BossBattle 写入，含 hearts 信息）；
@@ -430,6 +461,7 @@ export function HomePage() {
           todayBossStars: todayBossStars ?? 0,
           mistakesRevivedToday: mistakesRevivedToday ?? 0,
           reviveEncourageMore: reviveVitality?.encourageMore ?? false,
+          mistakeRingStickyDone: mistakeRingStickyDone ?? false,
           todayCount: todayAttempts.length,
           challengeTarget: 15,
           mastery: mastery ?? [],

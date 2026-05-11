@@ -64,7 +64,18 @@ export interface TodayRingsInput {
      *  - encourageMore: 闭环后是否鼓励继续做（>70% accuracy + 比 estimated 快 ≥20%）
      * 闭环规则：revivedToday >= min(target, totalDueToday)；不再要求"清零所有"。
      */
-    | { kind: "mistakes_due"; count: number; revivedToday: number; encourageMore: boolean }
+    | {
+        kind: "mistakes_due";
+        count: number;
+        revivedToday: number;
+        encourageMore: boolean;
+        /**
+         * v0.31.98：今日是否曾经达成过闭环（持久化到 db.meta）。
+         * 用来防"早上闭过 → 下午 spread/新错题让 due 又涨 → done 回退"的回退 bug。
+         * 由 Home 计算后传入。
+         */
+        stickyDone: boolean;
+      }
     | { kind: "exam_countdown"; examName: string; days: number }
     | { kind: "all_done" }
     | { kind: "idle" };
@@ -384,11 +395,13 @@ function buildFocus(
       };
     }
     case "mistakes_due": {
-      // v0.31.69: 每日复活目标 = min(10, totalDueToday)。多余到期题已被
-      // spreadOverflowDueMistakes 推到未来 7 天，这里只算今日工作量。
+      // v0.31.69: 每日复活目标 = min(10, totalDueToday)。
+      // v0.31.98: stickyDone monotonic 防回退 —— 早上闭过的环不能因为 spread 推回
+      //   新题又涨 due 而被打回 false。stickyDone 由 db.meta 持久化（带日期 key）。
       const totalToday = f.count + f.revivedToday;
       const targetToday = Math.min(DAILY_REVIVE_TARGET, totalToday);
-      const done = f.revivedToday >= targetToday && targetToday > 0;
+      const dynamicDone = f.revivedToday >= targetToday && targetToday > 0;
+      const done = f.stickyDone || dynamicDone;
       const ratio = targetToday > 0 ? f.revivedToday / targetToday : 1;
       const statusText = (() => {
         if (totalToday === 0) return "今日已清";

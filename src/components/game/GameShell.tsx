@@ -675,9 +675,11 @@ function FeedbackPanel({
   // 标签：速度档位 / 重做递减 / 新知识点
   const labels: string[] = [];
   // v0.28.1：阶梯速度奖励显示
-  if (isCorrect && speedTier === "lightning") labels.push("⚡⚡ 闪电 +5");
-  else if (isCorrect && speedTier === "quick") labels.push("⚡ 迅速 +3");
-  else if (isCorrect && speedTier === "on_time") labels.push("✓ 及时 +2");
+  // v0.31.98：⚡ 数量跟 SpeedMatch gameplay 实时显示完全对齐
+  //   lightning ↔ 3⚡（gameplay tier 3） / quick ↔ 2⚡ / on_time ↔ 1⚡
+  if (isCorrect && speedTier === "lightning") labels.push("⚡⚡⚡ 闪电 +5");
+  else if (isCorrect && speedTier === "quick") labels.push("⚡⚡ 迅速 +3");
+  else if (isCorrect && speedTier === "on_time") labels.push("⚡ 及时 +2");
   else if (isCorrect && speedTier === "overdue") labels.push("⏰ 超时");
   else if (isCorrect && speedTier === "slow") labels.push("🐢 拖拉 -1");
   if (isCorrect && repeatDecay !== undefined && repeatDecay < 1.0 && repeatDecay > 0) {
@@ -707,11 +709,11 @@ function FeedbackPanel({
             <span
               key={i}
               className={`text-[11px] px-1.5 py-0.5 rounded-full font-normal ${
-                l.startsWith("⚡⚡")
+                l.startsWith("⚡⚡⚡")
                   ? "bg-cyan-400/30 text-cyan-100 border border-cyan-300/50 animate-pulse"
-                  : l.startsWith("⚡")
-                    ? "bg-violet-400/20 text-violet-100 border border-violet-300/40"
-                    : l.startsWith("✓")
+                  : l.startsWith("⚡⚡")
+                    ? "bg-violet-400/30 text-violet-100 border border-violet-300/50"
+                    : l.startsWith("⚡")
                       ? "bg-emerald-400/20 text-emerald-100 border border-emerald-300/40"
                       : l.startsWith("⏰") || l.startsWith("🐢")
                         ? "bg-rose-500/20 text-rose-200 border border-rose-400/40"

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TemplateRenderProps } from "../GameShell";
 import type { Question } from "../../../core/types";
+import { adjustedEstimatedTime } from "../../../core/timing";
 
 /**
  * 闪电匹配 — v0.31.90 跟 PlainChoice 视觉差异化：
@@ -36,16 +37,16 @@ export function SpeedMatchPanel(props: TemplateRenderProps) {
     return () => window.clearInterval(id);
   }, [question.question_id, locked, disabled]);
   const elapsedSec = (elapsedMs / 1000).toFixed(1);
-  // 速度阶梯（< 3s = 3⚡ / 3-6s = 2⚡ / 6-10s = 1⚡ / > 10s = 🐌）
-  // 配色相应递降：emerald → amber → orange → 灰
-  const speedTier =
-    elapsedMs < 3000
-      ? 3
-      : elapsedMs < 6000
-        ? 2
-        : elapsedMs < 10000
-          ? 1
-          : 0;
+  // v0.31.98：阶梯改用 ratio (elapsed / estimated)，跟 scoring.ts::speedBonus 完全对齐
+  //   →  ratio < 50%  → 3⚡ "闪电"  (lightning, +5)
+  //   →  ratio < 80%  → 2⚡ "迅速"  (quick, +3)
+  //   →  ratio ≤ 100% → 1⚡ "及时"  (on_time, +2)
+  //   →  ratio > 100% → 🐌 "超时"  (overdue/slow)
+  // 跟 GameShell 完成时显示的"⚡⚡⚡ 闪电 +5"等标签数量保持完全一致——
+  // gameplay 时实时看到的 ⚡ 数量 = 完成后拿到的 ⚡ 数量。
+  const estimatedSec = adjustedEstimatedTime(question);
+  const ratio = elapsedMs / Math.max(1000, estimatedSec * 1000);
+  const speedTier = ratio < 0.5 ? 3 : ratio < 0.8 ? 2 : ratio <= 1.0 ? 1 : 0;
   const speedIcon = speedTier === 0 ? "🐌" : "⚡".repeat(speedTier);
   const speedTierCls =
     speedTier === 3
@@ -61,8 +62,8 @@ export function SpeedMatchPanel(props: TemplateRenderProps) {
       : speedTier === 2
         ? "保持节奏"
         : speedTier === 1
-          ? "加把劲"
-          : "慢了…再想想";
+          ? "刚好赶上"
+          : "超时啦";
 
   const handlePick = (optId: string, ev: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled || lockedCorrect || locked) return;
