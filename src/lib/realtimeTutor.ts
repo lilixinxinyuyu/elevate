@@ -304,6 +304,38 @@ export class RealtimeTutor {
     this.setState("thinking");
   }
 
+  /**
+   * v0.31.108：让 AI 用 audio modality 朗读一段文字（Qwen TTS，Tina 音色）。
+   *
+   * 流程：push 一条 user text message → response.create({modalities: ["audio"]})
+   * 服务端会 stream PCM16 chunks，复用 queueAudioChunk 直接播放。
+   *
+   * 必须在 ready 状态调（推荐：评分轮 onAssistantTurnDone 后立刻 follow-up，
+   * 复用同一条 ws，免去重连 1-2s）。
+   *
+   * **prompt 约束**：调用前 systemPrompt 必须教过 AI"收到 text 消息时只朗读，不评论"
+   * （SpeakWordPanel 的 combined prompt 已包含这条）。
+   */
+  async speakUserText(text: string): Promise<void> {
+    if (this.state !== "ready") {
+      throw new Error(`cannot speak from state=${this.state}`);
+    }
+    this.assistantTextBuf = "";
+    this.send({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text }],
+      },
+    });
+    this.send({
+      type: "response.create",
+      response: { modalities: ["audio"] },
+    });
+    this.setState("thinking");
+  }
+
   /** 中断当前响应（如果 AI 还在说话）*/
   cancelResponse(): void {
     if (this.state === "thinking" || this.state === "speaking") {

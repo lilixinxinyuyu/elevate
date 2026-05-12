@@ -407,17 +407,24 @@ export interface SyncResult {
  *
  * 即使 pull 失败（网络抖动），仍然继续 push（本地优先策略）。
  */
-export async function pushToCloud(): Promise<SyncResult> {
+export async function pushToCloud(
+  opts: { skipPrePull?: boolean } = {},
+): Promise<SyncResult> {
   const pwd = getStoredPassword();
   if (!pwd) return { ok: false, error: "no_password" };
 
   // v0.29.6: pull-merge 防覆盖
   // v0.31.16: pullFromCloud 内部已经做 cleanupOrphanMistakes，这里 dump 出去
   // 的快照就不会再带着孤儿错题。
-  try {
-    await pullFromCloud({ force: true });
-  } catch (e) {
-    console.warn("[pushToCloud] pre-push pull failed (continuing anyway):", e);
+  //
+  // v0.31.108: 一次性数据清理（devCleanup.clearTodayEnglish）传 skipPrePull=true
+  // 避免 pull 把刚被删的 daily key 又合并回来 — 那种场景下"本地权威，覆盖远程"。
+  if (!opts.skipPrePull) {
+    try {
+      await pullFromCloud({ force: true });
+    } catch (e) {
+      console.warn("[pushToCloud] pre-push pull failed (continuing anyway):", e);
+    }
   }
 
   // v0.29.7: 上传前检查图片总大小，若超 5 MB 强制重新压缩
@@ -454,23 +461,49 @@ export async function pushToCloud(): Promise<SyncResult> {
     clientId: getClientId(),
   };
   let mainVersion: number | undefined;
+  // v0.31.109: CF Pages Functions 偶发 503（冷启动 / D1 临时不可用）。
+  // 重试 2 次，指数退避 500ms → 1500ms。401/400 等业务错误不重试。
+  const bodyStr = JSON.stringify({ payload, ...meta });
+  let lastErr: string | null = null;
   try {
-    const resp = await fetch("/api/sync/upload", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${pwd}`,
-      },
-      body: JSON.stringify({ payload, ...meta }),
-    });
-    if (resp.status === 401) return { ok: false, error: "unauthorized" };
-    if (!resp.ok) return { ok: false, error: `http_${resp.status}` };
-    const data = (await resp.json()) as { ok: boolean; version?: number };
-    if (!data.ok) return { ok: false, error: "server_error" };
-    if (data.version) {
-      setLastPushAt(data.version);
-      mainVersion = data.version;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, attempt === 1 ? 500 : 1500));
+      }
+      const resp = await fetch("/api/sync/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${pwd}`,
+        },
+        body: bodyStr,
+      });
+      if (resp.status === 401) return { ok: false, error: "unauthorized" };
+      if (resp.status === 400) {
+        const t = await resp.text().catch(() => "");
+        return { ok: false, error: `http_400: ${t.slice(0, 200)}` };
+      }
+      if (resp.status >= 500 && resp.status < 600) {
+        // 5xx → 可重试
+        lastErr = `http_${resp.status}`;
+        const detail = await resp.text().catch(() => "");
+        console.warn(
+          `[pushToCloud] attempt ${attempt + 1}/3 got ${resp.status}: ${detail.slice(0, 200)}`,
+        );
+        continue;
+      }
+      if (!resp.ok) return { ok: false, error: `http_${resp.status}` };
+      const data = (await resp.json()) as { ok: boolean; version?: number };
+      if (!data.ok) return { ok: false, error: "server_error" };
+      if (data.version) {
+        setLastPushAt(data.version);
+        mainVersion = data.version;
+      }
+      // 成功跳出 retry 循环
+      lastErr = null;
+      break;
     }
+    if (lastErr) return { ok: false, error: `${lastErr}_after_3_retries` };
   } catch (e) {
     return { ok: false, error: "network: " + (e as Error).message };
   }
@@ -535,14 +568,11 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
   }
 
   // v0.30.0: 拉 trophyImages（增量；force=true 时强制全量重拉）
-  if (opts.force) {
-    try {
-      localStorage.removeItem(TROPHY_LAST_PULL_KEY);
-      localStorage.removeItem(AI_QS_LAST_PULL_KEY);
-    } catch {
-      /* */
-    }
-  }
+  // v0.31.110: **不再重置 since=0** — 实测 trophy-images?since=0 返 17MB，每次
+  // pushToCloud 内部 force pull 都会触发 17MB 大响应 → CF Worker 偶发 503
+  // （worker 内存压力 / 并发限制 / response 序列化超 CPU time）。
+  // trophy 和 ai-questions 都是 union-by-id merge，本地新的永远不会被覆盖，
+  // force 时也只拉增量就够。需要真正"远程全量"时另写独立 admin 命令处理。
   try {
     const r = await pullTrophyImages();
     if (r.ok && r.pulled > 0) {

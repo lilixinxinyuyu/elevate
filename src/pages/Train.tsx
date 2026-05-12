@@ -24,6 +24,10 @@ import type { TrophyMeta } from "../lib/trophyImages";
 import { TROPHIES } from "../core/trophies";
 import { tierById } from "../core/tiers";
 import { CelebrationBurst, type BurstKind } from "../components/CelebrationBurst";
+import { ATELIER_REALMS, type AtelierRealmId } from "../content/atelier/realms";
+import { addInspiration, recordRealmCompletion } from "../lib/atelier/atelierProgress";
+import { MascotPIP } from "../components/atelier/MascotPIP";
+import type { MascotEmotion, MascotGesture } from "../components/Mascot3D";
 
 export function TrainPage() {
   const [params] = useSearchParams();
@@ -60,6 +64,14 @@ export function TrainPage() {
   //   - consecutiveWrong：连续答错计数（答对 reset 0），用于触发"鼓励"节点
   //   - manualBurst：显式触发其他节点（session_win），递增 nonce 即可
   const [consecutiveWrong, setConsecutiveWrong] = useState(0);
+
+  // v0.32.9 沙箱：工坊 session 才显示的 Mascot PIP 反应状态
+  const fromAtelierForPIP = params.get("fromAtelier") as AtelierRealmId | null;
+  const atelierRealmForPIP = fromAtelierForPIP ? ATELIER_REALMS.find((r) => r.id === fromAtelierForPIP) : null;
+  const [pipState, setPipState] = useState<{ gesture: MascotGesture; emotion: MascotEmotion; line?: string }>({
+    gesture: "idle",
+    emotion: "happy",
+  });
   const [manualBurst, setManualBurst] = useState<{ kind: BurstKind; nonce: number }>({
     kind: "first_correct",
     nonce: 0,
@@ -166,6 +178,32 @@ export function TrainPage() {
       } else {
         setConsecutiveWrong((w) => w + 1);
       }
+
+      // v0.32.9 工坊 PIP 反应（仅在 atelier session 时生效）
+      if (atelierRealmForPIP) {
+        if (result.isCorrect) {
+          const correctReactions: { gesture: MascotGesture; line: string }[] = [
+            { gesture: "thumbsUp", line: "棒！" },
+            { gesture: "wave", line: "对啦～" },
+            { gesture: "nod", line: "👏" },
+            { gesture: "cheer", line: "✨ Yes!" },
+          ];
+          const r = correctReactions[Math.floor(Math.random() * correctReactions.length)]!;
+          setPipState({ gesture: r.gesture, emotion: "happy", line: r.line });
+        } else {
+          const wrongReactions: { gesture: MascotGesture; emotion: MascotEmotion; line: string }[] = [
+            { gesture: "shake", emotion: "sad", line: "再想想？" },
+            { gesture: "nod", emotion: "confused", line: "差一点～" },
+            { gesture: "shake", emotion: "confused", line: "我们一起再看看" },
+          ];
+          const r = wrongReactions[Math.floor(Math.random() * wrongReactions.length)]!;
+          setPipState({ gesture: r.gesture, emotion: r.emotion, line: r.line });
+        }
+        // 2.5s 后 PIP 恢复 idle
+        setTimeout(() => {
+          setPipState({ gesture: "idle", emotion: "happy" });
+        }, 2500);
+      }
       return {
         points: outcome.points,
         repeatDecay: outcome.repeatDecay,
@@ -266,6 +304,16 @@ export function TrainPage() {
         if (effectiveMode === "mock_exam") {
           await recordMockExamCompleted(state.studentId);
         }
+        // v0.32.9: 沙箱版工坊 — 如果本次 session 从工坊启动，给灵感 + 记录 realm 完成
+        const fromAtelier = params.get("fromAtelier") as AtelierRealmId | null;
+        if (fromAtelier && ATELIER_REALMS.some((r) => r.id === fromAtelier)) {
+          const correct = summary.correct;
+          const total = summary.total;
+          const inspirationDelta = correct + (correct === total && total > 0 ? 3 : 0);
+          await addInspiration(inspirationDelta);
+          const stars: 1 | 2 | 3 = summary.accuracy >= 0.95 ? 3 : summary.accuracy >= 0.7 ? 2 : 1;
+          await recordRealmCompletion(fromAtelier, stars);
+        }
         setState({ status: "done", summary, studentId: state.studentId });
         // v0.31.71: session 完成 → 触发 session_win burst（在 SummaryView 出现前的"凯旋"瞬间）
         setManualBurst((b) => ({ kind: "session_win", nonce: b.nonce + 1 }));
@@ -325,6 +373,20 @@ export function TrainPage() {
   const question = state.questions[state.index]!;
   return (
     <>
+      {/* v0.32.9 工坊 session 顶部"回工坊"逃生入口（主路径 train 无 fromAtelier 时不显示） */}
+      {atelierRealmForPIP && (
+        <Link
+          to="/math/atelier"
+          className="fixed top-3 right-3 z-30 px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm border shadow-lg hover:scale-105 transition"
+          style={{
+            background: `linear-gradient(135deg, ${atelierRealmForPIP.accent.color}cc, ${atelierRealmForPIP.accent.color}77)`,
+            borderColor: atelierRealmForPIP.accent.color + "aa",
+            color: "#fff",
+          }}
+        >
+          🏠 回工坊
+        </Link>
+      )}
       <GameShell
         question={question}
         index={state.index}
@@ -347,11 +409,29 @@ export function TrainPage() {
         consecutiveWrong={consecutiveWrong}
         manualTrigger={manualBurst}
       />
+      {/* v0.32.9 工坊 session 才有 Mascot PIP — 答题时小进在右下角陪伴 + 答对/答错给反应 */}
+      {atelierRealmForPIP && (
+        <MascotPIP
+          gesture={pipState.gesture}
+          emotion={pipState.emotion}
+          outfit={atelierRealmForPIP.xiaojinOutfit}
+          skin={atelierRealmForPIP.xiaojinSkin}
+          line={pipState.line}
+          accent={atelierRealmForPIP.accent.color}
+        />
+      )}
     </>
   );
 }
 
 function SummaryView({ summary }: { summary: SessionSummary }) {
+  // v0.32.9 工坊沙箱：如果本次 session 是从 atelier 启动的，summary 卡片要给"回工坊"按钮
+  const [searchParams] = useSearchParams();
+  const fromAtelier = searchParams.get("fromAtelier") as AtelierRealmId | null;
+  const fromRealm = fromAtelier ? ATELIER_REALMS.find((r) => r.id === fromAtelier) : null;
+  const inspirationEarned = fromRealm
+    ? summary.correct + (summary.correct === summary.total && summary.total > 0 ? 3 : 0)
+    : 0;
   const [chestOpened, setChestOpened] = useState(false);
   const [showTierCelebration, setShowTierCelebration] = useState(
     !!summary.tierUpgrade,
@@ -619,6 +699,39 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* v0.32.9 沙箱：从工坊启动 → top banner 显示获得灵感 + 回工坊按钮 */}
+          {fromRealm && (
+            <div
+              className="card-glow border-2 mb-3"
+              style={{
+                borderColor: fromRealm.accent.color + "88",
+                background: `linear-gradient(135deg, ${fromRealm.accent.grad[0]}, ${fromRealm.accent.grad[1]})`,
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">{fromRealm.emoji}</div>
+                <div className="flex-1">
+                  <div className="font-display font-bold text-base text-slate-50">
+                    完成 {fromRealm.name} 探险！
+                  </div>
+                  <div className="text-xs text-slate-300 mt-0.5">
+                    小进给你 <span className="font-mono text-amber-300 font-bold">+{inspirationEarned}</span> 灵感
+                    {summary.correct === summary.total && summary.total > 0 && (
+                      <span className="text-amber-200 ml-2">（全对加 3 ✨）</span>
+                    )}
+                  </div>
+                </div>
+                <Link
+                  to={`/math/atelier?just=${inspirationEarned}&realm=${fromRealm.id}`}
+                  className="btn-primary text-sm px-3 py-1.5 shrink-0"
+                  style={{ background: `linear-gradient(135deg, ${fromRealm.accent.color}, ${fromRealm.accent.color}cc)` }}
+                >
+                  🏠 回工坊
+                </Link>
+              </div>
             </div>
           )}
 

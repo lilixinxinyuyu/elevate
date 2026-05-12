@@ -23,9 +23,10 @@ import { ReportsPanel } from "../components/ReportsPanel";
 // v0.31.88: 周报 + 试玩台 改为 admin 内 tab（nav 上不再露面）
 import { ReportPage } from "./Report";
 import { PlaygroundPage } from "./Playground";
+import { AtelierAdminPanel } from "../components/atelier/AtelierAdminPanel";
 import type { Question } from "../core/types";
 
-type AdminTab = "bank" | "report" | "sync" | "assets" | "playground" | "system";
+type AdminTab = "bank" | "report" | "sync" | "assets" | "playground" | "system" | "atelier";
 
 // v0.31.55: hash → tab 映射，支持老的 deep link
 const HASH_TO_TAB: Record<string, AdminTab> = {
@@ -38,6 +39,7 @@ const HASH_TO_TAB: Record<string, AdminTab> = {
   "system": "system",
   "report": "report",
   "playground": "playground",
+  "atelier": "atelier",
 };
 
 export function AdminPage() {
@@ -143,6 +145,7 @@ export function AdminPage() {
             { id: "sync", label: "☁️ 同步 / 备份" },
             { id: "assets", label: "🎨 资源生成" },
             { id: "playground", label: "🧪 试玩台" },
+            { id: "atelier", label: "🏠 工坊沙箱" },
             { id: "system", label: "🛠️ 系统" },
           ] as { id: AdminTab; label: string }[]
         ).map((t) => (
@@ -323,6 +326,13 @@ export function AdminPage() {
       {tab === "playground" && (
         <div className="pt-2">
           <PlaygroundPage />
+        </div>
+      )}
+
+      {/* ============ 工坊沙箱 — v0.32.9 ============ */}
+      {tab === "atelier" && (
+        <div className="pt-2">
+          <AtelierAdminPanel />
         </div>
       )}
 

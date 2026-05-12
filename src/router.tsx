@@ -23,6 +23,12 @@ import { BossWorldPage } from "./pages/BossWorld";
 import { BossBattlePage } from "./pages/BossBattle";
 import { VoiceTestPage } from "./pages/VoiceTest";
 import { Mascot3DTestPage } from "./pages/Mascot3DTest";
+import { ParadisePage } from "./pages/paradise/ParadisePage";
+import { AtelierHomePage } from "./pages/atelier/AtelierHomePage";
+import { AtelierRealmPage } from "./pages/atelier/AtelierRealmPage";
+import { TownHomePage } from "./pages/town/TownHomePage";
+import { BankPage } from "./pages/town/BankPage";
+import { BuildingStubPage } from "./pages/town/BuildingStubPage";
 import { MascotComparePage } from "./pages/MascotCompare";
 import { MathTricksPage } from "./pages/MathTricks";
 import { PlaygroundPage } from "./pages/Playground";
@@ -146,7 +152,18 @@ export const router = createBrowserRouter([
       { path: "playground", element: <MathOnlyRoute><PlaygroundPage /></MathOnlyRoute> },
       { path: "voice-test", element: <MathOnlyRoute><VoiceTestPage /></MathOnlyRoute> },
       { path: "mascot3d", element: <MathOnlyRoute><Mascot3DTestPage /></MathOnlyRoute> },
+      // v0.31.113: 知识乐园 3D 探索世界（paradise-1 + Selena VRM + 红熊猫 follower）
+      { path: "paradise", element: <MathOnlyRoute><ParadisePage /></MathOnlyRoute> },
       { path: "mascot-compare", element: <MathOnlyRoute><MascotComparePage /></MathOnlyRoute> },
+      // v0.32.9: 小进的星海工坊（沙箱实验，独立路径，跟主路径完全隔离）
+      { path: "atelier", element: <MathOnlyRoute><AtelierHomePage /></MathOnlyRoute> },
+      { path: "atelier/realm/:id", element: <MathOnlyRoute><AtelierRealmPage /></MathOnlyRoute> },
+      // v0.32.10: 小镇（沙箱实验，超越 atelier 的 3D 城市方向）
+      { path: "town", element: <MathOnlyRoute><TownHomePage /></MathOnlyRoute> },
+      { path: "town/bank", element: <MathOnlyRoute><BankPage /></MathOnlyRoute> },
+      { path: "town/bus-stop", element: <MathOnlyRoute><BuildingStubPage /></MathOnlyRoute> },
+      { path: "town/shop", element: <MathOnlyRoute><BuildingStubPage /></MathOnlyRoute> },
+      { path: "town/school", element: <MathOnlyRoute><BuildingStubPage /></MathOnlyRoute> },
       { path: "admin", element: <AdminRoute /> },
       // v0.31.39：语文写字表 250 字练习
       { path: "char-practice", element: <CharPracticeRoute /> },

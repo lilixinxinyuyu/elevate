@@ -41,13 +41,15 @@ export function EnglishHomePage() {
       setCurrentTerm((s.currentTerm as Term) ?? "下册");
       const p = await loadVocabProgress(s.id);
       const [vd, spd, snd] = await Promise.all([
-        loadDaily("english_vocab", s.id, 10),
-        loadDaily("english_speak", s.id, 3),
+        loadDaily("english_vocab", s.id, 15),
+        loadDaily("english_speak", s.id, 5),
         loadDaily("english_sentences", s.id, 3),
       ]);
-      // v0.31.107：3 环目标统一（之前 SentencePractice/VocabPractice 默认 target
-      // 已经存进 db.meta，loadDaily 不会覆盖。这里强制对齐成新目标 10/3/3）
-      const TARGETS = { vocab: 10, speak: 3, sentence: 3 };
+      // v0.31.108：3 环目标按记忆曲线估算 — G4B 下册 112 词，6-7 周到期末（~49 天）：
+      //   vocab 15/天 × 49 = 735 词次 ÷ 112 词 = **每词 ~6.5 次见面**（间隔重现达 85-90% 掌握）
+      //   speak 5/天 = 4-5 句正好对应 Krashen 输出阈值（不会累）
+      //   sentence 3/天 × 49 = 147 次 ÷ 30 短句库 = 每句 ~5 次，整合输出足够
+      const TARGETS = { vocab: 15, speak: 5, sentence: 3 };
       const aligned = await Promise.all([
         vd.target === TARGETS.vocab
           ? vd

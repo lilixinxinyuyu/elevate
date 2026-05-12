@@ -1,16 +1,19 @@
 /**
- * v0.31.104 英语朗读判分 panel — **走 wss realtime 路径**（跟数学小进同一条路）。
+ * v0.31.109 英语朗读判分 panel — 双策略（跟数学讲题同款）：
+ *   - **wss realtime**（qwen3.5-omni-flash-realtime）→ 录音评分（streaming 转写+JSON 评分）
+ *   - **HTTP /api/tts/generate**（qwen3-tts-instruct-flash Cherry → cosyvoice → ...）
+ *     → AI 反馈+示范单词的朗读（mp3 blob 播放，自然女声）
  *
- * v0.31.103 第一版用 /api/tutor/voice HTTP path，但那条路 Free Tier 已 403
- * 全废（TutorPanel.tsx 注释里写过）。数学小进现行 working path 是
- * wss → selena-tutor-realtime Worker → wss dashscope realtime endpoint。
+ * v0.31.108 试过让 wss 同一条连接里 push user input_text 再 audio response，
+ * 但实测 omni realtime 对中途切 modalities/角色不友好（朗读员指令被忽略，仍输 text）。
+ * 改回简单方案：评分走 wss，朗读走 HTTP — 跟数学讲题"对话用 wss / 朗读用 HTTP TTS"
+ * 一致，最稳。
  *
- * 单次判分流程：
- *   1. connect → session.update (text-only modalities, judge prompt with target)
- *   2. user 按下录音 → startRecording (PCM16 24kHz 流式 append)
- *   3. user 松开 → stopAndRespond → commit + response.create(["text"])
- *   4. onAssistantTurnDone(fullText) → parse JSON → 返回 { score, transcript, feedback }
- *   5. close 释放 ws
+ * 流程：
+ *   1. connect wss → session.update (judge prompt, text-only)
+ *   2. user 录音 → 评分 → parse → close wss
+ *   3. **HTTP `/api/tts/generate`** 朗读 feedback (Cherry zh) → 等 mp3 played
+ *   4. **HTTP `/api/tts/generate`** 朗读 target × 3 (Cherry en) → 等 mp3 played
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -21,9 +24,9 @@ import {
 import {
   isTtsOn,
   setTtsOn,
-  speakChinese,
   speakEnglish,
 } from "../../lib/englishVocabProgress";
+import { speakText } from "../../lib/tts";
 
 const REALTIME_URL =
   (import.meta as unknown as { env: { VITE_REALTIME_URL?: string } }).env
@@ -59,6 +62,31 @@ function buildJudgePrompt(target: string, mode: "word" | "sentence"): string {
 转写：apple
 评分：88
 反馈：a 元音再饱满一点就更准了`;
+}
+
+/**
+ * v0.31.109：评分完后用 HTTP TTS 朗读反馈+示范单词。
+ *
+ * Qwen3-TTS Cherry voice 支持中英文混读（G4 简单词没问题）。
+ * 一段 mp3 含全部文字（feedback 中文 + 3 遍 target 英文），减少请求数。
+ */
+async function speakFeedbackAndTarget(feedback: string, target: string): Promise<void> {
+  // 用 ". " 分隔确保 Cherry 切换语言时语调对（不要全连成一句）
+  const composed = `${feedback}。 ${target}. ${target}. ${target}.`;
+  try {
+    const audio = await speakText(composed, { voice: "Cherry" });
+    // speakText 返回的 audio 已经 play() 过；等 ended 让 caller 知道完成
+    await new Promise<void>((resolve) => {
+      const onEnd = () => resolve();
+      audio.addEventListener("ended", onEnd, { once: true });
+      audio.addEventListener("error", onEnd, { once: true });
+      // 兜底超时（30s）防 ended 不触发
+      window.setTimeout(onEnd, 30000);
+    });
+  } catch (e) {
+    console.warn("[SpeakWordPanel] HTTP TTS failed, browser fallback:", e);
+    throw e;
+  }
 }
 
 /**
@@ -180,8 +208,7 @@ export function SpeakWordPanel({
           serverUrl: REALTIME_URL,
           password: pwd,
           systemPrompt: buildJudgePrompt(target, mode),
-          // **关键**：判分只要文字（JSON），不要 audio 输出——省时间 + 避免 Tina
-          // 读 JSON 字符串
+          // 判分默认要文字（按 3 行 parse）；朗读时单独传 audio
           responseModalities: ["text"],
         },
         {
@@ -191,26 +218,27 @@ export function SpeakWordPanel({
           onAssistantTurnDone: (full) => {
             const text = full || accumulatedTextRef.current;
             const parsed = parseJudgeJSON(text);
+            // 评分一拿到马上关 ws（HTTP TTS 是独立路径）
+            try { tutor.close(); } catch { /* */ }
+            tutorRef.current = null;
             if (parsed) {
               setResult(parsed);
               setPhase("result");
               onScore(parsed.score, parsed.transcript, parsed.feedback);
-              // v0.31.107：TTS 开关 on 时自动朗读反馈（中文）+ 接着读正确单词（英文）
+              // v0.31.109：HTTP /api/tts/generate 朗读反馈 + 单词×3（Qwen3-TTS Cherry，自然女声）
               if (parsed.feedback && isTtsOn()) {
-                speakChinese(parsed.feedback);
-                // 反馈完后接读正确发音，间隔 ~等中文长度估算
-                const delay = Math.max(1500, parsed.feedback.length * 200);
-                window.setTimeout(() => {
-                  if (isTtsOn()) speakEnglish(target);
-                }, delay);
+                speakFeedbackAndTarget(parsed.feedback, target).catch(() => {
+                  // HTTP TTS 全 fail（含 browser fallback 内 speakText 已处理）→ 再兜底一次
+                  try {
+                    speakEnglish(target, { force: true });
+                  } catch { /* */ }
+                });
               }
             } else {
               const raw = text.trim().slice(0, 200) || "(空)";
               setError(`没解析出评分。AI 说："${raw}"——请告诉 Claude 调 prompt`);
               setPhase("error");
             }
-            try { tutor.close(); } catch { /* */ }
-            tutorRef.current = null;
           },
           onState: (s: RealtimeState) => {
             // 把 lib 状态映射到 panel phase（已有 phase 时不覆盖）

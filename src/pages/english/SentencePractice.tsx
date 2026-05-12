@@ -44,7 +44,7 @@ export function SentencePracticePage() {
   useEffect(() => {
     if (!studentId) return;
     void (async () => {
-      const d = await loadDaily("english_sentences", studentId, 10);
+      const d = await loadDaily("english_sentences", studentId, 3);
       setDaily(d);
     })();
   }, [studentId]);
@@ -221,7 +221,7 @@ function SpeakModePanel({
           // v0.31.107：朗读 ≥70 分计入 english_speak daily（喂朗读环）
           if (score >= 70 && studentId) {
             void (async () => {
-              const cur = await loadDaily("english_speak", studentId, 3);
+              const cur = await loadDaily("english_speak", studentId, 5);
               await tickDaily("english_speak", studentId, cur);
             })();
           }

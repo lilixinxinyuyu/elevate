@@ -508,6 +508,29 @@ export function HomePage() {
         </div>
       )}
 
+      {/* v0.31.113: 知识乐园 3D 探险入口 */}
+      <Link
+        to="/math/paradise"
+        className="card-glow block bg-gradient-to-br from-emerald-500/25 via-sky-500/20 to-violet-500/20 border-emerald-400/40 hover:scale-[1.01] transition-transform"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-4xl">🌍</div>
+          <div className="flex-1">
+            <div className="font-display font-bold text-emerald-100 text-base">
+              知识乐园 · 3D 探险
+            </div>
+            <div className="text-xs text-slate-300 mt-0.5">
+              跟小番一起冒险 · 走近发光柱进入数学 / 英语 / 语文 / 火山挑战
+            </div>
+            <div className="text-[11px] text-emerald-300/80 mt-1">
+              WASD 走动 · 触屏摇杆 · 第三人称 camera
+            </div>
+          </div>
+          <div className="text-emerald-300 text-2xl">→</div>
+        </div>
+      </Link>
+
+
       {/* ROI #1：红旗 skill 提示（连错 3+ 次）— v0.31.19 改"让小进帮忙" */}
       {struggleSkills.length > 0 && (
         <section className="card-glow border-rose-400/50 bg-gradient-to-br from-rose-500/15 to-amber-500/10">

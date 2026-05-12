@@ -113,7 +113,7 @@ export function VocabPracticePage() {
         setTimeout(() => setMigratedToast(null), 5000);
       }
       const p = await loadVocabProgress(s.id);
-      const d = await loadDaily("english_vocab", s.id, 20);
+      const d = await loadDaily("english_vocab", s.id, 15);
       if (cancelled) return;
       setProgress(p);
       setDaily(d);
@@ -348,7 +348,7 @@ export function VocabPracticePage() {
             // v0.31.107：朗读 ≥70 分独立计入 english_speak daily（喂朗读环）
             if (isCorrect && studentId) {
               void (async () => {
-                const cur = await loadDaily("english_speak", studentId, 3);
+                const cur = await loadDaily("english_speak", studentId, 5);
                 await tickDaily("english_speak", studentId, cur);
               })();
             }

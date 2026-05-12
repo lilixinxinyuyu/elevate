@@ -15,7 +15,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { RealtimeTutor, type RealtimeState } from "../lib/realtimeTutor";
 import { getStoredPassword } from "../db/cloudSync";
-import type { MascotSkin } from "../components/Mascot3D";
+import type { MascotSkin, MascotView, MascotGesture, MascotEmotion, MascotOutfit } from "../components/Mascot3D";
 
 const Mascot3D = lazy(() => import("../components/Mascot3D"));
 
@@ -33,6 +33,10 @@ const SKIN_OPTIONS: { id: MascotSkin; label: string; lockLv?: number }[] = [
 export function Mascot3DTestPage() {
   const [skin, setSkin] = useState<MascotSkin>("default");
   const [spin, setSpin] = useState(false);
+  const [view, setView] = useState<MascotView>("portrait");
+  const [gesture, setGesture] = useState<MascotGesture>("idle");
+  const [emotion, setEmotion] = useState<MascotEmotion>("neutral");
+  const [outfit, setOutfit] = useState<MascotOutfit>("default");
   const [realtimeState, setRealtimeState] = useState<RealtimeState>("idle");
   const [audioLevel, setAudioLevel] = useState(0);
   const tutorRef = useRef<RealtimeTutor | null>(null);
@@ -154,39 +158,169 @@ export function Mascot3DTestPage() {
       {/* 3D 视口 */}
       <div className="rounded-2xl overflow-hidden border border-violet-400/30 bg-gradient-to-b from-ink-900 to-ink-950 h-[420px] sm:h-[520px]">
         <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-slate-400">加载 3D…</div>}>
-          <Mascot3D audioLevel={audioLevel} skin={skin} spin={spin} />
+          <Mascot3D
+            audioLevel={audioLevel}
+            skin={skin}
+            spin={spin}
+            view={view}
+            gesture={gesture}
+            emotion={emotion}
+            outfit={outfit}
+          />
         </Suspense>
       </div>
 
-      {/* Skin 切换 */}
-      <div className="card space-y-2">
-        <div className="text-xs text-slate-400">Skin（实测调试，不受等级限制）</div>
-        <div className="flex flex-wrap gap-2">
-          {SKIN_OPTIONS.map((opt) => (
+      {/* Skin / 视角 / 动作 控制台 */}
+      <div className="card space-y-3">
+        {/* Skin 行 */}
+        <div className="space-y-1.5">
+          <div className="text-xs text-slate-400">等级形态（Skin）</div>
+          <div className="flex flex-wrap gap-2">
+            {SKIN_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setSkin(opt.id)}
+                className={`chip text-xs px-3 py-1.5 ${
+                  skin === opt.id
+                    ? "bg-violet-500/40 text-violet-50 border border-violet-300/60"
+                    : "bg-white/5 text-slate-300 border border-white/10 hover:bg-violet-500/15"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 视角 + 旋转 行 */}
+        <div className="space-y-1.5">
+          <div className="text-xs text-slate-400">视角</div>
+          <div className="flex flex-wrap gap-2">
+            {(["portrait", "full"] as MascotView[]).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={`chip text-xs px-3 py-1.5 ${
+                  view === v
+                    ? "bg-cyan-500/30 text-cyan-50 border border-cyan-300/60"
+                    : "bg-white/5 text-slate-300 border border-white/10 hover:bg-cyan-500/15"
+                }`}
+              >
+                {v === "portrait" ? "🪞 头肩特写" : "🕴️ 全身"}
+              </button>
+            ))}
             <button
-              key={opt.id}
               type="button"
-              onClick={() => setSkin(opt.id)}
+              onClick={() => setSpin((v) => !v)}
               className={`chip text-xs px-3 py-1.5 ${
-                skin === opt.id
-                  ? "bg-violet-500/40 text-violet-50 border border-violet-300/60"
-                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-violet-500/15"
+                spin
+                  ? "bg-emerald-500/30 text-emerald-100 border border-emerald-300/60"
+                  : "bg-white/5 text-slate-300 border border-white/10 hover:bg-emerald-500/15"
               }`}
             >
-              {opt.label}
+              🔄 自动旋转 {spin ? "ON" : "OFF"}
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setSpin((v) => !v)}
-            className={`chip text-xs px-3 py-1.5 ${
-              spin
-                ? "bg-emerald-500/30 text-emerald-100 border border-emerald-300/60"
-                : "bg-white/5 text-slate-300 border border-white/10 hover:bg-emerald-500/15"
-            }`}
-          >
-            🔄 自动旋转 {spin ? "ON" : "OFF"}
-          </button>
+          </div>
+        </div>
+
+        {/* 动作 行 */}
+        <div className="space-y-1.5">
+          <div className="text-xs text-slate-400">动作（点了播一次后自动回 idle）</div>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: "idle", label: "🧍 idle" },
+                { id: "wave", label: "👋 挥手" },
+                { id: "nod", label: "🙂 点头" },
+                { id: "shake", label: "🙅 摇头" },
+                { id: "point", label: "👉 指题目" },
+                { id: "thumbsUp", label: "👍 棒棒" },
+                { id: "cheer", label: "🎉 欢呼" },
+                { id: "clap", label: "👏 拍手" },
+                { id: "dance", label: "💃 跳舞" },
+              ] as { id: MascotGesture; label: string }[]
+            ).map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => {
+                  setGesture(g.id);
+                  // 非 idle 动作后自动回 idle —— 跟 Mascot3D 最长 GESTURE_DUR (wave=3.6s) 对齐
+                  if (g.id !== "idle") {
+                    setTimeout(() => setGesture("idle"), 3600);
+                  }
+                }}
+                className={`chip text-xs px-3 py-1.5 ${
+                  gesture === g.id
+                    ? "bg-rose-500/30 text-rose-50 border border-rose-300/60"
+                    : "bg-white/5 text-slate-300 border border-white/10 hover:bg-rose-500/15"
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 衣服 outfit 行 —— 从另一个 VRM 把 cloth+body mesh 移植到 Xiaojin 脸上 */}
+        <div className="space-y-1.5">
+          <div className="text-xs text-slate-400">衣服（Xiaojin 的脸保留，只换身体上的衣服 / 配饰）</div>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: "default", label: "👧 校服" },
+                { id: "sandi", label: "👗 小礼服" },
+                { id: "zhou", label: "🐱 中国风+猫耳" },
+                { id: "mint", label: "👗 白短款" },
+                { id: "ren", label: "👘 白旗袍" },
+              ] as { id: MascotOutfit; label: string }[]
+            ).map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => setOutfit(o.id)}
+                className={`chip text-xs px-3 py-1.5 ${
+                  outfit === o.id
+                    ? "bg-fuchsia-500/30 text-fuchsia-50 border border-fuchsia-300/60"
+                    : "bg-white/5 text-slate-300 border border-white/10 hover:bg-fuchsia-500/15"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 表情 行 */}
+        <div className="space-y-1.5">
+          <div className="text-xs text-slate-400">表情（持续状态）</div>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: "neutral", label: "😐 中性" },
+                { id: "happy", label: "😊 开心" },
+                { id: "sad", label: "😢 难过" },
+                { id: "surprised", label: "😲 惊讶" },
+                { id: "confused", label: "🤔 困惑" },
+                { id: "angry", label: "😠 生气" },
+              ] as { id: MascotEmotion; label: string }[]
+            ).map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => setEmotion(e.id)}
+                className={`chip text-xs px-3 py-1.5 ${
+                  emotion === e.id
+                    ? "bg-amber-500/30 text-amber-50 border border-amber-300/60"
+                    : "bg-white/5 text-slate-300 border border-white/10 hover:bg-amber-500/15"
+                }`}
+              >
+                {e.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
