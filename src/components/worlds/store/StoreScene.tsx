@@ -211,10 +211,10 @@ function BakeryDecor() {
         ))}
       </group>
 
-      {/* 柜台上面包堆（KayKit buns / cheese） */}
-      <KayMesh url={`${KAY_RB}/food_ingredient_bun.gltf`} position={[-0.5, 1.02, -0.5]} scale={1.2} />
-      <KayMesh url={`${KAY_RB}/food_ingredient_bun.gltf`} position={[-0.3, 1.02, -0.55]} scale={1.1} rotationY={Math.PI / 4} />
-      <KayMesh url={`${KAY_RB}/food_ingredient_cheese.gltf`} position={[0.6, 1.02, -0.55]} scale={1.1} />
+      {/* 柜台上面包堆（KayKit buns / cheese） — scale 大幅缩小（v0.32.29 fix） */}
+      <KayMesh url={`${KAY_RB}/food_ingredient_bun.gltf`} position={[-0.5, 1.02, -0.5]} scale={0.4} />
+      <KayMesh url={`${KAY_RB}/food_ingredient_bun.gltf`} position={[-0.3, 1.02, -0.55]} scale={0.35} rotationY={Math.PI / 4} />
+      <KayMesh url={`${KAY_RB}/food_ingredient_cheese.gltf`} position={[0.6, 1.02, -0.55]} scale={0.38} />
 
       <Sign label="🥖 甜心面包店" color="#ec4899" />
     </group>
