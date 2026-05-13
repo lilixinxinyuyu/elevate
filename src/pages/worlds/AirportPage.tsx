@@ -86,7 +86,7 @@ export function AirportPage() {
         <directionalLight position={[3, 4, 2]} intensity={1.3} color="#fff5da" />
         <pointLight position={[0, 2.5, -1]} intensity={0.5} color="#06b6d4" />
 
-        <StoreEnvironment />
+        <StoreEnvironment variant="airport" />
 
         {phase === "loading" && (
           <AirportMiniGame

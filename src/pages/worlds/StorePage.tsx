@@ -104,7 +104,7 @@ export function StorePage() {
         <pointLight position={[0, 2.5, -1]} intensity={0.6} color="#fbbf24" />
 
         {/* 背景：柜台+地板+装饰；WorldsCanvas 顶层 Suspense 接管 loading */}
-        <StoreEnvironment />
+        <StoreEnvironment variant="store" />
 
         {(phase === "scan" || phase === "change") && (
           <StoreMiniGame

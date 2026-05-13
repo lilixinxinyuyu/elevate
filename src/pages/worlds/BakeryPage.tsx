@@ -89,7 +89,7 @@ export function BakeryPage() {
         <directionalLight position={[3, 4, 2]} intensity={1.3} color="#fff5da" />
         <pointLight position={[0, 2.5, -1]} intensity={0.7} color="#fda4af" />
 
-        <StoreEnvironment />
+        <StoreEnvironment variant="bakery" />
 
         {phase === "slicing" && (
           <BakeryMiniGame

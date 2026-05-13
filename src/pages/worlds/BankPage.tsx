@@ -92,7 +92,7 @@ export function BankPage() {
         <directionalLight position={[3, 4, 2]} intensity={1.2} color="#fff5da" />
         <pointLight position={[0, 2.5, -1]} intensity={0.5} color="#60a5fa" />
 
-        <StoreEnvironment />
+        <StoreEnvironment variant="bank" />
 
         {phase === "exchange" && (
           <BankMiniGame
