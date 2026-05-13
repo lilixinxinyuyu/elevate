@@ -18,6 +18,8 @@ import { formatYuan } from "../../lib/worlds/storeOrders";
 import { incrementBuildingComplete } from "../../lib/worlds/worldsProgress";
 import { MascotPIP } from "../../components/atelier/MascotPIP";
 import { useMascotReaction, type MascotMood } from "../../lib/worlds/useMascotReaction";
+import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
+import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
 
 type Phase = "intro" | "exchange";
 
@@ -41,6 +43,8 @@ export function BankPage() {
         ? "welcome"
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#3b82f6" });
+  // v0.32.12：反馈层
+  const { trigger, pulses } = useWorldFeedback();
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -48,10 +52,12 @@ export function BankPage() {
     setJustCompleted(true);
     window.setTimeout(() => setJustCompleted(false), 1800);
     if (newCount >= BANK_ORDERS.length) {
+      trigger("complete", "+5 XP · 银行客人都满意！");
       await incrementBuildingComplete("bank");
       setShowReward(true);
       window.setTimeout(() => navigate("/worlds/baibao"), 2800);
     } else {
+      trigger("correct", `${newCount}/${BANK_ORDERS.length} 单完成`);
       setOrderIdx(newCount);
       setPhase("intro");
     }
@@ -118,6 +124,8 @@ export function BankPage() {
         line={mascotProps.line}
         accent={mascotProps.accent}
       />
+
+      <WorldFeedbackOverlay pulses={pulses} />
     </div>
   );
 }

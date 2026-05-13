@@ -15,6 +15,8 @@ import { AIRPORT_ORDERS, type AirportOrder, LUGGAGE } from "../../lib/worlds/air
 import { incrementBuildingComplete } from "../../lib/worlds/worldsProgress";
 import { MascotPIP } from "../../components/atelier/MascotPIP";
 import { useMascotReaction, type MascotMood } from "../../lib/worlds/useMascotReaction";
+import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
+import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
 
 type Phase = "intro" | "loading";
 
@@ -38,6 +40,8 @@ export function AirportPage() {
         ? "welcome"
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#06b6d4" });
+  // v0.32.12：反馈层
+  const { trigger, pulses } = useWorldFeedback();
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -45,10 +49,12 @@ export function AirportPage() {
     setJustCompleted(true);
     window.setTimeout(() => setJustCompleted(false), 1800);
     if (newCount >= AIRPORT_ORDERS.length) {
+      trigger("complete", "+5 XP · 旅客顺利登机！");
       await incrementBuildingComplete("airport");
       setShowReward(true);
       window.setTimeout(() => navigate("/worlds/xingfan"), 2800);
     } else {
+      trigger("correct", `${newCount}/${AIRPORT_ORDERS.length} 单完成`);
       setOrderIdx(newCount);
       setPhase("intro");
     }
@@ -111,6 +117,8 @@ export function AirportPage() {
         line={mascotProps.line}
         accent={mascotProps.accent}
       />
+
+      <WorldFeedbackOverlay pulses={pulses} />
     </div>
   );
 }

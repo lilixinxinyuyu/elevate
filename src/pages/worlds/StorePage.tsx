@@ -23,6 +23,8 @@ import {
 import { incrementBuildingComplete } from "../../lib/worlds/worldsProgress";
 import { MascotPIP } from "../../components/atelier/MascotPIP";
 import { useMascotReaction, type MascotMood } from "../../lib/worlds/useMascotReaction";
+import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
+import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
 
 export function StorePage() {
   const navigate = useNavigate();
@@ -48,6 +50,9 @@ export function StorePage() {
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#f59e0b" });
 
+  // v0.32.12：统一反馈层（声 + 震 + 闪 + 文案）
+  const { trigger, pulses } = useWorldFeedback();
+
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
     setCompletedCount(newCount);
@@ -55,12 +60,14 @@ export function StorePage() {
     window.setTimeout(() => setJustCompleted(false), 1800);
     if (newCount >= ORDERS.length) {
       // 3 单完成 → 入库 + 奖励 + 回地图
+      trigger("complete", "+5 XP · 客人都满意！");
       await incrementBuildingComplete("store");
       setShowReward(true);
       window.setTimeout(() => {
         navigate("/worlds/baibao");
       }, 2800);
     } else {
+      trigger("correct", `${newCount}/${ORDERS.length} 单完成`);
       // 进入下一单 intro
       setOrderIdx(newCount);
       setPhase("intro");
@@ -145,6 +152,9 @@ export function StorePage() {
         line={mascotProps.line}
         accent={mascotProps.accent}
       />
+
+      {/* v0.32.12：反馈层 overlay */}
+      <WorldFeedbackOverlay pulses={pulses} />
     </div>
   );
 }

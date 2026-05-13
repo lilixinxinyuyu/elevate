@@ -15,6 +15,8 @@ import { BAKERY_ORDERS, type BakeryOrder } from "../../lib/worlds/bakeryOrders";
 import { incrementBuildingComplete } from "../../lib/worlds/worldsProgress";
 import { MascotPIP } from "../../components/atelier/MascotPIP";
 import { useMascotReaction, type MascotMood } from "../../lib/worlds/useMascotReaction";
+import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
+import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
 
 type Phase = "intro" | "slicing";
 
@@ -38,6 +40,8 @@ export function BakeryPage() {
         ? "welcome"
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#ec4899" });
+  // v0.32.12：反馈层
+  const { trigger, pulses } = useWorldFeedback();
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -45,10 +49,12 @@ export function BakeryPage() {
     setJustCompleted(true);
     window.setTimeout(() => setJustCompleted(false), 1800);
     if (newCount >= BAKERY_ORDERS.length) {
+      trigger("complete", "+5 XP · 客人都满意！");
       await incrementBuildingComplete("bakery");
       setShowReward(true);
       window.setTimeout(() => navigate("/worlds/baibao"), 2800);
     } else {
+      trigger("correct", `${newCount}/${BAKERY_ORDERS.length} 单完成`);
       setOrderIdx(newCount);
       setPhase("intro");
     }
@@ -111,6 +117,8 @@ export function BakeryPage() {
         line={mascotProps.line}
         accent={mascotProps.accent}
       />
+
+      <WorldFeedbackOverlay pulses={pulses} />
     </div>
   );
 }
