@@ -449,7 +449,8 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
                     label="数学易错 skill"
                     items={math.topWrongSkills.slice(0, 5).map((s) => ({
                       text: s.name,
-                      detail: `${s.wrong}/${s.total}`,
+                      // v0.32.20：爸爸要求"做 X 道错 Y 道"格式，比 X/Y 更直白给老师
+                      detail: `做${s.total}错${s.wrong}`,
                       isToday: true,
                     }))}
                     color="violet"
