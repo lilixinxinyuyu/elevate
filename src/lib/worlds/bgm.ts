@@ -136,11 +136,15 @@ function makeCtx(): AudioContext | null {
 }
 
 export function isBgmMuted(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") return true;
   try {
-    return localStorage.getItem(MUTE_KEY) === "true";
+    // v0.32.27：默认 muted（爸爸反馈当前合成 BGM 难听）。
+    // 用户主动点 🔊 才开 — localStorage 显式存 "false" 时才不静音。
+    const v = localStorage.getItem(MUTE_KEY);
+    if (v === null) return true; // 首次访问默认静音
+    return v === "true";
   } catch {
-    return false;
+    return true;
   }
 }
 
