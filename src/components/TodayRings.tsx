@@ -77,6 +77,18 @@ export interface TodayRingsInput {
         stickyDone: boolean;
       }
     | { kind: "exam_countdown"; examName: string; days: number }
+    /**
+     * v0.32.11：知识点复习环 — 当没错题但有连错 skill 时显示。
+     *   - skillsToReview: 今天还没碰过的连错 skill（点击跳第一个去练）
+     *   - practicedToday / total: 今日已碰几个 / struggle 总数，算 progress
+     * done = practicedToday >= total
+     */
+    | {
+        kind: "skill_review";
+        skillsToReview: { skillId: string; skillName: string }[];
+        practicedToday: number;
+        total: number;
+      }
     | { kind: "all_done" }
     | { kind: "idle" };
 }
@@ -442,6 +454,35 @@ function buildFocus(
         hue2: amber2,
         done: false,
       };
+    case "skill_review": {
+      // v0.32.11: 连错 skill 复习环。
+      const done = f.total > 0 && f.practicedToday >= f.total;
+      const firstToReview = f.skillsToReview[0];
+      const progress =
+        f.total > 0 ? Math.max(0.1, f.practicedToday / f.total) : 0;
+      const statusText = (() => {
+        if (done) return `今日已复习 ✓（${f.total} 个）`;
+        if (f.practicedToday > 0)
+          return `复习 ${f.practicedToday}/${f.total} 个`;
+        if (firstToReview) return `去练 ${firstToReview.skillName}`;
+        return `${f.total} 个知识点待复习`;
+      })();
+      const to = firstToReview
+        ? `/math/train?skillId=${encodeURIComponent(firstToReview.skillId)}&fresh=${Date.now()}`
+        : "/math/skills";
+      return {
+        id: "focus",
+        icon: done ? "✨" : "📖",
+        shortLabel: "知识点复习",
+        longLabel: "知识点复习",
+        progress: done ? 1 : progress,
+        statusText,
+        to,
+        hue: amber1,
+        hue2: amber2,
+        done,
+      };
+    }
     case "all_done":
       return {
         id: "focus",

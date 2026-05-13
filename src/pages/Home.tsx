@@ -21,6 +21,7 @@ import {
   getMockExamCooldown,
   getReviveSessionVitality,
   getSelectedTerm,
+  getSkillsNeedingReviewToday,
   getStruggleSkills,
   getUnlockedTiers,
   setEquippedBadge,
@@ -68,6 +69,12 @@ function buildTodayRingsInput(args: {
   reviveEncourageMore: boolean;
   /** v0.31.98：今日错题环是否已 sticky-闭过（防 due 反复涨缩导致打卡回退） */
   mistakeRingStickyDone: boolean;
+  /** v0.32.11：今日待复习 struggle skill（焦点环 fallback 用） */
+  skillsNeedingReview: {
+    toReview: { skillId: string; skillName: string; consecutiveWrong: number }[];
+    practicedToday: number;
+    total: number;
+  };
   mastery: { skillId: string; score: number }[];
   mistakes: { resolved: boolean; nextReviewAt: number; questionId: string }[];
   streak: number;
@@ -107,16 +114,19 @@ function buildTodayRingsInput(args: {
   const exam = currentExam();
   const examDays = daysUntil(exam.date);
 
-  // v0.31.59: 优先级重排（爸爸反馈第三环显示了错题复活，期望看到闯关赢星）
-  //   1. Phase 2 + 今日还没拿到 boss 星 → 闯关赢星（默认每日打卡，强动机）
-  //   2. 错题到期（仅当今日 boss 星已拿，作为下一件该做的事）
-  //   3. 考试 ≤14 天倒计时
-  //   4. Phase 2 + 已拿星 → 仍显示 boss_star_today (done 状态)
+  // v0.32.11: 爸爸要求换回错题优先 + 中间插入 skill 复习层。
+  //   1. 错题复活：有 due / revived / sticky
+  //   2. skill 复习：有连错 skill 还没在今天碰过（看 service.getSkillsNeedingReviewToday）
+  //   3. 考试倒计：≤14 天
+  //   4. 闯关赢星（Phase 2 默认）
   //   5. all_done / idle 兜底
   const bossStarDone = (args.todayBossStars ?? 0) >= 1;
-  if (phase2 && !bossStarDone) {
-    focus = { kind: "boss_star_today", starsToday: args.todayBossStars, target: 1 };
-  } else if (dueMistakes > 0 || args.mistakesRevivedToday > 0 || args.mistakeRingStickyDone) {
+  const hasMistakeContext =
+    dueMistakes > 0 ||
+    args.mistakesRevivedToday > 0 ||
+    args.mistakeRingStickyDone;
+  const hasSkillToReview = args.skillsNeedingReview.total > 0;
+  if (hasMistakeContext) {
     // v0.31.69: revivedToday > 0 也展示 mistakes_due（让闭环 / 鼓励文案能露出来）
     // v0.31.98: stickyDone 时即使 due/revived 都 0 也展示这个 ring，保持 done=true
     focus = {
@@ -126,8 +136,17 @@ function buildTodayRingsInput(args: {
       encourageMore: args.reviveEncourageMore,
       stickyDone: args.mistakeRingStickyDone,
     };
+  } else if (hasSkillToReview) {
+    focus = {
+      kind: "skill_review",
+      skillsToReview: args.skillsNeedingReview.toReview,
+      practicedToday: args.skillsNeedingReview.practicedToday,
+      total: args.skillsNeedingReview.total,
+    };
   } else if (examDays >= 0 && examDays <= 14) {
     focus = { kind: "exam_countdown", examName: exam.name, days: examDays };
+  } else if (phase2 && !bossStarDone) {
+    focus = { kind: "boss_star_today", starsToday: args.todayBossStars, target: 1 };
   } else if (phase2) {
     focus = { kind: "boss_star_today", starsToday: args.todayBossStars, target: 1 };
   } else if (challengeDone && fluencyTodayCount >= 1) {
@@ -212,6 +231,13 @@ export function HomePage() {
     if (!student) return 0;
     return await getTricksTodayCount(student.id);
   }, [student?.id]);
+
+  // v0.32.11: 今日"待复习 skill" — 连错 skill 中今天还没碰过的。
+  // focus 环优先级（爸爸要求）：错题 > skill 复习 > 闯关赢星。
+  const skillsNeedingReview = useLiveQuery(async () => {
+    if (!student) return { toReview: [], practicedToday: 0, total: 0 };
+    return await getSkillsNeedingReviewToday(student.id);
+  }, [student?.id, attempts?.length]);
 
   // v0.31.69: 今日复活"顺利度"——决定闭环后是否鼓励继续做。
   const reviveVitality = useLiveQuery(async () => {
@@ -462,6 +488,7 @@ export function HomePage() {
           mistakesRevivedToday: mistakesRevivedToday ?? 0,
           reviveEncourageMore: reviveVitality?.encourageMore ?? false,
           mistakeRingStickyDone: mistakeRingStickyDone ?? false,
+          skillsNeedingReview: skillsNeedingReview ?? { toReview: [], practicedToday: 0, total: 0 },
           todayCount: todayAttempts.length,
           challengeTarget: 15,
           mastery: mastery ?? [],

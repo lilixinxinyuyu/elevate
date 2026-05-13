@@ -1172,6 +1172,52 @@ export async function getStruggleSkills(studentId: string): Promise<{
 }
 
 /* ============================================================
+   v0.32.11：今日"待复习 skill" — struggleSkills 中今天还没碰过的。
+   ------------------------------------------------------------
+   爸爸要求：今日打卡第 3 环若没有错题复活，要换成 "skill 复习"
+   驱动 Selena 去再练那些连错的 skill。
+   返回值带"今日已碰几个 / 共几个" 用于 ring progress 显示。
+   ============================================================ */
+export async function getSkillsNeedingReviewToday(studentId: string): Promise<{
+  toReview: { skillId: string; skillName: string; consecutiveWrong: number }[];
+  practicedToday: number;
+  total: number;
+}> {
+  const struggle = await getStruggleSkills(studentId);
+  if (struggle.length === 0) {
+    return { toReview: [], practicedToday: 0, total: 0 };
+  }
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startMs = startOfToday.getTime();
+  const todayAttempts = await db.attempts
+    .where("studentId")
+    .equals(studentId)
+    .filter((a) => a.createdAt >= startMs)
+    .toArray();
+  const touchedToday = new Set(
+    todayAttempts.map((a) => a.skillId).filter(Boolean),
+  );
+  const struggleIds = new Set(struggle.map((s) => s.skillId));
+  let practiced = 0;
+  for (const id of touchedToday) {
+    if (struggleIds.has(id)) practiced += 1;
+  }
+  const toReview = struggle
+    .filter((s) => !touchedToday.has(s.skillId))
+    .map((s) => ({
+      skillId: s.skillId,
+      skillName: s.skillName,
+      consecutiveWrong: s.consecutiveWrong,
+    }));
+  return {
+    toReview,
+    practicedToday: practiced,
+    total: struggle.length,
+  };
+}
+
+/* ============================================================
    ROI 改进 #2：考试模拟 — 周节流
    ------------------------------------------------------------
    保证 mock_exam 一周一次（前一次完成至少 6 天后才能再开）。

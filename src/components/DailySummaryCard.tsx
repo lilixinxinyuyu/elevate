@@ -27,6 +27,7 @@ import { db } from "../db/dexie";
 import { SKILLS } from "../content/skills";
 import { G4A_CHARS, G4B_CHARS, G4_CHARS_ALL } from "../subjects/chinese/charLibrary";
 import { loadDailyLog } from "../lib/dailyActivityLog";
+import { getSkillsNeedingReviewToday } from "../db/service";
 import { termToSemester } from "./TermSwitcher";
 import type { Term } from "../core/types";
 import type { MasteryStat } from "../lib/masteryTier";
@@ -88,6 +89,13 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
 
   // 数学：attempts + fluency + tutor + mistakes 今日
   const math = useLiveQuery(async () => buildMathSummary(studentId), [studentId]);
+
+  // v0.32.11：今日数学待复习 skill（连错 ≥3 + 今日还没碰过）
+  // 没有就不显示这个 section
+  const mathToReview = useLiveQuery(
+    async () => getSkillsNeedingReviewToday(studentId),
+    [studentId],
+  );
 
   // 中文/英文：daily log（含 wrongItems）
   const chineseDaily = useLiveQuery(
@@ -278,6 +286,37 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             color="cyan"
           />
         </div>
+
+        {/* v0.32.11：数学待复习 skill — 连错 ≥3 + 今日还没碰过；有则显示，无则跳过 */}
+        {mathToReview && mathToReview.toReview.length > 0 && (
+          <section className="space-y-2">
+            <SectionTitle
+              icon="🔁"
+              title={`数学待复习（${mathToReview.practicedToday}/${mathToReview.total}）`}
+            />
+            <div className="rounded-xl border px-3 py-2 bg-rose-500/10 border-rose-400/25 text-rose-100">
+              <div className="flex items-center gap-1.5 mb-1 whitespace-nowrap">
+                <span className="text-sm leading-none">🚩</span>
+                <span className="text-[11px] font-bold opacity-90">
+                  这些知识点连错了，今天还没复习
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {mathToReview.toReview.slice(0, 6).map((s) => (
+                  <span
+                    key={s.skillId}
+                    className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
+                  >
+                    <span>{s.skillName}</span>
+                    <span className="text-[10px] opacity-60 tabular-nums ml-0.5">
+                      连错{s.consecutiveWrong}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* 今日错字 / 错词 / 数学易错 — 老师辅导抓手 */}
         {(chineseWrongToday.length > 0 ||
