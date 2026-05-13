@@ -27,6 +27,13 @@ export function ParadisePage() {
   const { state: controls, setJoystick } = usePlayerControls();
   const [nearPortal, setNearPortal] = useState<SkillPortalDef | null>(null);
   const [showHint, setShowHint] = useState(true);
+  const [canvasReady, setCanvasReady] = useState(false);
+  // 红熊猫延迟加载（先让场景 + 主角出来，再加 sidekick）
+  const [showPanda, setShowPanda] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setShowPanda(true), 1500);
+    return () => window.clearTimeout(id);
+  }, []);
 
   // 进 page 6 秒后自动隐藏 WASD 提示（玩过一次就别再提示）
   useEffect(() => {
@@ -59,7 +66,18 @@ export function ParadisePage() {
       style={{ zIndex: 50 }}
     >
       <Canvas
-        camera={{ position: [0, 5, 10], fov: 80, near: 0.1, far: 500 }}
+        // 初始 camera 直接 set 到玩家身后 lookAt 玩家头部高度 — 不要等 ChaseCamera
+        // 的 setInterval snap (200ms 期间用户看到的是 default lookAt -Z 全是天空)
+        camera={{ position: [0, 5, 12], fov: 80, near: 0.1, far: 500 }}
+        onCreated={({ camera, gl }) => {
+          camera.lookAt(0, 1.2, 2);
+          // 第一次 WebGL 渲染完毕后隐藏加载遮罩
+          // requestAnimationFrame 等到下一帧（确保 R3F render 已发生）
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => setCanvasReady(true));
+          });
+          void gl;
+        }}
         shadows={false}
         dpr={[1, 2]}
         gl={{ antialias: true, powerPreference: "high-performance" }}
@@ -92,10 +110,14 @@ export function ParadisePage() {
           <PlayerVRM ref={playerRef} controls={controls} initialPosition={[0, 0, 2]} />
         </Suspense>
 
-        {/* === Red Panda follower (optional, Suspense fallback = null) === */}
-        <Suspense fallback={null}>
-          <RedPandaFollower playerRef={playerRef} walking={controls.walking} />
-        </Suspense>
+        {/* === Red Panda follower (optional, Suspense fallback = null) ===
+            v0.31.119: 延迟 1.5s 挂载，避免 useLoader 一进场就并发拉 8 个 OBJ
+            阻塞 main thread，把 Selena + 场景遮黑 */}
+        {showPanda && (
+          <Suspense fallback={null}>
+            <RedPandaFollower playerRef={playerRef} walking={controls.walking} />
+          </Suspense>
+        )}
 
         {/* === Skill portals === */}
         <SkillPortals playerRef={playerRef} onNearPortal={setNearPortal} />
@@ -103,6 +125,9 @@ export function ParadisePage() {
         {/* === Camera === */}
         <ChaseCamera playerRef={playerRef} />
       </Canvas>
+
+      {/* ===== Loading overlay (Canvas 第一帧 paint 后淡出) ===== */}
+      <ParadiseLoadingOverlay hide={canvasReady} />
 
       {/* ===== HUD ===== */}
       <ParadiseHUD
@@ -124,6 +149,33 @@ function PlayerPlaceholder() {
       <cylinderGeometry args={[0.25, 0.3, 1.5, 16]} />
       <meshStandardMaterial color="#a78bfa" roughness={0.6} />
     </mesh>
+  );
+}
+
+/**
+ * 加载遮罩：3 秒内必显示，让用户知道游戏在加载（VRM 11MB+OBJ 多份 fetch
+ * 在弱网下可能要 10+ 秒，全黑屏太吓人）
+ */
+function ParadiseLoadingOverlay({ hide }: { hide: boolean }) {
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+      style={{
+        zIndex: 70,
+        background:
+          "radial-gradient(circle at center, rgba(135,206,235,0.0) 30%, rgba(135,206,235,0.75) 100%)",
+        opacity: hide ? 0 : 1,
+        visibility: hide ? "hidden" : "visible",
+        transition: "opacity 0.6s ease-out, visibility 0.6s",
+      }}
+    >
+      <div className="flex flex-col items-center gap-3">
+        <div className="text-5xl animate-bounce">🌍</div>
+        <div className="px-4 py-2 rounded-xl bg-black/40 text-white text-sm font-bold backdrop-blur-md border border-white/20 shadow-lg">
+          知识乐园加载中...
+        </div>
+      </div>
+    </div>
   );
 }
 
