@@ -27,7 +27,7 @@ import { db } from "../db/dexie";
 import { SKILLS } from "../content/skills";
 import { G4A_CHARS, G4B_CHARS, G4_CHARS_ALL } from "../subjects/chinese/charLibrary";
 import { loadDailyLog } from "../lib/dailyActivityLog";
-import { getSkillsNeedingReviewToday } from "../db/service";
+import { getFragileSkillsToReview } from "../db/service";
 import { termToSemester } from "./TermSwitcher";
 import type { Term } from "../core/types";
 import type { MasteryStat } from "../lib/masteryTier";
@@ -132,10 +132,11 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
   // 数学：attempts + fluency + tutor + mistakes 今日
   const math = useLiveQuery(async () => buildMathSummary(studentId), [studentId]);
 
-  // v0.32.11：今日数学待复习 skill（连错 ≥3 + 今日还没碰过）
-  // 没有就不显示这个 section
-  const mathToReview = useLiveQuery(
-    async () => getSkillsNeedingReviewToday(studentId),
+  // v0.32.18：数学"待复习" skill — 跟 /math/skills 页面 fragile tag 一致
+  //   判定: score>0 且 (最近 5 题错 ≥3 OR >21 天没碰)
+  //   爸爸明确：报告里要这些 fragile 的 skill，不是"连错 3+"那批
+  const mathFragile = useLiveQuery(
+    async () => getFragileSkillsToReview(studentId),
     [studentId],
   );
 
@@ -329,80 +330,102 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           />
         </div>
 
-        {/* v0.32.16：错题复活 — 今日已复活/待复活任一>0 都显示，文案带两边数据 */}
-        {math && (math.mistakesDueToday > 0 || math.mistakeRevived > 0) && (
-          <section className="space-y-2">
-            <SectionTitle
-              icon="🪄"
-              title={`错题复活（已复活 ${math.mistakeRevived} · 待复活 ${math.mistakesDueToday}）`}
-            />
-            <div className="rounded-xl border px-3 py-2 bg-amber-500/10 border-amber-400/25 text-amber-100">
-              {math.mistakesDueToday > 0 ? (
-                <>
-                  <div className="flex items-center gap-1.5 mb-1 whitespace-nowrap">
-                    <span className="text-sm leading-none">⏰</span>
-                    <span className="text-[11px] font-bold opacity-90">
-                      到期还要她再做一遍
-                    </span>
-                  </div>
-                  {math.mistakesDueBySkill.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {math.mistakesDueBySkill.map((s) => (
-                        <span
-                          key={s.skillId}
-                          className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
-                        >
-                          <span>{s.name}</span>
-                          <span className="text-[10px] opacity-60 tabular-nums ml-0.5">
-                            ×{s.count}
-                          </span>
+        {/* v0.32.18：错题复活
+            - 待复活 1-9 道：列出 skill chip
+            - 待复活 = 0 + 已复活 > 0：显示"今日错题已清"
+            - 待复活 > 9：隐藏（爸爸要求：">9 道题就隐藏起来"，避免压力大）
+            - 全 0：不显示
+         */}
+        {math &&
+          (() => {
+            const due = math.mistakesDueToday;
+            const revived = math.mistakeRevived;
+            const showDueChips = due > 0 && due <= 9;
+            const showCleared = due === 0 && revived > 0;
+            if (!showDueChips && !showCleared) return null;
+            return (
+              <section className="space-y-2">
+                <SectionTitle
+                  icon="🪄"
+                  title={`错题复活（已复活 ${revived}${showDueChips ? ` · 待复活 ${due}` : ""}）`}
+                />
+                <div className="rounded-xl border px-3 py-2 bg-amber-500/10 border-amber-400/25 text-amber-100">
+                  {showDueChips ? (
+                    <>
+                      <div className="flex items-center gap-1.5 mb-1 whitespace-nowrap">
+                        <span className="text-sm leading-none">⏰</span>
+                        <span className="text-[11px] font-bold opacity-90">
+                          到期还要她再做一遍
                         </span>
-                      ))}
-                    </div>
+                      </div>
+                      {math.mistakesDueBySkill.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {math.mistakesDueBySkill.map((s) => (
+                            <span
+                              key={s.skillId}
+                              className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
+                            >
+                              <span>{s.name}</span>
+                              <span className="text-[10px] opacity-60 tabular-nums ml-0.5">
+                                ×{s.count}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[12px] opacity-80">
+                          共 {due} 道（跨多个 skill）
+                        </div>
+                      )}
+                    </>
                   ) : (
-                    <div className="text-[12px] opacity-80">
-                      共 {math.mistakesDueToday} 道（跨多个 skill）
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span className="text-sm leading-none">🎉</span>
+                      <span className="text-[12px] font-bold opacity-95">
+                        今日错题已清完（共复活 {revived} 道）
+                      </span>
                     </div>
                   )}
-                </>
-              ) : (
-                <div className="flex items-center gap-1.5 whitespace-nowrap">
-                  <span className="text-sm leading-none">🎉</span>
-                  <span className="text-[12px] font-bold opacity-95">
-                    今日错题已清完（共复活 {math.mistakeRevived} 道）
-                  </span>
                 </div>
-              )}
-            </div>
-          </section>
-        )}
+              </section>
+            );
+          })()}
 
-        {/* v0.32.11：数学待复习 skill — 连错 ≥3 + 今日还没碰过；有则显示，无则跳过 */}
-        {mathToReview && mathToReview.toReview.length > 0 && (
+        {/* v0.32.18：数学"待复习" skill — 跟 /math/skills 页面 fragile tag 同步
+            判定: score>0 且 (最近 5 题错 ≥3 OR >21 天没碰)；没有就不显示 */}
+        {mathFragile && mathFragile.length > 0 && (
           <section className="space-y-2">
             <SectionTitle
               icon="🔁"
-              title={`数学待复习（${mathToReview.practicedToday}/${mathToReview.total}）`}
+              title={`数学待复习 skill（${mathFragile.length} 个）`}
             />
             <div className="rounded-xl border px-3 py-2 bg-rose-500/10 border-rose-400/25 text-rose-100">
               <div className="flex items-center gap-1.5 mb-1 whitespace-nowrap">
-                <span className="text-sm leading-none">🚩</span>
+                <span className="text-sm leading-none">⚠️</span>
                 <span className="text-[11px] font-bold opacity-90">
-                  这些知识点连错了，今天还没复习
+                  分数被压低，做对几道就能恢复
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {mathToReview.toReview.slice(0, 6).map((s) => (
-                  <span
-                    key={s.skillId}
-                    className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
-                  >
-                    <span>{s.skillName}</span>
-                    <span className="text-[10px] opacity-60 tabular-nums ml-0.5">
-                      连错{s.consecutiveWrong}
+                {mathFragile.slice(0, 12).map((s) => {
+                  const detail =
+                    s.reason === "wrong"
+                      ? `近5错${s.recent5Wrong}`
+                      : s.reason === "stale"
+                        ? `${s.daysSince}天未练`
+                        : `近5错${s.recent5Wrong} · ${s.daysSince}天未练`;
+                  return (
+                    <span
+                      key={s.skillId}
+                      className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
+                    >
+                      <span>{s.skillName}</span>
+                      <span className="text-[10px] opacity-60 tabular-nums ml-0.5">
+                        {detail}
+                      </span>
                     </span>
-                  </span>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </section>

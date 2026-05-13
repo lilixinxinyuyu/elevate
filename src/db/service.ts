@@ -1172,6 +1172,65 @@ export async function getStruggleSkills(studentId: string): Promise<{
 }
 
 /* ============================================================
+   v0.32.18：脆弱 skill（/math/skills 页面"待复习"tag）— 跟 SkillsConstellation
+   的 fragile 判定一致。
+   ------------------------------------------------------------
+   爸爸 v0.32.18 反馈：报告卡之前用 getSkillsNeedingReviewToday（连错 3+），
+   不是他要的"待复习"。他要的是 SkillsConstellation 的 fragile tag。
+   判定: score > 0 且 (最近 5 题错 ≥3 OR >21 天没碰)
+   ============================================================ */
+const FRAGILE_STALE_DAYS = 21;
+const FRAGILE_RECENT_WRONG_THRESHOLD = 3;
+
+export async function getFragileSkillsToReview(studentId: string): Promise<
+  { skillId: string; skillName: string; reason: "stale" | "wrong" | "both"; daysSince?: number; recent5Wrong?: number }[]
+> {
+  const masteries = await db.mastery
+    .where({ studentId })
+    .filter((m) => (m.subjectId ?? "math") === "math")
+    .toArray();
+  const now = Date.now();
+  const out: {
+    skillId: string;
+    skillName: string;
+    reason: "stale" | "wrong" | "both";
+    daysSince?: number;
+    recent5Wrong?: number;
+  }[] = [];
+  for (const m of masteries) {
+    const score = m.score ?? 0;
+    if (score <= 0) continue;
+    const recent5 = (m.recent ?? []).slice(-5);
+    const last5Wrong = recent5.filter((r) => !r.correct).length;
+    const daysSinceSuccess = m.lastSuccessAt
+      ? (now - m.lastSuccessAt) / 86_400_000
+      : Infinity;
+    const stale = daysSinceSuccess > FRAGILE_STALE_DAYS;
+    const wrong = last5Wrong >= FRAGILE_RECENT_WRONG_THRESHOLD;
+    if (!stale && !wrong) continue;
+    const skill = SKILL_MAP.get(m.skillId);
+    if (!skill) continue;
+    out.push({
+      skillId: m.skillId,
+      skillName: skill.name,
+      reason: stale && wrong ? "both" : stale ? "stale" : "wrong",
+      daysSince: stale && Number.isFinite(daysSinceSuccess)
+        ? Math.round(daysSinceSuccess)
+        : undefined,
+      recent5Wrong: wrong ? last5Wrong : undefined,
+    });
+  }
+  // 排序：wrong 优先（最近答错）→ stale（很久没碰）
+  const order: Record<"wrong" | "both" | "stale", number> = {
+    wrong: 0,
+    both: 1,
+    stale: 2,
+  };
+  out.sort((a, b) => order[a.reason] - order[b.reason]);
+  return out;
+}
+
+/* ============================================================
    v0.32.11：今日"待复习 skill" — struggleSkills 中今天还没碰过的。
    ------------------------------------------------------------
    爸爸要求：今日打卡第 3 环若没有错题复活，要换成 "skill 复习"
