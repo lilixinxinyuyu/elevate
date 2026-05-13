@@ -16,6 +16,7 @@
  */
 
 import { db } from "../db/dexie";
+import { schedulePushToCloud } from "../db/cloudSync";
 
 export interface DailyLogEntry {
   /** 今日答对次数（同一字答多次也算多次） */
@@ -76,4 +77,7 @@ export async function recordDailyActivity(
         : [...curWrong.slice(-49), item],
   };
   await db.meta.put({ key: key(subjectId, studentId), value: next });
+  // v0.32.15：daily_log 也走 schedulePushToCloud，跟 vocab/char 进度一致
+  //   原来只有 recordVocabAttempt 顺带推；中文/数学场景就漏了
+  schedulePushToCloud();
 }

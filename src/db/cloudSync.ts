@@ -362,6 +362,72 @@ async function applyPayloadMerged(payload: SnapshotPayload): Promise<void> {
             if (rTs > lTs) await db.meta.put(r);
             continue;
           }
+          // v0.32.15: 字词进度字典（english_vocab_progress / chinese_char_progress）
+          //   value: Record<word, MasteryStat>，MasteryStat 有 lastSeenAt 字段
+          //   按 word 级 deep merge：每个 word 取 lastSeenAt 更新的那条
+          //   修了 v0.32.10 前的跨设备同步 bug — A 设备答的英语 word，B 设备 pull 永远拿不到
+          if (
+            (r.key.startsWith("english_vocab_progress::") ||
+              r.key.startsWith("chinese_char_progress::")) &&
+            r.value &&
+            local.value &&
+            typeof r.value === "object" &&
+            typeof local.value === "object" &&
+            !Array.isArray(r.value) &&
+            !Array.isArray(local.value)
+          ) {
+            const remoteMap = r.value as Record<
+              string,
+              { lastSeenAt?: number } | undefined
+            >;
+            const localMap = local.value as Record<
+              string,
+              { lastSeenAt?: number } | undefined
+            >;
+            const merged: Record<string, unknown> = { ...localMap };
+            let changed = false;
+            for (const [k, remoteVal] of Object.entries(remoteMap)) {
+              if (!remoteVal) continue;
+              const localVal = localMap[k];
+              const rTs = remoteVal?.lastSeenAt ?? 0;
+              const lTs = localVal?.lastSeenAt ?? 0;
+              if (!localVal || rTs > lTs) {
+                merged[k] = remoteVal;
+                changed = true;
+              }
+            }
+            if (changed) await db.meta.put({ key: r.key, value: merged });
+            continue;
+          }
+          // v0.32.15: daily_log:: key — 跨设备 max(right) + max(wrong) + union(items, wrongItems)
+          //   原 fallthrough 也是丢同步。max 是保守策略（不漏字数）
+          if (
+            r.key.startsWith("daily_log::") &&
+            r.value &&
+            local.value &&
+            typeof r.value === "object" &&
+            typeof local.value === "object"
+          ) {
+            const rv = r.value as {
+              right?: number;
+              wrong?: number;
+              items?: string[];
+              wrongItems?: string[];
+            };
+            const lv = local.value as typeof rv;
+            const merged = {
+              right: Math.max(rv.right ?? 0, lv.right ?? 0),
+              wrong: Math.max(rv.wrong ?? 0, lv.wrong ?? 0),
+              items: Array.from(
+                new Set([...(lv.items ?? []), ...(rv.items ?? [])]),
+              ),
+              wrongItems: Array.from(
+                new Set([...(lv.wrongItems ?? []), ...(rv.wrongItems ?? [])]),
+              ),
+            };
+            await db.meta.put({ key: r.key, value: merged });
+            continue;
+          }
           // 其他（selectedTerm / selectedSubject / equippedBadge / mockExamLastAt）
           // → 保留本地（这些是 user 主动选的最新偏好）
           // 但 mockExamLastAt 应该取 max（最近一次完成更应保留）

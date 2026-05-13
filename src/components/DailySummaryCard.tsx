@@ -45,6 +45,13 @@ interface MathSummary {
   fluencySessions: number;
   tutorCount: number;
   mistakeRevived: number;
+  /**
+   * v0.32.15：今日错题"待复活"总数（!resolved && nextReviewAt <= now）。
+   * 爸爸反馈：有错题待复活时报告卡没显示，老师/家长看不到该提醒她做。
+   */
+  mistakesDueToday: number;
+  /** 按 skill 分组的待复活 top 5（给老师看一眼"哪几块没掌握"） */
+  mistakesDueBySkill: { skillId: string; name: string; count: number }[];
 }
 
 /** 持续薄弱字/词条目（level<3 + 最近碰过的优先） */
@@ -286,6 +293,43 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             color="cyan"
           />
         </div>
+
+        {/* v0.32.15：今日错题待复活 — !resolved && due，有则显示老师"还要她做" */}
+        {math && math.mistakesDueToday > 0 && (
+          <section className="space-y-2">
+            <SectionTitle
+              icon="🪄"
+              title={`错题待复活（${math.mistakesDueToday} 道）`}
+            />
+            <div className="rounded-xl border px-3 py-2 bg-amber-500/10 border-amber-400/25 text-amber-100">
+              <div className="flex items-center gap-1.5 mb-1 whitespace-nowrap">
+                <span className="text-sm leading-none">⏰</span>
+                <span className="text-[11px] font-bold opacity-90">
+                  到期等她再做一遍
+                </span>
+              </div>
+              {math.mistakesDueBySkill.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {math.mistakesDueBySkill.map((s) => (
+                    <span
+                      key={s.skillId}
+                      className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
+                    >
+                      <span>{s.name}</span>
+                      <span className="text-[10px] opacity-60 tabular-nums ml-0.5">
+                        ×{s.count}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[12px] opacity-80">
+                  共 {math.mistakesDueToday} 道（跨多个 skill）
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* v0.32.11：数学待复习 skill — 连错 ≥3 + 今日还没碰过；有则显示，无则跳过 */}
         {mathToReview && mathToReview.toReview.length > 0 && (
@@ -770,15 +814,42 @@ async function buildMathSummary(studentId: string): Promise<MathSummary> {
 
   // mistake revived today (lastAttemptAt 在今天 + 推进了 stage 视为今日复活成功)
   let mistakeRevived = 0;
+  let mistakesDueToday = 0;
+  const mistakesDueBySkill: { skillId: string; name: string; count: number }[] = [];
   try {
-    const m = await db.mistakes
+    const allMistakes = await db.mistakes
       .where("studentId")
       .equals(studentId)
-      .filter((mk) => (mk.lastAttemptAt ?? 0) >= startMs && mk.stage > 0)
       .toArray();
-    mistakeRevived = m.length;
+    const nowMs = Date.now();
+    // 今日已推进过的
+    mistakeRevived = allMistakes.filter(
+      (mk) => (mk.lastAttemptAt ?? 0) >= startMs && mk.stage > 0,
+    ).length;
+    // v0.32.15：今日待复活（未掌握 + 到期）
+    const due = allMistakes.filter(
+      (mk) => !mk.resolved && mk.nextReviewAt <= nowMs,
+    );
+    mistakesDueToday = due.length;
+    // 按 skill 分组 top 5
+    const skillCount = new Map<string, number>();
+    for (const mk of due) {
+      const sid = mk.skillId;
+      if (!sid) continue;
+      skillCount.set(sid, (skillCount.get(sid) ?? 0) + 1);
+    }
+    const sortedSkills = Array.from(skillCount.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    for (const [sid, count] of sortedSkills) {
+      mistakesDueBySkill.push({
+        skillId: sid,
+        name: skillName.get(sid) ?? sid,
+        count,
+      });
+    }
   } catch {
-    /* */
+    /* mistakes 表可能没初始化 */
   }
 
   return {
@@ -788,5 +859,7 @@ async function buildMathSummary(studentId: string): Promise<MathSummary> {
     fluencySessions,
     tutorCount,
     mistakeRevived,
+    mistakesDueToday,
+    mistakesDueBySkill,
   };
 }
