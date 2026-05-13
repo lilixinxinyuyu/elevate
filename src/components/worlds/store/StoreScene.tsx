@@ -89,10 +89,11 @@ export function StoreEnvironment({
 function StoreDecor() {
   return (
     <group>
-      <KayMesh url={`${KAY_RB}/crate_carrots.gltf`} position={[-1.05, 0, 0.35]} scale={0.9} />
-      <KayMesh url={`${KAY_RB}/crate_tomatoes.gltf`} position={[-1.05, 0.55, 0.45]} scale={0.9} rotationY={Math.PI / 6} />
-      <KayMesh url={`${KAY_RB}/crate_potatoes.gltf`} position={[1.05, 0, 0.35]} scale={0.9} />
-      <KayMesh url={`${KAY_RB}/crate_buns.gltf`} position={[1.05, 0.55, 0.45]} scale={0.9} rotationY={-Math.PI / 6} />
+      {/* v0.32.33: 食材 crate 坐桌面上 */}
+      <KayMesh url={`${KAY_RB}/crate_carrots.gltf`} position={[-1.05, 1.0, 0.35]} scale={0.6} />
+      <KayMesh url={`${KAY_RB}/crate_tomatoes.gltf`} position={[-1.05, 1.4, 0.4]} scale={0.55} rotationY={Math.PI / 6} />
+      <KayMesh url={`${KAY_RB}/crate_potatoes.gltf`} position={[1.05, 1.0, 0.35]} scale={0.6} />
+      <KayMesh url={`${KAY_RB}/crate_buns.gltf`} position={[1.05, 1.4, 0.4]} scale={0.55} rotationY={-Math.PI / 6} />
       {/* 柜台后方 jars，店内装饰 */}
       <KayMesh url={`${KAY_RB}/jar_A_small.gltf`} position={[-0.75, 1.0, -0.7]} scale={1.0} />
       <KayMesh url={`${KAY_RB}/jar_B_small.gltf`} position={[0.75, 1.0, -0.7]} scale={1.0} />
@@ -106,8 +107,8 @@ function StoreDecor() {
 function BankDecor() {
   return (
     <group>
-      {/* 左侧大保险柜 (深灰 box + 金边圆门) — v0.32.30 内移到 X=-1.35 Z=+0.25 */}
-      <group position={[-1.05, 0, 0.35]}>
+      {/* 大保险柜 — v0.32.33: 坐桌面上 Y=1.0 + scale 0.65 整体缩小 */}
+      <group position={[-1.05, 1.0, 0.35]} scale={0.65}>
         <mesh position={[0, 0.55, 0]} castShadow>
           <boxGeometry args={[0.95, 1.1, 0.75]} />
           <meshStandardMaterial color="#334155" roughness={0.5} metalness={0.45} />
@@ -154,8 +155,8 @@ function BankDecor() {
 function BakeryDecor() {
   return (
     <group>
-      {/* 左侧蛋糕架 — 粉色三层 cylinder — v0.32.30 内移 */}
-      <group position={[-1.05, 0, 0.35]}>
+      {/* 蛋糕架 — v0.32.33: 坐桌面上 Y=1.0 */}
+      <group position={[-1.05, 1.0, 0.35]} scale={0.8}>
         {/* 底盘 */}
         <mesh position={[0, 0.05, 0]}>
           <cylinderGeometry args={[0.36, 0.4, 0.1, 24]} />
@@ -186,8 +187,8 @@ function BakeryDecor() {
         </mesh>
       </group>
 
-      {/* 右侧烤箱 box（深灰 + 橙色发光门） — v0.32.30 内移 */}
-      <group position={[1.05, 0, 0.35]}>
+      {/* 烤箱 — v0.32.33: 坐桌面上 Y=1.0 + 缩小 */}
+      <group position={[1.05, 1.0, 0.35]} scale={0.6}>
         <mesh position={[0, 0.5, 0]}>
           <boxGeometry args={[0.9, 1.0, 0.75]} />
           <meshStandardMaterial color="#525252" roughness={0.6} metalness={0.3} />
@@ -225,8 +226,8 @@ function BakeryDecor() {
 function AirportDecor() {
   return (
     <group>
-      {/* 左侧传送带（灰色长 box + 黑色滚轮） — v0.32.30 内移 */}
-      <group position={[-1.05, 0, 0.35]}>
+      {/* 传送带 — v0.32.33: 坐桌面上 */}
+      <group position={[-1.05, 1.0, 0.35]} scale={0.6}>
         {/* 主带身 */}
         <mesh position={[0, 0.55, 0]}>
           <boxGeometry args={[0.7, 0.1, 1.5]} />
@@ -256,8 +257,8 @@ function AirportDecor() {
         </mesh>
       </group>
 
-      {/* 右侧登机门 frame — 蓝色高门 + 顶部 GATE 牌 — v0.32.30 内移 */}
-      <group position={[1.05, 0, 0.25]}>
+      {/* 登机门 — v0.32.33: 坐桌面上 + 缩小 */}
+      <group position={[1.05, 1.0, 0.25]} scale={0.5}>
         {/* 两侧门柱 */}
         {[-0.5, 0.5].map((x, i) => (
           <mesh key={i} position={[x, 0.9, 0]}>
