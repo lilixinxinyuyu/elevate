@@ -68,7 +68,7 @@ export function AirportPage() {
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 bg-cyan-50"
+      className="fixed inset-0 bg-cyan-50 world-theme-airport"
       style={{ zIndex: 50 }}
     >
       <WorldsCanvas
@@ -153,17 +153,11 @@ function TopHUD({
       className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none"
       style={{ zIndex: 60 }}
     >
-      <button
-        type="button"
-        onClick={onBack}
-        className="pointer-events-auto px-3 py-2 rounded-xl bg-black/55 text-white text-sm font-bold backdrop-blur-md hover:bg-black/70 border border-white/25 shadow-lg"
-      >
+      <button type="button" onClick={onBack} className="world-chip world-chip-dark">
         ← 离开
       </button>
-      <div className="px-4 py-2 rounded-full bg-cyan-500/90 text-white text-xs font-bold backdrop-blur-md border border-white/30 shadow-lg">
-        ✈️ 登机口 · Gate
-      </div>
-      <div className="px-3 py-2 rounded-xl bg-black/55 text-white text-xs font-bold backdrop-blur-md border border-white/25 shadow-lg">
+      <div className="world-chip">✈️ 登机口 · Gate</div>
+      <div className="world-chip world-chip-dark">
         旅客 {completedCount + (orderIdx === completedCount ? 0 : 1)}/{AIRPORT_ORDERS.length}
       </div>
     </div>
@@ -220,15 +214,15 @@ function IntroPanel({
       className="absolute pointer-events-none inset-0 flex items-end justify-center pb-12"
       style={{ zIndex: 60 }}
     >
-      <div className="pointer-events-auto card bg-white/95 backdrop-blur-md p-5 shadow-2xl border-2 border-cyan-300 max-w-md text-center">
-        <div className="text-cyan-700 text-xs font-bold mb-1">旅客 #{orderIdx + 1}</div>
+      <div className="pointer-events-auto world-panel max-w-md text-center">
+        <div className="world-panel-title">旅客 #{orderIdx + 1}</div>
         <div className="text-slate-900 text-sm leading-relaxed mb-1">
           <div className="font-bold text-cyan-800">{order.customerLineEn}</div>
         </div>
         <div className="text-xs text-slate-500 mb-3">{order.customerLineZh}</div>
-        <div className="text-xs text-slate-600 mb-3">
-          <div className="px-3 py-2 rounded-lg bg-cyan-50 border border-cyan-200">
-            <div className="text-cyan-700 font-bold mb-1">装载清单</div>
+        <div className="text-xs mb-3">
+          <div className="world-panel-stat text-cyan-700">
+            <div className="font-bold text-[11px] uppercase mb-1">装载清单</div>
             {order.requests.map((r) => (
               <div key={r.itemId} className="font-mono text-cyan-900 text-base">
                 {r.quantity} × {LUGGAGE[r.itemId].emoji}{" "}
@@ -243,11 +237,7 @@ function IntroPanel({
         {order.hint && (
           <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
         )}
-        <button
-          type="button"
-          onClick={onStart}
-          className="px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-sky-500 text-white text-base font-bold shadow-xl border-2 border-white/40 hover:scale-105 transition-transform"
-        >
+        <button type="button" onClick={onStart} className="world-cta-btn">
           🛄 开始装行李
         </button>
       </div>
@@ -266,7 +256,7 @@ function RewardOverlay() {
     >
       <div className="text-center animate-bounce">
         <div className="text-8xl mb-3">✈️</div>
-        <div className="px-6 py-3 rounded-2xl bg-cyan-500 text-white text-2xl font-bold shadow-2xl border-2 border-white">
+        <div className="world-reward-badge">
           +5 XP · +1 装饰碎片
         </div>
         <div className="mt-2 text-cyan-900 text-sm font-medium drop-shadow">

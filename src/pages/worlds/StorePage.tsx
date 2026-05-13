@@ -82,7 +82,7 @@ export function StorePage() {
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 bg-amber-50"
+      className="fixed inset-0 bg-amber-50 world-theme-store"
       style={{ zIndex: 50 }}
     >
       <WorldsCanvas
@@ -189,14 +189,14 @@ function TopHUD({
       <button
         type="button"
         onClick={onBack}
-        className="pointer-events-auto px-3 py-2 rounded-xl bg-black/55 text-white text-sm font-bold backdrop-blur-md hover:bg-black/70 border border-white/25 shadow-lg"
+        className="world-chip world-chip-dark"
       >
         ← 离开
       </button>
-      <div className="px-4 py-2 rounded-full bg-amber-500/90 text-white text-xs font-bold backdrop-blur-md border border-white/30 shadow-lg">
+      <div className="world-chip">
         🏪 和平小卖部
       </div>
-      <div className="px-3 py-2 rounded-xl bg-black/55 text-white text-xs font-bold backdrop-blur-md border border-white/25 shadow-lg">
+      <div className="world-chip world-chip-dark">
         客人 {completedCount + (orderIdx === completedCount ? 0 : 1)}/{ORDERS.length}
       </div>
     </div>
@@ -246,27 +246,23 @@ function IntroPanel({
       className="absolute pointer-events-none inset-0 flex items-end justify-center pb-12"
       style={{ zIndex: 60 }}
     >
-      <div className="pointer-events-auto card bg-white/95 backdrop-blur-md p-5 shadow-2xl border-2 border-amber-300 max-w-md text-center">
-        <div className="text-amber-700 text-xs font-bold mb-1">客人 #{orderIdx + 1}</div>
+      <div className="pointer-events-auto world-panel max-w-md text-center">
+        <div className="world-panel-title">客人 #{orderIdx + 1}</div>
         <div className="text-slate-900 text-sm leading-relaxed mb-3">{order.customerLine}</div>
-        <div className="text-xs text-slate-600 mb-3 grid grid-cols-2 gap-2">
-          <div className="px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
-            <div className="text-emerald-700 font-bold">应收</div>
-            <div className="font-mono text-emerald-900">{formatYuan(totalCent)}</div>
+        <div className="text-xs mb-3 grid grid-cols-2 gap-2">
+          <div className="world-panel-stat text-emerald-700">
+            <div className="font-bold text-[11px] uppercase">应收</div>
+            <div className="font-mono text-emerald-900 text-base">{formatYuan(totalCent)}</div>
           </div>
-          <div className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200">
-            <div className="text-amber-700 font-bold">找零</div>
-            <div className="font-mono text-amber-900">{formatYuan(changeCent)}</div>
+          <div className="world-panel-stat text-amber-700">
+            <div className="font-bold text-[11px] uppercase">找零</div>
+            <div className="font-mono text-amber-900 text-base">{formatYuan(changeCent)}</div>
           </div>
         </div>
         {order.hint && (
           <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
         )}
-        <button
-          type="button"
-          onClick={onStart}
-          className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-base font-bold shadow-xl border-2 border-white/40 hover:scale-105 transition-transform"
-        >
+        <button type="button" onClick={onStart} className="world-cta-btn">
           🎯 开始扫码
         </button>
       </div>
@@ -285,10 +281,8 @@ function RewardOverlay() {
     >
       <div className="text-center animate-bounce">
         <div className="text-8xl mb-3">🎉</div>
-        <div className="px-6 py-3 rounded-2xl bg-emerald-500 text-white text-2xl font-bold shadow-2xl border-2 border-white">
-          +5 XP · +1 装饰碎片
-        </div>
-        <div className="mt-2 text-amber-900 text-sm font-medium drop-shadow">
+        <div className="world-reward-badge">+5 XP · +1 装饰碎片</div>
+        <div className="mt-3 text-amber-900 text-sm font-bold drop-shadow">
           客人们都满意～回到百宝港
         </div>
       </div>

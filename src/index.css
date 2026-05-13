@@ -44,6 +44,128 @@ body {
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap;
 }
 
+/* ============ v0.32.37: worlds UI 主题化（双 CLI Ep14 一致 P0） ============
+   爸爸明确"游戏界面丑" — black/55 + backdrop-blur chip 平淡。
+   新 class 走"游戏化票据/徽章"风：白底+主题色硬描边+硬投影+内反光，
+   像 Toca/Townscaper 那种 chunky 卡通 UI。
+*/
+.world-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%);
+  color: #1f2937;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  border: 3px solid var(--world-accent, #f59e0b);
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.12),
+    0 6px 14px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.world-chip-dark {
+  /* 离开 / 计数等中性 chip — 暗灰版 */
+  background: linear-gradient(180deg, #475569 0%, #334155 100%);
+  color: #fff;
+  border-color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* IntroPanel：订单票据卡 — 顶/底锯齿撕边感（用 radial pattern 模拟） */
+.world-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 60%, #fef3c7 100%);
+  border-radius: 1.5rem;
+  padding: 1.25rem;
+  border: 3px solid var(--world-accent, #f59e0b);
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.4),
+    0 4px 0 rgba(0, 0, 0, 0.08),
+    0 12px 30px rgba(0, 0, 0, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.95);
+  position: relative;
+}
+.world-panel-title {
+  font-weight: 800;
+  color: var(--world-accent, #f59e0b);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+}
+.world-panel-stat {
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.75rem;
+  border: 2px solid currentColor;
+  background: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+/* RewardOverlay：金徽章风 */
+.world-reward-badge {
+  display: inline-block;
+  padding: 1rem 2rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(180deg, #fde047 0%, #fbbf24 45%, #d97706 100%);
+  color: white;
+  font-weight: 900;
+  font-size: 1.5rem;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+  border: 4px solid #fff;
+  box-shadow:
+    0 0 0 4px rgba(0, 0, 0, 0.15),
+    0 10px 24px rgba(0, 0, 0, 0.4),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.2),
+    inset 0 4px 6px rgba(255, 255, 255, 0.5);
+}
+
+/* 大主按钮 — 开始扫码/换零/切块/装行李 */
+.world-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(180deg, var(--world-accent-light, #fbbf24) 0%, var(--world-accent, #f59e0b) 100%);
+  color: white;
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.15),
+    0 8px 18px rgba(0, 0, 0, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+}
+.world-cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 6px 0 rgba(0, 0, 0, 0.15),
+    0 10px 22px rgba(0, 0, 0, 0.32),
+    inset 0 2px 0 rgba(255, 255, 255, 0.6);
+}
+.world-cta-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.15),
+    0 4px 8px rgba(0, 0, 0, 0.25),
+    inset 0 2px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* 4 店主题色 — CSS 变量驱动（page 顶层 div 加 class 即可） */
+.world-theme-store    { --world-accent: #f59e0b; --world-accent-light: #fbbf24; }
+.world-theme-bank     { --world-accent: #3b82f6; --world-accent-light: #60a5fa; }
+.world-theme-bakery   { --world-accent: #ec4899; --world-accent-light: #f472b6; }
+.world-theme-airport  { --world-accent: #06b6d4; --world-accent-light: #22d3ee; }
+
 /* Form controls in dark theme */
 input, select, textarea {
   color-scheme: dark;
