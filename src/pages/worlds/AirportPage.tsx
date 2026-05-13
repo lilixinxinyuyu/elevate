@@ -43,7 +43,8 @@ export function AirportPage() {
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#06b6d4" });
   // v0.32.12-14：反馈层 + Mascot 联动
-  const { trigger, pulses, lastReaction } = useWorldFeedback();
+  // v0.32.23: rootRef → screen shake / zoom
+  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
   // v0.32.21: BGM
   useBgm("airport");
 
@@ -65,7 +66,11 @@ export function AirportPage() {
   };
 
   return (
-    <div className="fixed inset-0 bg-cyan-50" style={{ zIndex: 50 }}>
+    <div
+      ref={rootRef}
+      className="fixed inset-0 bg-cyan-50"
+      style={{ zIndex: 50 }}
+    >
       <WorldsCanvas
         camera={{ position: [0, 1.55, 1.6], fov: 50, near: 0.05, far: 50 }}
         onCreated={({ camera }) => camera.lookAt(0, 1.0, -0.5)}

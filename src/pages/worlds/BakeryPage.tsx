@@ -43,7 +43,8 @@ export function BakeryPage() {
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#ec4899" });
   // v0.32.12-14：反馈层 + Mascot 联动
-  const { trigger, pulses, lastReaction } = useWorldFeedback();
+  // v0.32.23: rootRef → screen shake / zoom
+  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
   // v0.32.21: BGM
   useBgm("bakery");
 
@@ -65,7 +66,11 @@ export function BakeryPage() {
   };
 
   return (
-    <div className="fixed inset-0 bg-pink-50" style={{ zIndex: 50 }}>
+    <div
+      ref={rootRef}
+      className="fixed inset-0 bg-pink-50"
+      style={{ zIndex: 50 }}
+    >
       <WorldsCanvas
         camera={{ position: [0, 1.55, 1.6], fov: 50, near: 0.05, far: 50 }}
         onCreated={({ camera }) => {

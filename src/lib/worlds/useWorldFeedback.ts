@@ -19,7 +19,7 @@
  *   - DOM-only overlay：不进 R3F Canvas，避免 z-fighting
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sfx } from "../sfx";
 
 export type FeedbackKind =
@@ -106,5 +106,33 @@ export function useWorldFeedback() {
     [],
   );
 
-  return { trigger, pulses, lastReaction };
+  /**
+   * v0.32.23：把 ref 挂到 page outer div，hook 自动给 div 加 / 移除
+   * worlds-screen-shake (correct) / worlds-screen-zoom (complete) CSS class，
+   * 全屏轻抖 + 缩放冲击力。
+   * CSS keyframes 定义在 WorldFeedbackOverlay <style> 块内（一并 ship）。
+   */
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!lastReaction || !rootRef.current) return;
+    let cls: string | null = null;
+    let dur = 400;
+    if (lastReaction.kind === "correct") {
+      cls = "worlds-screen-shake";
+      dur = 350;
+    } else if (lastReaction.kind === "complete") {
+      cls = "worlds-screen-zoom";
+      dur = 800;
+    }
+    if (!cls) return;
+    const node = rootRef.current;
+    node.classList.add(cls);
+    const t = window.setTimeout(() => {
+      node.classList.remove(cls);
+    }, dur);
+    return () => window.clearTimeout(t);
+    // 监听 seq 让相同 kind 重复触发也能 re-trigger
+  }, [lastReaction?.seq, lastReaction?.kind]);
+
+  return { trigger, pulses, lastReaction, rootRef };
 }

@@ -53,7 +53,8 @@ export function StorePage() {
   const mascotProps = useMascotReaction({ mood, accent: "#f59e0b" });
 
   // v0.32.12-14：统一反馈层（声 + 震 + 闪 + 文案 + Mascot 联动）
-  const { trigger, pulses, lastReaction } = useWorldFeedback();
+  // v0.32.23: rootRef → screen shake / zoom on reaction
+  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
   // v0.32.21: BGM
   useBgm("store");
 
@@ -79,7 +80,11 @@ export function StorePage() {
   };
 
   return (
-    <div className="fixed inset-0 bg-amber-50" style={{ zIndex: 50 }}>
+    <div
+      ref={rootRef}
+      className="fixed inset-0 bg-amber-50"
+      style={{ zIndex: 50 }}
+    >
       <WorldsCanvas
         camera={{ position: [0, 1.55, 1.6], fov: 50, near: 0.05, far: 50 }}
         onCreated={({ camera }) => {
