@@ -467,17 +467,37 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           </section>
         )}
 
-        {/* v0.32.16：字词回看 — "今日错字 + 持续薄弱"合并；今日的高亮，累积的暗 */}
+        {/* v0.32.26：字词回看
+            爸爸 v0.32.25 反馈：今日没练时仍显示昨天/累积内容 → 不要。
+            修改逻辑：
+            - 每个学科行：只在该学科今日有错（wrongToday > 0）或数学今日有易错时显示
+            - weak（累积薄弱）只作为今日有错时的暗色补充，不单独露面
+            - 三科今日都没错 → 整个 section 不渲染
+         */}
         {(() => {
-          const chineseMerged = mergeWrongAndWeak(chineseWrongToday, chineseStats?.weak ?? []);
-          const englishMerged = mergeWrongAndWeak(englishWrongToday, englishStats?.weak ?? []);
           const hasMath = math && math.topWrongSkills.length > 0;
-          const hasChinese = chineseMerged.length > 0;
-          const hasEnglish = englishMerged.length > 0;
-          if (!hasMath && !hasChinese && !hasEnglish) return null;
+          const hasChineseToday = chineseWrongToday.length > 0;
+          const hasEnglishToday = englishWrongToday.length > 0;
+          // 整个 section 显示条件：任一今日有 actionable 内容
+          if (!hasMath && !hasChineseToday && !hasEnglishToday) return null;
+
+          // 各学科 merged：今日错 + 该学科累积薄弱（暗色补充）
+          // 只在该学科今日有内容时才计算 / 渲染该行
+          const chineseMerged = hasChineseToday
+            ? mergeWrongAndWeak(chineseWrongToday, chineseStats?.weak ?? [])
+            : [];
+          const englishMerged = hasEnglishToday
+            ? mergeWrongAndWeak(englishWrongToday, englishStats?.weak ?? [])
+            : [];
+
+          // 是否有任一行包含暗色 weak chip（用于决定底部图例是否显示）
+          const hasAnyWeakChip =
+            chineseMerged.some((c) => c.isToday === false) ||
+            englishMerged.some((e) => e.isToday === false);
+
           return (
             <section className="space-y-2">
-              <SectionTitle icon="📋" title="需要回看（今日 + 累积薄弱）" />
+              <SectionTitle icon="📋" title="需要回看（今日）" />
               <div className="space-y-2">
                 {hasMath && (
                   <MistakeRow
@@ -492,7 +512,7 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
                     color="violet"
                   />
                 )}
-                {hasChinese && (
+                {hasChineseToday && chineseMerged.length > 0 && (
                   <MistakeRow
                     emoji="📚"
                     label="语文字"
@@ -500,7 +520,7 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
                     color="emerald"
                   />
                 )}
-                {hasEnglish && (
+                {hasEnglishToday && englishMerged.length > 0 && (
                   <MistakeRow
                     emoji="🔤"
                     label="英语词"
@@ -509,9 +529,11 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
                   />
                 )}
               </div>
-              <div className="text-[10px] text-slate-400 px-1">
-                亮色 = 今日错过 · 暗色 = 累积薄弱（level&lt;3）
-              </div>
+              {hasAnyWeakChip && (
+                <div className="text-[10px] text-slate-400 px-1">
+                  亮色 = 今日错过 · 暗色 = 之前薄弱
+                </div>
+              )}
             </section>
           );
         })()}
