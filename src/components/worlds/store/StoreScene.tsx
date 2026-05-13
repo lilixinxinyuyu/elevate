@@ -89,10 +89,10 @@ export function StoreEnvironment({
 function StoreDecor() {
   return (
     <group>
-      <KayMesh url={`${KAY_RB}/crate_carrots.gltf`} position={[-2.0, 0, 0.2]} scale={0.9} />
-      <KayMesh url={`${KAY_RB}/crate_tomatoes.gltf`} position={[-2.0, 0.55, 0.2]} scale={0.9} rotationY={Math.PI / 6} />
-      <KayMesh url={`${KAY_RB}/crate_potatoes.gltf`} position={[2.0, 0, 0.2]} scale={0.9} />
-      <KayMesh url={`${KAY_RB}/crate_buns.gltf`} position={[2.0, 0.55, 0.2]} scale={0.9} rotationY={-Math.PI / 6} />
+      <KayMesh url={`${KAY_RB}/crate_carrots.gltf`} position={[-1.35, 0, 0.3]} scale={0.9} />
+      <KayMesh url={`${KAY_RB}/crate_tomatoes.gltf`} position={[-1.35, 0.55, 0.3]} scale={0.9} rotationY={Math.PI / 6} />
+      <KayMesh url={`${KAY_RB}/crate_potatoes.gltf`} position={[1.35, 0, 0.3]} scale={0.9} />
+      <KayMesh url={`${KAY_RB}/crate_buns.gltf`} position={[1.35, 0.55, 0.3]} scale={0.9} rotationY={-Math.PI / 6} />
       {/* 柜台后方 jars，店内装饰 */}
       <KayMesh url={`${KAY_RB}/jar_A_small.gltf`} position={[-0.75, 1.0, -0.7]} scale={1.0} />
       <KayMesh url={`${KAY_RB}/jar_B_small.gltf`} position={[0.75, 1.0, -0.7]} scale={1.0} />
@@ -106,8 +106,8 @@ function StoreDecor() {
 function BankDecor() {
   return (
     <group>
-      {/* 左侧大保险柜 (深灰 box + 金边圆门) */}
-      <group position={[-1.9, 0, -0.1]}>
+      {/* 左侧大保险柜 (深灰 box + 金边圆门) — v0.32.30 内移到 X=-1.35 Z=+0.25 */}
+      <group position={[-1.35, 0, 0.25]}>
         <mesh position={[0, 0.55, 0]} castShadow>
           <boxGeometry args={[0.95, 1.1, 0.75]} />
           <meshStandardMaterial color="#334155" roughness={0.5} metalness={0.45} />
@@ -124,9 +124,9 @@ function BankDecor() {
         </mesh>
       </group>
 
-      {/* 右侧 sack 钱袋（KayKit）+ 钞票堆 */}
-      <KayMesh url={`${KAY_DECO}/sack.gltf`} position={[1.85, 0, 0.15]} scale={1.1} />
-      <KayMesh url={`${KAY_DECO}/sack.gltf`} position={[2.15, 0, -0.05]} scale={0.95} rotationY={Math.PI / 5} />
+      {/* 右侧 sack 钱袋（KayKit）+ 钞票堆 — v0.32.30 内移 */}
+      <KayMesh url={`${KAY_DECO}/sack.gltf`} position={[1.35, 0, 0.25]} scale={1.1} />
+      <KayMesh url={`${KAY_DECO}/sack.gltf`} position={[1.6, 0, 0.05]} scale={0.95} rotationY={Math.PI / 5} />
 
       {/* 柜台上钞票堆（绿色小 box 堆叠） */}
       {[0, 0.04, 0.08, 0.12].map((y, i) => (
@@ -154,8 +154,8 @@ function BankDecor() {
 function BakeryDecor() {
   return (
     <group>
-      {/* 左侧蛋糕架 — 粉色三层 cylinder */}
-      <group position={[-1.9, 0, 0.1]}>
+      {/* 左侧蛋糕架 — 粉色三层 cylinder — v0.32.30 内移 */}
+      <group position={[-1.35, 0, 0.25]}>
         {/* 底盘 */}
         <mesh position={[0, 0.05, 0]}>
           <cylinderGeometry args={[0.36, 0.4, 0.1, 24]} />
@@ -186,8 +186,8 @@ function BakeryDecor() {
         </mesh>
       </group>
 
-      {/* 右侧烤箱 box（深灰 + 橙色发光门） */}
-      <group position={[1.9, 0, 0.1]}>
+      {/* 右侧烤箱 box（深灰 + 橙色发光门） — v0.32.30 内移 */}
+      <group position={[1.35, 0, 0.25]}>
         <mesh position={[0, 0.5, 0]}>
           <boxGeometry args={[0.9, 1.0, 0.75]} />
           <meshStandardMaterial color="#525252" roughness={0.6} metalness={0.3} />
@@ -225,8 +225,8 @@ function BakeryDecor() {
 function AirportDecor() {
   return (
     <group>
-      {/* 左侧传送带（灰色长 box + 黑色滚轮） */}
-      <group position={[-1.9, 0, 0.1]}>
+      {/* 左侧传送带（灰色长 box + 黑色滚轮） — v0.32.30 内移 */}
+      <group position={[-1.35, 0, 0.25]}>
         {/* 主带身 */}
         <mesh position={[0, 0.55, 0]}>
           <boxGeometry args={[0.7, 0.1, 1.5]} />
@@ -256,8 +256,8 @@ function AirportDecor() {
         </mesh>
       </group>
 
-      {/* 右侧登机门 frame — 蓝色高门 + 顶部 GATE 牌 */}
-      <group position={[1.9, 0, -0.1]}>
+      {/* 右侧登机门 frame — 蓝色高门 + 顶部 GATE 牌 — v0.32.30 内移 */}
+      <group position={[1.35, 0, 0.15]}>
         {/* 两侧门柱 */}
         {[-0.5, 0.5].map((x, i) => (
           <mesh key={i} position={[x, 0.9, 0]}>

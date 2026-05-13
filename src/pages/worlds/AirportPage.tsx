@@ -72,8 +72,8 @@ export function AirportPage() {
       style={{ zIndex: 50 }}
     >
       <WorldsCanvas
-        camera={{ position: [0, 1.55, 1.6], fov: 50, near: 0.05, far: 50 }}
-        onCreated={({ camera }) => camera.lookAt(0, 1.0, -0.5)}
+        camera={{ position: [0, 1.6, 2.2], fov: 55, near: 0.05, far: 50 }}
+        onCreated={({ camera }) => camera.lookAt(0, 1.05, -0.35)}
         dpr={[1, 1.5]}
         gl={{ antialias: true, powerPreference: "high-performance" }}
         loadingBg="#cffafe"
