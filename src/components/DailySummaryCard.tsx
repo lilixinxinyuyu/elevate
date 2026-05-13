@@ -79,6 +79,41 @@ function todayHuman(): string {
   return `${d.getMonth() + 1}/${d.getDate()} 周${week}`;
 }
 
+/**
+ * v0.32.16：合并今日错字/词 + 持续薄弱，去重 + 标 isToday。
+ * 今日的优先显示（按 wrongToday 顺序倒序，最新最前），累积薄弱补在后面。
+ */
+function mergeWrongAndWeak(
+  wrongToday: string[],
+  weakAccumulated: { item: string; wrong: number }[],
+): { text: string; detail?: string; isToday?: boolean }[] {
+  const weakMap = new Map(weakAccumulated.map((w) => [w.item, w]));
+  const seen = new Set<string>();
+  const out: { text: string; detail?: string; isToday?: boolean }[] = [];
+  // 1. 今日错的（最新优先）+ 如果累积薄弱里有同字，detail 加错次
+  for (const t of [...wrongToday].reverse()) {
+    if (seen.has(t)) continue;
+    seen.add(t);
+    const weak = weakMap.get(t);
+    out.push({
+      text: t,
+      detail: weak ? `错${weak.wrong}` : undefined,
+      isToday: true,
+    });
+  }
+  // 2. 累积薄弱（已显示在今日的跳过）
+  for (const w of weakAccumulated) {
+    if (seen.has(w.item)) continue;
+    seen.add(w.item);
+    out.push({
+      text: w.item,
+      detail: `错${w.wrong}`,
+      isToday: false,
+    });
+  }
+  return out.slice(0, 12);
+}
+
 /** 今日单科目标 — 用于 mini ring 完成度 */
 const DAILY_TARGET_PER_SUBJECT = 15;
 
@@ -294,37 +329,48 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           />
         </div>
 
-        {/* v0.32.15：今日错题待复活 — !resolved && due，有则显示老师"还要她做" */}
-        {math && math.mistakesDueToday > 0 && (
+        {/* v0.32.16：错题复活 — 今日已复活/待复活任一>0 都显示，文案带两边数据 */}
+        {math && (math.mistakesDueToday > 0 || math.mistakeRevived > 0) && (
           <section className="space-y-2">
             <SectionTitle
               icon="🪄"
-              title={`错题待复活（${math.mistakesDueToday} 道）`}
+              title={`错题复活（已复活 ${math.mistakeRevived} · 待复活 ${math.mistakesDueToday}）`}
             />
             <div className="rounded-xl border px-3 py-2 bg-amber-500/10 border-amber-400/25 text-amber-100">
-              <div className="flex items-center gap-1.5 mb-1 whitespace-nowrap">
-                <span className="text-sm leading-none">⏰</span>
-                <span className="text-[11px] font-bold opacity-90">
-                  到期等她再做一遍
-                </span>
-              </div>
-              {math.mistakesDueBySkill.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {math.mistakesDueBySkill.map((s) => (
-                    <span
-                      key={s.skillId}
-                      className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
-                    >
-                      <span>{s.name}</span>
-                      <span className="text-[10px] opacity-60 tabular-nums ml-0.5">
-                        ×{s.count}
-                      </span>
+              {math.mistakesDueToday > 0 ? (
+                <>
+                  <div className="flex items-center gap-1.5 mb-1 whitespace-nowrap">
+                    <span className="text-sm leading-none">⏰</span>
+                    <span className="text-[11px] font-bold opacity-90">
+                      到期还要她再做一遍
                     </span>
-                  ))}
-                </div>
+                  </div>
+                  {math.mistakesDueBySkill.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {math.mistakesDueBySkill.map((s) => (
+                        <span
+                          key={s.skillId}
+                          className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
+                        >
+                          <span>{s.name}</span>
+                          <span className="text-[10px] opacity-60 tabular-nums ml-0.5">
+                            ×{s.count}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[12px] opacity-80">
+                      共 {math.mistakesDueToday} 道（跨多个 skill）
+                    </div>
+                  )}
+                </>
               ) : (
-                <div className="text-[12px] opacity-80">
-                  共 {math.mistakesDueToday} 道（跨多个 skill）
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="text-sm leading-none">🎉</span>
+                  <span className="text-[12px] font-bold opacity-95">
+                    今日错题已清完（共复活 {math.mistakeRevived} 道）
+                  </span>
                 </div>
               )}
             </div>
@@ -362,81 +408,53 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           </section>
         )}
 
-        {/* 今日错字 / 错词 / 数学易错 — 老师辅导抓手 */}
-        {(chineseWrongToday.length > 0 ||
-          englishWrongToday.length > 0 ||
-          (math && math.topWrongSkills.length > 0)) && (
-          <section className="space-y-2">
-            <SectionTitle icon="📝" title="今日要回看" />
-            <div className="space-y-2">
-              {math && math.topWrongSkills.length > 0 && (
-                <MistakeRow
-                  emoji="📐"
-                  label="数学易错"
-                  items={math.topWrongSkills.slice(0, 3).map((s) => ({
-                    text: s.name,
-                    detail: `${s.wrong}/${s.total}`,
-                  }))}
-                  color="violet"
-                />
-              )}
-              {chineseWrongToday.length > 0 && (
-                <MistakeRow
-                  emoji="📚"
-                  label="语文错字"
-                  items={chineseWrongToday.slice(-8).reverse().map((c) => ({
-                    text: c,
-                  }))}
-                  color="emerald"
-                />
-              )}
-              {englishWrongToday.length > 0 && (
-                <MistakeRow
-                  emoji="🔤"
-                  label="英语错词"
-                  items={englishWrongToday.slice(-8).reverse().map((w) => ({
-                    text: w,
-                  }))}
-                  color="cyan"
-                />
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* 持续薄弱字/词 — 跨日累计 level<3 */}
-        {(((chineseStats?.weak.length ?? 0) > 0) ||
-          ((englishStats?.weak.length ?? 0) > 0)) && (
-          <section className="space-y-2">
-            <SectionTitle icon="⚠️" title="持续薄弱（多练几遍）" />
-            <div className="space-y-2">
-              {chineseStats && chineseStats.weak.length > 0 && (
-                <MistakeRow
-                  emoji="📚"
-                  label="语文"
-                  items={chineseStats.weak.map((w) => ({
-                    text: w.item,
-                    detail: `错${w.wrong}`,
-                  }))}
-                  color="emerald"
-                  dim
-                />
-              )}
-              {englishStats && englishStats.weak.length > 0 && (
-                <MistakeRow
-                  emoji="🔤"
-                  label="英语"
-                  items={englishStats.weak.map((w) => ({
-                    text: w.item,
-                    detail: `错${w.wrong}`,
-                  }))}
-                  color="cyan"
-                  dim
-                />
-              )}
-            </div>
-          </section>
-        )}
+        {/* v0.32.16：字词回看 — "今日错字 + 持续薄弱"合并；今日的高亮，累积的暗 */}
+        {(() => {
+          const chineseMerged = mergeWrongAndWeak(chineseWrongToday, chineseStats?.weak ?? []);
+          const englishMerged = mergeWrongAndWeak(englishWrongToday, englishStats?.weak ?? []);
+          const hasMath = math && math.topWrongSkills.length > 0;
+          const hasChinese = chineseMerged.length > 0;
+          const hasEnglish = englishMerged.length > 0;
+          if (!hasMath && !hasChinese && !hasEnglish) return null;
+          return (
+            <section className="space-y-2">
+              <SectionTitle icon="📋" title="需要回看（今日 + 累积薄弱）" />
+              <div className="space-y-2">
+                {hasMath && (
+                  <MistakeRow
+                    emoji="📐"
+                    label="数学易错 skill"
+                    items={math.topWrongSkills.slice(0, 5).map((s) => ({
+                      text: s.name,
+                      detail: `${s.wrong}/${s.total}`,
+                      isToday: true,
+                    }))}
+                    color="violet"
+                  />
+                )}
+                {hasChinese && (
+                  <MistakeRow
+                    emoji="📚"
+                    label="语文字"
+                    items={chineseMerged}
+                    color="emerald"
+                  />
+                )}
+                {hasEnglish && (
+                  <MistakeRow
+                    emoji="🔤"
+                    label="英语词"
+                    items={englishMerged}
+                    color="cyan"
+                  />
+                )}
+              </div>
+              <div className="text-[10px] text-slate-400 px-1">
+                亮色 = 今日错过 · 暗色 = 累积薄弱（level&lt;3）
+              </div>
+            </section>
+          );
+        })()}
 
         {/* 今日做了什么 chips（保留） */}
         {math && math.attempts > 0 && (
@@ -562,25 +580,17 @@ function MistakeRow({
   label,
   items,
   color,
-  dim,
 }: {
   emoji: string;
   label: string;
-  items: { text: string; detail?: string }[];
+  /** v0.32.16: per-item isToday flag — 今日错亮色，累积薄弱暗色 */
+  items: { text: string; detail?: string; isToday?: boolean }[];
   color: "violet" | "emerald" | "cyan";
-  /** 暗一档：用于"持续薄弱"区，跟"今日"区视觉区分 */
-  dim?: boolean;
 }) {
   const palette = {
-    violet: dim
-      ? "bg-violet-500/[0.06] border-violet-400/15 text-violet-200/80"
-      : "bg-violet-500/10 border-violet-400/25 text-violet-100",
-    emerald: dim
-      ? "bg-emerald-500/[0.06] border-emerald-400/15 text-emerald-200/80"
-      : "bg-emerald-500/10 border-emerald-400/25 text-emerald-100",
-    cyan: dim
-      ? "bg-cyan-500/[0.06] border-cyan-400/15 text-cyan-200/80"
-      : "bg-cyan-500/10 border-cyan-400/25 text-cyan-100",
+    violet: "bg-violet-500/10 border-violet-400/25 text-violet-100",
+    emerald: "bg-emerald-500/10 border-emerald-400/25 text-emerald-100",
+    cyan: "bg-cyan-500/10 border-cyan-400/25 text-cyan-100",
   }[color];
   return (
     <div className={`rounded-xl border px-3 py-2 ${palette}`}>
@@ -593,7 +603,11 @@ function MistakeRow({
         {items.map((it, i) => (
           <span
             key={`${it.text}-${i}`}
-            className="inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md bg-black/25 text-[12px] font-medium whitespace-nowrap"
+            className={`inline-flex items-baseline gap-0.5 px-2 py-0.5 rounded-md text-[12px] font-medium whitespace-nowrap ${
+              it.isToday === false
+                ? "bg-black/15 opacity-65"
+                : "bg-black/30"
+            }`}
           >
             <span>{it.text}</span>
             {it.detail && (
