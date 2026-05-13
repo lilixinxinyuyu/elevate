@@ -1,0 +1,310 @@
+/**
+ * v0.32.3: 小卖部 mini-game 状态机 —— 3 单 cycle (扫码+找零)。
+ *
+ * 流程:
+ *   intro → scan → change → reward → next order / finish
+ *
+ * 数学训练 (暗在游戏后面):
+ *   - 扫码: 总价 = sum(item.priceCent × quantity) → 小数乘 + 加
+ *   - 找零: change = paidCent - totalCent → 小数减
+ *   - 全程用 cent 整数运算，避免 0.1+0.2 浮点坑
+ */
+
+import { useMemo, useRef, useState } from "react";
+import { Text } from "@react-three/drei";
+import * as THREE from "three";
+import {
+  COINS,
+  ORDERS,
+  STORE_ITEMS,
+  calcOrderChangeCent,
+  calcOrderTotalCent,
+  formatYuan,
+  type Coin,
+  type Order,
+} from "../../../lib/worlds/storeOrders";
+import { DraggableObject } from "./DraggableObject";
+import { StoreItemMesh } from "./StoreScene";
+import { Coin3D } from "./Coin3D";
+
+export type StorePhase = "intro" | "scan" | "change" | "reward";
+
+interface StoreMiniGameProps {
+  order: Order;
+  phase: StorePhase;
+  onPhaseChange: (phase: StorePhase) => void;
+  onOrderComplete: () => void;
+}
+
+// KayKit kitchencounter_straight_A 台面 Y=1.0（实测 bbox）
+const COUNTER_Y = 1.0;
+// 扫码篮 / 找零托盘 都在柜台台面前部（靠近 camera）
+const SCAN_ZONE = { id: "scan", x: -0.5, z: 0.4, radius: 0.22 };
+const TRAY_ZONE = { id: "tray", x: 0.5, z: 0.4, radius: 0.22 };
+
+export function StoreMiniGame({
+  order,
+  phase,
+  onPhaseChange,
+  onOrderComplete,
+}: StoreMiniGameProps) {
+  // ============ scan phase 状态 ============
+  // 把订单展开成单个商品列表 (e.g. carrot×3 → 3 个 carrot 实例)
+  const itemInstances = useMemo(() => {
+    const out: { instanceId: string; itemId: string; emoji: string; price: number; gltf: string }[] = [];
+    for (const req of order.requests) {
+      const item = STORE_ITEMS[req.itemId];
+      if (!item) continue;
+      for (let i = 0; i < req.quantity; i++) {
+        out.push({
+          instanceId: `${req.itemId}-${i}`,
+          itemId: req.itemId,
+          emoji: item.emoji,
+          price: item.priceCent,
+          gltf: item.gltf,
+        });
+      }
+    }
+    return out;
+  }, [order]);
+
+  const [scannedIds, setScannedIds] = useState<Set<string>>(new Set());
+  const scannedTotalCent = useMemo(() => {
+    let total = 0;
+    for (const inst of itemInstances) {
+      if (scannedIds.has(inst.instanceId)) total += inst.price;
+    }
+    return total;
+  }, [scannedIds, itemInstances]);
+
+  // 商品摆放位置 — 柜台台面中后部（远离玩家的扫码篮）
+  const itemPositions = useMemo(() => {
+    const n = itemInstances.length;
+    const out: [number, number][] = [];
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / Math.max(n, 1);
+      const x = -0.6 + t * 1.2;
+      const z = -0.3; // 柜台中后部
+      out.push([x, z]);
+    }
+    return out;
+  }, [itemInstances]);
+
+  // ============ change phase 状态 ============
+  const [trayCent, setTrayCent] = useState(0);
+  const [coinsUsed, setCoinsUsed] = useState<Set<string>>(new Set());
+  const needChangeCent = useMemo(() => calcOrderChangeCent(order), [order]);
+
+  // 钱币摆放位置 (每个面额放 3 个，柜台中部铺开)
+  type CoinInstance = { instanceId: string; coin: Coin; origin: [number, number] };
+  const coinInstances = useMemo<CoinInstance[]>(() => {
+    const out: CoinInstance[] = [];
+    COINS.forEach((coin, ci) => {
+      for (let i = 0; i < 3; i++) {
+        out.push({
+          instanceId: `${coin.label}-${i}`,
+          coin,
+          origin: [-0.55 + ci * 0.55, -0.3 + i * 0.06],
+        });
+      }
+    });
+    return out;
+  }, []);
+
+  const handleScanDrop = (instanceId: string) => {
+    setScannedIds((prev) => new Set(prev).add(instanceId));
+  };
+
+  // 检测 scan 阶段完成
+  const allScanned = scannedIds.size === itemInstances.length;
+
+  const handleCoinDrop = (instanceId: string, valueCent: number) => {
+    setCoinsUsed((prev) => new Set(prev).add(instanceId));
+    setTrayCent((prev) => prev + valueCent);
+  };
+
+  // 检测 change 阶段完成（金额相等）
+  const changeMatch = trayCent === needChangeCent;
+  const wasNotifiedRef = useRef(false);
+  if (phase === "change" && changeMatch && !wasNotifiedRef.current) {
+    wasNotifiedRef.current = true;
+    setTimeout(() => onOrderComplete(), 600);
+  }
+  // reset ref when order changes
+  if (phase === "intro") wasNotifiedRef.current = false;
+
+  // ===== Render =====
+  return (
+    <group>
+      {/* 扫码篮 (柜台左侧发光圆环) — scan phase 可见 */}
+      {phase === "scan" && (
+        <DropZoneRing
+          x={SCAN_ZONE.x}
+          z={SCAN_ZONE.z}
+          radius={SCAN_ZONE.radius}
+          color="#10b981"
+          label={`总价 ${formatYuan(scannedTotalCent)}`}
+        />
+      )}
+      {/* 找零托盘 (柜台右侧) — change phase 可见 */}
+      {phase === "change" && (
+        <DropZoneRing
+          x={TRAY_ZONE.x}
+          z={TRAY_ZONE.z}
+          radius={TRAY_ZONE.radius}
+          color={changeMatch ? "#10b981" : "#fbbf24"}
+          label={`已放 ${formatYuan(trayCent)} / 需 ${formatYuan(needChangeCent)}`}
+        />
+      )}
+
+      {/* === Scan phase: 商品摆桌 === */}
+      {phase === "scan" &&
+        itemInstances.map((inst, i) => {
+          if (scannedIds.has(inst.instanceId)) return null; // 已扫的隐藏
+          return (
+            <DraggableObject
+              key={inst.instanceId}
+              origin={itemPositions[i]!}
+              planeY={COUNTER_Y}
+              dropZones={[SCAN_ZONE]}
+              onDrop={() => handleScanDrop(inst.instanceId)}
+            >
+              <group>
+                <StoreItemMesh gltfUrl={inst.gltf} scale={0.35} />
+                {/* 价签 */}
+                <Text
+                  position={[0, 0.15, 0]}
+                  fontSize={0.06}
+                  color="#ffffff"
+                  outlineWidth={0.008}
+                  outlineColor="#000"
+                  anchorX="center"
+                  anchorY="middle"
+                >
+                  {formatYuan(inst.price)}
+                </Text>
+              </group>
+            </DraggableObject>
+          );
+        })}
+
+      {/* === Scan-done 按钮: 全部扫码完后显示 "完成扫码" === */}
+      {phase === "scan" && allScanned && (
+        <ProceedButton
+          position={[0, COUNTER_Y + 0.25, -0.15]}
+          label={`✅ 扫码完成 ${formatYuan(scannedTotalCent)} - 去找零`}
+          onClick={() => onPhaseChange("change")}
+        />
+      )}
+
+      {/* === Change phase: 钱币桌前 === */}
+      {phase === "change" &&
+        coinInstances.map((inst) => {
+          if (coinsUsed.has(inst.instanceId)) return null;
+          return (
+            <DraggableObject
+              key={inst.instanceId}
+              origin={inst.origin}
+              planeY={COUNTER_Y}
+              dropZones={[TRAY_ZONE]}
+              onDrop={() => handleCoinDrop(inst.instanceId, inst.coin.valueCent)}
+            >
+              <Coin3D coin={inst.coin} />
+            </DraggableObject>
+          );
+        })}
+    </group>
+  );
+}
+
+/** 柜台上某 zone 的发光圆环 + 上方提示文字 */
+function DropZoneRing({
+  x,
+  z,
+  radius,
+  color,
+  label,
+}: {
+  x: number;
+  z: number;
+  radius: number;
+  color: string;
+  label: string;
+}) {
+  return (
+    <group position={[x, COUNTER_Y + 0.005, z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[radius - 0.04, radius, 32]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={1.2}
+          side={THREE.DoubleSide}
+          transparent
+          opacity={0.85}
+        />
+      </mesh>
+      <Text
+        position={[0, 0.18, 0]}
+        fontSize={0.045}
+        color={color}
+        outlineWidth={0.006}
+        outlineColor="#000"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {label}
+      </Text>
+    </group>
+  );
+}
+
+function ProceedButton({
+  position,
+  label,
+  onClick,
+}: {
+  position: [number, number, number];
+  label: string;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <group
+      position={position}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        setHovered(true);
+        document.body.style.cursor = "pointer";
+      }}
+      onPointerOut={(e) => {
+        e.stopPropagation();
+        setHovered(false);
+        document.body.style.cursor = "default";
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      <mesh>
+        <planeGeometry args={[0.8, 0.16]} />
+        <meshBasicMaterial color={hovered ? "#22c55e" : "#16a34a"} transparent opacity={0.95} />
+      </mesh>
+      <Text
+        position={[0, 0, 0.01]}
+        fontSize={0.06}
+        color="#ffffff"
+        outlineWidth={0.006}
+        outlineColor="#000"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {label}
+      </Text>
+    </group>
+  );
+}
+
+// Re-export for parent
+export { calcOrderTotalCent, calcOrderChangeCent, formatYuan, ORDERS };

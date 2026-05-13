@@ -34,6 +34,9 @@ export interface PlayerControls {
 interface PlayerVRMProps {
   /** 初始位置 */
   initialPosition?: [number, number, number];
+  /** 初始朝向 yaw（弧度，默认 0 = 默认 VRM forward -Z）。
+   * 老师精灵在 paradise 中心面向 +Z（朝俯视相机抬头）时传 Math.PI */
+  initialYaw?: number;
   /** input vector (call-by-ref / parent state) */
   controls: PlayerControls;
   /** 移动速度（单位/秒） */
@@ -54,6 +57,7 @@ export interface PlayerVRMHandle {
 export const PlayerVRM = forwardRef<PlayerVRMHandle, PlayerVRMProps>(function PlayerVRM(
   {
     initialPosition = [0, 0, 0],
+    initialYaw = 0,
     controls,
     speed = 4.5,
     turnSpeed = 9,
@@ -63,8 +67,8 @@ export const PlayerVRM = forwardRef<PlayerVRMHandle, PlayerVRMProps>(function Pl
 ) {
   const groupRef = useRef<Group>(null);
   const [vrm, setVrm] = useState<VRM | null>(null);
-  const targetYawRef = useRef(0);
-  const currentYawRef = useRef(0);
+  const targetYawRef = useRef(initialYaw);
+  const currentYawRef = useRef(initialYaw);
   // walking animation phase
   const walkPhaseRef = useRef(0);
 

@@ -24,6 +24,12 @@ export interface DailyLogEntry {
   wrong: number;
   /** 今日**练过的不同字/词**列表（去重，max 200 防爆 db.meta） */
   items: string[];
+  /**
+   * v0.32.10：今日**答错过的不同字/词**列表（去重，max 50）。
+   * 给快报卡列"今日错字/错词"用 — 老师辅导抓手。
+   * 老数据没此字段 — 读取时 fallback `[]`。
+   */
+  wrongItems?: string[];
 }
 
 function todayDateStr(now: number = Date.now()): string {
@@ -41,9 +47,10 @@ export async function loadDailyLog(
   dateStr?: string,
 ): Promise<DailyLogEntry> {
   const row = await db.meta.get(key(subjectId, studentId, dateStr));
-  return (
-    (row?.value as DailyLogEntry | undefined) ?? { right: 0, wrong: 0, items: [] }
-  );
+  const raw = row?.value as DailyLogEntry | undefined;
+  if (!raw) return { right: 0, wrong: 0, items: [], wrongItems: [] };
+  // v0.32.10：老数据 fallback wrongItems
+  return { wrongItems: [], ...raw };
 }
 
 /** 记一次答题（一个字/词，对错） */
@@ -54,12 +61,19 @@ export async function recordDailyActivity(
   isCorrect: boolean,
 ): Promise<void> {
   const cur = await loadDailyLog(subjectId, studentId);
+  const curWrong = cur.wrongItems ?? [];
   const next: DailyLogEntry = {
     right: cur.right + (isCorrect ? 1 : 0),
     wrong: cur.wrong + (isCorrect ? 0 : 1),
     items: cur.items.includes(item)
       ? cur.items
       : [...cur.items.slice(-199), item], // 上限 200
+    // v0.32.10：只在答错时加进 wrongItems（去重 + 上限 50）
+    wrongItems: isCorrect
+      ? curWrong
+      : curWrong.includes(item)
+        ? curWrong
+        : [...curWrong.slice(-49), item],
   };
   await db.meta.put({ key: key(subjectId, studentId), value: next });
 }

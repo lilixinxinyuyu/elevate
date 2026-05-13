@@ -40,7 +40,8 @@ body {
   @apply card shadow-glow;
 }
 .chip {
-  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  /* v0.32.10：whitespace-nowrap 修 html-to-image 截图时最后一字被换行 bug */
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap;
 }
 
 /* Form controls in dark theme */

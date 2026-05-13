@@ -13,6 +13,7 @@
  */
 
 import { db } from "../db/dexie";
+import { schedulePushToCloud } from "../db/cloudSync";
 import type { G4Word } from "../subjects/english/wordList";
 import {
   distribution,
@@ -64,6 +65,9 @@ export async function recordVocabAttempt(
   await saveVocabProgress(studentId, all);
   // v0.31.103：daily log（主页 summary 用）
   void recordDailyActivity("english", studentId, k, isCorrect);
+  // v0.32.10：跟数学 submitAttempt 一致，每题都触发 8s 防抖推送。
+  // 老逻辑只靠 pagehide/visibility 兜底，导致英语跨设备同步迟缓。
+  schedulePushToCloud();
   return next;
 }
 

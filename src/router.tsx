@@ -29,6 +29,16 @@ import { AtelierRealmPage } from "./pages/atelier/AtelierRealmPage";
 import { TownHomePage } from "./pages/town/TownHomePage";
 import { BankPage } from "./pages/town/BankPage";
 import { BuildingStubPage } from "./pages/town/BuildingStubPage";
+// v0.32.0: P3 Worlds — 3 学科地图独立沙箱（GDD docs/p3-worlds-gdd-v3.md）
+import { WorldsHomePage } from "./pages/worlds/WorldsHomePage";
+import { BaibaoMapPage } from "./pages/worlds/BaibaoMapPage";
+import { BuildingStubPage as WorldsBuildingStub } from "./pages/worlds/BuildingStubPage";
+import { WorldLockedPage } from "./pages/worlds/WorldLockedPage";
+import { StorePage } from "./pages/worlds/StorePage";
+import { BankPage as WorldsBankPage } from "./pages/worlds/BankPage";
+import { BakeryPage } from "./pages/worlds/BakeryPage";
+import { XingfanMapPage } from "./pages/worlds/XingfanMapPage";
+import { AirportPage } from "./pages/worlds/AirportPage";
 import { MascotComparePage } from "./pages/MascotCompare";
 import { MathTricksPage } from "./pages/MathTricks";
 import { PlaygroundPage } from "./pages/Playground";
@@ -174,6 +184,19 @@ export const router = createBrowserRouter([
       { path: "*", element: <ComingSoonPage /> },
     ],
   },
+  // v0.32.0: P3 Worlds 独立沙箱 — 跟 /:subject 完全平行，不挂 SubjectShell
+  { path: "/worlds", element: <WorldsHomePage /> },
+  { path: "/worlds/baibao", element: <BaibaoMapPage /> },
+  { path: "/worlds/baibao/store", element: <StorePage /> },
+  { path: "/worlds/baibao/bank", element: <WorldsBankPage /> },
+  { path: "/worlds/baibao/bakery", element: <BakeryPage /> },
+  { path: "/worlds/baibao/:buildingId", element: <WorldsBuildingStub /> },
+  // 星帆岛 (英语世界)
+  { path: "/worlds/xingfan", element: <XingfanMapPage /> },
+  { path: "/worlds/xingfan/airport", element: <AirportPage /> },
+  { path: "/worlds/xingfan/:buildingId", element: <WorldsBuildingStub /> },
+  { path: "/worlds/:worldId", element: <WorldLockedPage /> },
+
   // 老路径重定向：保护 PWA 已装的 Selena 设备。
   // 关键：必须保留 query string + hash —— 老代码里有 `/train?skillIds=...` 类似
   // 调用，普通 <Navigate to="/math/train" replace /> 会**直接丢掉 query**，
