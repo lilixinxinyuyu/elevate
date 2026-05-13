@@ -40,8 +40,8 @@ export function BakeryPage() {
         ? "welcome"
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#ec4899" });
-  // v0.32.12：反馈层
-  const { trigger, pulses } = useWorldFeedback();
+  // v0.32.12-14：反馈层 + Mascot 联动
+  const { trigger, pulses, lastReaction } = useWorldFeedback();
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -120,6 +120,7 @@ export function BakeryPage() {
         skin={mascotProps.skin}
         line={mascotProps.line}
         accent={mascotProps.accent}
+        reaction={lastReaction}
       />
 
       <WorldFeedbackOverlay pulses={pulses} />

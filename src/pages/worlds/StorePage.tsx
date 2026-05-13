@@ -50,8 +50,8 @@ export function StorePage() {
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#f59e0b" });
 
-  // v0.32.12：统一反馈层（声 + 震 + 闪 + 文案）
-  const { trigger, pulses } = useWorldFeedback();
+  // v0.32.12-14：统一反馈层（声 + 震 + 闪 + 文案 + Mascot 联动）
+  const { trigger, pulses, lastReaction } = useWorldFeedback();
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -152,6 +152,7 @@ export function StorePage() {
         skin={mascotProps.skin}
         line={mascotProps.line}
         accent={mascotProps.accent}
+        reaction={lastReaction}
       />
 
       {/* v0.32.12：反馈层 overlay */}

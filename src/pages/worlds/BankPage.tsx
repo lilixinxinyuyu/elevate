@@ -43,8 +43,8 @@ export function BankPage() {
         ? "welcome"
         : "playing";
   const mascotProps = useMascotReaction({ mood, accent: "#3b82f6" });
-  // v0.32.12：反馈层
-  const { trigger, pulses } = useWorldFeedback();
+  // v0.32.12-14：反馈层 + Mascot 联动
+  const { trigger, pulses, lastReaction } = useWorldFeedback();
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -127,6 +127,7 @@ export function BankPage() {
         skin={mascotProps.skin}
         line={mascotProps.line}
         accent={mascotProps.accent}
+        reaction={lastReaction}
       />
 
       <WorldFeedbackOverlay pulses={pulses} />

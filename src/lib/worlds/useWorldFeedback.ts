@@ -52,6 +52,14 @@ function vibrate(pattern: number | number[]) {
 
 export function useWorldFeedback() {
   const [pulses, setPulses] = useState<FeedbackPulse[]>([]);
+  /**
+   * v0.32.14: 最新反馈类型 + 轮次 seq，给 MascotPIP 联动用。
+   * seq 每 trigger 递增 — 让 useEffect 在相同 kind 重触发也能感知。
+   */
+  const [lastReaction, setLastReaction] = useState<{
+    kind: FeedbackKind;
+    seq: number;
+  } | null>(null);
 
   const trigger = useCallback(
     (kind: FeedbackKind, label?: string) => {
@@ -78,7 +86,7 @@ export function useWorldFeedback() {
           vibrate([10, 60, 10, 60, 10, 60, 24]);
           break;
       }
-      // 2. 视觉 pulse — 加入队列，让 Overlay 渲染并 800-1200ms 后自动清理
+      // 2. 视觉 pulse — 加入队列
       const id = ++pulseIdSeq;
       const pulse: FeedbackPulse = {
         id,
@@ -87,14 +95,16 @@ export function useWorldFeedback() {
         createdAt: Date.now(),
       };
       setPulses((prev) => [...prev, pulse]);
-      // 1200ms 后清理（足够动画播完）
       const ttl = kind === "complete" ? 1500 : 900;
       window.setTimeout(() => {
         setPulses((prev) => prev.filter((p) => p.id !== id));
       }, ttl);
+
+      // 3. Mascot reaction（同步 lastReaction state）
+      setLastReaction({ kind, seq: id });
     },
     [],
   );
 
-  return { trigger, pulses };
+  return { trigger, pulses, lastReaction };
 }
