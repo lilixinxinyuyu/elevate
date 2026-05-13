@@ -126,6 +126,13 @@ export function useWorldFeedback() {
     }
     if (!cls) return;
     const node = rootRef.current;
+    // v0.32.24 (Codex Ep9 fix)：连续 correct/complete 间隔 < 动画时长时，
+    // 旧 timeout 会 remove 正在播的新 class，且 className 还在 → 浏览器
+    // 不重启动画。修复：先 remove 全部 worlds-screen-* class，强制 reflow，
+    // 再 add 新 class — CSS animation 重播。
+    node.classList.remove("worlds-screen-shake", "worlds-screen-zoom");
+    // force reflow（读 offsetWidth 触发 layout），让浏览器确认 class 真被移除
+    void node.offsetWidth;
     node.classList.add(cls);
     const t = window.setTimeout(() => {
       node.classList.remove(cls);

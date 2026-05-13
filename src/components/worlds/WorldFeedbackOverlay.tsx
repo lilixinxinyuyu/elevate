@@ -4,7 +4,7 @@
  * 跟 useWorldFeedback 配合：
  *   - 屏幕闪光：correct=绿 / wrong=红 / complete=金，radial gradient，200ms fade
  *   - 中央 scale-up + fade 文案（correct ✓ / wrong ✗ / complete +5 XP）
- *   - **confetti 粒子喷射（correct 12 个 / complete 28 个，纯 CSS）**
+ *   - **confetti 粒子喷射（correct 12 个 / complete 32 个，纯 CSS）**
  *   - pickup/drop 不显示视觉（仅 SFX + 震动）
  *
  * 渲染在 fixed inset-0 div，pointer-events-none，不挡交互。
