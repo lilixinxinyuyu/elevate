@@ -20,6 +20,8 @@ import { MascotPIP } from "../../components/atelier/MascotPIP";
 import { useMascotReaction, type MascotMood } from "../../lib/worlds/useMascotReaction";
 import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
 import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
+import { useBgm } from "../../lib/worlds/useBGM";
+import { BgmMuteButton } from "../../components/worlds/BgmMuteButton";
 
 type Phase = "intro" | "exchange";
 
@@ -45,6 +47,8 @@ export function BankPage() {
   const mascotProps = useMascotReaction({ mood, accent: "#3b82f6" });
   // v0.32.12-14：反馈层 + Mascot 联动
   const { trigger, pulses, lastReaction } = useWorldFeedback();
+  // v0.32.21: BGM
+  useBgm("bank");
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -129,6 +133,8 @@ export function BankPage() {
         accent={mascotProps.accent}
         reaction={lastReaction}
       />
+
+      <BgmMuteButton accent="#3b82f6" />
 
       <WorldFeedbackOverlay pulses={pulses} />
     </div>

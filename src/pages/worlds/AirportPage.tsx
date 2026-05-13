@@ -17,6 +17,8 @@ import { MascotPIP } from "../../components/atelier/MascotPIP";
 import { useMascotReaction, type MascotMood } from "../../lib/worlds/useMascotReaction";
 import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
 import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
+import { useBgm } from "../../lib/worlds/useBGM";
+import { BgmMuteButton } from "../../components/worlds/BgmMuteButton";
 
 type Phase = "intro" | "loading";
 
@@ -42,6 +44,8 @@ export function AirportPage() {
   const mascotProps = useMascotReaction({ mood, accent: "#06b6d4" });
   // v0.32.12-14：反馈层 + Mascot 联动
   const { trigger, pulses, lastReaction } = useWorldFeedback();
+  // v0.32.21: BGM
+  useBgm("airport");
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -122,6 +126,8 @@ export function AirportPage() {
         accent={mascotProps.accent}
         reaction={lastReaction}
       />
+
+      <BgmMuteButton accent="#06b6d4" />
 
       <WorldFeedbackOverlay pulses={pulses} />
     </div>

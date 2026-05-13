@@ -17,6 +17,8 @@ import { MascotPIP } from "../../components/atelier/MascotPIP";
 import { useMascotReaction, type MascotMood } from "../../lib/worlds/useMascotReaction";
 import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
 import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
+import { useBgm } from "../../lib/worlds/useBGM";
+import { BgmMuteButton } from "../../components/worlds/BgmMuteButton";
 
 type Phase = "intro" | "slicing";
 
@@ -42,6 +44,8 @@ export function BakeryPage() {
   const mascotProps = useMascotReaction({ mood, accent: "#ec4899" });
   // v0.32.12-14：反馈层 + Mascot 联动
   const { trigger, pulses, lastReaction } = useWorldFeedback();
+  // v0.32.21: BGM
+  useBgm("bakery");
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -128,6 +132,8 @@ export function BakeryPage() {
         accent={mascotProps.accent}
         reaction={lastReaction}
       />
+
+      <BgmMuteButton accent="#ec4899" />
 
       <WorldFeedbackOverlay pulses={pulses} />
     </div>

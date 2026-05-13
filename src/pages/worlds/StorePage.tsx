@@ -25,6 +25,8 @@ import { MascotPIP } from "../../components/atelier/MascotPIP";
 import { useMascotReaction, type MascotMood } from "../../lib/worlds/useMascotReaction";
 import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
 import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
+import { useBgm } from "../../lib/worlds/useBGM";
+import { BgmMuteButton } from "../../components/worlds/BgmMuteButton";
 
 export function StorePage() {
   const navigate = useNavigate();
@@ -52,6 +54,8 @@ export function StorePage() {
 
   // v0.32.12-14：统一反馈层（声 + 震 + 闪 + 文案 + Mascot 联动）
   const { trigger, pulses, lastReaction } = useWorldFeedback();
+  // v0.32.21: BGM
+  useBgm("store");
 
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
@@ -154,6 +158,8 @@ export function StorePage() {
         accent={mascotProps.accent}
         reaction={lastReaction}
       />
+
+      <BgmMuteButton accent="#f59e0b" />
 
       {/* v0.32.12：反馈层 overlay */}
       <WorldFeedbackOverlay pulses={pulses} />
