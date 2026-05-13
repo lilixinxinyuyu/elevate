@@ -57,6 +57,17 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
     setTimeout(() => onOrderComplete(), 900);
   }
 
+  // v0.32.19：扇形切判定 — 切片必须相邻已切的 slice（第 1 块除外）
+  // 数学意义：1/N 蛋糕 = 连续 N/12 块，不是随便挑 N 块
+  const isAdjacent = (idx: number, removedSet: Set<number>): boolean => {
+    if (removedSet.size === 0) return true; // 第 1 块随便切
+    for (const r of removedSet) {
+      if ((r + 1) % 12 === idx) return true;
+      if ((r - 1 + 12) % 12 === idx) return true;
+    }
+    return false;
+  };
+
   const handleSliceClick = (idx: number) => {
     if (enough) {
       // v0.32.13: 切够了还点 → wrong 反馈
@@ -64,6 +75,15 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
       return;
     }
     if (removed.has(idx)) return;
+    // v0.32.19：扇形切判定 — 必须相邻
+    if (order.requireContiguous !== false && !isAdjacent(idx, removed)) {
+      onFeedback?.(
+        "wrong",
+        "要切连成一片！点已切的旁边那块",
+      );
+      // 用红色 hover 视觉提示该 slice 不能切（短闪）
+      return;
+    }
     setRemoved((prev) => {
       const n = new Set(prev);
       n.add(idx);

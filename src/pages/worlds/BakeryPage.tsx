@@ -100,7 +100,13 @@ export function BakeryPage() {
       <CustomerBubble
         emoji={order.customerEmoji}
         line={order.customerLine}
-        hint={phase === "slicing" ? `要 ${order.needSlices} 块（共 12 块）` : undefined}
+        hint={
+          phase === "slicing"
+            ? order.requireContiguous !== false
+              ? `要 ${order.needSlices} 块连成一片（共 12 块）`
+              : `要 ${order.needSlices} 块（共 12 块）`
+            : undefined
+        }
       />
 
       {phase === "intro" && !showReward && (
