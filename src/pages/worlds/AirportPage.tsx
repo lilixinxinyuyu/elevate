@@ -80,7 +80,11 @@ export function AirportPage() {
         <StoreEnvironment />
 
         {phase === "loading" && (
-          <AirportMiniGame order={order} onOrderComplete={handleOrderComplete} />
+          <AirportMiniGame
+            order={order}
+            onOrderComplete={handleOrderComplete}
+            onFeedback={trigger}
+          />
         )}
       </WorldsCanvas>
 

@@ -20,6 +20,8 @@ const CART_ZONE = { id: "cart", x: 0.45, z: 0.4, radius: 0.28 };
 interface AirportMiniGameProps {
   order: AirportOrder;
   onOrderComplete: () => void;
+  /** v0.32.13: 内层反馈 trigger */
+  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string) => void;
 }
 
 interface LuggageInstance {
@@ -29,7 +31,7 @@ interface LuggageInstance {
   origin: [number, number];
 }
 
-export function AirportMiniGame({ order, onOrderComplete }: AirportMiniGameProps) {
+export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportMiniGameProps) {
   const luggageInstances = useMemo<LuggageInstance[]>(() => {
     const out: LuggageInstance[] = [];
     const groupCount = order.pool.length;
@@ -80,8 +82,26 @@ export function AirportMiniGame({ order, onOrderComplete }: AirportMiniGameProps
     setTimeout(() => onOrderComplete(), 800);
   }
 
-  const handleDrop = (instanceId: string) => {
+  const handleDrop = (instanceId: string): boolean => {
+    // v0.32.13: 装错类（订单里没要求这个 itemId）/ 超量 → wrong + reject
+    const inst = luggageInstances.find((i) => i.instanceId === instanceId);
+    if (!inst) return false;
+    const wanted = order.requests.find((r) => r.itemId === inst.itemId);
+    if (!wanted) {
+      onFeedback?.("wrong", `客人没要 ${LUGGAGE[inst.itemId].english}`);
+      return false;
+    }
+    const currentCount = counts[inst.itemId] ?? 0;
+    if (currentCount >= wanted.quantity) {
+      onFeedback?.(
+        "wrong",
+        `${LUGGAGE[inst.itemId].english} 已经够 ${wanted.quantity} 件了`,
+      );
+      return false;
+    }
     setLoadedIds((prev) => new Set(prev).add(instanceId));
+    onFeedback?.("drop");
+    return true;
   };
 
   // requested 列表 progress 显示
@@ -138,6 +158,7 @@ export function AirportMiniGame({ order, onOrderComplete }: AirportMiniGameProps
             planeY={COUNTER_Y}
             dropZones={[CART_ZONE]}
             onDrop={() => handleDrop(inst.instanceId)}
+            onPickup={() => onFeedback?.("pickup")}
           >
             <group>
               {/* emoji 用 3D text 模拟（drei Text supports emoji） */}

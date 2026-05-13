@@ -22,6 +22,8 @@ import { sfx } from "../../../lib/sfx";
 interface BakeryMiniGameProps {
   order: BakeryOrder;
   onOrderComplete: () => void;
+  /** v0.32.13: 内层反馈 trigger */
+  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string) => void;
 }
 
 const COUNTER_Y = 1.0;
@@ -37,7 +39,7 @@ interface FlyingSlice {
 
 const FLY_DURATION_MS = 380;
 
-export function BakeryMiniGame({ order, onOrderComplete }: BakeryMiniGameProps) {
+export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMiniGameProps) {
   /** cake 上不再渲染的 slice（点了就立刻 add） */
   const [removed, setRemoved] = useState<Set<number>>(new Set());
   /** 已飞到盘子上的数量（影响 plate stack 渲染 + 完成判定） */
@@ -56,7 +58,11 @@ export function BakeryMiniGame({ order, onOrderComplete }: BakeryMiniGameProps) 
   }
 
   const handleSliceClick = (idx: number) => {
-    if (enough) return; // 别 overshoot
+    if (enough) {
+      // v0.32.13: 切够了还点 → wrong 反馈
+      onFeedback?.("wrong", "已经切够啦，多了客人吃不下");
+      return;
+    }
     if (removed.has(idx)) return;
     setRemoved((prev) => {
       const n = new Set(prev);
@@ -68,11 +74,13 @@ export function BakeryMiniGame({ order, onOrderComplete }: BakeryMiniGameProps) 
       ...prev,
       { idx, key: fkey, startedAt: performance.now() },
     ]);
+    onFeedback?.("pickup");
     sfx.tick(); // 切下的轻 tick 音
     window.setTimeout(() => {
       setFlying((prev) => prev.filter((f) => f.key !== fkey));
       setCollected((c) => c + 1);
       sfx.go(); // 落盘的"嗒"音
+      onFeedback?.("drop");
     }, FLY_DURATION_MS);
   };
 

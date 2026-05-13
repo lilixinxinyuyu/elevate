@@ -83,7 +83,11 @@ export function BakeryPage() {
         <StoreEnvironment />
 
         {phase === "slicing" && (
-          <BakeryMiniGame order={order} onOrderComplete={handleOrderComplete} />
+          <BakeryMiniGame
+            order={order}
+            onOrderComplete={handleOrderComplete}
+            onFeedback={trigger}
+          />
         )}
       </WorldsCanvas>
 

@@ -34,8 +34,14 @@ interface DraggableObjectProps {
   planeY?: number;
   /** drop zones — 拖到这些 zone 触发 onDrop */
   dropZones?: DropZone[];
-  /** 落入 zone 回调 */
-  onDrop?: (zoneId: string) => void;
+  /**
+   * 落入 zone 回调。
+   * v0.32.13: 返回 false 表示业务拒绝（如超额）→ 自动 snap 回 origin。
+   * 返回 true / undefined 视为接受。
+   */
+  onDrop?: (zoneId: string) => boolean | void;
+  /** v0.32.13: 拿起回调（按下时触发，用于 SFX + 震动反馈） */
+  onPickup?: () => void;
   /** 是否禁用拖动 (e.g. 已扫码后) */
   disabled?: boolean;
 }
@@ -46,6 +52,7 @@ export function DraggableObject({
   planeY = 1.0,
   dropZones = [],
   onDrop,
+  onPickup,
   disabled = false,
 }: DraggableObjectProps) {
   const groupRef = useRef<Group>(null);
@@ -66,6 +73,7 @@ export function DraggableObject({
     e.stopPropagation();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     setDragging(true);
+    onPickup?.();
   };
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
@@ -102,9 +110,13 @@ export function DraggableObject({
       }
     }
     if (dropped && onDrop) {
-      onDrop(dropped.id);
+      // v0.32.13: 业务可返回 false 拒绝 → snap 回 origin（如超额币 / 错类商品）
+      const accepted = onDrop(dropped.id);
+      if (accepted === false) {
+        groupRef.current.position.set(origin[0], planeY, origin[1]);
+      }
     } else {
-      // snap 回 origin
+      // 落空 → snap 回 origin
       groupRef.current.position.set(origin[0], planeY, origin[1]);
     }
   };

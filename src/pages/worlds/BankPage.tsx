@@ -86,7 +86,11 @@ export function BankPage() {
         <StoreEnvironment />
 
         {phase === "exchange" && (
-          <BankMiniGame order={order} onOrderComplete={handleOrderComplete} />
+          <BankMiniGame
+            order={order}
+            onOrderComplete={handleOrderComplete}
+            onFeedback={trigger}
+          />
         )}
       </WorldsCanvas>
 

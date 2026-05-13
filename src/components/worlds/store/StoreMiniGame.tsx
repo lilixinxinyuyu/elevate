@@ -34,6 +34,8 @@ interface StoreMiniGameProps {
   phase: StorePhase;
   onPhaseChange: (phase: StorePhase) => void;
   onOrderComplete: () => void;
+  /** v0.32.13: 内层反馈层 trigger（pickup/drop/wrong） */
+  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string) => void;
 }
 
 // KayKit kitchencounter_straight_A 台面 Y=1.0（实测 bbox）
@@ -47,6 +49,7 @@ export function StoreMiniGame({
   phase,
   onPhaseChange,
   onOrderComplete,
+  onFeedback,
 }: StoreMiniGameProps) {
   // ============ scan phase 状态 ============
   // 把订单展开成单个商品列表 (e.g. carrot×3 → 3 个 carrot 实例)
@@ -111,16 +114,26 @@ export function StoreMiniGame({
     return out;
   }, []);
 
-  const handleScanDrop = (instanceId: string) => {
+  const handleScanDrop = (instanceId: string): boolean => {
     setScannedIds((prev) => new Set(prev).add(instanceId));
+    onFeedback?.("drop");
+    return true;
   };
 
   // 检测 scan 阶段完成
   const allScanned = scannedIds.size === itemInstances.length;
 
-  const handleCoinDrop = (instanceId: string, valueCent: number) => {
+  /** v0.32.13: 超额放币 → wrong + reject（DraggableObject 自动 snap 回） */
+  const handleCoinDrop = (instanceId: string, valueCent: number): boolean => {
+    const newTotal = trayCent + valueCent;
+    if (newTotal > needChangeCent) {
+      onFeedback?.("wrong", `找多了！再放就 ${formatYuan(newTotal)} 啦`);
+      return false;
+    }
     setCoinsUsed((prev) => new Set(prev).add(instanceId));
-    setTrayCent((prev) => prev + valueCent);
+    setTrayCent(newTotal);
+    onFeedback?.("drop");
+    return true;
   };
 
   // 检测 change 阶段完成（金额相等）
@@ -168,6 +181,7 @@ export function StoreMiniGame({
               planeY={COUNTER_Y}
               dropZones={[SCAN_ZONE]}
               onDrop={() => handleScanDrop(inst.instanceId)}
+              onPickup={() => onFeedback?.("pickup")}
             >
               <group>
                 <StoreItemMesh gltfUrl={inst.gltf} scale={0.35} />
@@ -208,6 +222,7 @@ export function StoreMiniGame({
               planeY={COUNTER_Y}
               dropZones={[TRAY_ZONE]}
               onDrop={() => handleCoinDrop(inst.instanceId, inst.coin.valueCent)}
+              onPickup={() => onFeedback?.("pickup")}
             >
               <Coin3D coin={inst.coin} />
             </DraggableObject>

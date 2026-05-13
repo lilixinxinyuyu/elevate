@@ -19,6 +19,8 @@ const TRAY_ZONE = { id: "tray", x: 0, z: 0.35, radius: 0.28 };
 interface BankMiniGameProps {
   order: BankOrder;
   onOrderComplete: () => void;
+  /** v0.32.13: 内层反馈 trigger */
+  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string) => void;
 }
 
 interface CoinInstance {
@@ -30,7 +32,7 @@ interface CoinInstance {
   origin: [number, number];
 }
 
-export function BankMiniGame({ order, onOrderComplete }: BankMiniGameProps) {
+export function BankMiniGame({ order, onOrderComplete, onFeedback }: BankMiniGameProps) {
   // 把 poolCoins 展开成单个 coin 实例
   const coinInstances = useMemo<CoinInstance[]>(() => {
     const out: CoinInstance[] = [];
@@ -70,9 +72,16 @@ export function BankMiniGame({ order, onOrderComplete }: BankMiniGameProps) {
     setTimeout(() => onOrderComplete(), 700);
   }
 
-  const handleDrop = (instanceId: string, valueCent: number) => {
+  const handleDrop = (instanceId: string, valueCent: number): boolean => {
+    const newTotal = trayCent + valueCent;
+    if (newTotal > target) {
+      onFeedback?.("wrong", `放多了！再放就 ${formatYuan(newTotal)}`);
+      return false;
+    }
     setCoinsUsed((prev) => new Set(prev).add(instanceId));
-    setTrayCent((prev) => prev + valueCent);
+    setTrayCent(newTotal);
+    onFeedback?.("drop");
+    return true;
   };
 
   return (
@@ -126,6 +135,7 @@ export function BankMiniGame({ order, onOrderComplete }: BankMiniGameProps) {
             planeY={COUNTER_Y}
             dropZones={[TRAY_ZONE]}
             onDrop={() => handleDrop(inst.instanceId, inst.valueCent)}
+            onPickup={() => onFeedback?.("pickup")}
           >
             <Coin3D
               coin={{

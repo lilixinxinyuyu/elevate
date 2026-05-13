@@ -103,6 +103,7 @@ export function StorePage() {
             phase={phase}
             onPhaseChange={setPhase}
             onOrderComplete={handleOrderComplete}
+            onFeedback={trigger}
           />
         )}
       </WorldsCanvas>
