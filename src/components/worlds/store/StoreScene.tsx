@@ -89,11 +89,9 @@ export function StoreEnvironment({
 function StoreDecor() {
   return (
     <group>
-      {/* v0.32.33: 食材 crate 坐桌面上 */}
-      <KayMesh url={`${KAY_RB}/crate_carrots.gltf`} position={[-1.05, 1.0, 0.35]} scale={0.6} />
-      <KayMesh url={`${KAY_RB}/crate_tomatoes.gltf`} position={[-1.05, 1.4, 0.4]} scale={0.55} rotationY={Math.PI / 6} />
-      <KayMesh url={`${KAY_RB}/crate_potatoes.gltf`} position={[1.05, 1.0, 0.35]} scale={0.6} />
-      <KayMesh url={`${KAY_RB}/crate_buns.gltf`} position={[1.05, 1.4, 0.4]} scale={0.55} rotationY={-Math.PI / 6} />
+      {/* v0.32.35: 食材 crate 坐桌面 — 单个不堆叠 + 更小 scale 防堵视野 */}
+      <KayMesh url={`${KAY_RB}/crate_carrots.gltf`} position={[-1.05, 1.0, 0.35]} scale={0.38} />
+      <KayMesh url={`${KAY_RB}/crate_potatoes.gltf`} position={[1.05, 1.0, 0.35]} scale={0.38} />
       {/* 柜台后方 jars，店内装饰 */}
       <KayMesh url={`${KAY_RB}/jar_A_small.gltf`} position={[-0.75, 1.0, -0.7]} scale={1.0} />
       <KayMesh url={`${KAY_RB}/jar_B_small.gltf`} position={[0.75, 1.0, -0.7]} scale={1.0} />
