@@ -20,6 +20,7 @@
 import { useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { Text } from "../BillboardText";
 
 const KAY_RB = "/env/kaykit/restaurant";
 const KAY_DECO = "/env/kaykit/medieval/deco";
@@ -301,25 +302,55 @@ function AirportDecor() {
 }
 
 /**
- * 柜台后方招牌 — 替代之前丑的 menu.gltf
- * 普通 box plane + emissive 颜色，背景挂在 Y=1.6 高处。
+ * 柜台后方招牌 — v0.32.36: 删除丑的黑色 #0f172a 边框（爸爸/双 CLI 都标 P0）
+ * + 加白色 SDF 文字显示 label
+ * + 顶部金色顶饰 + 底部金属支柱
+ * 整体更像"店招"
  */
 function Sign({ label, color }: { label: string; color: string }) {
-  // 招牌纯几何，文字由 mini-game HUD 内的 drei Text 显示（不在此处重复）
-  // 这里只放一个 emissive 板做"店招"视觉锚点
   return (
     <group position={[0, 1.6, -0.9]}>
+      {/* 主板 emissive 牌 */}
       <mesh>
         <boxGeometry args={[1.6, 0.45, 0.08]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} roughness={0.4} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.55}
+          roughness={0.35}
+        />
       </mesh>
-      {/* 装饰边框 */}
-      <mesh position={[0, 0, 0.05]}>
-        <boxGeometry args={[1.65, 0.5, 0.02]} />
-        <meshStandardMaterial color="#0f172a" />
+      {/* 白色 SDF 文字 — 招牌 label */}
+      <Text
+        position={[0, 0, 0.07]}
+        fontSize={0.16}
+        color="#ffffff"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.012}
+        outlineColor="#000000"
+        maxWidth={1.5}
+      >
+        {label}
+      </Text>
+      {/* 顶部金色顶饰 — 装饰条 */}
+      <mesh position={[0, 0.27, 0]}>
+        <boxGeometry args={[1.7, 0.06, 0.06]} />
+        <meshStandardMaterial
+          color="#fbbf24"
+          metalness={0.7}
+          roughness={0.25}
+          emissive="#92400e"
+          emissiveIntensity={0.15}
+        />
       </mesh>
-      {/* label 仅用于 debug — 通过 group userData 注释；实际 store/bank 等 HUD 显示这个 label */}
-      <group userData={{ signLabel: label }} />
+      {/* 底部金属支柱 ×2 — 让招牌看起来"立着"而非"漂着" */}
+      {[-0.6, 0.6].map((x, i) => (
+        <mesh key={i} position={[x, -0.35, 0]}>
+          <boxGeometry args={[0.05, 0.3, 0.05]} />
+          <meshStandardMaterial color="#52525b" metalness={0.5} roughness={0.35} />
+        </mesh>
+      ))}
     </group>
   );
 }
