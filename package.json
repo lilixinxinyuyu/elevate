@@ -1,7 +1,7 @@
 {
   "name": "heping-math-trainer",
   "private": true,
-  "version": "0.32.16",
+  "version": "0.32.17",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,7 @@
     "@pixiv/three-vrm": "^3.5.2",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
+    "@react-three/postprocessing": "^2",
     "dexie": "^4.0.8",
     "dexie-react-hooks": "^1.1.7",
     "html-to-image": "^1.11.13",

@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import type { ReactNode } from "react";
 import { Canvas, type CanvasProps, useThree } from "@react-three/fiber";
 import { useProgress, Html } from "@react-three/drei";
+import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 
 interface WorldsCanvasProps extends CanvasProps {
   children: ReactNode;
@@ -22,6 +23,12 @@ interface WorldsCanvasProps extends CanvasProps {
   loadingEmoji?: string;
   /** 加载界面标题 */
   loadingTitle?: string;
+  /**
+   * v0.32.17：是否启用后处理（Bloom + Vignette），默认 true。
+   * Bloom 给柜台高光、emoji、emissive 材质添加柔光晕；
+   * Vignette 给边缘加暗角，强化绘本沉浸感。
+   */
+  postFx?: boolean;
 }
 
 /**
@@ -35,6 +42,7 @@ export function WorldsCanvas({
   loadingBg = "#0f172a",
   loadingEmoji = "🎡",
   loadingTitle = "加载中…",
+  postFx = true,
   onCreated,
   ...rest
 }: WorldsCanvasProps) {
@@ -82,6 +90,24 @@ export function WorldsCanvas({
             }
           >
             {children}
+            {/* v0.32.17：后处理 — Bloom 柔光 + Vignette 暗角。
+                参数低强度，避免文字 / drei Text 被 bloom 模糊。
+                multisampling=0 跟 R3F 默认抗锯齿配合。 */}
+            {postFx && (
+              <EffectComposer multisampling={0}>
+                <Bloom
+                  intensity={0.42}
+                  luminanceThreshold={0.88}
+                  luminanceSmoothing={0.04}
+                  mipmapBlur
+                />
+                <Vignette
+                  eskil={false}
+                  offset={0.22}
+                  darkness={0.42}
+                />
+              </EffectComposer>
+            )}
           </Suspense>
           <ForceFirstFrame />
         </Canvas>
