@@ -20,7 +20,7 @@
  * 截屏：用 html-to-image.toPng() 把卡片 div 转 base64 → 触发 download。
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { toPng } from "html-to-image";
 import { db } from "../db/dexie";
@@ -129,25 +129,61 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
   const currentTerm: Term = (liveStudent?.currentTerm as Term | undefined) ?? "下册";
   const semester = termToSemester(currentTerm);
 
+  /**
+   * v0.32.25：跨天 bug 修。
+   * 爸爸反馈："landing page 需要回看的，在今日还没开始练习的情况下，
+   * 语文字和英语词都已经有内容了，把昨天的内容搬到今天来显示了"
+   *
+   * 根因：useLiveQuery 内部 todayDateStr() 在 closure 调用时算。
+   * 但 deps 是 [studentId]，db.meta 没变化 → query 不重 invoke。
+   * 跨午夜后 page 一直开着，loadDailyLog 还在拉昨天 dateKey 的数据。
+   *
+   * 修：currentDateKey state，每分钟检测变化，作为 useLiveQuery deps。
+   * 跨天后 dateKey 变 → query 重 invoke → 拉今天的（通常是空 = 今天没练过）。
+   */
+  const [currentDateKey, setCurrentDateKey] = useState<string>(() => todayDateStr());
+  useEffect(() => {
+    const check = () => {
+      const cur = todayDateStr();
+      setCurrentDateKey((prev) => (prev === cur ? prev : cur));
+    };
+    // 每分钟 check 一次 — 跨午夜后最迟 1 分钟内切换
+    const id = window.setInterval(check, 60_000);
+    // visibilitychange 也 check 一下（用户切回 tab 时）
+    const onVis = () => {
+      if (!document.hidden) check();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
   // 数学：attempts + fluency + tutor + mistakes 今日
-  const math = useLiveQuery(async () => buildMathSummary(studentId), [studentId]);
+  // v0.32.25: currentDateKey 加进 deps，跨天 re-query
+  const math = useLiveQuery(
+    async () => buildMathSummary(studentId),
+    [studentId, currentDateKey],
+  );
 
   // v0.32.18：数学"待复习" skill — 跟 /math/skills 页面 fragile tag 一致
   //   判定: score>0 且 (最近 5 题错 ≥3 OR >21 天没碰)
   //   爸爸明确：报告里要这些 fragile 的 skill，不是"连错 3+"那批
   const mathFragile = useLiveQuery(
     async () => getFragileSkillsToReview(studentId),
-    [studentId],
+    [studentId, currentDateKey],
   );
 
   // 中文/英文：daily log（含 wrongItems）
+  // v0.32.25: 显式传 currentDateKey，跨天后自动拉今天的 key（通常空 → 今日列表清空）
   const chineseDaily = useLiveQuery(
-    async () => loadDailyLog("chinese", studentId),
-    [studentId],
+    async () => loadDailyLog("chinese", studentId, currentDateKey),
+    [studentId, currentDateKey],
   );
   const englishDaily = useLiveQuery(
-    async () => loadDailyLog("english", studentId),
-    [studentId],
+    async () => loadDailyLog("english", studentId, currentDateKey),
+    [studentId, currentDateKey],
   );
 
   // 中文累计已掌握 + 持续薄弱 — 按 term 过滤池
