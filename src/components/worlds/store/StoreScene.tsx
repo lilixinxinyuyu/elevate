@@ -126,8 +126,8 @@ function BankDecor() {
       </group>
 
       {/* 右侧 sack 钱袋（KayKit）+ 钞票堆 — v0.32.30 内移 */}
-      <KayMesh url={`${KAY_DECO}/sack.gltf`} position={[1.05, 0, 0.35]} scale={1.1} />
-      <KayMesh url={`${KAY_DECO}/sack.gltf`} position={[1.6, 0, 0.05]} scale={0.95} rotationY={Math.PI / 5} />
+      <KayMesh url={`${KAY_DECO}/sack.gltf`} position={[1.05, 1.0, 0.35]} scale={0.65} />
+      <KayMesh url={`${KAY_DECO}/sack.gltf`} position={[1.15, 1.0, 0.15]} scale={0.55} rotationY={Math.PI / 5} />
 
       {/* 柜台上钞票堆（绿色小 box 堆叠） */}
       {[0, 0.04, 0.08, 0.12].map((y, i) => (
