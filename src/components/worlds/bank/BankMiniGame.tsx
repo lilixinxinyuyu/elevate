@@ -6,7 +6,8 @@
  */
 
 import { useMemo, useRef, useState } from "react";
-import { Text } from "@react-three/drei";
+// v0.32.22: BillboardText 替代 drei Text — 防遮挡
+import { Text } from "../BillboardText";
 import * as THREE from "three";
 import { formatYuan } from "../../../lib/worlds/storeOrders";
 import type { BankOrder } from "../../../lib/worlds/bankOrders";

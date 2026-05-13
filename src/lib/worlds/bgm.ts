@@ -87,6 +87,7 @@ interface BgmState {
 
 let state: BgmState | null = null;
 let visibilityHooked = false;
+let userUnlockHooked = false;
 
 function hookVisibility() {
   if (visibilityHooked) return;
@@ -97,6 +98,28 @@ function hookVisibility() {
     if (document.hidden) state.ctx.suspend().catch(() => void 0);
     else state.ctx.resume().catch(() => void 0);
   });
+}
+
+/**
+ * v0.32.22（Codex Ep7 P0 fix）：浏览器 autoplay policy 限制 AudioContext
+ * 必须在 user gesture（pointerdown / keydown / touchend）之后才能 resume。
+ * React mount 不算 gesture — 直达 URL /worlds/baibao/store 时 BGM ctx 会
+ * 一直 suspended，oscillator 不响。
+ * 这里 hook 全局首次 user gesture，触发 ctx.resume()。
+ */
+function hookUserUnlock() {
+  if (userUnlockHooked) return;
+  userUnlockHooked = true;
+  if (typeof document === "undefined") return;
+  const unlock = () => {
+    if (state && state.ctx.state === "suspended") {
+      state.ctx.resume().catch(() => void 0);
+    }
+  };
+  // passive=true 避免阻塞滚动
+  document.addEventListener("pointerdown", unlock, { passive: true });
+  document.addEventListener("touchend", unlock, { passive: true });
+  document.addEventListener("keydown", unlock, { passive: true });
 }
 
 function makeCtx(): AudioContext | null {
@@ -144,7 +167,9 @@ export function startBgm(theme: BgmTheme): void {
   const ctx = makeCtx();
   if (!ctx) return;
   hookVisibility();
-  // iOS Safari 需要 user gesture 后 resume
+  hookUserUnlock();
+  // iOS Safari 需要 user gesture 后 resume — 若已在 gesture 内调（如 intro click）
+  // 这里直接 resume；否则 hookUserUnlock 会兜底
   if (ctx.state === "suspended") ctx.resume().catch(() => void 0);
 
   const muted = isBgmMuted();

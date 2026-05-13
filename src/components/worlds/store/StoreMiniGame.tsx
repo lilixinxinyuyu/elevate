@@ -11,7 +11,8 @@
  */
 
 import { useMemo, useRef, useState } from "react";
-import { Text } from "@react-three/drei";
+// v0.32.22: 用 BillboardText 替代 drei Text — 默认关 depthTest 防遮挡
+import { Text } from "../BillboardText";
 import * as THREE from "three";
 import {
   COINS,

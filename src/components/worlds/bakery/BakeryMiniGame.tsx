@@ -11,7 +11,8 @@
  */
 
 import { useRef, useState } from "react";
-import { Text } from "@react-three/drei";
+// v0.32.22: BillboardText 替代 drei Text — 防遮挡
+import { Text } from "../BillboardText";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Group } from "three";

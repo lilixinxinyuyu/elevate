@@ -8,7 +8,8 @@
  */
 
 import { useMemo, useRef, useState } from "react";
-import { Text } from "@react-three/drei";
+// v0.32.22: BillboardText 替代 drei Text — 防遮挡
+import { Text } from "../BillboardText";
 import * as THREE from "three";
 import type { AirportOrder, LuggageId } from "../../../lib/worlds/airportOrders";
 import { LUGGAGE } from "../../../lib/worlds/airportOrders";
