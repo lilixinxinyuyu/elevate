@@ -212,6 +212,40 @@ function WorldDock({
       className="absolute left-0 right-0 bottom-32 flex justify-center gap-2 pointer-events-none"
       style={{ zIndex: 58 }}
     >
+      {/* v0.33.12 (Ep88 PPPPPPP): dock chip 右上角 idle accent dot */}
+      <style>{`
+        .worlds-dock-accent-dot {
+          position: absolute;
+          top: 7px;
+          right: 8px;
+          width: 7px;
+          height: 7px;
+          border-radius: 999px;
+          background: radial-gradient(
+            circle at 35% 35%,
+            #ffffff 0 22%,
+            #fef3c7 23% 55%,
+            var(--dock-accent, #f59e0b) 56%
+          );
+          box-shadow: 0 0 10px var(--dock-accent, #f59e0b);
+          opacity: 0.85;
+          animation: worlds-dock-dot-pulse 2.1s ease-in-out infinite;
+          pointer-events: none;
+        }
+        .worlds-dock-accent-dot.is-focus {
+          opacity: 1;
+          width: 9px;
+          height: 9px;
+          box-shadow: 0 0 14px var(--dock-accent, #f59e0b), 0 0 0 2px rgba(255, 255, 255, 0.55);
+        }
+        @keyframes worlds-dock-dot-pulse {
+          0%, 100% { transform: scale(0.85); opacity: 0.7; }
+          50%      { transform: scale(1.12); opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .worlds-dock-accent-dot { animation: none; }
+        }
+      `}</style>
       {WORLDS.map((w) => {
         const isFocus = w.id === focusId;
         return (
@@ -272,6 +306,18 @@ function WorldDock({
                   background: `linear-gradient(90deg, transparent, ${w.accent}, transparent)`,
                   boxShadow: `0 0 12px ${w.accent}`,
                 }}
+              />
+            )}
+            {/* v0.33.12 (Ep88 PPPPPPP): unlocked dock chip 右上角 idle accent dot */}
+            {w.unlocked && (
+              <span
+                aria-hidden
+                className={`worlds-dock-accent-dot ${isFocus ? "is-focus" : ""}`}
+                style={
+                  {
+                    ["--dock-accent" as string]: w.accent,
+                  } as React.CSSProperties
+                }
               />
             )}
           </button>
