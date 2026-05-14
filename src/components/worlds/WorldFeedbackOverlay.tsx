@@ -60,6 +60,7 @@ function ToastTrail({ pulses }: { pulses: FeedbackPulse[] }) {
               {
                 color: meta.color,
                 ["--toast-i" as string]: i,
+                ["--toast-accent" as string]: meta.color,
               } as React.CSSProperties
             }
           >
@@ -182,10 +183,13 @@ function FeedbackStyles() {
         pointer-events: none;
       }
       .worlds-toast {
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        padding: 0.5rem 0.85rem;
+        padding: 0.5rem 0.85rem 0.5rem 1.1rem;
         border-radius: 999px;
         border: 3px solid currentColor;
         background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
@@ -201,13 +205,39 @@ function FeedbackStyles() {
         animation-delay: calc(var(--toast-i, 0) * 70ms);
         align-self: flex-end;
       }
+      /* v0.32.92 (Ep68 AAAAAA): toast 左侧 accent 实心条 + 弹出动画 — 跟 hint card accent bar 风格一致 */
+      .worlds-toast::before {
+        content: "";
+        position: absolute;
+        left: 7px;
+        top: 7px;
+        bottom: 7px;
+        width: 5px;
+        border-radius: 999px;
+        background: var(--toast-accent, currentColor);
+        box-shadow: 0 0 12px var(--toast-accent, currentColor);
+        transform-origin: center;
+        animation: worlds-toast-accent-pop 900ms cubic-bezier(.34,1.56,.64,1) forwards;
+        animation-delay: calc(var(--toast-i, 0) * 70ms + 80ms);
+        opacity: 0;
+        z-index: 0;
+      }
+      @keyframes worlds-toast-accent-pop {
+        0%   { opacity: 0; transform: scaleY(0.35); }
+        22%  { opacity: 1; transform: scaleY(1.18); }
+        100% { opacity: 0.95; transform: scaleY(1); }
+      }
       .worlds-toast-icon {
+        position: relative;
+        z-index: 1;
         font-size: 16px;
         font-weight: 900;
         line-height: 1;
         filter: drop-shadow(0 0 4px currentColor);
       }
       .worlds-toast-label {
+        position: relative;
+        z-index: 1;
         color: #0f172a;
         white-space: nowrap;
       }
@@ -221,6 +251,11 @@ function FeedbackStyles() {
       @media (prefers-reduced-motion: reduce) {
         .worlds-toast {
           animation: worlds-toast-cascade 200ms ease-out forwards;
+        }
+        .worlds-toast::before {
+          animation: none;
+          opacity: 0.85;
+          transform: scaleY(1);
         }
       }
     `}</style>
