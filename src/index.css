@@ -853,6 +853,23 @@ a.world-chip:focus-visible,
 .world-customer-bubble-happy .world-customer-bubble-avatar-wrap {
   animation: world-avatar-pop 700ms cubic-bezier(.34,1.56,.64,1);
 }
+/* v0.33.2 (Ep78 FFFFFFF): happy 瞬间 emoji 摇头 wave gesture
+   内层 .world-customer-bubble-avatar 是 emoji 字符 — 单独旋转, 不冲突 wrap 的 pop。 */
+.world-customer-bubble-happy .world-customer-bubble-avatar {
+  transform-origin: 50% 90%;
+  animation: world-customer-happy-wave 900ms cubic-bezier(.34, 1.56, .64, 1) 120ms both;
+}
+@keyframes world-customer-happy-wave {
+  0%   { transform: rotate(0deg); }
+  20%  { transform: rotate(-10deg) scale(1.04); }
+  40%  { transform: rotate(12deg) scale(1.06); }
+  60%  { transform: rotate(-7deg) scale(1.03); }
+  80%  { transform: rotate(5deg) scale(1.01); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-customer-bubble-happy .world-customer-bubble-avatar { animation: none; }
+}
 .world-customer-bubble-happy .world-customer-emote {
   background: linear-gradient(180deg, #fde68a, #f59e0b);
   border-color: #b45309;
