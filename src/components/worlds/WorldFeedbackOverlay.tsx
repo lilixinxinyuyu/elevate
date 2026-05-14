@@ -18,6 +18,11 @@ interface Props {
 }
 
 export function WorldFeedbackOverlay({ pulses }: Props) {
+  // v0.32.72 (Ep48 QQ): 右上角 toast trail —— 只显示有视觉意义的 pulse (correct/wrong/complete)
+  // 最多 3 个 stack，每个延迟 70ms cascade
+  const trailPulses = pulses
+    .filter((p) => p.kind === "correct" || p.kind === "complete")
+    .slice(-3);
   return (
     <>
       {/* v0.32.23：CSS keyframes 永久 mount，确保 page root 加 class 时
@@ -30,8 +35,42 @@ export function WorldFeedbackOverlay({ pulses }: Props) {
         {pulses.map((p) => (
           <PulseFx key={p.id} pulse={p} />
         ))}
+        <ToastTrail pulses={trailPulses} />
       </div>
     </>
+  );
+}
+
+// v0.32.72 (Ep48 QQ): 顶部右侧 toast trail —— cascade 显示最近 N 个 correct/complete
+const TOAST_META: Record<string, { icon: string; defaultLabel: string; color: string }> = {
+  correct: { icon: "✓", defaultLabel: "对了！", color: "#10b981" },
+  complete: { icon: "🎉", defaultLabel: "完成！", color: "#f59e0b" },
+};
+function ToastTrail({ pulses }: { pulses: FeedbackPulse[] }) {
+  if (pulses.length === 0) return null;
+  return (
+    <div className="worlds-toast-stack">
+      {pulses.map((p, i) => {
+        const meta = TOAST_META[p.kind] ?? TOAST_META.correct!;
+        return (
+          <div
+            key={p.id}
+            className={`worlds-toast worlds-toast-${p.kind}`}
+            style={
+              {
+                color: meta.color,
+                ["--toast-i" as string]: i,
+              } as React.CSSProperties
+            }
+          >
+            <span className="worlds-toast-icon">{meta.icon}</span>
+            <span className="worlds-toast-label">
+              {p.label ?? meta.defaultLabel}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -89,6 +128,59 @@ function FeedbackStyles() {
       }
       .worlds-screen-zoom {
         animation: worlds-screen-zoom-kf 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      /* v0.32.72 (Ep48 QQ): 右上角 toast cascade trail */
+      .worlds-toast-stack {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 80px);
+        right: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 3;
+        pointer-events: none;
+      }
+      .worlds-toast {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.5rem 0.85rem;
+        border-radius: 999px;
+        border: 3px solid currentColor;
+        background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.02em;
+        box-shadow:
+          0 4px 0 rgba(0,0,0,0.14),
+          0 12px 24px rgba(0,0,0,0.28),
+          inset 0 1px 0 rgba(255,255,255,0.95);
+        opacity: 0;
+        animation: worlds-toast-cascade 1100ms cubic-bezier(.34,1.56,.64,1) forwards;
+        animation-delay: calc(var(--toast-i, 0) * 70ms);
+        align-self: flex-end;
+      }
+      .worlds-toast-icon {
+        font-size: 16px;
+        font-weight: 900;
+        line-height: 1;
+        filter: drop-shadow(0 0 4px currentColor);
+      }
+      .worlds-toast-label {
+        color: #0f172a;
+        white-space: nowrap;
+      }
+      @keyframes worlds-toast-cascade {
+        0%   { opacity: 0; transform: translateX(40px) translateY(8px) scale(0.9); }
+        18%  { opacity: 1; transform: translateX(0) translateY(0) scale(1.08); }
+        30%  { opacity: 1; transform: translateX(0) translateY(0) scale(1); }
+        72%  { opacity: 1; transform: translateX(-4px) translateY(-2px) scale(1); }
+        100% { opacity: 0; transform: translateX(-22px) translateY(-22px) scale(0.95); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .worlds-toast {
+          animation: worlds-toast-cascade 200ms ease-out forwards;
+        }
       }
     `}</style>
   );
