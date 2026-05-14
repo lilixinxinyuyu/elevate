@@ -10,7 +10,7 @@
  * 渲染在 fixed inset-0 div，pointer-events-none，不挡交互。
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FeedbackPulse } from "../../lib/worlds/useWorldFeedback";
 
 interface Props {
@@ -408,7 +408,11 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
                 "0 3px 12px rgba(0,0,0,0.78), 0 0 16px currentColor",
             }}
           >
-            {label ?? palette.defaultLabel}
+            {kind === "complete" ? (
+              <AnimatedXpLabel label={label ?? palette.defaultLabel} />
+            ) : (
+              label ?? palette.defaultLabel
+            )}
           </div>
         </div>
       </div>
@@ -450,6 +454,52 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
 }
 
 /** v0.32.23: confetti 粒子喷射（纯 CSS，无外部库） */
+/**
+ * v0.33.3 (Ep79 WWWWWW): complete 文案里的 XP 数字 count-up 0 → target，520ms ease-out。
+ * 解析 label 中的 "+N XP" pattern，其它部分保持原样。
+ */
+function AnimatedXpLabel({ label }: { label: string }) {
+  const match = label.match(/^\+?(\d+)\s*XP(.*)$/i);
+  const target = match ? Number(match[1]) : 0;
+  const suffix = match ? match[2] : "";
+  const [value, setValue] = useState(target ? 0 : target);
+  useEffect(() => {
+    if (!match || !target) return;
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setValue(target);
+      return;
+    }
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - start) / 520);
+      const eased = 1 - Math.pow(1 - k, 3);
+      setValue(Math.round(target * eased));
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, match]);
+  if (!match) return <>{label}</>;
+  return (
+    <>
+      <span
+        style={{
+          display: "inline-block",
+          minWidth: "2ch",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        +{value}
+      </span>
+      <span> XP{suffix}</span>
+    </>
+  );
+}
+
 function ConfettiBurst({
   count,
   colors,
