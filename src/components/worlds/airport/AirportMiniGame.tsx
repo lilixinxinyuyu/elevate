@@ -1,23 +1,42 @@
 /**
- * v0.32.7: 登机口 mini-game —— 数量词 + 复数训练。
+ * v0.32.51 (Ep27 D): 登机口 mini-game 玩法差异化 —— **传送带 + 时机点击**。
  *
- * 玩法: 桌上摆 mixed 行李 emoji (拖拽对象)，旅客气泡说要 X backpack + Y suitcase。
- * Selena 拖正确数量的行李到 "Cart" 区域。校验:
- *   - 每种 itemId 数量精确匹配 requests
- *   - 多了/少了/类型错都不通过
+ * 玩法升级：原来是桌上摆 emoji 拖到 cart（跟 store v0.32.48 之前 / bank 重复）。
+ * 现在：行李在传送带 (z 方向) 持续移动，旅客气泡说要 X backpack + Y suitcase。
+ * Selena 必须在行李经过发光抓取区 (cyan ring) 时点击 → 才能装上 cart。
+ * 校验仍是: 每种 itemId 数量精确匹配 requests，多了/类型错弹 hint 卡。
+ *
+ * 数学+英语训练 (暗在游戏后面):
+ *   - 数量词 + plural -s
+ *   - 时机判定 = 视觉空间感知（区分 store 点击 + bank 键盘 + bakery 扇形切）
  */
 
 import { useMemo, useRef, useState } from "react";
+import { useFrame } from "@react-three/fiber";
+import type { Group } from "three";
 // v0.32.22: BillboardText 替代 drei Text — 防遮挡
 import { Text } from "../BillboardText";
 import * as THREE from "three";
 import type { AirportOrder, LuggageId } from "../../../lib/worlds/airportOrders";
 import { LUGGAGE } from "../../../lib/worlds/airportOrders";
-import { DraggableObject } from "../store/DraggableObject";
 
 const COUNTER_Y = 1.0;
 // v0.32.43: radius 0.28 → 0.35
 const CART_ZONE = { id: "cart", x: 0.45, z: 0.4, radius: 0.35 };
+
+// v0.32.51 传送带几何：从柜台后方 z=-0.7 流向前方 z=+0.55，靠左侧 (x=-0.45)
+const BELT = {
+  startZ: -0.7,
+  endZ: 0.55,
+  x: -0.45,
+  width: 0.5,
+  grabZ: 0.15,
+  /** 抓取窗口半宽（z 维度），0.18 ≈ 0.36m 总宽 */
+  grabWindow: 0.18,
+  /** 移动速度 m/s */
+  speed: 0.28,
+};
+const BELT_LOOP = BELT.endZ - BELT.startZ;
 
 interface AirportMiniGameProps {
   order: AirportOrder;
@@ -30,23 +49,32 @@ interface LuggageInstance {
   instanceId: string;
   itemId: LuggageId;
   emoji: string;
-  origin: [number, number];
+  /** 传送带横向 lane 微偏 (避免重叠) */
+  laneOffset: number;
+  /** 起始延迟（秒）— 让多件错开滚动 */
+  spawnDelay: number;
 }
 
 export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportMiniGameProps) {
   const luggageInstances = useMemo<LuggageInstance[]>(() => {
     const out: LuggageInstance[] = [];
-    const groupCount = order.pool.length;
-    const groupSpan = 1.4;
-    order.pool.forEach((p, gi) => {
-      const gx = -groupSpan / 2 + groupSpan / (groupCount * 2) + (gi * groupSpan) / groupCount;
+    // 把所有 pool 件数集中到传送带；用 spawnDelay 错开
+    let runningIdx = 0;
+    const total = order.pool.reduce((s, p) => s + p.count, 0);
+    // 让 total 个行李均匀分布在 BELT_LOOP 的时间周期上
+    const period = BELT_LOOP / BELT.speed; // 秒 / 满圈
+    const dt = period / Math.max(total, 1);
+    order.pool.forEach((p) => {
       for (let i = 0; i < p.count; i++) {
         out.push({
           instanceId: `${p.itemId}-${i}`,
           itemId: p.itemId,
           emoji: LUGGAGE[p.itemId].emoji,
-          origin: [gx + (i % 2 === 0 ? -0.07 : 0.07), -0.4 + Math.floor(i / 2) * 0.18],
+          // 同 itemId 同 lane (奇偶差 ±0.08) 防完全重叠
+          laneOffset: ((runningIdx % 3) - 1) * 0.08,
+          spawnDelay: runningIdx * dt,
         });
+        runningIdx++;
       }
     });
     return out;
@@ -83,6 +111,22 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
     wasNotifiedRef.current = true;
     setTimeout(() => onOrderComplete(), 800);
   }
+
+  /**
+   * v0.32.51 (Ep27 D): 点击行李 — 必须在抓取窗口内 + 类型/数量校验。
+   * 返回 true 才标记 loaded（其余情况已弹 wrong/hint）。
+   */
+  const tryGrab = (instanceId: string, inWindow: boolean): boolean => {
+    if (!inWindow) {
+      onFeedback?.(
+        "wrong",
+        "时机不对！再等一下",
+        "等行李滑到 cyan 圈圈里再点 — 这就是机场扫描区。",
+      );
+      return false;
+    }
+    return handleDrop(instanceId);
+  };
 
   const handleDrop = (instanceId: string): boolean => {
     // v0.32.13: 装错类（订单里没要求这个 itemId）/ 超量 → wrong + reject
@@ -186,43 +230,124 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
         </Text>
       </group>
 
-      {/* 行李 emoji 拖拽对象 */}
+      {/* 传送带表面 (v0.32.51) */}
+      <mesh
+        position={[BELT.x, COUNTER_Y - 0.01, (BELT.startZ + BELT.endZ) / 2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <planeGeometry args={[BELT.width, BELT_LOOP]} />
+        <meshStandardMaterial color="#27272a" roughness={0.7} metalness={0.3} />
+      </mesh>
+      {/* 传送带边缘 / 滚轴提示横条 */}
+      {Array.from({ length: 7 }).map((_, i) => {
+        const z = BELT.startZ + (BELT_LOOP / 6) * i;
+        return (
+          <mesh
+            key={i}
+            position={[BELT.x, COUNTER_Y + 0.005, z]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <planeGeometry args={[BELT.width, 0.015]} />
+            <meshStandardMaterial color="#52525b" />
+          </mesh>
+        );
+      })}
+      {/* 抓取区 (cyan emissive ring) — 时机指示 */}
+      <mesh
+        position={[BELT.x, COUNTER_Y + 0.025, BELT.grabZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[BELT.grabWindow + 0.04, BELT.grabWindow + 0.10, 32]} />
+        <meshStandardMaterial
+          color="#22d3ee"
+          emissive="#06b6d4"
+          emissiveIntensity={1.5}
+          side={THREE.DoubleSide}
+          transparent
+          opacity={0.85}
+        />
+      </mesh>
+      <Text
+        position={[BELT.x, COUNTER_Y + 0.18, BELT.grabZ]}
+        fontSize={0.04}
+        color="#0e7490"
+        outlineWidth={0.005}
+        outlineColor="#fff"
+        anchorX="center"
+        anchorY="middle"
+      >
+        ✨ 抓取区
+      </Text>
+
+      {/* 行李在传送带上滚动 (v0.32.51) */}
       {luggageInstances.map((inst) => {
         if (loadedIds.has(inst.instanceId)) return null;
         return (
-          <DraggableObject
+          <MovingLuggage
             key={inst.instanceId}
-            origin={inst.origin}
-            planeY={COUNTER_Y}
-            dropZones={[CART_ZONE]}
-            onDrop={() => handleDrop(inst.instanceId)}
-            onPickup={() => onFeedback?.("pickup")}
-          >
-            <group>
-              {/* emoji 用 3D text 模拟（drei Text supports emoji） */}
-              <Text
-                fontSize={0.16}
-                anchorX="center"
-                anchorY="middle"
-              >
-                {inst.emoji}
-              </Text>
-              {/* 英文标签 */}
-              <Text
-                position={[0, -0.1, 0]}
-                fontSize={0.04}
-                color="#ffffff"
-                outlineWidth={0.005}
-                outlineColor="#000"
-                anchorX="center"
-                anchorY="middle"
-              >
-                {LUGGAGE[inst.itemId].english}
-              </Text>
-            </group>
-          </DraggableObject>
+            instance={inst}
+            onGrab={(inWindow) => tryGrab(inst.instanceId, inWindow)}
+            onHover={() => onFeedback?.("pickup")}
+          />
         );
       })}
+    </group>
+  );
+}
+
+/**
+ * v0.32.51: 单个行李在传送带上循环移动 — useFrame 更新 z 位置。
+ * 点击时把当前 z 是否在 grabWindow 内传给 onGrab。
+ */
+function MovingLuggage({
+  instance,
+  onGrab,
+  onHover,
+}: {
+  instance: LuggageInstance;
+  onGrab: (inWindow: boolean) => void;
+  onHover: () => void;
+}) {
+  const ref = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.elapsedTime + instance.spawnDelay;
+    const z = BELT.startZ + ((t * BELT.speed) % BELT_LOOP);
+    ref.current.position.set(BELT.x + instance.laneOffset, COUNTER_Y + 0.08, z);
+  });
+  return (
+    <group
+      ref={ref}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        document.body.style.cursor = "pointer";
+        onHover();
+      }}
+      onPointerOut={(e) => {
+        e.stopPropagation();
+        document.body.style.cursor = "default";
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        const z = ref.current?.position.z ?? 0;
+        const inWindow = Math.abs(z - BELT.grabZ) <= BELT.grabWindow;
+        onGrab(inWindow);
+      }}
+    >
+      <Text fontSize={0.16} anchorX="center" anchorY="middle">
+        {instance.emoji}
+      </Text>
+      <Text
+        position={[0, -0.1, 0]}
+        fontSize={0.04}
+        color="#ffffff"
+        outlineWidth={0.005}
+        outlineColor="#000"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {LUGGAGE[instance.itemId].english}
+      </Text>
     </group>
   );
 }
