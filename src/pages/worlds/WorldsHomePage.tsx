@@ -88,11 +88,21 @@ export function WorldsHomePage() {
       {/* ===== HUD ===== */}
       <HUD />
 
+      {/* v0.32.59 (Ep35 N): SVG 装饰星座 + 上方 hero ribbon */}
+      <WorldsHomeDecor />
+
       {/* ===== 中央台词 / 推荐按钮 ===== */}
       <CenterPanel
         recommended={recommended}
         hoverWorld={hoverWorld}
         onStart={() => navigate(recommended.route)}
+      />
+
+      {/* v0.32.59 (Ep35 N): 底部 dock — 3 world 缩略 chip，永远可见，提示玩家全图 */}
+      <WorldDock
+        focusId={(hoverWorld ?? recommended).id}
+        onHover={setHoverWorld}
+        onSelect={handleSelect}
       />
 
       {/* ===== Hover overlay (不可见，仅捕获 hover 状态用于 CenterPanel) ===== */}
@@ -116,14 +126,127 @@ function HUD() {
       <button
         type="button"
         onClick={() => navigate("/math")}
-        className="pointer-events-auto px-3 py-2 rounded-xl bg-black/55 text-white text-sm font-bold backdrop-blur-md hover:bg-black/70 border border-white/25 shadow-lg"
+        className="world-chip world-chip-dark"
       >
-        ← 返回主页
+        <span className="world-top-back-arrow">←</span> 返回主页
       </button>
-      <div className="px-4 py-2 rounded-full bg-black/45 text-white text-xs font-bold backdrop-blur-md border border-white/20 shadow-lg">
+      <div className="world-chip" style={{ background: "linear-gradient(180deg, #fff 0%, #ddd6fe 100%)", borderColor: "#a78bfa", color: "#1e1b4b" }}>
         🎡 奇遇乐园
       </div>
       <div className="w-[90px]" />
+    </div>
+  );
+}
+
+// v0.32.59 (Ep35 N): SVG 星座装饰 — 不抢戏，纯背景点缀
+function WorldsHomeDecor() {
+  return (
+    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 51 }}>
+      {/* hero ribbon: 顶部副标题 */}
+      <div className="absolute top-14 left-1/2 -translate-x-1/2 pointer-events-none">
+        <div
+          className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.3em] text-amber-200/90 border border-amber-200/40"
+          style={{
+            background: "rgba(30,27,75,0.5)",
+            backdropFilter: "blur(6px)",
+            textShadow: "0 0 12px rgba(251,191,36,0.5)",
+          }}
+        >
+          ✦ Worlds of Adventure ✦
+        </div>
+      </div>
+
+      {/* 装饰 SVG: 顶部 + 两侧的星座线 + 散点星星 */}
+      <svg
+        className="absolute inset-0 w-full h-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        style={{ opacity: 0.5 }}
+      >
+        {/* 星座连线（左上）*/}
+        <polyline
+          points="6,18 14,12 22,20 30,14"
+          stroke="rgba(167,139,250,0.7)"
+          strokeWidth="0.18"
+          strokeDasharray="0.6,0.4"
+          fill="none"
+        />
+        {/* 星座连线（右上）*/}
+        <polyline
+          points="78,16 86,24 94,18"
+          stroke="rgba(251,191,36,0.7)"
+          strokeWidth="0.18"
+          strokeDasharray="0.6,0.4"
+          fill="none"
+        />
+        {/* 4 个小星 */}
+        {[
+          [6, 18, "#a78bfa"],
+          [22, 20, "#a78bfa"],
+          [78, 16, "#fbbf24"],
+          [94, 18, "#fbbf24"],
+          [10, 70, "#f0abfc"],
+          [92, 80, "#fde68a"],
+        ].map(([cx, cy, color], i) => (
+          <circle key={i} cx={cx as number} cy={cy as number} r="0.45" fill={color as string} opacity="0.9">
+            <animate attributeName="opacity" values="0.4;1;0.4" dur={`${2.5 + (i % 3) * 0.5}s`} repeatCount="indefinite" />
+          </circle>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+// v0.32.59 (Ep35 N): 底部 3 world dock chip
+function WorldDock({
+  focusId,
+  onHover,
+  onSelect,
+}: {
+  focusId: string;
+  onHover: (w: WorldDef | null) => void;
+  onSelect: (w: WorldDef) => void;
+}) {
+  return (
+    <div
+      className="absolute left-0 right-0 bottom-32 flex justify-center gap-2 pointer-events-none"
+      style={{ zIndex: 58 }}
+    >
+      {WORLDS.map((w) => {
+        const isFocus = w.id === focusId;
+        return (
+          <button
+            key={w.id}
+            type="button"
+            disabled={!w.unlocked}
+            onMouseEnter={() => onHover(w)}
+            onMouseLeave={() => onHover(null)}
+            onClick={() => w.unlocked && onSelect(w)}
+            className={`pointer-events-auto rounded-2xl border-[3px] px-3 py-2 shadow-xl transition-all duration-200 ${
+              isFocus ? "scale-110 -translate-y-1" : "scale-100"
+            } ${!w.unlocked ? "grayscale opacity-50 cursor-not-allowed" : "hover:scale-110 hover:-translate-y-1"}`}
+            style={{
+              borderColor: isFocus ? w.accent : "rgba(255,255,255,0.4)",
+              background: isFocus
+                ? `linear-gradient(180deg, #fff, ${w.accent}33)`
+                : "rgba(255,255,255,0.88)",
+              minWidth: 96,
+              boxShadow: isFocus ? `0 6px 20px ${w.accent}88` : undefined,
+            }}
+          >
+            <div className="text-2xl leading-none">{w.emoji}</div>
+            <div
+              className="text-[11px] font-black mt-1 leading-tight"
+              style={{ color: isFocus ? "#0f172a" : "#334155" }}
+            >
+              {w.name}
+            </div>
+            {!w.unlocked && (
+              <div className="text-[9px] font-bold text-slate-500 mt-0.5">🔒 锁定</div>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -153,14 +276,15 @@ function CenterPanel({ recommended, hoverWorld, onStart }: CenterPanelProps) {
           <span className="absolute -left-2 bottom-3 w-0 h-0 border-y-8 border-y-transparent border-r-8 border-r-white/95" />
         </div>
       </div>
-      {/* 推荐 / 开始按钮 */}
+      {/* 推荐 / 开始按钮 — v0.32.59 (Ep35 N): chunky cta + accent glow */}
       <button
         type="button"
         onClick={onStart}
-        className="pointer-events-auto px-7 py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-white text-base font-bold shadow-2xl border-2 border-white/40 hover:scale-105 transition-transform animate-pulse"
+        className="pointer-events-auto world-cta-btn"
         style={{
-          boxShadow: `0 0 40px ${recommended.accent}99`,
-        }}
+          ["--world-accent" as string]: recommended.accent,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 0 32px ${recommended.accent}aa, inset 0 1px 0 rgba(255,255,255,0.4)`,
+        } as React.CSSProperties}
       >
         {recommended.emoji} 出发去 {recommended.name}
       </button>
