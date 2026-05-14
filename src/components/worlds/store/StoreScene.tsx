@@ -106,8 +106,8 @@ function StoreDecor() {
 function BankDecor() {
   return (
     <group>
-      {/* 大保险柜 — v0.32.33: 坐桌面上 Y=1.0 + scale 0.65 整体缩小 */}
-      <group position={[-1.05, 1.0, 0.35]} scale={0.65}>
+      {/* 大保险柜 — v0.32.48 (Ep24 J)：scale 0.65 → 0.85 增加存在感 */}
+      <group position={[-1.05, 1.0, 0.35]} scale={0.85}>
         <mesh position={[0, 0.55, 0]} castShadow>
           <boxGeometry args={[0.95, 1.1, 0.75]} />
           <meshStandardMaterial color="#334155" roughness={0.5} metalness={0.45} />
@@ -154,8 +154,8 @@ function BankDecor() {
 function BakeryDecor() {
   return (
     <group>
-      {/* 蛋糕架 — v0.32.33: 坐桌面上 Y=1.0 */}
-      <group position={[-1.05, 1.0, 0.35]} scale={0.8}>
+      {/* 蛋糕架 — v0.32.48 (Ep24 J)：scale 0.8 → 1.0 更突出 */}
+      <group position={[-1.05, 1.0, 0.35]} scale={1.0}>
         {/* 底盘 */}
         <mesh position={[0, 0.05, 0]}>
           <cylinderGeometry args={[0.36, 0.4, 0.1, 24]} />
@@ -186,8 +186,8 @@ function BakeryDecor() {
         </mesh>
       </group>
 
-      {/* 烤箱 — v0.32.33: 坐桌面上 Y=1.0 + 缩小 */}
-      <group position={[1.05, 1.0, 0.35]} scale={0.6}>
+      {/* 烤箱 — v0.32.48 (Ep24 J)：scale 0.6 → 0.8 更显眼 */}
+      <group position={[1.05, 1.0, 0.35]} scale={0.8}>
         <mesh position={[0, 0.5, 0]}>
           <boxGeometry args={[0.9, 1.0, 0.75]} />
           <meshStandardMaterial color="#525252" roughness={0.6} metalness={0.3} />
@@ -225,8 +225,8 @@ function BakeryDecor() {
 function AirportDecor() {
   return (
     <group>
-      {/* 传送带 — v0.32.33: 坐桌面上 */}
-      <group position={[-1.05, 1.0, 0.35]} scale={0.6}>
+      {/* 传送带 — v0.32.48 (Ep24 J)：scale 0.6 → 0.8 */}
+      <group position={[-1.05, 1.0, 0.35]} scale={0.8}>
         {/* 主带身 */}
         <mesh position={[0, 0.55, 0]}>
           <boxGeometry args={[0.7, 0.1, 1.5]} />
@@ -256,8 +256,8 @@ function AirportDecor() {
         </mesh>
       </group>
 
-      {/* 登机门 — v0.32.33: 坐桌面上 + 缩小 */}
-      <group position={[1.05, 1.0, 0.25]} scale={0.5}>
+      {/* 登机门 — v0.32.48 (Ep24 J)：scale 0.5 → 0.7 GATE 牌更醒目 */}
+      <group position={[1.05, 1.0, 0.25]} scale={0.7}>
         {/* 两侧门柱 */}
         {[-0.5, 0.5].map((x, i) => (
           <mesh key={i} position={[x, 0.9, 0]}>
