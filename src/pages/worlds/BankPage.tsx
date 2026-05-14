@@ -37,6 +37,9 @@ export function BankPage() {
 
   // R3F cold start 由 WorldsCanvas 接管
 
+  // v0.32.41: useWorldFeedback 提前给 useMascotReaction 用
+  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+
   const mood: MascotMood = showReward
     ? "allDone"
     : justCompleted
@@ -44,10 +47,7 @@ export function BankPage() {
       : phase === "intro"
         ? "welcome"
         : "playing";
-  const mascotProps = useMascotReaction({ mood, accent: "#3b82f6" });
-  // v0.32.12-14：反馈层 + Mascot 联动
-  // v0.32.23: rootRef → screen shake / zoom
-  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+  const mascotProps = useMascotReaction({ mood, accent: "#3b82f6", reaction: lastReaction });
   // v0.32.21: BGM
   useBgm("bank");
 

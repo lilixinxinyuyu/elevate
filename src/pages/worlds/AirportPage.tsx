@@ -34,6 +34,9 @@ export function AirportPage() {
 
   // R3F cold start 由 WorldsCanvas 接管
 
+  // v0.32.41: useWorldFeedback 提前
+  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+
   const mood: MascotMood = showReward
     ? "allDone"
     : justCompleted
@@ -41,10 +44,7 @@ export function AirportPage() {
       : phase === "intro"
         ? "welcome"
         : "playing";
-  const mascotProps = useMascotReaction({ mood, accent: "#06b6d4" });
-  // v0.32.12-14：反馈层 + Mascot 联动
-  // v0.32.23: rootRef → screen shake / zoom
-  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+  const mascotProps = useMascotReaction({ mood, accent: "#06b6d4", reaction: lastReaction });
   // v0.32.21: BGM
   useBgm("airport");
 

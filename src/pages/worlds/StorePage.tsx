@@ -42,7 +42,12 @@ export function StorePage() {
 
   // R3F cold start 由 WorldsCanvas 内部 ResizeObserver + invalidate 接管
 
-  // Mascot 反应：mood 由 game state 决定
+  // v0.32.12-14：统一反馈层（声 + 震 + 闪 + 文案 + Mascot 联动）
+  // v0.32.23: rootRef → screen shake / zoom on reaction
+  // v0.32.41: useWorldFeedback 提前，给 useMascotReaction 用 lastReaction
+  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+
+  // Mascot 反应：mood 由 game state 决定 + reaction 短暂覆盖
   const mood: MascotMood = showReward
     ? "allDone"
     : justCompleted
@@ -50,11 +55,7 @@ export function StorePage() {
       : phase === "intro"
         ? "welcome"
         : "playing";
-  const mascotProps = useMascotReaction({ mood, accent: "#f59e0b" });
-
-  // v0.32.12-14：统一反馈层（声 + 震 + 闪 + 文案 + Mascot 联动）
-  // v0.32.23: rootRef → screen shake / zoom on reaction
-  const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+  const mascotProps = useMascotReaction({ mood, accent: "#f59e0b", reaction: lastReaction });
   // v0.32.21: BGM
   useBgm("store");
 
