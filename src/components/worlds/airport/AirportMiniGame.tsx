@@ -252,21 +252,8 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
           </mesh>
         );
       })}
-      {/* 抓取区 (cyan emissive ring) — 时机指示 */}
-      <mesh
-        position={[BELT.x, COUNTER_Y + 0.025, BELT.grabZ]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <ringGeometry args={[BELT.grabWindow + 0.04, BELT.grabWindow + 0.10, 32]} />
-        <meshStandardMaterial
-          color="#22d3ee"
-          emissive="#06b6d4"
-          emissiveIntensity={1.5}
-          side={THREE.DoubleSide}
-          transparent
-          opacity={0.85}
-        />
-      </mesh>
+      {/* v0.32.80 (Ep56 TTTT): 抓取区动态变色 — 有行李在窗口内时 cyan→amber + 快脉动 */}
+      <GrabZoneRing instances={luggageInstances} loadedIds={loadedIds} />
       <Text
         position={[BELT.x, COUNTER_Y + 0.18, BELT.grabZ]}
         fontSize={0.04}
@@ -299,6 +286,58 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
  * v0.32.51: 单个行李在传送带上循环移动 — useFrame 更新 z 位置。
  * 点击时把当前 z 是否在 grabWindow 内传给 onGrab。
  */
+/**
+ * v0.32.80 (Ep56 TTTT): 抓取区 ring 动态变色 — 有行李进窗口时切 cyan→amber + 快脉动。
+ * 用 useFrame 实时检测，不接 React state（避免每帧重渲）。
+ */
+function GrabZoneRing({
+  instances,
+  loadedIds,
+}: {
+  instances: LuggageInstance[];
+  loadedIds: Set<string>;
+}) {
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+  const tmpColor = useMemo(() => new THREE.Color(), []);
+  const tmpEmissive = useMemo(() => new THREE.Color(), []);
+  useFrame(({ clock }) => {
+    const mat = matRef.current;
+    if (!mat) return;
+    const t = clock.elapsedTime;
+    // 检查是否有未装的行李正在 grab window 内
+    const active = instances.some((inst) => {
+      if (loadedIds.has(inst.instanceId)) return false;
+      const tt = t + inst.spawnDelay;
+      const z = BELT.startZ + ((tt * BELT.speed) % BELT_LOOP);
+      return Math.abs(z - BELT.grabZ) <= BELT.grabWindow;
+    });
+    // active: amber pulse 8Hz, idle: cyan pulse 3Hz
+    const baseIntensity = active ? 2.2 : 1.5;
+    const pulse = Math.sin(t * (active ? 8 : 3)) * (active ? 0.55 : 0.25);
+    mat.color.copy(tmpColor.set(active ? "#fbbf24" : "#22d3ee"));
+    mat.emissive.copy(tmpEmissive.set(active ? "#f59e0b" : "#06b6d4"));
+    mat.emissiveIntensity = baseIntensity + pulse;
+    mat.opacity = active ? 0.98 : 0.85;
+  });
+  return (
+    <mesh
+      position={[BELT.x, COUNTER_Y + 0.025, BELT.grabZ]}
+      rotation={[-Math.PI / 2, 0, 0]}
+    >
+      <ringGeometry args={[BELT.grabWindow + 0.04, BELT.grabWindow + 0.1, 32]} />
+      <meshStandardMaterial
+        ref={matRef}
+        color="#22d3ee"
+        emissive="#06b6d4"
+        emissiveIntensity={1.5}
+        side={THREE.DoubleSide}
+        transparent
+        opacity={0.85}
+      />
+    </mesh>
+  );
+}
+
 function MovingLuggage({
   instance,
   onGrab,
