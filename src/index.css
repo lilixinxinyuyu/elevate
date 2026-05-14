@@ -362,11 +362,9 @@ a.world-chip:focus-visible,
   padding: 0.42rem 0.7rem 0.42rem 0.85rem;
   border-radius: 0.65rem;
   background: rgba(255, 255, 255, 0.55);
-  /* v0.32.68 (Ep44 WW): 左侧 4px accent 实心条 + 主题色描边 — callout 风
-     之前是纯文本，没有视觉层级。现在 hint 像左侧带 accent bar 的引述卡，
-     视觉上比 customer line 低一级，但比无层级强很多。 */
+  /* v0.32.68 (Ep44 WW): 左侧 accent 实心条 (改为 ::before 以便 v0.32.96 独立 pulse)
+     v0.32.96 (Ep72 OOOOOO): bar 独立呼吸 — 强化 affordance */
   box-shadow:
-    inset 4px 0 0 var(--world-accent, #f59e0b),
     inset 0 0 0 1px rgba(255, 255, 255, 0.7),
     0 2px 6px rgba(0, 0, 0, 0.08);
   font-size: 11.5px;
@@ -375,6 +373,26 @@ a.world-chip:focus-visible,
   letter-spacing: 0.02em;
   color: var(--world-accent, #f59e0b);
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.world-customer-bubble-hint::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--world-accent, #f59e0b);
+  box-shadow: 0 0 8px var(--world-accent, #f59e0b);
+  animation: world-hint-accent-pulse 1.5s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes world-hint-accent-pulse {
+  0%, 100% { opacity: 0.65; transform: scaleY(0.72); filter: brightness(1); }
+  50%      { opacity: 1;    transform: scaleY(1.06); filter: brightness(1.25); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-customer-bubble-hint::before { animation: none; }
 }
 
 /* v0.32.58 (Ep34 L): WorldTopHUD 共用 TopHUD 布局 + chunky dot chain
