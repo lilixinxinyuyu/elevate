@@ -29,6 +29,15 @@ export function AirportPage() {
   const [completedCount, setCompletedCount] = useState(0);
   const [showReward, setShowReward] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  // v0.32.53 (Ep29 H): phase transition
+  const [introExiting, setIntroExiting] = useState(false);
+  const startPhase = (next: Phase) => {
+    setIntroExiting(true);
+    window.setTimeout(() => {
+      setPhase(next);
+      setIntroExiting(false);
+    }, 220);
+  };
 
   const order = AIRPORT_ORDERS[orderIdx]!;
 
@@ -118,7 +127,9 @@ export function AirportPage() {
       />
 
       {phase === "intro" && !showReward && (
-        <IntroPanel order={order} orderIdx={orderIdx} onStart={() => setPhase("loading")} />
+        <div className={introExiting ? "world-intro-exit" : ""}>
+          <IntroPanel order={order} orderIdx={orderIdx} onStart={() => startPhase("loading")} />
+        </div>
       )}
 
       {showReward && <RewardOverlay />}
@@ -260,8 +271,8 @@ function RewardOverlay() {
         background: "radial-gradient(circle, rgba(103,232,249,0.3) 0%, rgba(0,0,0,0) 70%)",
       }}
     >
-      <div className="text-center animate-bounce">
-        <div className="text-8xl mb-3">✈️</div>
+      <div className="text-center world-reward-content">
+        <div className="text-8xl mb-3 animate-bounce">✈️</div>
         <div className="world-reward-badge">
           +5 XP · +1 装饰碎片
         </div>

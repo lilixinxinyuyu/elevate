@@ -34,6 +34,15 @@ export function BankPage() {
   const [completedCount, setCompletedCount] = useState(0);
   const [showReward, setShowReward] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  // v0.32.53 (Ep29 H): phase transition
+  const [introExiting, setIntroExiting] = useState(false);
+  const startPhase = (next: Phase) => {
+    setIntroExiting(true);
+    window.setTimeout(() => {
+      setPhase(next);
+      setIntroExiting(false);
+    }, 220);
+  };
 
   const order = BANK_ORDERS[orderIdx]!;
 
@@ -125,11 +134,13 @@ export function BankPage() {
       />
 
       {phase === "intro" && !showReward && (
-        <IntroPanel
-          order={order}
-          orderIdx={orderIdx}
-          onStart={() => setPhase("exchange")}
-        />
+        <div className={introExiting ? "world-intro-exit" : ""}>
+          <IntroPanel
+            order={order}
+            orderIdx={orderIdx}
+            onStart={() => startPhase("exchange")}
+          />
+        </div>
       )}
 
       {showReward && <RewardOverlay />}
@@ -259,8 +270,8 @@ function RewardOverlay() {
         background: "radial-gradient(circle, rgba(147,197,253,0.3) 0%, rgba(0,0,0,0) 70%)",
       }}
     >
-      <div className="text-center animate-bounce">
-        <div className="text-8xl mb-3">💰</div>
+      <div className="text-center world-reward-content">
+        <div className="text-8xl mb-3 animate-bounce">💰</div>
         <div className="world-reward-badge">+5 XP · +1 装饰碎片</div>
         <div className="mt-3 text-blue-900 text-sm font-bold drop-shadow">
           银行的客人都满意～回到百宝港
