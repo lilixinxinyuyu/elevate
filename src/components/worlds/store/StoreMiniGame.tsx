@@ -222,36 +222,14 @@ export function StoreMiniGame({
           const flying = flyingItems.some((f) => f.instanceId === inst.instanceId);
           if (flying) return null;
           return (
-            <group
+            <ScannableStoreItem
               key={inst.instanceId}
-              position={[pos[0], COUNTER_Y, pos[1]]}
-              onPointerOver={(e) => {
-                e.stopPropagation();
-                document.body.style.cursor = "pointer";
-              }}
-              onPointerOut={(e) => {
-                e.stopPropagation();
-                document.body.style.cursor = "default";
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleScanClick(inst.instanceId, pos);
-              }}
-            >
-              <StoreItemMesh gltfUrl={inst.gltf} scale={0.35} />
-              {/* 价签 */}
-              <Text
-                position={[0, 0.15, 0]}
-                fontSize={0.06}
-                color="#ffffff"
-                outlineWidth={0.008}
-                outlineColor="#000"
-                anchorX="center"
-                anchorY="middle"
-              >
-                {formatYuan(inst.price)}
-              </Text>
-            </group>
+              x={pos[0]}
+              z={pos[1]}
+              gltfUrl={inst.gltf}
+              price={inst.price}
+              onClick={() => handleScanClick(inst.instanceId, pos)}
+            />
           );
         })}
 
@@ -435,6 +413,89 @@ function FlyingItem({
   return (
     <group ref={groupRef} position={[fromX, COUNTER_Y, fromZ]} scale={0.35}>
       <StoreItemMesh gltfUrl={gltfUrl} scale={1} />
+    </group>
+  );
+}
+
+/**
+ * v0.32.79 (Ep55 XXX): 扫码阶段商品 mesh — idle bob + hover scale/lift + amber ring。
+ * 价格标签不动画（防文字抖动），只动 mesh wrapper。
+ */
+function ScannableStoreItem({
+  x,
+  z,
+  gltfUrl,
+  price,
+  onClick,
+}: {
+  x: number;
+  z: number;
+  gltfUrl: string;
+  price: number;
+  onClick: () => void;
+}) {
+  const meshRef = useRef<Group>(null);
+  const [hovered, setHovered] = useState(false);
+  const seedRef = useRef(Math.random() * Math.PI * 2);
+  useFrame(({ clock }) => {
+    if (!meshRef.current) return;
+    const t = clock.elapsedTime + seedRef.current;
+    const targetScale = hovered ? 0.43 : 0.35;
+    const cur = meshRef.current.scale.x;
+    meshRef.current.scale.setScalar(cur + (targetScale - cur) * 0.18);
+    meshRef.current.position.y =
+      Math.sin(t * 2.4) * 0.012 + (hovered ? 0.05 : 0);
+    meshRef.current.rotation.y =
+      Math.sin(t * 1.6) * 0.05 + (hovered ? 0.18 : 0);
+  });
+  return (
+    <group
+      position={[x, COUNTER_Y, z]}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        setHovered(true);
+        document.body.style.cursor = "pointer";
+      }}
+      onPointerOut={(e) => {
+        e.stopPropagation();
+        setHovered(false);
+        document.body.style.cursor = "default";
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {/* hover amber ring */}
+      {hovered && (
+        <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.13, 0.17, 24]} />
+          <meshStandardMaterial
+            color="#fbbf24"
+            emissive="#fbbf24"
+            emissiveIntensity={1.4}
+            side={THREE.DoubleSide}
+            transparent
+            opacity={0.85}
+          />
+        </mesh>
+      )}
+      {/* mesh wrapper (受动画) */}
+      <group ref={meshRef} scale={0.35}>
+        <StoreItemMesh gltfUrl={gltfUrl} scale={1} />
+      </group>
+      {/* 价签 — 锚定不抖动 */}
+      <Text
+        position={[0, 0.15, 0]}
+        fontSize={0.06}
+        color="#ffffff"
+        outlineWidth={0.008}
+        outlineColor="#000"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {formatYuan(price)}
+      </Text>
     </group>
   );
 }
