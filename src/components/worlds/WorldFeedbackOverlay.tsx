@@ -68,6 +68,12 @@ function ToastTrail({ pulses }: { pulses: FeedbackPulse[] }) {
             <span className="worlds-toast-label">
               {p.label ?? meta.defaultLabel}
             </span>
+            {/* v0.33.9 (Ep85 MMMMMMM): correct toast 右侧加 +1 combo chip */}
+            {p.kind === "correct" && (
+              <span className="worlds-toast-combo-chip" aria-hidden>
+                +1
+              </span>
+            )}
           </div>
         );
       })}
@@ -274,6 +280,34 @@ function FeedbackStyles() {
         z-index: 1;
         color: #0f172a;
         white-space: nowrap;
+      }
+      /* v0.33.9 (Ep85 MMMMMMM): correct toast 右侧 +1 chip — emerald combo 反馈 */
+      .worlds-toast-combo-chip {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.3rem;
+        padding: 0.12rem 0.42rem;
+        border-radius: 999px;
+        border: 2px solid #34d399;
+        background: linear-gradient(180deg, #ecfdf5 0%, #bbf7d0 100%);
+        color: #047857;
+        font-size: 10.5px;
+        font-weight: 900;
+        letter-spacing: 0.03em;
+        box-shadow:
+          0 0 10px rgba(52, 211, 153, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        animation: worlds-toast-combo-pop 520ms cubic-bezier(.34, 1.56, .64, 1) 280ms both;
+      }
+      @keyframes worlds-toast-combo-pop {
+        0%   { opacity: 0; transform: translateY(4px) scale(0.55); }
+        60%  { opacity: 1; transform: translateY(-2px) scale(1.18); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .worlds-toast-combo-chip { animation: none; }
       }
       @keyframes worlds-toast-cascade {
         0%   { opacity: 0; transform: translateX(40px) translateY(8px) scale(0.9); }
