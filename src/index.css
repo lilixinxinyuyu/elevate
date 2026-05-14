@@ -359,10 +359,67 @@ body {
   animation: world-intro-slide-out 220ms cubic-bezier(.4,.0,.7,.2) forwards !important;
 }
 .world-reward-content {
+  position: relative;
+  isolation: isolate;
   animation: world-reward-slide-in 620ms cubic-bezier(.34,1.56,.64,1);
 }
 .world-phase-rise-in {
   animation: world-mini-rise-in 360ms cubic-bezier(.22,.9,.32,1);
+}
+
+/* v0.32.55 (Ep31 K): RewardOverlay 星光散射 + badge 拉丝高光
+   ----------------------------------------------------------------- */
+/* 8 个星光粒子用 text-shadow trick — 单个 ::before + 8 个偏移阴影 */
+.world-reward-content::before {
+  content: "✦";
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  font-size: 28px;
+  color: transparent;
+  text-shadow:
+    0    -110px 0 #fef3c7,
+    88px  -68px 0 #fde68a,
+    112px  22px 0 #fbbf24,
+    56px   98px 0 #fef08a,
+    -56px  98px 0 #fde68a,
+    -112px 22px 0 #fbbf24,
+    -88px -68px 0 #fef3c7,
+    0     118px 0 #fde047;
+  transform: translate(-50%, -50%) scale(0.4);
+  animation: world-reward-starburst 1100ms ease-out 80ms both;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes world-reward-starburst {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.35) rotate(-25deg); }
+  45%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.4) rotate(22deg); }
+}
+
+/* badge 上一道扫光（从左→右） */
+.world-reward-badge {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.world-reward-badge::after {
+  content: "";
+  position: absolute;
+  inset: -45%;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.78) 48%,
+    transparent 62%
+  );
+  transform: translateX(-70%) rotate(8deg);
+  animation: world-reward-badge-shine 1050ms ease-out 240ms both;
+  pointer-events: none;
+  z-index: 1;
+}
+@keyframes world-reward-badge-shine {
+  to { transform: translateX(70%) rotate(8deg); }
 }
 
 /* v0.32.52 (Ep28 I): 顾客气泡活化 — idle bob + mood-aware micro-animations
