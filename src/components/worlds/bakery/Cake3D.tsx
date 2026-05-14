@@ -10,6 +10,7 @@ import { useRef, useState } from "react";
 import { Text } from "../BillboardText";
 import { useFrame } from "@react-three/fiber";
 import type { Mesh } from "three";
+import * as THREE from "three";
 
 interface CakeSliceProps {
   /** 块 index 0-11 */
@@ -118,6 +119,9 @@ export function Cake({
             }}
           >
             <CakeSlice index={i} total={12} topColor={topColor} accentColor={accentColor} />
+            {hovered && (
+              <SliceHoverGlow index={i} total={12} accentColor={accentColor} />
+            )}
           </group>
         );
       })}
@@ -189,6 +193,52 @@ export function Plate({ position, collectedSlices, needSlices, topColor, accentC
       >
         {`${collectedSlices}/${needSlices} 块`}
       </Text>
+    </group>
+  );
+}
+
+/**
+ * v0.32.95 (Ep71 WWW): bakery slice hover 时在该扇形外圈画 emissive ring glow,
+ * 强化"这块可点"affordance；脉动 7Hz scale ±0.025 不影响 click affordance。
+ */
+function SliceHoverGlow({
+  index,
+  total,
+  accentColor,
+  radius = 0.42,
+}: {
+  index: number;
+  total: number;
+  accentColor: string;
+  radius?: number;
+}) {
+  const ref = useRef<Mesh>(null);
+  const thetaLength = (Math.PI * 2) / total;
+  const thetaStart = index * thetaLength;
+  const gap = thetaLength * 0.04;
+  const drawTheta = thetaLength - gap;
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const s = 1 + Math.sin(clock.elapsedTime * 7) * 0.03;
+    ref.current.scale.setScalar(s);
+  });
+  return (
+    <group rotation={[0, gap / 2, 0]}>
+      <mesh
+        ref={ref}
+        position={[0, 0.135, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[radius * 0.92, radius * 1.12, 36, 1, thetaStart, drawTheta]} />
+        <meshBasicMaterial
+          color={accentColor}
+          transparent
+          opacity={0.78}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
     </group>
   );
 }
