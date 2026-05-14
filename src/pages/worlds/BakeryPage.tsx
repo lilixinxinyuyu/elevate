@@ -189,14 +189,11 @@ function CustomerBubble({
         top: "12%",
       }}
     >
-      <div className="text-7xl drop-shadow-2xl">{emoji}</div>
+      <div className="world-customer-bubble-avatar">{emoji}</div>
       <div className="max-w-md">
-        <div className="px-4 py-2.5 rounded-2xl bg-white/95 text-slate-900 text-sm font-medium shadow-2xl border-2 border-pink-200 relative">
+        <div className="world-customer-bubble-card">
           {line}
-          {hint && (
-            <div className="mt-1 text-xs text-pink-700 font-bold">💡 {hint}</div>
-          )}
-          <span className="absolute -left-2 bottom-3 w-0 h-0 border-y-8 border-y-transparent border-r-8 border-r-white/95" />
+          {hint && <div className="world-customer-bubble-hint">💡 {hint}</div>}
         </div>
       </div>
     </div>

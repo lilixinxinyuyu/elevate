@@ -166,6 +166,60 @@ body {
 .world-theme-bakery   { --world-accent: #ec4899; --world-accent-light: #f472b6; }
 .world-theme-airport  { --world-accent: #06b6d4; --world-accent-light: #22d3ee; }
 
+/* v0.32.38: 顾客气泡 chunky 化（Ep15 双 CLI 一致 A）— 之前 white/95 backdrop-blur
+   跟新 world-chip 风格不统一。用 world-panel 同款渐变 + 主题色 3px 边 + 硬投影。
+   删除尾部三角 span，改用 ::after CSS 画带描边的小三角指向 mascot。
+*/
+.world-customer-bubble-avatar {
+  font-size: 5.5rem;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+}
+.world-customer-bubble-card {
+  position: relative;
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  padding: 0.7rem 1rem;
+  border-radius: 20px;
+  border: 3px solid var(--world-accent, #f59e0b);
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.1),
+    0 14px 24px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+/* 朝左指向 mascot 的三角尾巴 — CSS 画形 */
+.world-customer-bubble-card::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  bottom: 22%;
+  width: 0;
+  height: 0;
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  border-right: 12px solid var(--world-accent, #f59e0b);
+}
+.world-customer-bubble-card::after {
+  content: '';
+  position: absolute;
+  left: -7px;
+  bottom: 22%;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 10px solid #ffffff;
+}
+.world-customer-bubble-hint {
+  margin-top: 0.4rem;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--world-accent, #f59e0b);
+}
+
 /* Form controls in dark theme */
 input, select, textarea {
   color-scheme: dark;
