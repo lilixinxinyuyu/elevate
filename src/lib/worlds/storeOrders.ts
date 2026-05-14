@@ -111,37 +111,50 @@ export interface Order {
   hint?: string;
 }
 
+/**
+ * v0.32.44 (Ep20)：3 单难度梯度大幅提升（爸爸 P0#3 "幼儿园难度"）
+ *  单 1: 2 件同类商品（教程，建立"单价 × 数量 + 找零"流程，¥0.5 × 2 = ¥1.0）
+ *  单 2: 3 件不同商品（多件相加，G4B 小数加法）
+ *  单 3: 5-6 件含奶酪 (¥2)，杂项总价 + 找零（接近期中题目）
+ *
+ * 价格不变（保持 STORE_ITEMS 模型/coin 兼容）：
+ *  carrot ¥0.5 / tomato ¥1.5 / bun ¥1.2 / cheese ¥2.0 / potato ¥0.8 / onion ¥0.7
+ */
 export const ORDERS: Order[] = [
-  // 单 1: 教程 — 1 个商品 + ¥1 付款
+  // 单 1: 教程 — 2 件同类（单价 × 数量，¥0.5 × 2 = ¥1）
   {
     index: 1,
     customerEmoji: "🧑",
-    customerLine: "你好！我要 1 个 🥕 胡萝卜，给你 ¥1",
-    requests: [{ itemId: "carrot", quantity: 1 }],
-    paidCent: 100,
-    hint: "拖商品到柜台扫码篮，再拖钱币找零",
+    customerLine: "你好！我要 2 个 🥕 胡萝卜，给你 ¥2",
+    requests: [{ itemId: "carrot", quantity: 2 }],
+    paidCent: 200,
+    hint: "拖商品到扫码篮，应付 ¥0.5×2 = ¥1.0；找零 ¥2.0 - ¥1.0 = ¥1.0",
   },
-  // 单 2: 含 ¥0.5 找零
+  // 单 2: 3 件不同（小数加法 + 找零，期中难度）
   {
     index: 2,
     customerEmoji: "👩",
-    customerLine: "我要 1 个 🍅 番茄 和 1 个 🥔 土豆，给你 ¥5",
+    customerLine: "我要 1 个 🍅 番茄、1 个 🥔 土豆 和 1 个 🧅 洋葱，给你 ¥5",
     requests: [
       { itemId: "tomato", quantity: 1 },
       { itemId: "potato", quantity: 1 },
+      { itemId: "onion", quantity: 1 },
     ],
     paidCent: 500,
+    hint: "应付 ¥1.5 + ¥0.8 + ¥0.7 = ¥3.0；找零 ¥5.0 - ¥3.0 = ¥2.0",
   },
-  // 单 3: 含 ¥0.1 + 数量乘法
+  // 单 3: 6 件 mixed 含奶酪（小数加法 + 单价 × 数量 + 找零，期末难度）
   {
     index: 3,
     customerEmoji: "👨",
-    customerLine: "请给我 3 个 🥕 胡萝卜 和 2 个 🍞 面包，给你 ¥5",
+    customerLine: "请给我 2 个 🍞 面包、1 个 🧀 奶酪 和 3 个 🥕 胡萝卜，给你 ¥10",
     requests: [
-      { itemId: "carrot", quantity: 3 },
       { itemId: "bun", quantity: 2 },
+      { itemId: "cheese", quantity: 1 },
+      { itemId: "carrot", quantity: 3 },
     ],
-    paidCent: 500,
+    paidCent: 1000,
+    hint: "应付 ¥1.2×2 + ¥2.0 + ¥0.5×3 = ¥2.4 + ¥2.0 + ¥1.5 = ¥5.9；找零 ¥10.0 - ¥5.9 = ¥4.1",
   },
 ];
 
