@@ -224,6 +224,56 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
         @media (prefers-reduced-motion: reduce) {
           .baibao-tooltip { animation: none; }
         }
+        /* v0.32.76 (Ep52 CCC): hero progress bar gradient shimmer 横扫
+           替代原 h-2 rounded-full slate-200 朴素进度条 */
+        .baibao-progress-track {
+          position: relative;
+          margin-top: 0.55rem;
+          height: 12px;
+          border-radius: 999px;
+          overflow: hidden;
+          background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+          border: 2px solid rgba(251, 191, 36, 0.45);
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);
+        }
+        .baibao-progress-fill {
+          position: relative;
+          height: 100%;
+          width: var(--baibao-pct, 0%);
+          background: linear-gradient(
+            90deg,
+            #fbbf24 0%,
+            #fb923c 35%,
+            #f472b6 70%,
+            #38bdf8 100%
+          );
+          border-radius: 999px;
+          box-shadow:
+            0 0 14px rgba(251, 191, 36, 0.75),
+            inset 0 1px 0 rgba(255, 255, 255, 0.5);
+          transition: width 600ms cubic-bezier(.34, 1.56, .64, 1);
+          overflow: hidden;
+        }
+        .baibao-progress-fill::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            100deg,
+            transparent 30%,
+            rgba(255, 255, 255, 0.85) 50%,
+            transparent 70%
+          );
+          background-size: 200% 100%;
+          animation: baibao-progress-sweep 1.8s linear infinite;
+        }
+        @keyframes baibao-progress-sweep {
+          0%   { background-position: -100% 0; }
+          100% { background-position: 200% 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .baibao-progress-fill::after { animation: none; }
+        }
       `}</style>
       <div
         className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none"
@@ -267,14 +317,18 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
               </div>
             </div>
 
-            {/* 进度条 */}
-            <div className="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden">
+            {/* v0.32.76 (Ep52 CCC): hero progress bar w/ gradient shimmer 横扫 */}
+            <div
+              className="baibao-progress-track"
+              role="meter"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`百宝港点亮进度 ${pct}%`}
+            >
               <div
-                className="h-full transition-all duration-500"
-                style={{
-                  width: `${pct}%`,
-                  background: "linear-gradient(90deg, #fbbf24, #f97316)",
-                }}
+                className="baibao-progress-fill"
+                style={{ ["--baibao-pct" as string]: `${pct}%` } as React.CSSProperties}
               />
             </div>
 
