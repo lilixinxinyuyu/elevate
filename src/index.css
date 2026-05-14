@@ -238,6 +238,87 @@ body {
   color: var(--world-accent, #f59e0b);
 }
 
+/* v0.32.52 (Ep28 I): 顾客气泡活化 — idle bob + mood-aware micro-animations
+   ----------------------------------------------------------------- */
+.world-customer-bubble {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  animation: world-customer-idle 3s ease-in-out infinite;
+}
+@keyframes world-customer-idle {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+.world-customer-bubble-avatar-wrap {
+  position: relative;
+  animation: world-avatar-bob 2.4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+@keyframes world-avatar-bob {
+  0%, 100% { transform: rotate(-2deg) scale(1); }
+  50%      { transform: rotate(2deg)  scale(1.02); }
+}
+.world-customer-emote {
+  position: absolute;
+  right: -10px;
+  top: -10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fef3c7 100%);
+  border: 2px solid var(--world-accent, #f59e0b);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+  animation: world-emote-pop 1.6s ease-in-out infinite;
+}
+@keyframes world-emote-pop {
+  0%, 100% { transform: scale(1) rotate(-6deg); }
+  50%      { transform: scale(1.15) rotate(6deg); }
+}
+
+/* mood: happy — 客人开心反弹 + emote 转金色 */
+.world-customer-bubble-happy .world-customer-bubble-avatar-wrap {
+  animation: world-avatar-pop 700ms cubic-bezier(.34,1.56,.64,1);
+}
+.world-customer-bubble-happy .world-customer-emote {
+  background: linear-gradient(180deg, #fde68a, #f59e0b);
+  border-color: #b45309;
+  animation: world-emote-burst 700ms ease-out;
+}
+@keyframes world-avatar-pop {
+  0%   { transform: scale(0.85) rotate(-8deg); }
+  60%  { transform: scale(1.25) rotate(6deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+@keyframes world-emote-burst {
+  0%   { transform: scale(0.5); opacity: 0.5; }
+  60%  { transform: scale(1.6) rotate(20deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* mood: focus — 提示卡轻闪，引导玩家关注 */
+.world-customer-bubble-focus .world-customer-bubble-card {
+  animation: world-bubble-attention 1.4s ease-out;
+}
+@keyframes world-bubble-attention {
+  0%   { box-shadow: 0 4px 0 rgba(0,0,0,0.1), 0 14px 24px rgba(0,0,0,0.3), 0 0 0 0 var(--world-accent, #f59e0b); }
+  40%  { box-shadow: 0 4px 0 rgba(0,0,0,0.1), 0 14px 24px rgba(0,0,0,0.3), 0 0 0 6px rgba(245, 158, 11, 0.35); }
+  100% { box-shadow: 0 4px 0 rgba(0,0,0,0.1), 0 14px 24px rgba(0,0,0,0.3), 0 0 0 0 transparent; }
+}
+
+/* hint card 持续微闪 — 提示玩家"这里有线索" */
+.world-customer-bubble-hint {
+  animation: world-hint-pulse 1.6s ease-in-out infinite;
+}
+@keyframes world-hint-pulse {
+  0%, 100% { opacity: 1; transform: translateX(0); }
+  50%      { opacity: 0.65; transform: translateX(1px); }
+}
+
 /* Form controls in dark theme */
 input, select, textarea {
   color-scheme: dark;

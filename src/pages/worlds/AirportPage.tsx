@@ -107,6 +107,7 @@ export function AirportPage() {
         emoji={order.customerEmoji}
         lineEn={order.customerLineEn}
         lineZh={order.customerLineZh}
+        mood={justCompleted ? "happy" : phase === "intro" ? "hello" : "focus"}
         hint={
           phase === "loading"
             ? order.requests
@@ -169,15 +170,18 @@ function CustomerBubble({
   lineEn,
   lineZh,
   hint,
+  mood = "hello",
 }: {
   emoji: string;
   lineEn: string;
   lineZh: string;
   hint?: string;
+  mood?: "hello" | "focus" | "happy";
 }) {
+  const emote = mood === "happy" ? "🎉" : mood === "focus" ? "👀" : "💬";
   return (
     <div
-      className="absolute pointer-events-none flex items-end gap-3"
+      className="absolute pointer-events-none"
       style={{
         zIndex: 55,
         left: "50%",
@@ -185,12 +189,17 @@ function CustomerBubble({
         top: "12%",
       }}
     >
-      <div className="world-customer-bubble-avatar">{emoji}</div>
-      <div className="max-w-md">
-        <div className="world-customer-bubble-card">
-          <div className="font-bold text-cyan-700">{lineEn}</div>
-          <div className="text-xs text-slate-500 mt-0.5 font-medium">{lineZh}</div>
-          {hint && <div className="world-customer-bubble-hint">🛄 装: {hint}</div>}
+      <div className={`world-customer-bubble world-customer-bubble-${mood}`}>
+        <div className="world-customer-bubble-avatar-wrap">
+          <div className="world-customer-bubble-avatar">{emoji}</div>
+          <span className="world-customer-emote">{emote}</span>
+        </div>
+        <div className="max-w-md">
+          <div className="world-customer-bubble-card">
+            <div className="font-bold text-cyan-700">{lineEn}</div>
+            <div className="text-xs text-slate-500 mt-0.5 font-medium">{lineZh}</div>
+            {hint && <div className="world-customer-bubble-hint">🛄 装: {hint}</div>}
+          </div>
         </div>
       </div>
     </div>
