@@ -49,11 +49,18 @@ export function WorldOrb({ world, position, onSelect }: WorldOrbProps) {
     e.stopPropagation();
     setHovered(true);
     document.body.style.cursor = world.unlocked ? "pointer" : "not-allowed";
+    // v0.32.93 (Ep69 BBBBB): dispatch hover bridge → WorldsHomePage CenterPanel
+    window.dispatchEvent(
+      new CustomEvent("worlds-orb-hover", { detail: { id: world.id } }),
+    );
   };
   const handleOut = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
     setHovered(false);
     document.body.style.cursor = "default";
+    window.dispatchEvent(
+      new CustomEvent("worlds-orb-hover", { detail: { id: null } }),
+    );
   };
 
   return (
@@ -77,21 +84,10 @@ export function WorldOrb({ world, position, onSelect }: WorldOrbProps) {
           <Text fontSize={0.7} anchorX="center" anchorY="middle">🔒</Text>
         </Billboard>
       )}
-      {/* 名字标签（建筑上方） */}
-      <Billboard position={[0, 2.4, 0]}>
-        <Text
-          fontSize={0.42}
-          color={world.unlocked ? "#ffffff" : "#cbd5e1"}
-          outlineWidth={0.05}
-          outlineColor="#000000"
-          anchorX="center"
-          anchorY="middle"
-        >
-          {`${world.emoji} ${world.name}`}
-        </Text>
-      </Billboard>
+      {/* v0.32.93 (Ep69 BBBBB): 名字标签 + chunky badge 背景 (替代裸 Text) */}
+      <OrbNameBadge world={world} hovered={hovered} />
       {/* tagline / lock hint */}
-      <Billboard position={[0, 1.95, 0]}>
+      <Billboard position={[0, 1.85, 0]}>
         <Text
           fontSize={0.22}
           color={world.unlocked ? "#fef3c7" : "#94a3b8"}
@@ -311,6 +307,67 @@ function OrbAuraParticle({
         depthWrite={false}
       />
     </mesh>
+  );
+}
+
+/**
+ * v0.32.93 (Ep69 BBBBB): WorldOrb 名字 label chunky badge —
+ *   accent 色 plane 背景 + 白色 cream 主卡 + Text + hover scale/lift。
+ *   替代之前裸 Billboard + Text（裸文字 + 描边显得不够 chunky）。
+ */
+function OrbNameBadge({ world, hovered }: { world: WorldDef; hovered: boolean }) {
+  const group = useRef<Group>(null);
+  const text = `${world.emoji} ${world.name}`;
+  // 字符按 1 char ≈ 0.32 unit 估宽，限定 max
+  const badgeWidth = Math.min(3.4, Math.max(1.4, text.length * 0.34));
+  const badgeHeight = 0.55;
+  useFrame(({ clock }) => {
+    if (!group.current) return;
+    const t = clock.elapsedTime;
+    const hot = hovered && world.unlocked;
+    const targetScale = hot ? 1.08 : 1.0;
+    const cur = group.current.scale.x;
+    group.current.scale.setScalar(cur + (targetScale - cur) * 0.15);
+    group.current.position.y = (hot ? 0.08 : 0) + Math.sin(t * 2) * 0.012;
+  });
+  const accent = world.accent;
+  const locked = !world.unlocked;
+  return (
+    <Billboard position={[0, 2.42, 0]}>
+      <group ref={group}>
+        {/* accent 阴影背板（稍大、偏下） */}
+        <mesh position={[0, -0.04, -0.02]}>
+          <planeGeometry args={[badgeWidth + 0.18, badgeHeight + 0.16]} />
+          <meshBasicMaterial
+            color={accent}
+            transparent
+            opacity={locked ? 0.32 : 0.9}
+          />
+        </mesh>
+        {/* 主卡片 — 奶油底 */}
+        <mesh>
+          <planeGeometry args={[badgeWidth, badgeHeight]} />
+          <meshBasicMaterial
+            color={locked ? "#e2e8f0" : "#fff7ed"}
+            transparent
+            opacity={0.96}
+          />
+        </mesh>
+        {/* 文字 */}
+        <Text
+          fontSize={0.34}
+          color={locked ? "#475569" : "#0f172a"}
+          outlineWidth={0.014}
+          outlineColor="#ffffff"
+          anchorX="center"
+          anchorY="middle"
+          position={[0, 0, 0.005]}
+          maxWidth={badgeWidth - 0.2}
+        >
+          {text}
+        </Text>
+      </group>
+    </Billboard>
   );
 }
 
