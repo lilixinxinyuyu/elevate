@@ -234,27 +234,36 @@ function IntroPanel({
       className="absolute pointer-events-none inset-0 flex items-end justify-center pb-12"
       style={{ zIndex: 60 }}
     >
-      <div className="pointer-events-auto world-panel max-w-md text-center">
-        <div className="world-panel-title">订单 #{orderIdx + 1}</div>
-        <div className="text-slate-900 text-sm leading-relaxed mb-3">
-          {order.customerLine}
+      <div className="pointer-events-auto world-panel world-order-card">
+        <div className="world-order-head">
+          <div>
+            <div className="world-order-num">#{orderIdx + 1}</div>
+            <span className="world-order-num-label">分数</span>
+          </div>
+          <div className="world-order-title-block">
+            <div className="world-panel-title">甜心面包店 · 12 等分</div>
+            <div className="world-order-line">{order.customerLine}</div>
+          </div>
+          <div className="world-order-emoji">{order.emoji}</div>
         </div>
-        <div className="text-xs mb-3">
-          <div className="world-panel-stat text-pink-700">
-            <div className="font-bold text-[11px] uppercase">
-              要 {order.fractionLabel} 个 {order.emoji}
-            </div>
-            <div className="font-mono text-pink-900 text-base">
-              = {order.needSlices} / 12 块
+        <div className="world-order-body">
+          <div className="text-xs mb-3">
+            <div className="world-panel-stat text-pink-700">
+              <div className="font-bold text-[11px] uppercase">
+                要 {order.fractionLabel} 个 {order.emoji}
+              </div>
+              <div className="font-mono text-pink-900 text-base">
+                = {order.needSlices} / 12 块
+              </div>
             </div>
           </div>
+          {order.hint && (
+            <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
+          )}
+          <button type="button" onClick={onStart} className="world-cta-btn w-full">
+            🍰 开始切块
+          </button>
         </div>
-        {order.hint && (
-          <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
-        )}
-        <button type="button" onClick={onStart} className="world-cta-btn">
-          🍰 开始切块
-        </button>
       </div>
     </div>
   );

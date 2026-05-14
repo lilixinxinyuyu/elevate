@@ -272,25 +272,36 @@ function IntroPanel({
       className="absolute pointer-events-none inset-0 flex items-end justify-center pb-12"
       style={{ zIndex: 60 }}
     >
-      <div className="pointer-events-auto world-panel max-w-md text-center">
-        <div className="world-panel-title">客人 #{orderIdx + 1}</div>
-        <div className="text-slate-900 text-sm leading-relaxed mb-3">{order.customerLine}</div>
-        <div className="text-xs mb-3 grid grid-cols-2 gap-2">
-          <div className="world-panel-stat text-emerald-700">
-            <div className="font-bold text-[11px] uppercase">应收</div>
-            <div className="font-mono text-emerald-900 text-base">{formatYuan(totalCent)}</div>
+      <div className="pointer-events-auto world-panel world-order-card">
+        <div className="world-order-head">
+          <div>
+            <div className="world-order-num">#{orderIdx + 1}</div>
+            <span className="world-order-num-label">订单</span>
           </div>
-          <div className="world-panel-stat text-amber-700">
-            <div className="font-bold text-[11px] uppercase">找零</div>
-            <div className="font-mono text-amber-900 text-base">{formatYuan(changeCent)}</div>
+          <div className="world-order-title-block">
+            <div className="world-panel-title">小卖部 · 扫码 + 找零</div>
+            <div className="world-order-line">{order.customerLine}</div>
           </div>
+          <div className="world-order-emoji">🛒</div>
         </div>
-        {order.hint && (
-          <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
-        )}
-        <button type="button" onClick={onStart} className="world-cta-btn">
-          🎯 开始扫码
-        </button>
+        <div className="world-order-body">
+          <div className="text-xs mb-3 grid grid-cols-2 gap-2">
+            <div className="world-panel-stat text-emerald-700">
+              <div className="font-bold text-[11px] uppercase">应收</div>
+              <div className="font-mono text-emerald-900 text-base">{formatYuan(totalCent)}</div>
+            </div>
+            <div className="world-panel-stat text-amber-700">
+              <div className="font-bold text-[11px] uppercase">找零</div>
+              <div className="font-mono text-amber-900 text-base">{formatYuan(changeCent)}</div>
+            </div>
+          </div>
+          {order.hint && (
+            <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
+          )}
+          <button type="button" onClick={onStart} className="world-cta-btn w-full">
+            🎯 开始扫码
+          </button>
+        </div>
       </div>
     </div>
   );

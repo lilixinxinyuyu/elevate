@@ -231,32 +231,43 @@ function IntroPanel({
       className="absolute pointer-events-none inset-0 flex items-end justify-center pb-12"
       style={{ zIndex: 60 }}
     >
-      <div className="pointer-events-auto world-panel max-w-md text-center">
-        <div className="world-panel-title">旅客 #{orderIdx + 1}</div>
-        <div className="text-slate-900 text-sm leading-relaxed mb-1">
-          <div className="font-bold text-cyan-800">{order.customerLineEn}</div>
-        </div>
-        <div className="text-xs text-slate-500 mb-3">{order.customerLineZh}</div>
-        <div className="text-xs mb-3">
-          <div className="world-panel-stat text-cyan-700">
-            <div className="font-bold text-[11px] uppercase mb-1">装载清单</div>
-            {order.requests.map((r) => (
-              <div key={r.itemId} className="font-mono text-cyan-900 text-base">
-                {r.quantity} × {LUGGAGE[r.itemId].emoji}{" "}
-                <span className="text-cyan-700">
-                  {r.quantity > 1 ? LUGGAGE[r.itemId].englishPlural : LUGGAGE[r.itemId].english}
-                </span>
-                <span className="text-slate-500 ml-1">({LUGGAGE[r.itemId].zh})</span>
-              </div>
-            ))}
+      <div className="pointer-events-auto world-panel world-order-card">
+        <div className="world-order-head">
+          <div>
+            <div className="world-order-num">#{orderIdx + 1}</div>
+            <span className="world-order-num-label">旅客</span>
           </div>
+          <div className="world-order-title-block">
+            <div className="world-panel-title">登机口 · 量词 + 复数</div>
+            <div className="world-order-line">
+              <span className="font-bold text-cyan-800">{order.customerLineEn}</span>
+            </div>
+            <div className="text-xs text-slate-500">{order.customerLineZh}</div>
+          </div>
+          <div className="world-order-emoji">🛄</div>
         </div>
-        {order.hint && (
-          <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
-        )}
-        <button type="button" onClick={onStart} className="world-cta-btn">
-          🛄 开始装行李
-        </button>
+        <div className="world-order-body">
+          <div className="text-xs mb-3">
+            <div className="world-panel-stat text-cyan-700">
+              <div className="font-bold text-[11px] uppercase mb-1">装载清单</div>
+              {order.requests.map((r) => (
+                <div key={r.itemId} className="font-mono text-cyan-900 text-base">
+                  {r.quantity} × {LUGGAGE[r.itemId].emoji}{" "}
+                  <span className="text-cyan-700">
+                    {r.quantity > 1 ? LUGGAGE[r.itemId].englishPlural : LUGGAGE[r.itemId].english}
+                  </span>
+                  <span className="text-slate-500 ml-1">({LUGGAGE[r.itemId].zh})</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {order.hint && (
+            <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
+          )}
+          <button type="button" onClick={onStart} className="world-cta-btn w-full">
+            🛄 开始装行李
+          </button>
+        </div>
       </div>
     </div>
   );

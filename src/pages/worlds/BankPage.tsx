@@ -239,23 +239,34 @@ function IntroPanel({
       className="absolute pointer-events-none inset-0 flex items-end justify-center pb-12"
       style={{ zIndex: 60 }}
     >
-      <div className="pointer-events-auto world-panel max-w-md text-center">
-        <div className="world-panel-title">换零 #{orderIdx + 1}</div>
-        <div className="text-slate-900 text-sm leading-relaxed mb-3">{order.customerLine}</div>
-        <div className="text-xs mb-3">
-          <div className="world-panel-stat text-blue-700">
-            <div className="font-bold text-[11px] uppercase">需要换零</div>
-            <div className="font-mono text-blue-900 text-lg">
-              {formatYuan(order.targetCent)}
+      <div className="pointer-events-auto world-panel world-order-card">
+        <div className="world-order-head">
+          <div>
+            <div className="world-order-num">#{orderIdx + 1}</div>
+            <span className="world-order-num-label">换零</span>
+          </div>
+          <div className="world-order-title-block">
+            <div className="world-panel-title">百宝银行 · 单位换算</div>
+            <div className="world-order-line">{order.customerLine}</div>
+          </div>
+          <div className="world-order-emoji">🪙</div>
+        </div>
+        <div className="world-order-body">
+          <div className="text-xs mb-3">
+            <div className="world-panel-stat text-blue-700">
+              <div className="font-bold text-[11px] uppercase">需要换零</div>
+              <div className="font-mono text-blue-900 text-lg">
+                {formatYuan(order.targetCent)}
+              </div>
             </div>
           </div>
+          {order.hint && (
+            <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
+          )}
+          <button type="button" onClick={onStart} className="world-cta-btn w-full">
+            🪙 开始换零
+          </button>
         </div>
-        {order.hint && (
-          <div className="text-xs text-slate-500 italic mb-3">💡 {order.hint}</div>
-        )}
-        <button type="button" onClick={onStart} className="world-cta-btn">
-          🪙 开始换零
-        </button>
       </div>
     </div>
   );
