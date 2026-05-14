@@ -13,20 +13,36 @@ import { OrbitControls } from "@react-three/drei";
 import { WorldsCanvas } from "../../components/worlds/WorldsCanvas";
 import { BaibaoTownMap } from "../../components/worlds/BaibaoTownMap";
 import {
+  BAIBAO_BUILDINGS,
   type BaibaoBuilding,
 } from "../../content/worlds/baibao";
-import { getDecorationShards } from "../../lib/worlds/worldsProgress";
+import {
+  getBuildingCompleteCount,
+  getDecorationShards,
+} from "../../lib/worlds/worldsProgress";
 
 export function BaibaoMapPage() {
   const navigate = useNavigate();
   const [hoverBuilding, setHoverBuilding] = useState<BaibaoBuilding | null>(null);
   const [decorations, setDecorations] = useState(0);
+  // v0.32.57 (Ep33 M): per-building 完成次数 → hero 进度横幅 + medal row
+  const [buildingStats, setBuildingStats] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const c = await getDecorationShards();
-      if (!cancelled) setDecorations(c);
+      // 并行拉 active building 的完成次数
+      const active = BAIBAO_BUILDINGS.filter((b) => b.active);
+      const counts = await Promise.all(active.map((b) => getBuildingCompleteCount(b.id)));
+      const stats: Record<string, number> = {};
+      active.forEach((b, i) => {
+        stats[b.id] = counts[i] ?? 0;
+      });
+      if (!cancelled) {
+        setDecorations(c);
+        setBuildingStats(stats);
+      }
     })();
     return () => {
       cancelled = true;
@@ -85,7 +101,11 @@ export function BaibaoMapPage() {
       </WorldsCanvas>
 
       {/* HUD */}
-      <HUD decorations={decorations} hoverBuilding={hoverBuilding} />
+      <HUD
+        decorations={decorations}
+        hoverBuilding={hoverBuilding}
+        buildingStats={buildingStats}
+      />
     </div>
   );
 }
@@ -93,14 +113,21 @@ export function BaibaoMapPage() {
 interface HUDProps {
   decorations: number;
   hoverBuilding: BaibaoBuilding | null;
+  buildingStats: Record<string, number>;
 }
 
-function HUD({ decorations, hoverBuilding }: HUDProps) {
+function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
   const navigate = useNavigate();
+  // v0.32.57 (Ep33 M): hero 进度数据
+  const active = BAIBAO_BUILDINGS.filter((b) => b.active);
+  const doneCount = active.filter((b) => (buildingStats[b.id] ?? 0) > 0).length;
+  const totalRuns = active.reduce((sum, b) => sum + (buildingStats[b.id] ?? 0), 0);
+  const pct = Math.round((doneCount / Math.max(active.length, 1)) * 100);
+
   return (
     <>
       <div
-        className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none"
+        className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none"
         style={{ zIndex: 60 }}
       >
         <button
@@ -110,10 +137,79 @@ function HUD({ decorations, hoverBuilding }: HUDProps) {
         >
           ← 奇遇乐园
         </button>
-        <div className="px-4 py-2 rounded-full bg-black/45 text-white text-xs font-bold backdrop-blur-md border border-white/20 shadow-lg">
-          🏪 百宝港
+
+        {/* v0.32.57 (Ep33 M): Hero 横幅 — 标题 + 进度条 + 各店奖牌 */}
+        <div className="pointer-events-none flex-1 mx-3 flex justify-center">
+          <div
+            className="rounded-2xl border-[3px] border-amber-400 px-5 py-3 shadow-2xl"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,251,235,0.92))",
+              backdropFilter: "blur(10px)",
+              minWidth: 280,
+              maxWidth: 420,
+            }}
+          >
+            <div className="flex items-baseline justify-between">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                  Math Harbor
+                </div>
+                <div className="text-xl font-black text-slate-900 leading-tight">
+                  🏪 百宝港
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-bold uppercase text-slate-500">
+                  已点亮
+                </div>
+                <div className="text-base font-black text-amber-700 leading-tight">
+                  {doneCount}/{active.length}
+                </div>
+              </div>
+            </div>
+
+            {/* 进度条 */}
+            <div className="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className="h-full transition-all duration-500"
+                style={{
+                  width: `${pct}%`,
+                  background: "linear-gradient(90deg, #fbbf24, #f97316)",
+                }}
+              />
+            </div>
+
+            {/* 各店奖牌 + 完成次数 chip */}
+            <div className="mt-2 flex flex-wrap gap-1.5 justify-center">
+              {active.map((b) => {
+                const cnt = buildingStats[b.id] ?? 0;
+                const done = cnt > 0;
+                return (
+                  <span
+                    key={b.id}
+                    className={`rounded-full px-2 py-1 text-[11px] font-bold border ${
+                      done
+                        ? "bg-amber-50 border-amber-300 text-amber-900"
+                        : "bg-slate-100 border-slate-300 text-slate-500"
+                    }`}
+                    title={b.name}
+                  >
+                    <span className="mr-0.5">{b.emoji}</span>
+                    <span className="mr-0.5">{done ? "🏅" : "○"}</span>
+                    <span className="font-mono">{cnt}</span>
+                  </span>
+                );
+              })}
+              {totalRuns > 0 && (
+                <span className="rounded-full bg-orange-100 border border-orange-300 px-2 py-1 text-[11px] font-bold text-orange-800">
+                  总单 {totalRuns}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="pointer-events-none px-3 py-2 rounded-xl bg-amber-500/85 text-white text-xs font-bold backdrop-blur-md border border-amber-200/40 shadow-lg">
+
+        <div className="pointer-events-none px-3 py-2 rounded-xl bg-amber-500/85 text-white text-xs font-bold backdrop-blur-md border border-amber-200/40 shadow-lg whitespace-nowrap">
           ✨ {decorations}
         </div>
       </div>
