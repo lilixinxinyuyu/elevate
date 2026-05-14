@@ -10,7 +10,7 @@
  *   - 全程用 cent 整数运算，避免 0.1+0.2 浮点坑
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 // v0.32.22: 用 BillboardText 替代 drei Text — 默认关 depthTest 防遮挡
 import { Text } from "../BillboardText";
 import { useFrame } from "@react-three/fiber";
@@ -112,6 +112,29 @@ export function StoreMiniGame({
   const [coinsUsed, setCoinsUsed] = useState<Set<string>>(new Set());
   const needChangeCent = useMemo(() => calcOrderChangeCent(order), [order]);
 
+  // v0.32.97 (Ep73 AAAAA): trayCent 数字 count-up 动画 — 280ms ease-out per drop
+  const [shownTrayCent, setShownTrayCent] = useState(0);
+  useEffect(() => {
+    const start = shownTrayCent;
+    const end = trayCent;
+    if (start === end) return;
+    const t0 = performance.now();
+    const dur = 280;
+    let rafId = 0;
+    const tick = () => {
+      const elapsed = performance.now() - t0;
+      const k = Math.min(1, elapsed / dur);
+      const ease = 1 - Math.pow(1 - k, 3);
+      const v = Math.round(start + (end - start) * ease);
+      setShownTrayCent(v);
+      if (k < 1) rafId = requestAnimationFrame(tick);
+      else setShownTrayCent(end);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trayCent]);
+
   // 钱币摆放位置 (每个面额放 3 个，柜台中部铺开)
   type CoinInstance = { instanceId: string; coin: Coin; origin: [number, number] };
   const coinInstances = useMemo<CoinInstance[]>(() => {
@@ -210,7 +233,7 @@ export function StoreMiniGame({
           z={TRAY_ZONE.z}
           radius={TRAY_ZONE.radius}
           color={changeMatch ? "#10b981" : "#fbbf24"}
-          label={`已放 ${formatYuan(trayCent)} / 需 ${formatYuan(needChangeCent)}`}
+          label={`已放 ${formatYuan(shownTrayCent)} / 需 ${formatYuan(needChangeCent)}`}
         />
       )}
 
