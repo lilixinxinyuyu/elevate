@@ -129,6 +129,27 @@ function FeedbackStyles() {
       .worlds-screen-zoom {
         animation: worlds-screen-zoom-kf 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
       }
+      /* v0.32.78 (Ep54 PPP): correct 时中心连续 ripple ring 散开 */
+      @keyframes worlds-correct-ring-spread {
+        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.45); }
+        14%  { opacity: 0.95; }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(2.4); }
+      }
+      .worlds-correct-ripple-ring {
+        position: absolute;
+        left: 50%;
+        top: 55%;
+        width: 124px;
+        height: 124px;
+        border-radius: 999px;
+        border: 4px solid #10b981;
+        box-shadow: 0 0 18px rgba(52, 211, 153, 0.7), inset 0 0 14px rgba(167, 243, 208, 0.5);
+        pointer-events: none;
+        animation: worlds-correct-ring-spread 800ms cubic-bezier(.16, 1, .3, 1) forwards;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .worlds-correct-ripple-ring { animation-duration: 300ms; }
+      }
       /* v0.32.72 (Ep48 QQ): 右上角 toast cascade trail */
       .worlds-toast-stack {
         position: absolute;
@@ -232,6 +253,21 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
           background: `radial-gradient(circle, ${palette.bg} 0%, transparent 60%)`,
         }}
       />
+      {/* v0.32.78 (Ep54 PPP): correct 时连续 3 个 ripple ring 散开（only correct, 不重复 reward starburst） */}
+      {kind === "correct" && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ zIndex: 1 }}
+        >
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="worlds-correct-ripple-ring"
+              style={{ animationDelay: `${i * 100}ms` }}
+            />
+          ))}
+        </div>
+      )}
       {/* v0.32.23: confetti 粒子喷射（correct 12 / complete 32） */}
       {palette.confettiCount > 0 && (
         <ConfettiBurst
