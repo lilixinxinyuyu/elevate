@@ -68,10 +68,12 @@ function ToastTrail({ pulses }: { pulses: FeedbackPulse[] }) {
             <span className="worlds-toast-label">
               {p.label ?? meta.defaultLabel}
             </span>
-            {/* v0.33.9 (Ep85 MMMMMMM): correct toast 右侧加 +1 combo chip */}
+            {/* v0.33.9 (Ep85 MMMMMMM): correct toast 右侧加 +1 combo chip
+                v0.33.16 (Ep92 DDDDDDDD): +1 后加 mini ⭐ 延迟弹出 */}
             {p.kind === "correct" && (
               <span className="worlds-toast-combo-chip" aria-hidden>
                 +1
+                <span className="worlds-toast-mini-star">⭐</span>
               </span>
             )}
           </div>
@@ -336,8 +338,24 @@ function FeedbackStyles() {
         60%  { opacity: 1; transform: translateY(-2px) scale(1.18); }
         100% { opacity: 1; transform: translateY(0) scale(1); }
       }
+      /* v0.33.16 (Ep92 DDDDDDDD): combo chip 后的 ⭐ 延迟弹出 */
+      .worlds-toast-mini-star {
+        display: inline-block;
+        margin-left: 0.22rem;
+        font-size: 12px;
+        line-height: 1;
+        filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.9));
+        transform-origin: center;
+        animation: worlds-toast-star-pop 680ms cubic-bezier(.34, 1.56, .64, 1) 380ms both;
+      }
+      @keyframes worlds-toast-star-pop {
+        0%   { opacity: 0; transform: translateY(5px) scale(0.2) rotate(-28deg); }
+        58%  { opacity: 1; transform: translateY(-3px) scale(1.4) rotate(14deg); }
+        100% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+      }
       @media (prefers-reduced-motion: reduce) {
-        .worlds-toast-combo-chip { animation: none; }
+        .worlds-toast-combo-chip,
+        .worlds-toast-mini-star { animation: none; }
       }
       @keyframes worlds-toast-cascade {
         0%   { opacity: 0; transform: translateX(40px) translateY(8px) scale(0.9); }
