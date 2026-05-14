@@ -12,7 +12,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { WorldsCanvas } from "../../components/worlds/WorldsCanvas";
 import { StoreEnvironment } from "../../components/worlds/store/StoreScene";
-import { BankMiniGame } from "../../components/worlds/bank/BankMiniGame";
+// v0.32.50 (Ep26 C): Bank 改用 DOM 键盘玩法差异化；旧的拖币 mini-game 暂留代码不渲染
+// import { BankMiniGame } from "../../components/worlds/bank/BankMiniGame";
+import { BankKeypadMiniGame } from "../../components/worlds/bank/BankKeypadMiniGame";
 import { BANK_ORDERS, type BankOrder } from "../../lib/worlds/bankOrders";
 import { formatYuan } from "../../lib/worlds/storeOrders";
 import { incrementBuildingComplete } from "../../lib/worlds/worldsProgress";
@@ -94,14 +96,16 @@ export function BankPage() {
 
         <StoreEnvironment variant="bank" />
 
-        {phase === "exchange" && (
-          <BankMiniGame
-            order={order}
-            onOrderComplete={handleOrderComplete}
-            onFeedback={trigger}
-          />
-        )}
+        {/* v0.32.50: Bank 不再在 3D Canvas 内放可拖硬币；改 DOM 键盘 overlay（柜台场景保留） */}
       </WorldsCanvas>
+
+      {phase === "exchange" && !showReward && (
+        <BankKeypadMiniGame
+          order={order}
+          onOrderComplete={handleOrderComplete}
+          onFeedback={trigger}
+        />
+      )}
 
       <TopHUD
         orderIdx={orderIdx}
