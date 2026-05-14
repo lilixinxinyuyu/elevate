@@ -222,7 +222,7 @@ function WorldDock({
             onMouseEnter={() => onHover(w)}
             onMouseLeave={() => onHover(null)}
             onClick={() => w.unlocked && onSelect(w)}
-            className={`pointer-events-auto rounded-2xl border-[3px] px-3 py-2 shadow-xl transition-all duration-200 ${
+            className={`pointer-events-auto group relative overflow-hidden rounded-2xl border-[3px] px-3 pt-2 pb-3 shadow-xl transition-all duration-200 ${
               isFocus ? "scale-110 -translate-y-1" : "scale-100"
             } ${!w.unlocked ? "grayscale opacity-50 cursor-not-allowed" : "hover:scale-110 hover:-translate-y-1"}`}
             style={{
@@ -257,6 +257,22 @@ function WorldDock({
             </div>
             {!w.unlocked && (
               <div className="text-[9px] font-bold text-slate-500 mt-0.5">🔒 锁定</div>
+            )}
+            {/* v0.32.89 (Ep65 EEEEEE): focus chip 主题色发光下划线 indicator
+                hover 时其他 chip 也 preview 一道暗淡线（仅 unlocked） */}
+            {w.unlocked && (
+              <span
+                aria-hidden
+                className={`absolute bottom-1 left-4 right-4 h-1 rounded-full origin-center transition-all duration-220 ${
+                  isFocus
+                    ? "opacity-100 scale-x-100"
+                    : "opacity-0 scale-x-50 group-hover:opacity-70 group-hover:scale-x-80"
+                }`}
+                style={{
+                  background: `linear-gradient(90deg, transparent, ${w.accent}, transparent)`,
+                  boxShadow: `0 0 12px ${w.accent}`,
+                }}
+              />
             )}
           </button>
         );
