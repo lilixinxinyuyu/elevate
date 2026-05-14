@@ -37,55 +37,65 @@ export interface AirportOrder {
   hint?: string;
 }
 
+/**
+ * v0.32.45 (Ep21): airportOrders 难度升级（P0#3 同步推进）
+ *  - 总件数从 1+1 / 3+2 / 2+1+1 升到 2+3 / 4+3 / 3+2+2 = 5/7/7 件
+ *  - 单 1 教程引入 plural（之前单数误导）
+ *  - 单 2 增量 mix 3 种
+ *  - 单 3 全部用复数 + 7 件
+ *  pool 多 1-2 件考验"精确数"
+ */
 export const AIRPORT_ORDERS: AirportOrder[] = [
-  // 单 1: 教程 — 简单数 1 + 1
+  // 单 1: 教程 — 已经引入复数 2+3 = 5 件
   {
     index: 1,
     customerEmoji: "🧑‍✈️",
-    customerLineEn: "Hello! I have 1 backpack and 1 suitcase. Help me load them~",
-    customerLineZh: "你好！我有 1 个背包和 1 个行李箱，请帮我装上车～",
+    customerLineEn: "Hi! I have 2 backpacks and 3 suitcases. Please load them up!",
+    customerLineZh: "你好！我有 2 个背包和 3 个行李箱，请装上车～",
     requests: [
-      { itemId: "backpack", quantity: 1 },
-      { itemId: "suitcase", quantity: 1 },
-    ],
-    pool: [
-      { itemId: "backpack", count: 2 },
-      { itemId: "suitcase", count: 2 },
-    ],
-    hint: "听清楚说要几个 backpack（背包） 和 suitcase（行李箱）",
-  },
-  // 单 2: 复数 — 3 个 backpacks + 2 个 suitcases
-  {
-    index: 2,
-    customerEmoji: "👨‍👩‍👧",
-    customerLineEn: "We have 3 backpacks and 2 suitcases, please.",
-    customerLineZh: "我们有 3 个背包和 2 个行李箱，请装一下～",
-    requests: [
-      { itemId: "backpack", quantity: 3 },
-      { itemId: "suitcase", quantity: 2 },
+      { itemId: "backpack", quantity: 2 },
+      { itemId: "suitcase", quantity: 3 },
     ],
     pool: [
       { itemId: "backpack", count: 4 },
-      { itemId: "suitcase", count: 3 },
+      { itemId: "suitcase", count: 4 },
     ],
-    hint: "backpacks (复数 +s) 表示多个；数清楚再装",
+    hint: "backpacks / suitcases 都是复数（+s）；数清楚 2+3=5 件",
   },
-  // 单 3: 引入第三种 + 更多数量
+  // 单 2: 3 种 mix 7 件
+  {
+    index: 2,
+    customerEmoji: "👨‍👩‍👧",
+    customerLineEn: "We have 4 backpacks, 2 suitcases and 1 duffel bag.",
+    customerLineZh: "我们有 4 个背包、2 个行李箱和 1 个旅行袋。",
+    requests: [
+      { itemId: "backpack", quantity: 4 },
+      { itemId: "suitcase", quantity: 2 },
+      { itemId: "duffel", quantity: 1 },
+    ],
+    pool: [
+      { itemId: "backpack", count: 5 },
+      { itemId: "suitcase", count: 3 },
+      { itemId: "duffel", count: 3 },
+    ],
+    hint: "duffel bag = 旅行袋（单数 1 个不加 -s）；总数 4+2+1=7 件",
+  },
+  // 单 3: 期末难度 — 3 种全复数 7 件
   {
     index: 3,
     customerEmoji: "👴",
-    customerLineEn: "I need 2 duffel bags, 1 backpack and 1 suitcase.",
-    customerLineZh: "我要装 2 个旅行袋、1 个背包和 1 个行李箱。",
+    customerLineEn: "I need 3 duffel bags, 2 backpacks and 2 suitcases.",
+    customerLineZh: "我要装 3 个旅行袋、2 个背包和 2 个行李箱。",
     requests: [
-      { itemId: "duffel", quantity: 2 },
-      { itemId: "backpack", quantity: 1 },
-      { itemId: "suitcase", quantity: 1 },
+      { itemId: "duffel", quantity: 3 },
+      { itemId: "backpack", quantity: 2 },
+      { itemId: "suitcase", quantity: 2 },
     ],
     pool: [
-      { itemId: "duffel", count: 3 },
-      { itemId: "backpack", count: 2 },
-      { itemId: "suitcase", count: 2 },
+      { itemId: "duffel", count: 4 },
+      { itemId: "backpack", count: 3 },
+      { itemId: "suitcase", count: 3 },
     ],
-    hint: "duffel bag = 旅行袋。3 种各装 N 个",
+    hint: "3 种 全复数 +s（duffel bags / backpacks / suitcases）；总数 3+2+2=7 件",
   },
 ];
