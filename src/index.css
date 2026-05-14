@@ -204,7 +204,12 @@ a.world-chip:focus-visible,
     0 8px 18px rgba(0, 0, 0, 0.3),
     inset 0 2px 0 rgba(255, 255, 255, 0.6);
   cursor: pointer;
-  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+  /* v0.33.18 (Ep95 XXXXXXX): box-shadow 慢一点（260ms）让 :active 的 ring 释放时
+     有"涟漪扩散后淡去"的感觉；transform 仍快（100ms）保持按压触感 */
+  transition:
+    transform 0.1s ease-out,
+    box-shadow 260ms cubic-bezier(.2, .9, .3, 1),
+    filter 180ms ease-out;
   /* v0.32.83 (Ep59 WWWW): shimmer sweep 准备 */
   overflow: hidden;
   isolation: isolate;
@@ -300,7 +305,20 @@ a.world-chip:focus-visible,
     0 10px 22px rgba(0, 0, 0, 0.32),
     inset 0 2px 0 rgba(255, 255, 255, 0.6);
 }
-.world-cta-btn:active {
+/* v0.33.18 (Ep95 XXXXXXX): click ripple — :active 瞬间套上"白圈 + accent halo"
+   双层 box-shadow ring + 1.12 brightness 内闪；松开后 box-shadow 用 260ms
+   缓出 transition 淡回常态，类似涟漪扩散后消散。无 ::before/::after 占用。 */
+.world-cta-btn:not(:disabled):active {
+  transform: translateY(2px) scale(0.97);
+  filter: brightness(1.12) saturate(1.08);
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.75),
+    0 0 0 12px var(--world-accent-light, rgba(255, 255, 255, 0.45)),
+    0 0 22px var(--world-accent, rgba(255, 255, 255, 0.55)),
+    0 1px 0 rgba(0, 0, 0, 0.15),
+    inset 0 2px 0 rgba(255, 255, 255, 0.9);
+}
+.world-cta-btn:disabled:active {
   transform: translateY(2px);
   box-shadow:
     0 2px 0 rgba(0, 0, 0, 0.15),
@@ -311,6 +329,14 @@ a.world-chip:focus-visible,
   .world-cta-btn::after {
     transition: none;
     opacity: 0;
+  }
+  .world-cta-btn:not(:disabled):active {
+    transform: translateY(2px);
+    filter: none;
+    box-shadow:
+      0 2px 0 rgba(0, 0, 0, 0.15),
+      0 4px 8px rgba(0, 0, 0, 0.25),
+      inset 0 2px 0 rgba(255, 255, 255, 0.6);
   }
 }
 
