@@ -45,22 +45,28 @@ export function MascotPIP({
 }: Props) {
   // 当前反应动画 class — 由 reaction.seq 触发重播
   const [animClass, setAnimClass] = useState<string>("");
+  // v0.32.66 (Ep42 UU): halo 颜色 override，跟反应同周期变绿/红/金
+  const [haloOverride, setHaloOverride] = useState<string | null>(null);
   useEffect(() => {
     if (!reaction) return;
     let cls = "";
     let dur = 600;
+    let halo: string | null = null;
     switch (reaction.kind) {
       case "correct":
         cls = "mascot-bounce-correct";
         dur = 700;
+        halo = "#22c55e"; // green
         break;
       case "wrong":
         cls = "mascot-shake-wrong";
         dur = 600;
+        halo = "#ef4444"; // red
         break;
       case "complete":
         cls = "mascot-bounce-complete";
-        dur = 1100;
+        dur = 1300; // halo 比动画再多一点，盖住 bounce 末尾
+        halo = "#fbbf24"; // gold
         break;
       // pickup / drop: 不做整体动画（频率太高，会闪烁）
       default:
@@ -68,19 +74,25 @@ export function MascotPIP({
     }
     // 切到 "" 再切到 cls 让 CSS animation 重新触发
     setAnimClass("");
+    setHaloOverride(halo);
     const t1 = window.setTimeout(() => setAnimClass(cls), 16);
     const t2 = window.setTimeout(() => setAnimClass(""), dur);
+    const t3 = window.setTimeout(() => setHaloOverride(null), dur + 200);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
+      window.clearTimeout(t3);
     };
   }, [reaction?.seq, reaction?.kind]);
 
   const accentColor = accent ?? "#a78bfa";
+  // v0.32.66 (Ep42 UU): halo 颜色 — reaction 期间用主题反馈色，平时跟世界 accent
+  const haloColor = haloOverride ?? accentColor;
 
   return (
     <div
       className="fixed bottom-3 right-3 pointer-events-none mascot-pip-float"
+      data-reactive={haloOverride ? "true" : "false"}
       style={
         {
           zIndex: 30,
@@ -88,6 +100,8 @@ export function MascotPIP({
           height: 232,
           // v0.32.56 (Ep32 P): CSS var → 子节点能用 var(--pip-accent)
           ["--pip-accent" as string]: accentColor,
+          // v0.32.66 (Ep42 UU): halo 单独 var，跟随反馈即时变色
+          ["--pip-halo" as string]: haloColor,
         } as React.CSSProperties
       }
     >
@@ -199,7 +213,9 @@ export function MascotPIP({
         .mascot-pip-float {
           animation: mascot-pip-float-kf 3.6s ease-in-out infinite;
         }
-        /* v0.32.56 (Ep32 P): 呼吸光晕 — 在 mascot 背后扩张收缩 */
+        /* v0.32.56 (Ep32 P): 呼吸光晕 — 在 mascot 背后扩张收缩
+           v0.32.66 (Ep42 UU): 用 --pip-halo (与 --pip-accent 分离) 跟反应即时变色，
+           background transition 360ms 让绿/红/金切换不突兀。 */
         .mascot-pip-halo {
           position: absolute;
           left: 50%;
@@ -208,16 +224,25 @@ export function MascotPIP({
           width: 168px;
           height: 168px;
           border-radius: 999px;
-          background: var(--pip-accent, #a78bfa);
+          background: var(--pip-halo, var(--pip-accent, #a78bfa));
           opacity: 0.18;
           filter: blur(14px);
           z-index: 0;
           pointer-events: none;
+          transition: background 360ms ease-out;
           animation: mascot-pip-halo-breathe 2.8s ease-in-out infinite;
         }
         @keyframes mascot-pip-halo-breathe {
           0%, 100% { transform: translateX(-50%) scale(0.94); opacity: 0.14; }
           50%      { transform: translateX(-50%) scale(1.08); opacity: 0.30; }
+        }
+        /* v0.32.66 (Ep42 UU): 反应期间 halo 强度提升 + 加快脉动 */
+        .mascot-pip-float[data-reactive='true'] .mascot-pip-halo {
+          animation: mascot-pip-halo-react 480ms ease-out infinite;
+        }
+        @keyframes mascot-pip-halo-react {
+          0%, 100% { transform: translateX(-50%) scale(0.96); opacity: 0.35; }
+          50%      { transform: translateX(-50%) scale(1.18); opacity: 0.7; }
         }
         /* 右上角 online 绿点 */
         .mascot-pip-online {
