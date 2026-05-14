@@ -64,17 +64,9 @@ export function WorldOrb({ world, position, onSelect }: WorldOrbProps) {
       onPointerOver={handleOver}
       onPointerOut={handleOut}
     >
-      {/* 底座光环（仅 unlocked） */}
+      {/* v0.32.74 (Ep50 Z): 底座 glow + 双 ring + accent particles，仅 unlocked */}
       {world.unlocked && (
-        <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[1.0, 1.3, 32]} />
-          <meshBasicMaterial
-            color={world.accent}
-            transparent
-            opacity={hovered ? 0.6 : 0.35}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
+        <OrbBaseAura accent={world.accent} hovered={hovered} seed={position[0]} />
       )}
       {/* KayKit 真素材组合（hex tile + 建筑 + 装饰） */}
       <OrbMiniScene assets={world.orbAssets} locked={!world.unlocked} />
@@ -190,6 +182,135 @@ function ClonedPrimitive({
       rotation={[0, rotationY, 0]}
       scale={scale}
     />
+  );
+}
+
+/**
+ * v0.32.74 (Ep50 Z): orb 底座光晕 — 双 ring + 10 个 accent 粒子绕环旋转。
+ * hover 时整体放大 + 内 ring 加亮，强化首屏吸引力。
+ */
+function OrbBaseAura({
+  accent,
+  hovered,
+  seed,
+}: {
+  accent: string;
+  hovered: boolean;
+  seed: number;
+}) {
+  const group = useRef<Group>(null);
+  // 10 deterministic dots around outer ring (避免 SSR 抖动)
+  const particles = useMemo(() => {
+    const N = 10;
+    return Array.from({ length: N }, (_, i) => {
+      const angle = (i / N) * Math.PI * 2 + (seed * 0.3);
+      const radius = 1.45 + ((i * 7 + Math.abs(seed * 13)) % 5) * 0.018;
+      return {
+        x: Math.cos(angle) * radius,
+        z: Math.sin(angle) * radius,
+        size: 0.045 + ((i * 3) % 5) * 0.008,
+        phase: (i / N) * Math.PI * 2,
+      };
+    });
+  }, [seed]);
+
+  useFrame(({ clock }) => {
+    if (!group.current) return;
+    const t = clock.getElapsedTime();
+    // 缓慢自转
+    group.current.rotation.y = t * (hovered ? 0.35 : 0.15);
+    // hover 时整体微脉动
+    const base = hovered ? 1.06 : 1.0;
+    const pulse = hovered ? 1 + Math.sin(t * 3) * 0.025 : 1;
+    group.current.scale.setScalar(base * pulse);
+  });
+
+  return (
+    <group ref={group} position={[0, -0.12, 0]}>
+      {/* 内环：主色发光 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.0, 1.3, 48]} />
+        <meshBasicMaterial
+          color={accent}
+          transparent
+          opacity={hovered ? 0.7 : 0.4}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {/* 外环：柔光晕（更宽更淡） */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 0]}>
+        <ringGeometry args={[1.32, 1.75, 64]} />
+        <meshBasicMaterial
+          color={accent}
+          transparent
+          opacity={hovered ? 0.28 : 0.16}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* 中央 disc 浅 glow 给底盘垫色 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.005, 0]}>
+        <circleGeometry args={[0.98, 36]} />
+        <meshBasicMaterial
+          color={accent}
+          transparent
+          opacity={hovered ? 0.18 : 0.1}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* 10 颗围绕粒子（小 sphere） */}
+      {particles.map((p, i) => (
+        <OrbAuraParticle
+          key={i}
+          x={p.x}
+          z={p.z}
+          size={p.size}
+          phase={p.phase}
+          accent={accent}
+          hovered={hovered}
+        />
+      ))}
+    </group>
+  );
+}
+
+function OrbAuraParticle({
+  x,
+  z,
+  size,
+  phase,
+  accent,
+  hovered,
+}: {
+  x: number;
+  z: number;
+  size: number;
+  phase: number;
+  accent: string;
+  hovered: boolean;
+}) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.getElapsedTime() * 2 + phase;
+    const yOff = Math.sin(t) * (hovered ? 0.08 : 0.04);
+    ref.current.position.set(x, yOff, z);
+    const s = (hovered ? 1.4 : 1) * (1 + Math.sin(t * 1.5) * 0.18);
+    ref.current.scale.setScalar(s);
+  });
+  return (
+    <mesh ref={ref} position={[x, 0, z]}>
+      <sphereGeometry args={[size, 10, 10]} />
+      <meshBasicMaterial
+        color={accent}
+        transparent
+        opacity={hovered ? 0.95 : 0.7}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+      />
+    </mesh>
   );
 }
 
