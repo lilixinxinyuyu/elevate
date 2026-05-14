@@ -33,6 +33,24 @@ interface WorldsCanvasProps extends CanvasProps {
   postFx?: boolean;
 }
 
+// v0.32.65 (Ep41 W): loading 背景从纯色 → layered gradient + grid + dot pattern
+// 加 visual depth 同时不抢主视觉。accent 根据 bg 推断（深紫色→紫光，浅色→琥珀光）。
+function getLoadingBackdrop(bg: string): import("react").CSSProperties {
+  const isDark = bg && bg.startsWith("#0") || (bg && bg.startsWith("#1"));
+  const accent = isDark ? "#a78bfa" : "#f59e0b";
+  return {
+    backgroundColor: bg,
+    backgroundImage: `
+      radial-gradient(circle at 20% 22%, ${accent}55, transparent 30%),
+      radial-gradient(circle at 82% 76%, rgba(255,255,255,0.18), transparent 28%),
+      linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px),
+      radial-gradient(circle, rgba(255,255,255,0.16) 1px, transparent 1.5px)
+    `,
+    backgroundSize: "100% 100%, 100% 100%, 28px 28px, 28px 28px, 10px 10px",
+  };
+}
+
 // v0.32.60 (Ep36 Q): 默认加载提示，5-7s 内 rotate
 const DEFAULT_LOADING_HINTS = [
   "看清客人的订单，再开始操作",
@@ -126,7 +144,7 @@ export function WorldsCanvas({
         </Canvas>
       )}
       {!ready && (
-        <div className="w-full h-full" style={{ background: loadingBg }}>
+        <div className="w-full h-full" style={getLoadingBackdrop(loadingBg)}>
           <WorldLoadingBody
             bg={loadingBg}
             emoji={loadingEmoji}
@@ -178,7 +196,7 @@ function LoadingScreen({
     <Html
       fullscreen
       style={{
-        background: bg,
+        ...getLoadingBackdrop(bg),
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
