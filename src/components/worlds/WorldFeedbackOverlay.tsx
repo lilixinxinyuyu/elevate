@@ -156,6 +156,36 @@ function FeedbackStyles() {
       @media (prefers-reduced-motion: reduce) {
         .worlds-wrong-vignette { animation-duration: 350ms; }
       }
+      /* v0.33.15 (Ep91 WWWWWWW): wrong hint card 加 2 圈 amber ring 散开 — 强化"看这里"焦点 */
+      .worlds-wrong-hint-card {
+        position: relative;
+        isolation: isolate;
+      }
+      .worlds-wrong-hint-card::before,
+      .worlds-wrong-hint-card::after {
+        content: "";
+        position: absolute;
+        inset: -8px;
+        border-radius: 1.25rem;
+        border: 3px solid rgba(245, 158, 11, 0.75);
+        box-shadow: 0 0 18px rgba(245, 158, 11, 0.5);
+        animation: worlds-wrong-hint-ring 900ms cubic-bezier(.16, 1, .3, 1) forwards;
+        pointer-events: none;
+        z-index: -1;
+      }
+      .worlds-wrong-hint-card::after {
+        animation-delay: 140ms;
+        border-color: rgba(251, 191, 36, 0.4);
+      }
+      @keyframes worlds-wrong-hint-ring {
+        0%   { opacity: 0; transform: scale(0.94); }
+        20%  { opacity: 1; }
+        100% { opacity: 0; transform: scale(1.16); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .worlds-wrong-hint-card::before,
+        .worlds-wrong-hint-card::after { animation: none; opacity: 0; }
+      }
       /* v0.32.78 (Ep54 PPP): correct 时中心连续 ripple ring 散开 */
       @keyframes worlds-correct-ring-spread {
         0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.45); }
@@ -462,6 +492,7 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
           }}
         >
           <div
+            className="worlds-wrong-hint-card"
             style={{
               padding: "0.7rem 1rem",
               borderRadius: "1rem",
