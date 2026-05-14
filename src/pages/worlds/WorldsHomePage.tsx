@@ -296,13 +296,53 @@ function CenterPanel({ recommended, hoverWorld, onStart }: CenterPanelProps) {
       style={{ zIndex: 55 }}
     >
       {/* v0.32.69 (Ep45 MM): 小进 emoji + chunky world-panel 风格台词卡
-          (替代 v32.0 朴素 bg-white/95) */}
+          (替代 v32.0 朴素 bg-white/95)
+          v0.33.10 (Ep86 NNNNNNN): mascot 周围浮 3 颗 sparkle + bob 动画 */}
+      <style>{`
+        .worlds-home-mascot-wrap {
+          position: relative;
+          width: 4rem;
+          height: 4rem;
+          display: grid;
+          place-items: center;
+          flex: 0 0 auto;
+        }
+        .worlds-home-mascot {
+          font-size: 3rem;
+          line-height: 1;
+          filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4));
+          animation: worlds-home-mascot-bob 2.8s ease-in-out infinite;
+        }
+        .worlds-home-mascot-sparkle {
+          position: absolute;
+          color: #fde68a;
+          font-size: 0.95rem;
+          text-shadow: 0 0 10px rgba(251, 191, 36, 0.85);
+          pointer-events: none;
+          animation: worlds-home-sparkle-float 2.4s ease-in-out infinite;
+        }
+        .worlds-home-mascot-sparkle.sparkle-a { left: -0.4rem; top: 0.1rem; animation-delay: 0ms; }
+        .worlds-home-mascot-sparkle.sparkle-b { right: -0.3rem; top: 1.1rem; animation-delay: 450ms; color: #fbbf24; }
+        .worlds-home-mascot-sparkle.sparkle-c { right: 0.2rem; bottom: -0.15rem; animation-delay: 900ms; color: #fef08a; }
+        @keyframes worlds-home-mascot-bob {
+          0%, 100% { transform: translateY(0) rotate(-2deg); }
+          50%      { transform: translateY(-5px) rotate(2deg); }
+        }
+        @keyframes worlds-home-sparkle-float {
+          0%, 100% { opacity: 0.4; transform: translateY(0) scale(0.78) rotate(0deg); }
+          50%      { opacity: 1;   transform: translateY(-8px) scale(1.18) rotate(20deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .worlds-home-mascot,
+          .worlds-home-mascot-sparkle { animation: none; }
+        }
+      `}</style>
       <div className="flex items-end gap-3 max-w-[92%]">
-        <div
-          className="text-5xl"
-          style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.4))" }}
-        >
-          👩‍🏫
+        <div className="worlds-home-mascot-wrap" aria-hidden>
+          <span className="worlds-home-mascot-sparkle sparkle-a">✦</span>
+          <span className="worlds-home-mascot-sparkle sparkle-b">✨</span>
+          <span className="worlds-home-mascot-sparkle sparkle-c">✦</span>
+          <div className="worlds-home-mascot">👩‍🏫</div>
         </div>
         <div
           className="relative pointer-events-none"
