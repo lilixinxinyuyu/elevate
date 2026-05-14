@@ -274,6 +274,57 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
         @media (prefers-reduced-motion: reduce) {
           .baibao-progress-fill::after { animation: none; }
         }
+        /* v0.32.77 (Ep53 SS): decorations chip chunky 化 — 替代右上角 bg-amber/85 朴素 */
+        .baibao-deco-chip {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.55rem 0.95rem 0.55rem 0.75rem;
+          border-radius: 999px;
+          border: 3px solid #fbbf24;
+          background: linear-gradient(180deg, #fffbeb 0%, #fcd34d 100%);
+          color: #78350f;
+          font-weight: 900;
+          font-size: 13px;
+          letter-spacing: 0.02em;
+          box-shadow:
+            0 4px 0 rgba(0, 0, 0, 0.16),
+            0 0 22px rgba(251, 191, 36, 0.6),
+            inset 0 1px 0 rgba(255, 255, 255, 0.65);
+          animation: baibao-deco-chip-glow 2.8s ease-in-out infinite;
+          white-space: nowrap;
+        }
+        @keyframes baibao-deco-chip-glow {
+          0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.16), 0 0 16px rgba(251,191,36,0.5), inset 0 1px 0 rgba(255,255,255,0.65); }
+          50%      { box-shadow: 0 4px 0 rgba(0,0,0,0.16), 0 0 30px rgba(251,191,36,0.9), inset 0 1px 0 rgba(255,255,255,0.7); }
+        }
+        .baibao-deco-chip-icon {
+          display: inline-block;
+          font-size: 14px;
+          line-height: 1;
+          animation: baibao-deco-spark-pop 2.8s ease-in-out infinite;
+        }
+        @keyframes baibao-deco-spark-pop {
+          0%, 100% { transform: scale(1) rotate(-8deg); }
+          50%      { transform: scale(1.25) rotate(8deg); }
+        }
+        .baibao-deco-chip-num {
+          font-variant-numeric: tabular-nums;
+          font-size: 14px;
+        }
+        .baibao-deco-chip-label {
+          font-size: 9.5px;
+          opacity: 0.75;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .baibao-deco-chip,
+          .baibao-deco-chip-icon {
+            animation: none;
+          }
+        }
       `}</style>
       <div
         className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none"
@@ -365,8 +416,14 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
           </div>
         </div>
 
-        <div className="pointer-events-none px-3 py-2 rounded-xl bg-amber-500/85 text-white text-xs font-bold backdrop-blur-md border border-amber-200/40 shadow-lg whitespace-nowrap">
-          ✨ {decorations}
+        <div
+          className="pointer-events-none baibao-deco-chip"
+          aria-label={`百宝港装饰 ${decorations} 个`}
+          title={`已积累 ${decorations} 个装饰碎片`}
+        >
+          <span className="baibao-deco-chip-icon">✨</span>
+          <span className="baibao-deco-chip-label hidden sm:inline">Decor</span>
+          <span className="baibao-deco-chip-num">{decorations}</span>
         </div>
       </div>
 
