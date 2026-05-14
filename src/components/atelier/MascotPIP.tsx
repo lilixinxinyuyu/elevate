@@ -205,13 +205,18 @@ export function MascotPIP({
       )}
 
       <style>{`
-        /* 整个 PIP 闲时浮动 */
+        /* 整个 PIP 闲时浮动 — v0.32.91 (Ep67 CCCCCC) 加 ±0.8° 微旋转, 生动不晕 */
         @keyframes mascot-pip-float-kf {
-          0%, 100% { transform: translateY(0); }
-          50%      { transform: translateY(-4px); }
+          0%, 100% { transform: translateY(0) rotate(-0.8deg); }
+          50%      { transform: translateY(-4px) rotate(0.8deg); }
         }
         .mascot-pip-float {
-          animation: mascot-pip-float-kf 3.6s ease-in-out infinite;
+          transform-origin: 50% 82%;
+          animation: mascot-pip-float-kf 3.8s ease-in-out infinite;
+          will-change: transform;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .mascot-pip-float { animation: none; }
         }
         /* v0.32.56 (Ep32 P): 呼吸光晕 — 在 mascot 背后扩张收缩
            v0.32.66 (Ep42 UU): 用 --pip-halo (与 --pip-accent 分离) 跟反应即时变色，
