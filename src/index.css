@@ -208,6 +208,25 @@ a.world-chip:focus-visible,
   /* v0.32.83 (Ep59 WWWW): shimmer sweep 准备 */
   overflow: hidden;
   isolation: isolate;
+  /* v0.32.88 (Ep64 YYYYY): idle subtle breathing — 引导玩家"这里能点"
+     2.9s 周期，scale 1.025 + brightness 1.055；不动 box-shadow（避免与 WorldsHome inline 冲突） */
+  transform-origin: center;
+  animation: world-cta-breathe 2.9s ease-in-out infinite;
+  will-change: transform, filter;
+}
+@keyframes world-cta-breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50%      { transform: scale(1.025); filter: brightness(1.055); }
+}
+.world-cta-btn:hover {
+  animation: none;
+}
+.world-cta-btn:active,
+.world-cta-btn:disabled {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-cta-btn { animation: none; }
 }
 /* v0.32.83 (Ep59 WWWW): hover 时一道扫光从左横扫过去（每次 hover 复播一次） */
 .world-cta-btn::after {
