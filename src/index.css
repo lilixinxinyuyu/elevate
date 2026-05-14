@@ -690,8 +690,23 @@ a.world-chip:focus-visible,
     0 6px 0 rgba(0, 0, 0, 0.12),
     0 12px 22px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  transform: rotate(-2.5deg);
   border: 2px solid rgba(255, 255, 255, 0.6);
+  transform-origin: 50% 0.35rem;
+  /* v0.33.17 (Ep93 EEEEEEEE): 番号牌 idle wobble — 在原 rotate(-2.5deg) 基础上轻微摇摆 */
+  animation: world-order-ticket-wobble 3.4s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes world-order-ticket-wobble {
+  0%, 100% { transform: translateY(0) rotate(-2.5deg); }
+  20%      { transform: translateY(-1.5px) rotate(-1.2deg); }
+  40%      { transform: translateY(0.5px) rotate(-3.8deg); }
+  60%      { transform: translateY(-0.5px) rotate(-1.8deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-order-head > div:first-child {
+    animation: none;
+    transform: rotate(-2.5deg);
+  }
 }
 /* 底部 V 型尖角（票据撕口） */
 .world-order-head > div:first-child::after {
