@@ -47,6 +47,8 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
   const [collected, setCollected] = useState(0);
   /** 正在飞行的 slice */
   const [flying, setFlying] = useState<FlyingSlice[]>([]);
+  /** v0.32.99 (Ep75 QQQQQ): 切块瞬间的 confirm flash overlay */
+  const [sliceFlashes, setSliceFlashes] = useState<FlyingSlice[]>([]);
   const [hover, setHover] = useState<number | null>(null);
   const wasNotifiedRef = useRef(false);
 
@@ -95,6 +97,15 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
       n.add(idx);
       return n;
     });
+    // v0.32.99 (Ep75 QQQQQ): 切块确认 emissive flash overlay — 500ms ring 散开
+    const flashKey = Date.now() + Math.random();
+    setSliceFlashes((prev) => [
+      ...prev,
+      { idx, key: flashKey, startedAt: performance.now() },
+    ]);
+    window.setTimeout(() => {
+      setSliceFlashes((prev) => prev.filter((f) => f.key !== flashKey));
+    }, 520);
     const fkey = Date.now() + Math.random();
     setFlying((prev) => [
       ...prev,
@@ -122,6 +133,15 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
           hoverSliceIndex={hover}
           onHoverChange={setHover}
         />
+        {/* v0.32.99 (Ep75 QQQQQ): 切块瞬间 confirm flash (附着在蛋糕坐标系) */}
+        {sliceFlashes.map((f) => (
+          <SliceConfirmFlash
+            key={f.key}
+            index={f.idx}
+            startedAt={f.startedAt}
+            accentColor={order.cakeAccentColor}
+          />
+        ))}
       </group>
 
       {/* 飞行中的 slice ghost wedges */}
@@ -250,6 +270,53 @@ function FlyingSliceWedge({
           />
         </mesh>
       </group>
+    </group>
+  );
+}
+
+/**
+ * v0.32.99 (Ep75 QQQQQ): 切块确认 flash — 在被切下的扇形位置画一道发光环 0.5s 散开。
+ * 强化"我刚切了这块"的视觉反馈（before slice 飞向盘子）。
+ */
+function SliceConfirmFlash({
+  index,
+  startedAt,
+  accentColor,
+}: {
+  index: number;
+  startedAt: number;
+  accentColor: string;
+}) {
+  const ref = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  const FLASH_MS = 500;
+  const thetaLength = (Math.PI * 2) / 12;
+  const thetaStart = index * thetaLength;
+  const gap = thetaLength * 0.04;
+  const drawTheta = thetaLength - gap;
+  useFrame(() => {
+    if (!ref.current || !matRef.current) return;
+    const elapsed = performance.now() - startedAt;
+    const k = Math.min(1, elapsed / FLASH_MS);
+    const e = 1 - Math.pow(1 - k, 2); // ease-out quad
+    const scale = 1 + e * 0.4;
+    ref.current.scale.setScalar(scale);
+    matRef.current.opacity = 0.9 * (1 - e);
+  });
+  return (
+    <group rotation={[0, gap / 2, 0]}>
+      <mesh ref={ref} position={[0, 0.135, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.35, 0.5, 32, 1, thetaStart, drawTheta]} />
+        <meshBasicMaterial
+          ref={matRef}
+          color={accentColor}
+          transparent
+          opacity={0.9}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
     </group>
   );
 }
