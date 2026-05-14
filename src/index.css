@@ -297,6 +297,30 @@ a.world-chip:focus-visible,
   }
 }
 
+/* v0.32.98 (Ep74 FFFFFF): chip stagger entrance — page 进入时 HUD chip 错峰 fade-down
+   只在 page mount 时跑一次，后续无影响（CSS animation 只跑 mount 时一次）。 */
+@keyframes world-chip-stagger-in {
+  0%   { opacity: 0; transform: translateY(-10px) scale(0.94); }
+  65%  { opacity: 1; transform: translateY(2px) scale(1.03); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.world-page-enter .world-chip {
+  opacity: 0;
+  animation: world-chip-stagger-in 460ms cubic-bezier(.34, 1.56, .64, 1) both;
+  animation-delay: 220ms;
+}
+.world-page-enter .world-chip:nth-of-type(1) { animation-delay: 220ms; }
+.world-page-enter .world-chip:nth-of-type(2) { animation-delay: 290ms; }
+.world-page-enter .world-chip:nth-of-type(3) { animation-delay: 360ms; }
+.world-page-enter .world-chip:nth-of-type(4) { animation-delay: 430ms; }
+.world-page-enter .world-chip:nth-of-type(5) { animation-delay: 500ms; }
+@media (prefers-reduced-motion: reduce) {
+  .world-page-enter .world-chip {
+    opacity: 1;
+    animation: none;
+  }
+}
+
 /* v0.32.38: 顾客气泡 chunky 化（Ep15 双 CLI 一致 A）— 之前 white/95 backdrop-blur
    跟新 world-chip 风格不统一。用 world-panel 同款渐变 + 主题色 3px 边 + 硬投影。
    删除尾部三角 span，改用 ::after CSS 画带描边的小三角指向 mascot。
