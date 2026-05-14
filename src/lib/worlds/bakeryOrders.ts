@@ -30,44 +30,53 @@ export interface BakeryOrder {
   requireContiguous?: boolean;
 }
 
+/**
+ * v0.32.46 (Ep22 P0#3)：3 单升级到 1/3 / 5/12 / 7/12
+ *  - 单 1 (教程): 1/3 = 4 块（强化"约分分数 → /12 计数"概念）
+ *  - 单 2: 5/12 = 5 块（非约分分数，G4B 期末难点）
+ *  - 单 3: 7/12 = 7 块（非约分 + 大份额，扇形切判定更严格）
+ *
+ * 原 1/4 / 1/3 / 1/2 都是常见约分分数，对 G4B 偏简单。
+ * 新方案让 Selena 接触"非约分分母 12 的分数"，培养"看 1/12 单位块算"思维。
+ */
 export const BAKERY_ORDERS: BakeryOrder[] = [
-  // 单 1: 1/4 = 3 块（连续扇形）
+  // 单 1: 教程 — 1/3 = 4 块（约分分数 → 4/12 计数）
   {
     index: 1,
     customerEmoji: "👧",
-    customerLine: "请给我 1/4 个 🍰 草莓蛋糕～整块的哦！",
-    needSlices: 3,
-    fractionLabel: "1/4",
+    customerLine: "请给我 1/3 个 🍰 草莓蛋糕～整块的哦！",
+    needSlices: 4,
+    fractionLabel: "1/3",
     cakeTopColor: "#fda4af",
     cakeAccentColor: "#dc2626",
     emoji: "🍰",
-    hint: "1/4 = 12 块里的 3 块，切成扇形（不要东切一块西切一块）",
+    hint: "1/3 = 12 块里的 4 块（12 ÷ 3 = 4）；切成连续的扇形",
     requireContiguous: true,
   },
-  // 单 2: 1/3 = 4 块（连续扇形）
+  // 单 2: 5/12 = 5 块（非约分）
   {
     index: 2,
     customerEmoji: "🧒",
-    customerLine: "我要 1/3 个 🎂 巧克力蛋糕！要一片连着的～",
-    needSlices: 4,
-    fractionLabel: "1/3",
+    customerLine: "我要 5/12 个 🎂 巧克力蛋糕！要连着的～",
+    needSlices: 5,
+    fractionLabel: "5/12",
     cakeTopColor: "#78350f",
     cakeAccentColor: "#fbbf24",
     emoji: "🎂",
-    hint: "1/3 = 12 块里的 4 块；切成连成一片",
+    hint: "5/12 直接读 — 12 块里的 5 块（不像 1/3、1/2，5/12 不能约分）",
     requireContiguous: true,
   },
-  // 单 3: 1/2 = 6 块（连续扇形 — 半圆）
+  // 单 3: 7/12 = 7 块（非约分 + 大份额）
   {
     index: 3,
     customerEmoji: "👵",
-    customerLine: "我要 1/2 个 🥮 抹茶蛋糕。切成半个圆～",
-    needSlices: 6,
-    fractionLabel: "1/2",
+    customerLine: "我要 7/12 个 🥮 抹茶蛋糕。要切大半个连着的～",
+    needSlices: 7,
+    fractionLabel: "7/12",
     cakeTopColor: "#86efac",
     cakeAccentColor: "#16a34a",
     emoji: "🥮",
-    hint: "1/2 = 12 块里的 6 块；半个圆是连续的 6 块",
+    hint: "7/12 = 12 块里的 7 块（比一半多 1 块，非约分分数）",
     requireContiguous: true,
   },
 ];
