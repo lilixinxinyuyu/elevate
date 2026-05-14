@@ -125,21 +125,16 @@ export function BankKeypadMiniGame({ order, onOrderComplete, onFeedback }: BankK
           )}
         </div>
 
-        {/* 键盘 3×4 */}
+        {/* 键盘 3×4 — v0.32.82 (Ep58 XXXX): ripple + scale press feedback */}
         <div className="grid grid-cols-3 gap-2">
           {keys.map((k, i) => (
-            <button
+            <KeypadButton
               key={i}
-              type="button"
-              onClick={k.onClick}
+              label={k.label}
+              cls={k.cls}
               disabled={locked}
-              className={`rounded-xl font-bold py-3 shadow active:translate-y-0.5 transition-transform select-none ${
-                k.cls ?? "bg-white text-blue-900 hover:bg-blue-50"
-              } border border-blue-200`}
-              style={{ fontSize: "1.4rem" }}
-            >
-              {k.label}
-            </button>
+              onPress={k.onClick}
+            />
           ))}
         </div>
 
@@ -153,5 +148,82 @@ export function BankKeypadMiniGame({ order, onOrderComplete, onFeedback }: BankK
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * v0.32.82 (Ep58 XXXX): bank keypad 按键反馈 — ripple + 短暂 scale pop。
+ * 每次点击触发一次性 ripple，260ms 后自动清掉，不堆栈。
+ */
+function KeypadButton({
+  label,
+  cls,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  cls?: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const [seq, setSeq] = useState(0);
+  return (
+    <>
+      <style>{`
+        .bank-keypad-btn {
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+          transform-origin: center;
+          transition: transform 80ms ease-out;
+        }
+        .bank-keypad-btn:not(:disabled):active {
+          transform: scale(0.94);
+        }
+        .bank-keypad-ripple {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          background: rgba(59, 130, 246, 0.34);
+          transform: translate(-50%, -50%) scale(0);
+          pointer-events: none;
+          animation: bank-keypad-ripple-kf 420ms cubic-bezier(.16, 1, .3, 1) forwards;
+        }
+        @keyframes bank-keypad-ripple-kf {
+          0%   { opacity: 0.9; transform: translate(-50%, -50%) scale(0); }
+          70%  { opacity: 0.55; }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(10); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .bank-keypad-ripple { animation: none; opacity: 0; }
+          .bank-keypad-btn:not(:disabled):active { transform: none; }
+        }
+      `}</style>
+      <button
+        type="button"
+        onClick={() => {
+          if (disabled) return;
+          setSeq((s) => s + 1);
+          onPress();
+        }}
+        disabled={disabled}
+        className={`bank-keypad-btn rounded-xl font-bold py-3 shadow select-none ${
+          cls ?? "bg-white text-blue-900 hover:bg-blue-50"
+        } border border-blue-200`}
+        style={{ fontSize: "1.4rem" }}
+      >
+        <span>{label}</span>
+        {seq > 0 && (
+          <span
+            key={seq}
+            className="bank-keypad-ripple"
+            aria-hidden
+          />
+        )}
+      </button>
+    </>
   );
 }
