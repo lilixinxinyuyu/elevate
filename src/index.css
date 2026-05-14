@@ -548,6 +548,33 @@ body {
   border-color: #b45309;
   animation: world-emote-burst 700ms ease-out;
 }
+/* v0.32.62 (Ep38 HH): 客人开心瞬间，头像周围爆一次 8 颗 sparkle ✦ */
+.world-customer-bubble-happy .world-customer-bubble-avatar-wrap::after {
+  content: "✦";
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  font-size: 22px;
+  color: transparent;
+  text-shadow:
+    0    -64px 0 #fde68a,
+    50px -42px 0 #fbbf24,
+    68px  12px 0 #fef08a,
+    36px  58px 0 #fde68a,
+    -36px 58px 0 #fde68a,
+    -68px 12px 0 #fbbf24,
+    -50px -42px 0 #fde68a,
+    0     78px 0 #fef08a;
+  transform: translate(-50%, -50%) scale(0.25) rotate(-20deg);
+  animation: world-customer-spark-burst 820ms ease-out 60ms both;
+  pointer-events: none;
+  z-index: 3;
+}
+@keyframes world-customer-spark-burst {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.25) rotate(-20deg); }
+  35%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3) rotate(20deg); }
+}
 @keyframes world-avatar-pop {
   0%   { transform: scale(0.85) rotate(-8deg); }
   60%  { transform: scale(1.25) rotate(6deg); }
