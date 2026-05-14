@@ -142,18 +142,69 @@ function HUD() {
 function WorldsHomeDecor() {
   return (
     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 51 }}>
-      {/* hero ribbon: 顶部副标题 */}
-      <div className="absolute top-14 left-1/2 -translate-x-1/2 pointer-events-none">
-        <div
-          className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.3em] text-amber-200/90 border border-amber-200/40"
-          style={{
-            background: "rgba(30,27,75,0.5)",
-            backdropFilter: "blur(6px)",
-            textShadow: "0 0 12px rgba(251,191,36,0.5)",
-          }}
-        >
-          ✦ Worlds of Adventure ✦
-        </div>
+      {/* hero ribbon: 顶部副标题 — v0.33.14 (Ep90 AAAAAAAA) 渐变金边 + 双侧 sparkle 散光 */}
+      <style>{`
+        .worlds-hero-ribbon-wrap {
+          position: absolute;
+          top: 3.5rem;
+          left: 50%;
+          transform: translateX(-50%);
+          pointer-events: none;
+          padding: 0 1.8rem;
+        }
+        .worlds-hero-ribbon {
+          position: relative;
+          padding: 0.45rem 1.3rem;
+          border-radius: 999px;
+          background: rgba(30, 27, 75, 0.62);
+          backdrop-filter: blur(8px);
+          color: #fef3c7;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.34em;
+          text-transform: uppercase;
+          text-shadow: 0 0 12px rgba(251, 191, 36, 0.7);
+          /* gold gradient border via background-clip mask */
+          border: 2.5px solid transparent;
+          background-image:
+            linear-gradient(rgba(30, 27, 75, 0.62), rgba(30, 27, 75, 0.62)),
+            linear-gradient(120deg, #fde68a 0%, #f59e0b 30%, #fef08a 50%, #f59e0b 70%, #fde68a 100%);
+          background-origin: border-box;
+          background-clip: padding-box, border-box;
+          background-size: 100% 100%, 220% 100%;
+          animation: worlds-hero-ribbon-shimmer 3.5s linear infinite;
+          box-shadow:
+            0 4px 20px rgba(245, 158, 11, 0.32),
+            inset 0 0 18px rgba(251, 191, 36, 0.18);
+        }
+        @keyframes worlds-hero-ribbon-shimmer {
+          0%   { background-position: 0 0, 0 0; }
+          100% { background-position: 0 0, 220% 0; }
+        }
+        .worlds-hero-ribbon-sparkle {
+          position: absolute;
+          top: 50%;
+          font-size: 18px;
+          color: #fde68a;
+          text-shadow: 0 0 10px rgba(251, 191, 36, 0.85);
+          pointer-events: none;
+          transform: translateY(-50%);
+        }
+        .worlds-hero-ribbon-sparkle.left  { right: 100%; margin-right: 0.65rem; animation: worlds-hero-sparkle-twinkle 2.2s ease-in-out infinite; }
+        .worlds-hero-ribbon-sparkle.right { left:  100%; margin-left:  0.65rem; animation: worlds-hero-sparkle-twinkle 2.2s ease-in-out infinite 1.1s; }
+        @keyframes worlds-hero-sparkle-twinkle {
+          0%, 100% { opacity: 0.55; transform: translateY(-50%) scale(0.78) rotate(0deg); }
+          50%      { opacity: 1;    transform: translateY(-50%) scale(1.25) rotate(25deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .worlds-hero-ribbon,
+          .worlds-hero-ribbon-sparkle { animation: none; }
+        }
+      `}</style>
+      <div className="worlds-hero-ribbon-wrap">
+        <span className="worlds-hero-ribbon-sparkle left" aria-hidden>✦</span>
+        <div className="worlds-hero-ribbon">Worlds of Adventure</div>
+        <span className="worlds-hero-ribbon-sparkle right" aria-hidden>✦</span>
       </div>
 
       {/* 装饰 SVG: 顶部 + 两侧的星座线 + 散点星星 */}
