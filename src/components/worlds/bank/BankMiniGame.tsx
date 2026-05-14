@@ -22,7 +22,7 @@ interface BankMiniGameProps {
   order: BankOrder;
   onOrderComplete: () => void;
   /** v0.32.13: 内层反馈 trigger */
-  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string) => void;
+  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string, hint?: string) => void;
 }
 
 interface CoinInstance {
@@ -77,7 +77,11 @@ export function BankMiniGame({ order, onOrderComplete, onFeedback }: BankMiniGam
   const handleDrop = (instanceId: string, valueCent: number): boolean => {
     const newTotal = trayCent + valueCent;
     if (newTotal > target) {
-      onFeedback?.("wrong", `放多了！再放就 ${formatYuan(newTotal)}`);
+      onFeedback?.(
+        "wrong",
+        `放多了！再放就 ${formatYuan(newTotal)}`,
+        order.hint ?? `目标 ${formatYuan(target)}；先减去一些大面额，再用小面额凑。`,
+      );
       return false;
     }
     setCoinsUsed((prev) => new Set(prev).add(instanceId));

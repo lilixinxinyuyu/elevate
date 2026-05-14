@@ -95,7 +95,7 @@ function FeedbackStyles() {
 }
 
 function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
-  const { kind, label } = pulse;
+  const { kind, label, hint } = pulse;
   if (kind === "pickup" || kind === "drop") return null;
 
   const palette = {
@@ -174,6 +174,39 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
           </div>
         </div>
       </div>
+      {/* v0.32.47: wrong 时显示底部教学卡 — 错因 label（上方 pulse）+ 详细 hint 提示（这里） */}
+      {kind === "wrong" && hint && (
+        <div
+          className="absolute pointer-events-none animate-worlds-hint-card"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 80px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            maxWidth: 360,
+          }}
+        >
+          <div
+            style={{
+              padding: "0.7rem 1rem",
+              borderRadius: "1rem",
+              background: "linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)",
+              border: "3px solid #f59e0b",
+              boxShadow:
+                "0 4px 0 rgba(0,0,0,0.12), 0 14px 24px rgba(0,0,0,0.3)",
+              color: "#78350f",
+              fontSize: 13,
+              fontWeight: 700,
+              lineHeight: 1.45,
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+              💡 教学提示
+            </div>
+            {hint}
+          </div>
+        </div>
+      )}
     </>
   );
 }

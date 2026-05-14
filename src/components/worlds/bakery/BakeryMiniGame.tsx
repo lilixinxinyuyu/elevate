@@ -24,7 +24,7 @@ interface BakeryMiniGameProps {
   order: BakeryOrder;
   onOrderComplete: () => void;
   /** v0.32.13: 内层反馈 trigger */
-  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string) => void;
+  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string, hint?: string) => void;
 }
 
 const COUNTER_Y = 1.0;
@@ -72,7 +72,11 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
   const handleSliceClick = (idx: number) => {
     if (enough) {
       // v0.32.13: 切够了还点 → wrong 反馈
-      onFeedback?.("wrong", "已经切够啦，多了客人吃不下");
+      onFeedback?.(
+        "wrong",
+        "已经切够啦，多了客人吃不下",
+        order.hint ?? `${order.fractionLabel} 只要 ${order.needSlices} 块，已经切到啦。`,
+      );
       return;
     }
     if (removed.has(idx)) return;
@@ -81,6 +85,7 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
       onFeedback?.(
         "wrong",
         "要切连成一片！点已切的旁边那块",
+        `${order.fractionLabel} = 连续 ${order.needSlices} 块（扇形），不能东切一块西切一块。`,
       );
       // 用红色 hover 视觉提示该 slice 不能切（短闪）
       return;

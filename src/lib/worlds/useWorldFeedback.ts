@@ -34,6 +34,8 @@ export interface FeedbackPulse {
   kind: FeedbackKind;
   /** 屏幕中央显示的文字（仅 correct / wrong / complete） */
   label?: string;
+  /** v0.32.47: wrong 时显示的"教学 hint"（错因下方第 2 行，给具体解题提示） */
+  hint?: string;
   /** 创建时间戳，cleanup 用 */
   createdAt: number;
 }
@@ -62,7 +64,7 @@ export function useWorldFeedback() {
   } | null>(null);
 
   const trigger = useCallback(
-    (kind: FeedbackKind, label?: string) => {
+    (kind: FeedbackKind, label?: string, hint?: string) => {
       // 1. SFX + 触感
       switch (kind) {
         case "pickup":
@@ -92,10 +94,12 @@ export function useWorldFeedback() {
         id,
         kind,
         label,
+        hint,
         createdAt: Date.now(),
       };
       setPulses((prev) => [...prev, pulse]);
-      const ttl = kind === "complete" ? 1500 : 900;
+      // v0.32.47: wrong 给玩家 3200ms 读教学 hint（之前 900ms 太短）
+      const ttl = kind === "complete" ? 1500 : kind === "wrong" ? 3200 : 900;
       window.setTimeout(() => {
         setPulses((prev) => prev.filter((p) => p.id !== id));
       }, ttl);

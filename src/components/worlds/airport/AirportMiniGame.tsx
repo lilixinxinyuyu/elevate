@@ -23,7 +23,7 @@ interface AirportMiniGameProps {
   order: AirportOrder;
   onOrderComplete: () => void;
   /** v0.32.13: 内层反馈 trigger */
-  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string) => void;
+  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string, hint?: string) => void;
 }
 
 interface LuggageInstance {
@@ -90,7 +90,16 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
     if (!inst) return false;
     const wanted = order.requests.find((r) => r.itemId === inst.itemId);
     if (!wanted) {
-      onFeedback?.("wrong", `客人没要 ${LUGGAGE[inst.itemId].english}`);
+      const requested = order.requests
+        .map((r) =>
+          `${r.quantity} ${r.quantity > 1 ? LUGGAGE[r.itemId].englishPlural : LUGGAGE[r.itemId].english}`,
+        )
+        .join(" + ");
+      onFeedback?.(
+        "wrong",
+        `客人没要 ${LUGGAGE[inst.itemId].english}`,
+        order.hint ?? `客人的清单：${requested}。这件不在清单上。`,
+      );
       return false;
     }
     const currentCount = counts[inst.itemId] ?? 0;
@@ -98,6 +107,7 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
       onFeedback?.(
         "wrong",
         `${LUGGAGE[inst.itemId].english} 已经够 ${wanted.quantity} 件了`,
+        order.hint ?? `${LUGGAGE[inst.itemId].english} 客人只要 ${wanted.quantity} 件 — 再装就超量了。`,
       );
       return false;
     }

@@ -36,7 +36,7 @@ interface StoreMiniGameProps {
   onPhaseChange: (phase: StorePhase) => void;
   onOrderComplete: () => void;
   /** v0.32.13: 内层反馈层 trigger（pickup/drop/wrong） */
-  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string) => void;
+  onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string, hint?: string) => void;
 }
 
 // KayKit kitchencounter_straight_A 台面 Y=1.0（实测 bbox）
@@ -129,7 +129,11 @@ export function StoreMiniGame({
   const handleCoinDrop = (instanceId: string, valueCent: number): boolean => {
     const newTotal = trayCent + valueCent;
     if (newTotal > needChangeCent) {
-      onFeedback?.("wrong", `找多了！再放就 ${formatYuan(newTotal)} 啦`);
+      onFeedback?.(
+        "wrong",
+        `找多了！再放就 ${formatYuan(newTotal)} 啦`,
+        order.hint ?? `应找零 ${formatYuan(needChangeCent)}；先看现在托盘里还差多少。`,
+      );
       return false;
     }
     setCoinsUsed((prev) => new Set(prev).add(instanceId));
