@@ -325,6 +325,51 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
             animation: none;
           }
         }
+        /* v0.33.6 (Ep82 KKKKKKK): baibao hero card 顶部 chunky banner —
+           突出"航海冒险"主题，hero card 顶端浮一道带 emoji 的 ribbon。 */
+        .baibao-hero-card {
+          position: relative;
+          overflow: visible;
+          padding-top: 1.4rem !important;
+        }
+        .baibao-hero-banner {
+          position: absolute;
+          left: 50%;
+          top: 0;
+          transform: translate(-50%, -52%);
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.32rem 0.85rem;
+          border-radius: 999px;
+          background: linear-gradient(180deg, #fbbf24 0%, #f97316 100%);
+          color: #ffffff;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
+          border: 2.5px solid #ffffff;
+          box-shadow:
+            0 3px 0 rgba(0, 0, 0, 0.16),
+            0 8px 18px rgba(245, 158, 11, 0.45),
+            inset 0 1px 0 rgba(255, 255, 255, 0.55);
+          white-space: nowrap;
+          max-width: 86%;
+          animation: baibao-hero-banner-pulse 2.6s ease-in-out infinite;
+        }
+        .baibao-hero-banner-icon {
+          font-size: 13px;
+          line-height: 1;
+          filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+        }
+        @keyframes baibao-hero-banner-pulse {
+          0%, 100% { box-shadow: 0 3px 0 rgba(0,0,0,0.16), 0 6px 14px rgba(245,158,11,0.45), inset 0 1px 0 rgba(255,255,255,0.55); }
+          50%      { box-shadow: 0 3px 0 rgba(0,0,0,0.16), 0 10px 24px rgba(245,158,11,0.7),  inset 0 1px 0 rgba(255,255,255,0.55); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .baibao-hero-banner { animation: none; }
+        }
       `}</style>
       <div
         className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none"
@@ -341,7 +386,7 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
         {/* v0.32.57 (Ep33 M): Hero 横幅 — 标题 + 进度条 + 各店奖牌 */}
         <div className="pointer-events-none flex-1 mx-3 flex justify-center">
           <div
-            className="rounded-2xl border-[3px] border-amber-400 px-5 py-3 shadow-2xl"
+            className="baibao-hero-card rounded-2xl border-[3px] border-amber-400 px-5 py-3 shadow-2xl"
             style={{
               background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,251,235,0.92))",
               backdropFilter: "blur(10px)",
@@ -349,6 +394,11 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
               maxWidth: 420,
             }}
           >
+            {/* v0.33.6 (Ep82 KKKKKKK): chunky 锚⚓ banner — 浮在 hero card 上沿 */}
+            <div className="baibao-hero-banner" aria-hidden>
+              <span className="baibao-hero-banner-icon">⚓</span>
+              <span>{pct >= 100 ? "Harbor Lit" : "Harbor Quest"}</span>
+            </div>
             <div className="flex items-baseline justify-between">
               <div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">
