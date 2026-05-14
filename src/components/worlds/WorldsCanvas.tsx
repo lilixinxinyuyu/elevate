@@ -23,6 +23,8 @@ interface WorldsCanvasProps extends CanvasProps {
   loadingEmoji?: string;
   /** 加载界面标题 */
   loadingTitle?: string;
+  /** v0.32.60 (Ep36 Q): 加载界面 rotating hints */
+  loadingHints?: string[];
   /**
    * v0.32.17：是否启用后处理（Bloom + Vignette），默认 true。
    * Bloom 给柜台高光、emoji、emissive 材质添加柔光晕；
@@ -30,6 +32,15 @@ interface WorldsCanvasProps extends CanvasProps {
    */
   postFx?: boolean;
 }
+
+// v0.32.60 (Ep36 Q): 默认加载提示，5-7s 内 rotate
+const DEFAULT_LOADING_HINTS = [
+  "看清客人的订单，再开始操作",
+  "发光区域就是可交互目标",
+  "做完一单就解锁地图装饰",
+  "答错也能学到东西，看下面的提示",
+  "拖拽 + 时机点击 + 键盘 — 每店玩法不同",
+];
 
 /**
  * Canvas 启动稳定版：
@@ -42,6 +53,7 @@ export function WorldsCanvas({
   loadingBg = "#0f172a",
   loadingEmoji = "🎡",
   loadingTitle = "加载中…",
+  loadingHints = DEFAULT_LOADING_HINTS,
   postFx = true,
   onCreated,
   ...rest
@@ -86,6 +98,7 @@ export function WorldsCanvas({
                 bg={loadingBg}
                 emoji={loadingEmoji}
                 title={loadingTitle}
+                hints={loadingHints}
               />
             }
           >
@@ -113,14 +126,15 @@ export function WorldsCanvas({
         </Canvas>
       )}
       {!ready && (
-        <div
-          className="w-full h-full flex items-center justify-center"
-          style={{ background: loadingBg }}
-        >
-          <div className="text-white opacity-70 text-sm">
-            <span className="text-3xl mr-2">{loadingEmoji}</span>
-            正在准备…
-          </div>
+        <div className="w-full h-full" style={{ background: loadingBg }}>
+          <WorldLoadingBody
+            bg={loadingBg}
+            emoji={loadingEmoji}
+            title={loadingTitle}
+            progress={8}
+            hints={loadingHints}
+            detail="正在准备画布..."
+          />
         </div>
       )}
     </div>
@@ -152,12 +166,14 @@ function LoadingScreen({
   bg,
   emoji,
   title,
+  hints,
 }: {
   bg: string;
   emoji: string;
   title: string;
+  hints: string[];
 }) {
-  const { progress, active } = useProgress();
+  const { progress, active, item } = useProgress();
   return (
     <Html
       fullscreen
@@ -169,50 +185,207 @@ function LoadingScreen({
         pointerEvents: "none",
       }}
     >
-      <div style={{ textAlign: "center", color: "#fff" }}>
+      <WorldLoadingBody
+        bg={bg}
+        emoji={emoji}
+        title={title}
+        progress={active ? progress : 100}
+        hints={hints}
+        detail={item ? "正在装入素材..." : active ? "" : "马上进入"}
+      />
+    </Html>
+  );
+}
+
+/**
+ * v0.32.60 (Ep36 Q): 共用 loading shell — chunky 玩家友好版。
+ * - 大 emoji + 头顶 sparkle 光环
+ * - chunky 进度条带 shimmer
+ * - 旋转 hint：每 2.6s 切一条
+ * - 数字百分比 + detail 副文案
+ */
+function WorldLoadingBody({
+  bg,
+  emoji,
+  title,
+  progress,
+  hints,
+  detail,
+}: {
+  bg: string;
+  emoji: string;
+  title: string;
+  progress: number;
+  hints: string[];
+  detail?: string;
+}) {
+  const [hintIdx, setHintIdx] = useState(0);
+  useEffect(() => {
+    if (hints.length <= 1) return;
+    const id = window.setInterval(() => {
+      setHintIdx((i) => (i + 1) % hints.length);
+    }, 2600);
+    return () => window.clearInterval(id);
+  }, [hints.length]);
+  const pct = Math.min(100, Math.max(0, Math.round(progress)));
+  // 简单根据 bg 推断 accent
+  const accent = bg && bg.startsWith("#1") ? "#a78bfa" : "#f59e0b";
+  const hint = hints.length > 0 ? hints[hintIdx % hints.length] : null;
+  return (
+    <div
+      style={{
+        textAlign: "center",
+        color: "#fff",
+        maxWidth: 360,
+        padding: "0 1rem",
+        margin: "0 auto",
+      }}
+    >
+      {/* emoji + sparkle 光环 */}
+      <div
+        style={{
+          position: "relative",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 120,
+          height: 120,
+        }}
+      >
         <div
           style={{
-            fontSize: 64,
-            animation: "spin 1.4s linear infinite",
-            display: "inline-block",
+            position: "absolute",
+            inset: 0,
+            borderRadius: "50%",
+            background: `radial-gradient(circle at 50% 50%, ${accent}55 0%, transparent 65%)`,
+            animation: "world-load-halo 2.4s ease-in-out infinite",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: -6,
+            borderRadius: "50%",
+            border: `3px solid ${accent}cc`,
+            borderTopColor: "transparent",
+            borderRightColor: "transparent",
+            animation: "world-load-spin 1.6s linear infinite",
+          }}
+        />
+        <div
+          style={{
+            fontSize: 56,
+            animation: "world-load-emoji-bob 2.2s ease-in-out infinite",
+            filter: `drop-shadow(0 4px 12px ${accent}aa)`,
           }}
         >
           {emoji}
         </div>
-        <div
-          style={{
-            marginTop: 12,
-            fontSize: 14,
-            fontWeight: "bold",
-            opacity: 0.85,
-          }}
-        >
-          {title}
-        </div>
-        <div
-          style={{
-            width: 180,
-            height: 6,
-            margin: "8px auto 0",
-            background: "rgba(255,255,255,0.15)",
-            borderRadius: 999,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              width: `${Math.round(progress)}%`,
-              height: "100%",
-              background: "linear-gradient(90deg,#fbbf24,#f97316)",
-              transition: "width 0.2s",
-            }}
-          />
-        </div>
-        <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4 }}>
-          {Math.round(progress)}% {active ? "" : "·"}
-        </div>
-        <style>{`@keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }`}</style>
       </div>
-    </Html>
+
+      {/* 标题 */}
+      <div
+        style={{
+          marginTop: 18,
+          fontSize: 18,
+          fontWeight: 900,
+          letterSpacing: 1.5,
+          textShadow: "0 2px 8px rgba(0,0,0,0.45)",
+        }}
+      >
+        {title}
+      </div>
+
+      {/* chunky 进度条 + shimmer */}
+      <div
+        style={{
+          position: "relative",
+          width: 220,
+          height: 12,
+          margin: "14px auto 0",
+          background: "rgba(255,255,255,0.16)",
+          borderRadius: 999,
+          overflow: "hidden",
+          border: "2px solid rgba(255,255,255,0.25)",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: `linear-gradient(90deg, ${accent}, #f97316)`,
+            transition: "width 0.25s ease-out",
+            boxShadow: `0 0 12px ${accent}aa, inset 0 -2px 0 rgba(0,0,0,0.18)`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(110deg, transparent 35%, rgba(255,255,255,0.45) 50%, transparent 65%)",
+            backgroundSize: "200% 100%",
+            animation: "world-load-shimmer 1.6s linear infinite",
+            mixBlendMode: "overlay",
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          fontSize: 12,
+          opacity: 0.85,
+          marginTop: 6,
+          fontVariantNumeric: "tabular-nums",
+          fontWeight: 700,
+          letterSpacing: 0.5,
+        }}
+      >
+        {pct}%
+        {detail ? <span style={{ opacity: 0.6, marginLeft: 8 }}>· {detail}</span> : null}
+      </div>
+
+      {/* rotating hint */}
+      {hint && (
+        <div
+          key={hintIdx}
+          style={{
+            marginTop: 16,
+            fontSize: 12,
+            fontWeight: 600,
+            color: "rgba(255,255,255,0.82)",
+            background: "rgba(0,0,0,0.28)",
+            borderRadius: 999,
+            padding: "6px 14px",
+            display: "inline-block",
+            border: "1.5px solid rgba(255,255,255,0.18)",
+            animation: "world-load-hint-fade 360ms ease-out",
+            maxWidth: 320,
+          }}
+        >
+          💡 {hint}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes world-load-spin { to { transform: rotate(360deg); } }
+        @keyframes world-load-emoji-bob {
+          0%, 100% { transform: translateY(0) rotate(-3deg); }
+          50%      { transform: translateY(-6px) rotate(3deg); }
+        }
+        @keyframes world-load-halo {
+          0%, 100% { transform: scale(0.92); opacity: 0.6; }
+          50%      { transform: scale(1.12); opacity: 0.95; }
+        }
+        @keyframes world-load-shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        @keyframes world-load-hint-fade {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
   );
 }
