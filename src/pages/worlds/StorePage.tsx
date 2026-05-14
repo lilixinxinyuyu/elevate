@@ -83,7 +83,7 @@ export function StorePage() {
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 bg-amber-50 world-theme-store"
+      className="fixed inset-0 bg-amber-50 world-theme-store world-page-enter"
       style={{ zIndex: 50 }}
     >
       <WorldsCanvas

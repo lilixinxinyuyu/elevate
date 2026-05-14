@@ -68,7 +68,7 @@ export function BakeryPage() {
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 bg-pink-50 world-theme-bakery"
+      className="fixed inset-0 bg-pink-50 world-theme-bakery world-page-enter"
       style={{ zIndex: 50 }}
     >
       <WorldsCanvas

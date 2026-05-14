@@ -45,7 +45,7 @@ export function BaibaoMapPage() {
   };
 
   return (
-    <div className="fixed inset-0 bg-sky-200" style={{ zIndex: 50 }}>
+    <div className="fixed inset-0 bg-sky-200 world-page-enter" style={{ zIndex: 50 }}>
       <WorldsCanvas
         camera={{ position: [0, 14, 20], fov: 50, near: 0.1, far: 200 }}
         dpr={[1, 1.5]}

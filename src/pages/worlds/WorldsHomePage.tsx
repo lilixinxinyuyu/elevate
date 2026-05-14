@@ -42,7 +42,7 @@ export function WorldsHomePage() {
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-indigo-950 via-purple-900 to-pink-950" style={{ zIndex: 50 }}>
+    <div className="fixed inset-0 bg-gradient-to-b from-indigo-950 via-purple-900 to-pink-950 world-page-enter" style={{ zIndex: 50 }}>
       <WorldsCanvas
         camera={{ position: [0, 1.8, 8], fov: 55, near: 0.1, far: 200 }}
         dpr={[1, 1.5]}

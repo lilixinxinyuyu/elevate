@@ -71,7 +71,7 @@ export function BankPage() {
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 bg-blue-50 world-theme-bank"
+      className="fixed inset-0 bg-blue-50 world-theme-bank world-page-enter"
       style={{ zIndex: 50 }}
     >
       <WorldsCanvas

@@ -166,6 +166,24 @@ body {
 .world-theme-bakery   { --world-accent: #ec4899; --world-accent-light: #f472b6; }
 .world-theme-airport  { --world-accent: #06b6d4; --world-accent-light: #22d3ee; }
 
+/* v0.32.42 (Ep18): 路由 entry fade transition — 解决爸爸 P0#4 "画面切换不自然"。
+   不装 framer-motion，不用 View Transition API（兼容性差），纯 CSS keyframe 渐入。
+   只做 entry（新 page 渐入），exit 仍瞬间（react-router 默认行为）。
+   prefers-reduced-motion 用户跳过动画。
+*/
+@keyframes world-page-enter-kf {
+  0%   { opacity: 0; transform: scale(0.985); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.world-page-enter {
+  animation: world-page-enter-kf 380ms cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-page-enter {
+    animation: none;
+  }
+}
+
 /* v0.32.38: 顾客气泡 chunky 化（Ep15 双 CLI 一致 A）— 之前 white/95 backdrop-blur
    跟新 world-chip 风格不统一。用 world-panel 同款渐变 + 主题色 3px 边 + 硬投影。
    删除尾部三角 span，改用 ::after CSS 画带描边的小三角指向 mascot。

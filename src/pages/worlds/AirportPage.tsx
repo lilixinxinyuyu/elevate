@@ -68,7 +68,7 @@ export function AirportPage() {
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 bg-cyan-50 world-theme-airport"
+      className="fixed inset-0 bg-cyan-50 world-theme-airport world-page-enter"
       style={{ zIndex: 50 }}
     >
       <WorldsCanvas
