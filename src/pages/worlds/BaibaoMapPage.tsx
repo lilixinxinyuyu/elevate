@@ -126,6 +126,40 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
 
   return (
     <>
+      {/* v0.32.70 (Ep46 YY): done medal chip 持续 glow pulse + icon pop */}
+      <style>{`
+        @keyframes baibao-medal-glow {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 2px 0 rgba(0,0,0,0.08), 0 0 0 rgba(251,191,36,0);
+          }
+          50% {
+            transform: scale(1.055);
+            box-shadow: 0 3px 0 rgba(0,0,0,0.1), 0 0 18px rgba(251,191,36,0.7);
+          }
+        }
+        @keyframes baibao-medal-icon-pop {
+          0%, 100% { transform: scale(1) rotate(-4deg); }
+          50%      { transform: scale(1.18) rotate(6deg); }
+        }
+        .baibao-medal-chip-done {
+          background: linear-gradient(180deg, #fff7ed, #fde68a) !important;
+          border-color: #f59e0b !important;
+          color: #78350f !important;
+          animation: baibao-medal-glow 2.6s ease-in-out infinite;
+          will-change: transform, box-shadow;
+        }
+        .baibao-medal-chip-done .baibao-medal-icon {
+          display: inline-block;
+          animation: baibao-medal-icon-pop 2.6s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .baibao-medal-chip-done,
+          .baibao-medal-chip-done .baibao-medal-icon {
+            animation: none;
+          }
+        }
+      `}</style>
       <div
         className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none"
         style={{ zIndex: 60 }}
@@ -181,7 +215,7 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
 
             {/* 各店奖牌 + 完成次数 chip */}
             <div className="mt-2 flex flex-wrap gap-1.5 justify-center">
-              {active.map((b) => {
+              {active.map((b, i) => {
                 const cnt = buildingStats[b.id] ?? 0;
                 const done = cnt > 0;
                 return (
@@ -189,13 +223,16 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
                     key={b.id}
                     className={`rounded-full px-2 py-1 text-[11px] font-bold border ${
                       done
-                        ? "bg-amber-50 border-amber-300 text-amber-900"
+                        ? "baibao-medal-chip-done"
                         : "bg-slate-100 border-slate-300 text-slate-500"
                     }`}
+                    style={done ? { animationDelay: `${i * 200}ms` } : undefined}
                     title={b.name}
                   >
                     <span className="mr-0.5">{b.emoji}</span>
-                    <span className="mr-0.5">{done ? "🏅" : "○"}</span>
+                    <span className={`mr-0.5${done ? " baibao-medal-icon" : ""}`}>
+                      {done ? "🏅" : "○"}
+                    </span>
                     <span className="font-mono">{cnt}</span>
                   </span>
                 );
