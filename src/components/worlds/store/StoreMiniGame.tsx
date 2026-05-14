@@ -42,8 +42,9 @@ interface StoreMiniGameProps {
 // KayKit kitchencounter_straight_A 台面 Y=1.0（实测 bbox）
 const COUNTER_Y = 1.0;
 // 扫码篮 / 找零托盘 都在柜台台面前部（靠近 camera）
-const SCAN_ZONE = { id: "scan", x: -0.5, z: 0.4, radius: 0.22 };
-const TRAY_ZONE = { id: "tray", x: 0.5, z: 0.4, radius: 0.22 };
+// v0.32.43: radius 0.22 → 0.30，zone 更显眼
+const SCAN_ZONE = { id: "scan", x: -0.5, z: 0.4, radius: 0.30 };
+const TRAY_ZONE = { id: "tray", x: 0.5, z: 0.4, radius: 0.30 };
 
 export function StoreMiniGame({
   order,
@@ -249,7 +250,16 @@ function DropZoneRing({
 }) {
   return (
     <group position={[x, COUNTER_Y + 0.005, z]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+      {/* v0.32.43: 加实体浅碗（cylinder）+ 保留 emissive ring 高亮 */}
+      <mesh position={[0, -0.015, 0]}>
+        <cylinderGeometry args={[radius * 1.02, radius * 0.88, 0.035, 32]} />
+        <meshStandardMaterial
+          color="#f5f5f4"
+          roughness={0.55}
+          metalness={0.15}
+        />
+      </mesh>
+      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[radius - 0.04, radius, 32]} />
         <meshStandardMaterial
           color={color}
@@ -257,7 +267,7 @@ function DropZoneRing({
           emissiveIntensity={1.2}
           side={THREE.DoubleSide}
           transparent
-          opacity={0.85}
+          opacity={0.9}
         />
       </mesh>
       <Text

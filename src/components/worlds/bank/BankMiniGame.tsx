@@ -15,7 +15,8 @@ import { DraggableObject } from "../store/DraggableObject";
 import { Coin3D } from "../store/Coin3D";
 
 const COUNTER_Y = 1.0;
-const TRAY_ZONE = { id: "tray", x: 0, z: 0.35, radius: 0.28 };
+// v0.32.43: radius 0.28 → 0.34
+const TRAY_ZONE = { id: "tray", x: 0, z: 0.35, radius: 0.34 };
 
 interface BankMiniGameProps {
   order: BankOrder;
@@ -87,9 +88,19 @@ export function BankMiniGame({ order, onOrderComplete, onFeedback }: BankMiniGam
 
   return (
     <group>
-      {/* 换零托盘 */}
+      {/* 换零金属托盘 — v0.32.43: 加实体底盘 + rim */}
       <group position={[TRAY_ZONE.x, COUNTER_Y + 0.005, TRAY_ZONE.z]}>
-        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        {/* 金属底盘 */}
+        <mesh position={[0, -0.015, 0]}>
+          <cylinderGeometry args={[TRAY_ZONE.radius * 0.95, TRAY_ZONE.radius * 0.85, 0.035, 32]} />
+          <meshStandardMaterial
+            color="#e7e5e4"
+            metalness={0.7}
+            roughness={0.25}
+          />
+        </mesh>
+        {/* rim 高亮 ring */}
+        <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[TRAY_ZONE.radius - 0.04, TRAY_ZONE.radius, 32]} />
           <meshStandardMaterial
             color={match ? "#10b981" : "#3b82f6"}

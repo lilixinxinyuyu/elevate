@@ -16,7 +16,8 @@ import { LUGGAGE } from "../../../lib/worlds/airportOrders";
 import { DraggableObject } from "../store/DraggableObject";
 
 const COUNTER_Y = 1.0;
-const CART_ZONE = { id: "cart", x: 0.45, z: 0.4, radius: 0.28 };
+// v0.32.43: radius 0.28 → 0.35
+const CART_ZONE = { id: "cart", x: 0.45, z: 0.4, radius: 0.35 };
 
 interface AirportMiniGameProps {
   order: AirportOrder;
@@ -112,9 +113,35 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
 
   return (
     <group>
-      {/* Cart 区域（接收行李） */}
+      {/* Cart 区域（接收行李）— v0.32.43: 加实体 box cart + 栏杆 + 轮子 */}
       <group position={[CART_ZONE.x, COUNTER_Y + 0.005, CART_ZONE.z]}>
-        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        {/* cart 底板 */}
+        <mesh position={[0, -0.005, 0]}>
+          <boxGeometry args={[CART_ZONE.radius * 2 * 0.9, 0.05, CART_ZONE.radius * 2 * 0.7]} />
+          <meshStandardMaterial color="#52525b" metalness={0.4} roughness={0.5} />
+        </mesh>
+        {/* 两侧栏杆 */}
+        {[-1, 1].map((s, i) => (
+          <mesh key={i} position={[s * CART_ZONE.radius * 0.85, 0.09, 0]}>
+            <boxGeometry args={[0.04, 0.18, CART_ZONE.radius * 2 * 0.7]} />
+            <meshStandardMaterial color="#a1a1aa" metalness={0.5} />
+          </mesh>
+        ))}
+        {/* 4 个小轮 */}
+        {([
+          [-1, -1], [1, -1], [-1, 1], [1, 1],
+        ] as const).map(([sx, sz], i) => (
+          <mesh
+            key={i}
+            position={[sx * CART_ZONE.radius * 0.75, -0.04, sz * CART_ZONE.radius * 0.55]}
+            rotation={[Math.PI / 2, 0, 0]}
+          >
+            <cylinderGeometry args={[0.035, 0.035, 0.02, 16]} />
+            <meshStandardMaterial color="#18181b" metalness={0.3} />
+          </mesh>
+        ))}
+        {/* emissive ring 高亮（保留） */}
+        <mesh position={[0, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[CART_ZONE.radius - 0.04, CART_ZONE.radius, 32]} />
           <meshStandardMaterial
             color={exact ? "#10b981" : "#06b6d4"}
