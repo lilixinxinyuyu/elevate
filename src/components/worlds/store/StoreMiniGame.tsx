@@ -13,6 +13,8 @@
 import { useMemo, useRef, useState } from "react";
 // v0.32.22: 用 BillboardText 替代 drei Text — 默认关 depthTest 防遮挡
 import { Text } from "../BillboardText";
+import { useFrame } from "@react-three/fiber";
+import type { Group } from "three";
 import * as THREE from "three";
 import {
   COINS,
@@ -82,6 +84,16 @@ export function StoreMiniGame({
     return total;
   }, [scannedIds, itemInstances]);
 
+  // v0.32.49 (Ep25 B-2): 点击扫码 — 飞行中商品 ghost 队列
+  interface FlyingItemState {
+    instanceId: string;
+    gltfUrl: string;
+    fromX: number;
+    fromZ: number;
+    startedAt: number;
+  }
+  const [flyingItems, setFlyingItems] = useState<FlyingItemState[]>([]);
+
   // 商品摆放位置 — 柜台台面中后部（远离玩家的扫码篮）
   const itemPositions = useMemo(() => {
     const n = itemInstances.length;
@@ -120,6 +132,31 @@ export function StoreMiniGame({
     setScannedIds((prev) => new Set(prev).add(instanceId));
     onFeedback?.("drop");
     return true;
+  };
+
+  // v0.32.49 (Ep25 B-2): 点击商品 → ghost 飞向 SCAN_ZONE → 落定后才标 scanned
+  const FLY_DURATION_MS = 320;
+  const handleScanClick = (instanceId: string, pos: [number, number]) => {
+    // 已在飞行 / 已扫过 — 忽略
+    if (scannedIds.has(instanceId)) return;
+    if (flyingItems.some((f) => f.instanceId === instanceId)) return;
+    const inst = itemInstances.find((i) => i.instanceId === instanceId);
+    if (!inst) return;
+    setFlyingItems((prev) => [
+      ...prev,
+      {
+        instanceId,
+        gltfUrl: inst.gltf,
+        fromX: pos[0],
+        fromZ: pos[1],
+        startedAt: performance.now(),
+      },
+    ]);
+    onFeedback?.("pickup");
+    window.setTimeout(() => {
+      setFlyingItems((prev) => prev.filter((f) => f.instanceId !== instanceId));
+      handleScanDrop(instanceId);
+    }, FLY_DURATION_MS);
   };
 
   // 检测 scan 阶段完成
@@ -176,37 +213,61 @@ export function StoreMiniGame({
         />
       )}
 
-      {/* === Scan phase: 商品摆桌 === */}
+      {/* v0.32.49 (Ep25 B-2): Scan phase 改成"点击扫码" — 跟 Bakery 扇形切机制差异化 */}
       {phase === "scan" &&
         itemInstances.map((inst, i) => {
-          if (scannedIds.has(inst.instanceId)) return null; // 已扫的隐藏
+          if (scannedIds.has(inst.instanceId)) return null;
+          const pos = itemPositions[i]!;
+          // 飞行中的商品不渲染原位 mesh
+          const flying = flyingItems.some((f) => f.instanceId === inst.instanceId);
+          if (flying) return null;
           return (
-            <DraggableObject
+            <group
               key={inst.instanceId}
-              origin={itemPositions[i]!}
-              planeY={COUNTER_Y}
-              dropZones={[SCAN_ZONE]}
-              onDrop={() => handleScanDrop(inst.instanceId)}
-              onPickup={() => onFeedback?.("pickup")}
+              position={[pos[0], COUNTER_Y, pos[1]]}
+              onPointerOver={(e) => {
+                e.stopPropagation();
+                document.body.style.cursor = "pointer";
+              }}
+              onPointerOut={(e) => {
+                e.stopPropagation();
+                document.body.style.cursor = "default";
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleScanClick(inst.instanceId, pos);
+              }}
             >
-              <group>
-                <StoreItemMesh gltfUrl={inst.gltf} scale={0.35} />
-                {/* 价签 */}
-                <Text
-                  position={[0, 0.15, 0]}
-                  fontSize={0.06}
-                  color="#ffffff"
-                  outlineWidth={0.008}
-                  outlineColor="#000"
-                  anchorX="center"
-                  anchorY="middle"
-                >
-                  {formatYuan(inst.price)}
-                </Text>
-              </group>
-            </DraggableObject>
+              <StoreItemMesh gltfUrl={inst.gltf} scale={0.35} />
+              {/* 价签 */}
+              <Text
+                position={[0, 0.15, 0]}
+                fontSize={0.06}
+                color="#ffffff"
+                outlineWidth={0.008}
+                outlineColor="#000"
+                anchorX="center"
+                anchorY="middle"
+              >
+                {formatYuan(inst.price)}
+              </Text>
+            </group>
           );
         })}
+
+      {/* 飞行中的商品 ghost — 从原位飞向 SCAN_ZONE */}
+      {flyingItems.map((f) => (
+        <FlyingItem
+          key={f.instanceId}
+          instanceId={f.instanceId}
+          gltfUrl={f.gltfUrl}
+          fromX={f.fromX}
+          fromZ={f.fromZ}
+          toX={SCAN_ZONE.x}
+          toZ={SCAN_ZONE.z}
+          startedAt={f.startedAt}
+        />
+      ))}
 
       {/* === Scan-done 按钮: 全部扫码完后显示 "完成扫码" === */}
       {phase === "scan" && allScanned && (
@@ -332,6 +393,48 @@ function ProceedButton({
       >
         {label}
       </Text>
+    </group>
+  );
+}
+
+/**
+ * v0.32.49 (Ep25 B-2): 飞行中商品 ghost — 从原位抛物线飞向扫码篮，途中缩小 + 微旋转。
+ */
+function FlyingItem({
+  gltfUrl,
+  fromX,
+  fromZ,
+  toX,
+  toZ,
+  startedAt,
+}: {
+  instanceId: string;
+  gltfUrl: string;
+  fromX: number;
+  fromZ: number;
+  toX: number;
+  toZ: number;
+  startedAt: number;
+}) {
+  const groupRef = useRef<Group>(null);
+  const FLY_DURATION_MS = 320;
+  useFrame(() => {
+    if (!groupRef.current) return;
+    const elapsed = performance.now() - startedAt;
+    const t = Math.min(1, elapsed / FLY_DURATION_MS);
+    const e = 1 - Math.pow(1 - t, 3);
+    const arc = Math.sin(t * Math.PI) * 0.25;
+    const x = fromX + (toX - fromX) * e;
+    const y = COUNTER_Y + 0.05 + arc;
+    const z = fromZ + (toZ - fromZ) * e;
+    groupRef.current.position.set(x, y, z);
+    const s = 0.35 * (1 - 0.35 * e);
+    groupRef.current.scale.setScalar(s);
+    groupRef.current.rotation.y = t * Math.PI * 0.9;
+  });
+  return (
+    <group ref={groupRef} position={[fromX, COUNTER_Y, fromZ]} scale={0.35}>
+      <StoreItemMesh gltfUrl={gltfUrl} scale={1} />
     </group>
   );
 }
