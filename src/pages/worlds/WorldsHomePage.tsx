@@ -296,6 +296,25 @@ function WorldDock({
         @media (prefers-reduced-motion: reduce) {
           .worlds-dock-accent-dot { animation: none; }
         }
+        /* v0.33.18 (Ep94 WWWWW): dock chip hover glow halo via box-shadow stack
+           （button overflow-hidden 限制 ::after halo, 改用 box-shadow + outline 实现） */
+        .worlds-dock-chip {
+          transition:
+            transform 220ms cubic-bezier(.34, 1.56, .64, 1),
+            box-shadow 220ms ease-out,
+            filter 220ms ease-out;
+        }
+        .worlds-dock-chip:not(:disabled):hover,
+        .worlds-dock-chip.is-focus {
+          box-shadow:
+            0 10px 26px var(--dock-accent-glow, rgba(245, 158, 11, 0.65)),
+            0 0 0 5px var(--dock-accent-soft, rgba(245, 158, 11, 0.22)),
+            inset 0 1px 0 rgba(255, 255, 255, 0.5);
+          filter: brightness(1.06) saturate(1.08);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .worlds-dock-chip { transition: none; }
+        }
       `}</style>
       {WORLDS.map((w) => {
         const isFocus = w.id === focusId;
@@ -307,17 +326,22 @@ function WorldDock({
             onMouseEnter={() => onHover(w)}
             onMouseLeave={() => onHover(null)}
             onClick={() => w.unlocked && onSelect(w)}
-            className={`pointer-events-auto group relative overflow-hidden rounded-2xl border-[3px] px-3 pt-2 pb-3 shadow-xl transition-all duration-200 ${
+            className={`worlds-dock-chip ${isFocus ? "is-focus" : ""} pointer-events-auto group relative overflow-hidden rounded-2xl border-[3px] px-3 pt-2 pb-3 shadow-xl transition-all duration-200 ${
               isFocus ? "scale-110 -translate-y-1" : "scale-100"
             } ${!w.unlocked ? "grayscale opacity-50 cursor-not-allowed" : "hover:scale-110 hover:-translate-y-1"}`}
-            style={{
-              borderColor: isFocus ? w.accent : "rgba(255,255,255,0.4)",
-              background: isFocus
-                ? `linear-gradient(180deg, #fff, ${w.accent}33)`
-                : "rgba(255,255,255,0.88)",
-              minWidth: isFocus ? 132 : 112,
-              boxShadow: isFocus ? `0 6px 20px ${w.accent}88` : undefined,
-            }}
+            style={
+              {
+                borderColor: isFocus ? w.accent : "rgba(255,255,255,0.4)",
+                background: isFocus
+                  ? `linear-gradient(180deg, #fff, ${w.accent}33)`
+                  : "rgba(255,255,255,0.88)",
+                minWidth: isFocus ? 132 : 112,
+                boxShadow: isFocus ? `0 6px 20px ${w.accent}88` : undefined,
+                ["--dock-accent" as string]: w.accent,
+                ["--dock-accent-glow" as string]: `${w.accent}aa`,
+                ["--dock-accent-soft" as string]: `${w.accent}33`,
+              } as React.CSSProperties
+            }
           >
             <div className="text-2xl leading-none">{w.emoji}</div>
             <div
