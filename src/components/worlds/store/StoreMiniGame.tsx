@@ -200,6 +200,7 @@ export function StoreMiniGame({
           radius={SCAN_ZONE.radius}
           color="#10b981"
           label={`总价 ${formatYuan(scannedTotalCent)}`}
+          sweep
         />
       )}
       {/* 找零托盘 (柜台右侧) — change phase 可见 */}
@@ -284,12 +285,15 @@ function DropZoneRing({
   radius,
   color,
   label,
+  sweep = false,
 }: {
   x: number;
   z: number;
   radius: number;
   color: string;
   label: string;
+  /** v0.32.81 (Ep57 VVVV): 扫码灯条来回扫，仅在 scan zone 用 */
+  sweep?: boolean;
 }) {
   return (
     <group position={[x, COUNTER_Y + 0.005, z]}>
@@ -313,6 +317,8 @@ function DropZoneRing({
           opacity={0.9}
         />
       </mesh>
+      {/* v0.32.81 (Ep57 VVVV): 扫描线 sweep — 像超市扫码枪的红线来回扫 */}
+      {sweep && <ScanSweepBar radius={radius} color={color} />}
       <Text
         position={[0, 0.18, 0]}
         fontSize={0.045}
@@ -371,6 +377,62 @@ function ProceedButton({
       >
         {label}
       </Text>
+    </group>
+  );
+}
+
+/**
+ * v0.32.81 (Ep57 VVVV): 扫描线 sweep — 在扫码篮内来回滑动 emissive bar，
+ * 视觉上像超市扫码枪扫描，强化"现在在扫码"的玩法感。
+ */
+function ScanSweepBar({ radius, color }: { radius: number; color: string }) {
+  const group = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (!group.current) return;
+    const t = clock.elapsedTime;
+    // 来回扫：用 sin 周期 1.8s, amplitude = radius * 0.72
+    const amp = radius * 0.72;
+    const z = Math.sin(t * 1.6) * amp;
+    group.current.position.z = z;
+    // bar 长度也轻微 wobble，看起来不死板
+    const sx = 0.92 + Math.sin(t * 6) * 0.04;
+    group.current.scale.x = sx;
+  });
+  return (
+    <group ref={group} position={[0, 0.025, 0]}>
+      {/* 主 bar */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[radius * 1.7, 0.05]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.85}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* 副 bar — 在主 bar 左侧拖尾 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -0.04]}>
+        <planeGeometry args={[radius * 1.5, 0.03]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.4}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* 副 bar — 右侧 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0.04]}>
+        <planeGeometry args={[radius * 1.5, 0.03]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.4}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
     </group>
   );
 }
