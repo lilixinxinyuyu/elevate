@@ -769,6 +769,44 @@ a.world-chip:focus-visible,
   50%      { transform: scale(1.15) rotate(6deg); }
 }
 
+/* v0.32.94 (Ep70 KKKKKK): mood: hello — 新单 intro 时顾客头像 wave-in
+   先 wave 进场 620ms，之后切到常驻 idle bob；emote 同步 wave，卡片柔滑入场。 */
+.world-customer-bubble-hello .world-customer-bubble-avatar-wrap {
+  animation:
+    world-customer-hello-wave-in 620ms cubic-bezier(.34, 1.56, .64, 1) both,
+    world-avatar-bob 2.4s ease-in-out 620ms infinite;
+}
+.world-customer-bubble-hello .world-customer-emote {
+  animation:
+    world-customer-hello-emote-wave 720ms ease-out both,
+    world-emote-pop 1.6s ease-in-out 720ms infinite;
+}
+.world-customer-bubble-hello .world-customer-bubble-card {
+  animation: world-customer-hello-card-in 360ms ease-out both;
+}
+@keyframes world-customer-hello-wave-in {
+  0%   { opacity: 0; transform: translateY(10px) rotate(-16deg) scale(0.82); }
+  45%  { opacity: 1; transform: translateY(-5px) rotate(10deg) scale(1.12); }
+  72%  { transform: translateY(0) rotate(-5deg) scale(1.03); }
+  100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+}
+@keyframes world-customer-hello-emote-wave {
+  0%   { opacity: 0; transform: scale(0.3) rotate(-30deg); }
+  60%  { opacity: 1; transform: scale(1.25) rotate(15deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes world-customer-hello-card-in {
+  0%   { opacity: 0; transform: translateX(-6px) scale(0.96); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-customer-bubble-hello .world-customer-bubble-avatar-wrap,
+  .world-customer-bubble-hello .world-customer-emote,
+  .world-customer-bubble-hello .world-customer-bubble-card {
+    animation: none;
+  }
+}
+
 /* mood: happy — 客人开心反弹 + emote 转金色 */
 .world-customer-bubble-happy .world-customer-bubble-avatar-wrap {
   animation: world-avatar-pop 700ms cubic-bezier(.34,1.56,.64,1);
