@@ -129,6 +129,26 @@ function FeedbackStyles() {
       .worlds-screen-zoom {
         animation: worlds-screen-zoom-kf 800ms cubic-bezier(0.34, 1.56, 0.64, 1);
       }
+      /* v0.32.87 (Ep63 KKKKK): wrong 时屏幕红色 vignette 罩 — 强化失败反馈 */
+      @keyframes worlds-wrong-vignette-kf {
+        0%   { opacity: 0; transform: scale(1.03); }
+        14%  { opacity: 1; }
+        65%  { opacity: 0.55; }
+        100% { opacity: 0; transform: scale(1); }
+      }
+      .worlds-wrong-vignette {
+        background:
+          radial-gradient(circle at center,
+            transparent 42%,
+            rgba(244, 63, 94, 0.20) 64%,
+            rgba(127, 29, 29, 0.66) 100%);
+        box-shadow: inset 0 0 90px rgba(244, 63, 94, 0.72);
+        animation: worlds-wrong-vignette-kf 1050ms ease-out forwards;
+        pointer-events: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .worlds-wrong-vignette { animation-duration: 350ms; }
+      }
       /* v0.32.78 (Ep54 PPP): correct 时中心连续 ripple ring 散开 */
       @keyframes worlds-correct-ring-spread {
         0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.45); }
@@ -253,6 +273,10 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
           background: `radial-gradient(circle, ${palette.bg} 0%, transparent 60%)`,
         }}
       />
+      {/* v0.32.87 (Ep63 KKKKK): wrong 时屏幕红色 vignette 罩（1.05s 退场，强化失败感） */}
+      {kind === "wrong" && (
+        <div className="absolute inset-0 worlds-wrong-vignette" />
+      )}
       {/* v0.32.78 (Ep54 PPP): correct 时连续 3 个 ripple ring 散开（only correct, 不重复 reward starburst） */}
       {kind === "correct" && (
         <div
