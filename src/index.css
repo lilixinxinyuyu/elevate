@@ -281,6 +281,47 @@ body {
   background: linear-gradient(180deg, #fff, #fde68a 80%);
   color: #0f172a;
   border-color: var(--world-accent, #f59e0b);
+  /* v0.32.67 (Ep43 RR): chunky underline 准备 */
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding-bottom: 0.55rem;
+}
+/* v0.32.67 (Ep43 RR): 标题 chip 底部 accent 渐变 shimmer underline，
+   持续 loop，强化"游戏中" 感且不抢戏。 */
+.world-top-title::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--world-accent, #f59e0b) 25%,
+    var(--world-accent-light, #fde68a) 45%,
+    #ffffff 50%,
+    var(--world-accent-light, #fde68a) 55%,
+    var(--world-accent, #f59e0b) 75%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: world-top-title-underline-slide 2.4s linear infinite;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 4px var(--world-accent, #f59e0b));
+  pointer-events: none;
+}
+@keyframes world-top-title-underline-slide {
+  0%   { background-position: -110% 0; }
+  100% { background-position: 110% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-top-title::after {
+    animation: none;
+    background-position: 55% 0;
+  }
 }
 .world-top-count {
   justify-self: end;
