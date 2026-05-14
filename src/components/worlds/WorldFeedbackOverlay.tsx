@@ -380,13 +380,19 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
       <div className="absolute inset-0 flex items-center justify-center">
         <div
           className="text-center animate-worlds-pulse"
-          style={{ color: palette.text }}
+          style={{
+            color: palette.text,
+            // v0.33.1 (Ep77 SSSSS): drop-shadow glow strengthens icon/label visibility against busy bg
+            filter: "drop-shadow(0 0 18px currentColor)",
+          }}
         >
           <div
             style={{
-              fontSize: kind === "complete" ? 96 : 72,
+              // v0.33.1 (Ep77 SSSSS): bigger icon + outer accent glow text-shadow
+              fontSize: kind === "complete" ? 108 : 84,
               lineHeight: 1,
-              textShadow: "0 4px 18px rgba(0,0,0,0.6), 0 0 24px currentColor",
+              textShadow:
+                "0 5px 22px rgba(0,0,0,0.68), 0 0 34px currentColor, 0 0 8px #ffffff66",
             }}
           >
             {palette.icon}
@@ -394,8 +400,12 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
           <div
             className="mt-2 font-display font-bold whitespace-nowrap"
             style={{
-              fontSize: kind === "complete" ? 28 : 20,
-              textShadow: "0 2px 8px rgba(0,0,0,0.7)",
+              // 字号微增 + 强化对比, 跟 icon 视觉重量对齐
+              fontSize: kind === "complete" ? 30 : 22,
+              fontWeight: 900,
+              letterSpacing: "0.02em",
+              textShadow:
+                "0 3px 12px rgba(0,0,0,0.78), 0 0 16px currentColor",
             }}
           >
             {label ?? palette.defaultLabel}
