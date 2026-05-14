@@ -68,6 +68,11 @@ export function WorldTopHUD({
             <span
               key={i}
               className={`world-top-dot${i < safeCurrent ? " world-top-dot-filled" : ""}`}
+              style={
+                i < safeCurrent
+                  ? ({ ["--dot-i" as string]: i } as CSSProperties)
+                  : undefined
+              }
             />
           ))}
         </span>
