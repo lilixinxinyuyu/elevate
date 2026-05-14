@@ -745,6 +745,45 @@ a.world-chip:focus-visible,
   35%  { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3) rotate(20deg); }
 }
+/* v0.32.84 (Ep60 CCCCC): happy 状态客人气泡卡 — background 流光带 + 主题色 accent glow
+   不使用 ::after（::before/::after 给气泡尾巴三角占了），改用 background 多层叠加 + animation。 */
+.world-customer-bubble-happy .world-customer-bubble-card {
+  background:
+    linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.78) 50%,
+      transparent 70%
+    ) -110% 0 / 220% 100% no-repeat,
+    linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+  animation: world-bubble-happy-sweep 1100ms cubic-bezier(.4, 0, .2, 1) 100ms both,
+             world-bubble-happy-glow 1300ms ease-out both;
+}
+@keyframes world-bubble-happy-sweep {
+  to { background-position: 110% 0, 0 0; }
+}
+@keyframes world-bubble-happy-glow {
+  0%   { box-shadow:
+          0 4px 0 rgba(0,0,0,0.1),
+          0 14px 24px rgba(0,0,0,0.3),
+          inset 0 1px 0 rgba(255,255,255,0.95),
+          0 0 0 0 transparent; }
+  35%  { box-shadow:
+          0 4px 0 rgba(0,0,0,0.1),
+          0 14px 24px rgba(0,0,0,0.3),
+          inset 0 1px 0 rgba(255,255,255,0.95),
+          0 0 28px 6px var(--world-accent, #f59e0b); }
+  100% { box-shadow:
+          0 4px 0 rgba(0,0,0,0.1),
+          0 14px 24px rgba(0,0,0,0.3),
+          inset 0 1px 0 rgba(255,255,255,0.95),
+          0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-customer-bubble-happy .world-customer-bubble-card {
+    animation: none;
+  }
+}
 @keyframes world-avatar-pop {
   0%   { transform: scale(0.85) rotate(-8deg); }
   60%  { transform: scale(1.25) rotate(6deg); }
