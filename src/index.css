@@ -367,23 +367,73 @@ body {
   position: relative;
   z-index: 2;
 }
+/* v0.32.63 (Ep39 EE): #N + label 包成番号牌 ribbon —— 像票据上的客人编号牌
+   利用 .world-order-head > div:first-child 已有的 wrapper（4 IntroPanel 都用 grid 第一列） */
+.world-order-head > div:first-child {
+  position: relative;
+  width: 4.4rem;
+  min-height: 3.6rem;
+  padding: 0.5rem 0.45rem 0.7rem;
+  text-align: center;
+  border-radius: 0.9rem 0.9rem 0.45rem 0.45rem;
+  background: linear-gradient(
+    180deg,
+    var(--world-accent-light, #fbbf24) 0%,
+    var(--world-accent, #f59e0b) 100%
+  );
+  box-shadow:
+    0 6px 0 rgba(0, 0, 0, 0.12),
+    0 12px 22px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transform: rotate(-2.5deg);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+/* 底部 V 型尖角（票据撕口） */
+.world-order-head > div:first-child::after {
+  content: "";
+  position: absolute;
+  left: 0.55rem;
+  right: 0.55rem;
+  bottom: -0.45rem;
+  height: 0.6rem;
+  background: var(--world-accent, #f59e0b);
+  clip-path: polygon(0 0, 50% 100%, 100% 0);
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.15));
+}
+/* 顶部 2 个圆点 (装订孔) */
+.world-order-head > div:first-child::before {
+  content: "";
+  position: absolute;
+  top: 0.32rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1.8rem;
+  height: 0.18rem;
+  background:
+    radial-gradient(circle at 0 50%, rgba(0,0,0,0.35) 0 0.09rem, transparent 0.1rem),
+    radial-gradient(circle at 100% 50%, rgba(0,0,0,0.35) 0 0.09rem, transparent 0.1rem);
+}
 .world-order-num {
   font-family: "Inter", system-ui, monospace;
   font-weight: 900;
-  font-size: 2.4rem;
+  font-size: 2.05rem;
   line-height: 0.95;
-  color: var(--world-accent, #f59e0b);
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+  color: #ffffff;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.22),
+    0 0 8px rgba(255, 255, 255, 0.25);
   letter-spacing: -1px;
+  margin-top: 0.25rem;
 }
 .world-order-num-label {
   display: block;
   font-size: 0.55rem;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: rgba(0, 0, 0, 0.4);
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.92);
   text-transform: uppercase;
-  margin-top: 0.15rem;
+  margin-top: 0.18rem;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
 }
 .world-order-title-block .world-panel-title {
   margin-bottom: 0.15rem;
