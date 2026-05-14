@@ -27,6 +27,7 @@ import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
 import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
 import { useBgm } from "../../lib/worlds/useBGM";
 import { BgmMuteButton } from "../../components/worlds/BgmMuteButton";
+import { WorldTopHUD } from "../../components/worlds/WorldTopHUD";
 
 export function StorePage() {
   const navigate = useNavigate();
@@ -128,9 +129,11 @@ export function StorePage() {
       </WorldsCanvas>
 
       {/* HUD overlays */}
-      <TopHUD
-        orderIdx={orderIdx}
-        completedCount={completedCount}
+      <WorldTopHUD
+        title="🏪 和平小卖部"
+        current={completedCount + (orderIdx === completedCount ? 0 : 1)}
+        total={ORDERS.length}
+        accent="#f59e0b"
         onBack={() => navigate("/worlds/baibao")}
       />
 
@@ -185,36 +188,7 @@ export function StorePage() {
   );
 }
 
-function TopHUD({
-  orderIdx,
-  completedCount,
-  onBack,
-}: {
-  orderIdx: number;
-  completedCount: number;
-  onBack: () => void;
-}) {
-  return (
-    <div
-      className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none"
-      style={{ zIndex: 60 }}
-    >
-      <button
-        type="button"
-        onClick={onBack}
-        className="world-chip world-chip-dark"
-      >
-        ← 离开
-      </button>
-      <div className="world-chip">
-        🏪 和平小卖部
-      </div>
-      <div className="world-chip world-chip-dark">
-        客人 {completedCount + (orderIdx === completedCount ? 0 : 1)}/{ORDERS.length}
-      </div>
-    </div>
-  );
-}
+// v0.32.58 (Ep34 L): TopHUD 抽到 WorldTopHUD（src/components/worlds/WorldTopHUD.tsx）
 
 function CustomerBubble({
   emoji,

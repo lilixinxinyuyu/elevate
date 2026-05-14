@@ -19,6 +19,7 @@ import { useWorldFeedback } from "../../lib/worlds/useWorldFeedback";
 import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverlay";
 import { useBgm } from "../../lib/worlds/useBGM";
 import { BgmMuteButton } from "../../components/worlds/BgmMuteButton";
+import { WorldTopHUD } from "../../components/worlds/WorldTopHUD";
 
 type Phase = "intro" | "slicing";
 
@@ -109,9 +110,11 @@ export function BakeryPage() {
         )}
       </WorldsCanvas>
 
-      <TopHUD
-        orderIdx={orderIdx}
-        completedCount={completedCount}
+      <WorldTopHUD
+        title="🥖 甜心面包店"
+        current={completedCount + (orderIdx === completedCount ? 0 : 1)}
+        total={BAKERY_ORDERS.length}
+        accent="#ec4899"
         onBack={() => navigate("/worlds/baibao")}
       />
 
@@ -157,30 +160,7 @@ export function BakeryPage() {
   );
 }
 
-function TopHUD({
-  orderIdx,
-  completedCount,
-  onBack,
-}: {
-  orderIdx: number;
-  completedCount: number;
-  onBack: () => void;
-}) {
-  return (
-    <div
-      className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none"
-      style={{ zIndex: 60 }}
-    >
-      <button type="button" onClick={onBack} className="world-chip world-chip-dark">
-        ← 离开
-      </button>
-      <div className="world-chip">🥖 甜心面包店</div>
-      <div className="world-chip world-chip-dark">
-        客人 {completedCount + (orderIdx === completedCount ? 0 : 1)}/{BAKERY_ORDERS.length}
-      </div>
-    </div>
-  );
-}
+// v0.32.58 (Ep34 L): TopHUD 抽到 WorldTopHUD
 
 function CustomerBubble({
   emoji,
