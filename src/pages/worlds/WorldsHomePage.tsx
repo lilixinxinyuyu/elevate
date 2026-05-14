@@ -230,7 +230,7 @@ function WorldDock({
               background: isFocus
                 ? `linear-gradient(180deg, #fff, ${w.accent}33)`
                 : "rgba(255,255,255,0.88)",
-              minWidth: 96,
+              minWidth: isFocus ? 132 : 112,
               boxShadow: isFocus ? `0 6px 20px ${w.accent}88` : undefined,
             }}
           >
@@ -240,6 +240,20 @@ function WorldDock({
               style={{ color: isFocus ? "#0f172a" : "#334155" }}
             >
               {w.name}
+            </div>
+            {/* v0.32.64 (Ep40 AA): inline tagline — focus 2 行展开，常态 1 行截断 */}
+            <div
+              className="text-[9px] font-bold leading-tight mt-0.5 mx-auto"
+              style={{
+                color: isFocus ? w.accent : "#64748b",
+                maxWidth: isFocus ? 118 : 96,
+                display: "-webkit-box",
+                WebkitLineClamp: isFocus ? 2 : 1,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {w.unlocked ? w.tagline : (w.lockHint ?? "敬请期待")}
             </div>
             {!w.unlocked && (
               <div className="text-[9px] font-bold text-slate-500 mt-0.5">🔒 锁定</div>
