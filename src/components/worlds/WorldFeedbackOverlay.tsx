@@ -171,6 +171,40 @@ function FeedbackStyles() {
       @media (prefers-reduced-motion: reduce) {
         .worlds-correct-ripple-ring { animation-duration: 300ms; }
       }
+      /* v0.33.0 (Ep76 JJJJJJ): complete 瞬间中心 amber bloom soft halo
+         双层 radial gradient + box-shadow，1.15s expand + fade out, behind 中央文案 */
+      @keyframes worlds-complete-bloom-kf {
+        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.45); filter: blur(18px); }
+        18%  { opacity: 0.92; transform: translate(-50%, -50%) scale(1); filter: blur(10px); }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(2.2); filter: blur(34px); }
+      }
+      .worlds-complete-bloom {
+        position: absolute;
+        left: 50%;
+        top: 54%;
+        width: min(72vw, 520px);
+        aspect-ratio: 1;
+        border-radius: 999px;
+        background: radial-gradient(
+          circle,
+          rgba(253, 224, 71, 0.55) 0%,
+          rgba(251, 191, 36, 0.28) 32%,
+          transparent 68%
+        );
+        box-shadow:
+          0 0 60px rgba(251, 191, 36, 0.55),
+          0 0 120px rgba(244, 114, 182, 0.22);
+        animation: worlds-complete-bloom-kf 1150ms cubic-bezier(.16, 1, .3, 1) forwards;
+        pointer-events: none;
+      }
+      .worlds-complete-bloom-inner {
+        animation-delay: 140ms;
+        opacity: 0.65;
+        width: min(58vw, 390px);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .worlds-complete-bloom { animation-duration: 500ms; }
+      }
       /* v0.32.72 (Ep48 QQ): 右上角 toast cascade trail */
       .worlds-toast-stack {
         position: absolute;
@@ -325,6 +359,13 @@ function PulseFx({ pulse }: { pulse: FeedbackPulse }) {
               style={{ animationDelay: `${i * 100}ms` }}
             />
           ))}
+        </div>
+      )}
+      {/* v0.33.0 (Ep76 JJJJJJ): complete 时中央 amber bloom 双层 soft halo */}
+      {kind === "complete" && (
+        <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+          <span className="worlds-complete-bloom" />
+          <span className="worlds-complete-bloom worlds-complete-bloom-inner" />
         </div>
       )}
       {/* v0.32.23: confetti 粒子喷射（correct 12 / complete 32） */}
