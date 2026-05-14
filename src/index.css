@@ -120,8 +120,34 @@ a.world-chip:focus-visible,
     0 0 0 4px rgba(255, 255, 255, 0.4),
     0 4px 0 rgba(0, 0, 0, 0.08),
     0 12px 30px rgba(0, 0, 0, 0.35),
-    inset 0 2px 0 rgba(255, 255, 255, 0.95);
+    inset 0 2px 0 rgba(255, 255, 255, 0.95),
+    /* v0.32.85 (Ep61 IIIII): idle accent glow halo (动画下面 keyframe) */
+    0 0 0 0 var(--world-accent, #f59e0b);
   position: relative;
+  /* v0.32.85 (Ep61 IIIII): 主题色 halo 缓慢呼吸 — 不影响 ::before/::after 子组件
+     (.world-order-card 已用 ::before/::after，所以用 box-shadow 不冲突) */
+  animation: world-panel-idle-halo 3.6s ease-in-out infinite;
+}
+@keyframes world-panel-idle-halo {
+  0%, 100% {
+    box-shadow:
+      0 0 0 4px rgba(255, 255, 255, 0.4),
+      0 4px 0 rgba(0, 0, 0, 0.08),
+      0 12px 30px rgba(0, 0, 0, 0.35),
+      inset 0 2px 0 rgba(255, 255, 255, 0.95),
+      0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(255, 255, 255, 0.45),
+      0 4px 0 rgba(0, 0, 0, 0.08),
+      0 14px 36px rgba(0, 0, 0, 0.4),
+      inset 0 2px 0 rgba(255, 255, 255, 0.95),
+      0 0 28px 4px var(--world-accent, #f59e0b);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-panel { animation: none; }
 }
 .world-panel-title {
   font-weight: 800;
