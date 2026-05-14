@@ -276,18 +276,71 @@ function CenterPanel({ recommended, hoverWorld, onStart }: CenterPanelProps) {
   const focus = hoverWorld ?? recommended;
   return (
     <div
-      className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-2 pointer-events-none"
+      className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-3 pointer-events-none"
       style={{ zIndex: 55 }}
     >
-      {/* 小进 emoji + 台词 */}
-      <div className="flex items-end gap-2 max-w-[90%]">
-        <div className="text-4xl">👩‍🏫</div>
-        <div className="px-4 py-2 rounded-2xl bg-white/95 text-slate-900 text-sm font-medium backdrop-blur-md shadow-2xl border border-white/40 relative">
-          {focus.unlocked
-            ? `${focus.emoji} ${focus.name}：${focus.tagline}`
-            : `${focus.emoji} ${focus.name} 还在装修中... ${focus.lockHint ?? ""}`}
-          {/* 对话气泡尾巴 */}
-          <span className="absolute -left-2 bottom-3 w-0 h-0 border-y-8 border-y-transparent border-r-8 border-r-white/95" />
+      {/* v0.32.69 (Ep45 MM): 小进 emoji + chunky world-panel 风格台词卡
+          (替代 v32.0 朴素 bg-white/95) */}
+      <div className="flex items-end gap-3 max-w-[92%]">
+        <div
+          className="text-5xl"
+          style={{ filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.4))" }}
+        >
+          👩‍🏫
+        </div>
+        <div
+          className="relative pointer-events-none"
+          style={{
+            ["--world-accent" as string]: focus.accent,
+          } as React.CSSProperties}
+        >
+          <div
+            className="world-panel"
+            style={{
+              maxWidth: "min(92vw, 480px)",
+              padding: "0.75rem 1.1rem",
+              borderColor: focus.accent,
+            }}
+          >
+            <div
+              className="world-panel-title"
+              style={{ color: focus.accent }}
+            >
+              <span className="mr-1">{focus.emoji}</span>
+              {focus.unlocked ? "推荐前往" : "建设中"}
+            </div>
+            <div className="text-slate-900 text-base font-black leading-tight mt-0.5">
+              {focus.name}
+            </div>
+            <div className="mt-1 text-xs font-extrabold text-slate-600 leading-snug">
+              {focus.unlocked ? focus.tagline : (focus.lockHint ?? "敬请期待")}
+            </div>
+          </div>
+          {/* 对话气泡尾巴 - accent 描边 + 白填充, 双层 */}
+          <span
+            className="absolute"
+            style={{
+              left: -14,
+              bottom: 22,
+              width: 0,
+              height: 0,
+              borderTop: "10px solid transparent",
+              borderBottom: "10px solid transparent",
+              borderRight: `14px solid ${focus.accent}`,
+            }}
+          />
+          <span
+            className="absolute"
+            style={{
+              left: -9,
+              bottom: 23,
+              width: 0,
+              height: 0,
+              borderTop: "9px solid transparent",
+              borderBottom: "9px solid transparent",
+              borderRight: "11px solid #ffffff",
+            }}
+          />
         </div>
       </div>
       {/* 推荐 / 开始按钮 — v0.32.59 (Ep35 N): chunky cta + accent glow */}
