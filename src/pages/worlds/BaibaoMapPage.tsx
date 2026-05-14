@@ -159,6 +159,71 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
             animation: none;
           }
         }
+        /* v0.32.71 (Ep47 BBB): hover tooltip chunky 化 — 3 态：idle / active / locked
+           替代 bg-black/55 + white text 朴素 chip */
+        .baibao-tooltip {
+          position: absolute;
+          bottom: 1rem;
+          left: 50%;
+          transform: translateX(-50%);
+          max-width: min(92vw, 460px);
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.65rem 1rem 0.65rem 0.75rem;
+          border-radius: 1.1rem;
+          border: 3px solid var(--tooltip-accent, #38bdf8);
+          background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+          color: #0f172a;
+          font-weight: 900;
+          font-size: 12.5px;
+          letter-spacing: 0.01em;
+          text-align: left;
+          box-shadow:
+            0 4px 0 rgba(0,0,0,0.14),
+            0 14px 28px rgba(0,0,0,0.28),
+            inset 0 1px 0 rgba(255,255,255,0.95);
+          animation: baibao-tooltip-pop 240ms cubic-bezier(.34,1.56,.64,1);
+          z-index: 55;
+        }
+        .baibao-tooltip-badge {
+          flex: 0 0 auto;
+          width: 2.1rem;
+          height: 2.1rem;
+          border-radius: 50%;
+          background: var(--tooltip-accent, #38bdf8);
+          color: #fff;
+          display: grid;
+          place-items: center;
+          font-size: 1.15rem;
+          box-shadow: 0 3px 0 rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.4);
+        }
+        .baibao-tooltip-copy {
+          display: flex;
+          flex-direction: column;
+          gap: 0.05rem;
+          line-height: 1.25;
+          min-width: 0;
+        }
+        .baibao-tooltip-title {
+          font-size: 13px;
+          font-weight: 900;
+          color: #0f172a;
+        }
+        .baibao-tooltip-sub {
+          font-size: 11px;
+          font-weight: 800;
+          color: var(--tooltip-accent, #0e7490);
+          letter-spacing: 0.02em;
+        }
+        @keyframes baibao-tooltip-pop {
+          0%   { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.96); }
+          60%  { opacity: 1; transform: translateX(-50%) translateY(-2px) scale(1.02); }
+          100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .baibao-tooltip { animation: none; }
+        }
       `}</style>
       <div
         className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none"
@@ -251,29 +316,58 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
         </div>
       </div>
 
-      {/* 底部提示 */}
-      <div
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-black/55 text-white text-xs backdrop-blur-md border border-white/20 pointer-events-none shadow-lg max-w-[92%] text-center"
-        style={{ zIndex: 55 }}
-      >
-        {hoverBuilding ? (
-          hoverBuilding.active ? (
-            <span>
-              <span className="text-base mr-1">{hoverBuilding.emoji}</span>
-              点击进入 <b>{hoverBuilding.name}</b>
-              <span className="text-amber-200 ml-1">· {hoverBuilding.skillHint}</span>
-            </span>
-          ) : (
-            <span>
-              <span className="text-base mr-1">🔒</span>
-              <b>{hoverBuilding.name}</b>
-              <span className="text-slate-300 ml-1">· {hoverBuilding.tagline}</span>
-            </span>
-          )
-        ) : (
-          <span>🖱️ 拖动旋转 · 滚轮缩放 · 点亮 3 栋建筑（小卖部 / 银行 / 面包店）出发</span>
-        )}
-      </div>
+      {/* v0.32.71 (Ep47 BBB): chunky 底部 hover tooltip — idle / active / locked 三态 */}
+      <BaibaoHoverTooltip hoverBuilding={hoverBuilding} />
     </>
+  );
+}
+
+function BaibaoHoverTooltip({ hoverBuilding }: { hoverBuilding: BaibaoBuilding | null }) {
+  const mode: "idle" | "active" | "locked" = !hoverBuilding
+    ? "idle"
+    : hoverBuilding.active
+      ? "active"
+      : "locked";
+  // accent 色：idle cyan / active 该店色 / locked 灰
+  const accent =
+    mode === "active"
+      ? (hoverBuilding!.color ?? "#f59e0b")
+      : mode === "locked"
+        ? "#94a3b8"
+        : "#0ea5e9";
+  return (
+    <div
+      key={hoverBuilding?.id ?? "idle"}
+      className={`baibao-tooltip baibao-tooltip-${mode}`}
+      style={{ ["--tooltip-accent" as string]: accent } as React.CSSProperties}
+    >
+      <span className="baibao-tooltip-badge">
+        {mode === "idle" ? "🧭" : mode === "locked" ? "🔒" : hoverBuilding!.emoji}
+      </span>
+      <span className="baibao-tooltip-copy">
+        {mode === "active" ? (
+          <>
+            <span className="baibao-tooltip-title">
+              点击进入 {hoverBuilding!.name}
+            </span>
+            <span className="baibao-tooltip-sub">
+              {hoverBuilding!.skillHint}
+            </span>
+          </>
+        ) : mode === "locked" ? (
+          <>
+            <span className="baibao-tooltip-title">{hoverBuilding!.name}</span>
+            <span className="baibao-tooltip-sub">{hoverBuilding!.tagline}</span>
+          </>
+        ) : (
+          <>
+            <span className="baibao-tooltip-title">拖动旋转 · 滚轮缩放</span>
+            <span className="baibao-tooltip-sub">
+              点亮 3 栋建筑（小卖部 / 银行 / 面包店）出发
+            </span>
+          </>
+        )}
+      </span>
+    </div>
   );
 }
