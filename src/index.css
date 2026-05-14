@@ -228,6 +228,47 @@ a.world-chip:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .world-cta-btn { animation: none; }
 }
+/* v0.33.4 (Ep80 IIIIIII): 右侧 accent dot indicator — 提示玩家"这里能点"焦点
+   ::after 已被 shimmer 占用，这里用 ::before */
+.world-cta-btn {
+  padding-right: 2.4rem;
+}
+.world-cta-btn::before {
+  content: "";
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 35% 35%,
+    #ffffff 0 22%,
+    var(--world-accent-light, #fde68a) 23% 55%,
+    var(--world-accent, #f59e0b) 56%
+  );
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.7),
+    0 0 12px var(--world-accent, #f59e0b);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 2;
+  animation: world-cta-dot-pulse 1.8s ease-in-out infinite;
+}
+.world-cta-btn:hover::before {
+  transform: translateY(-50%) scale(1.18);
+}
+.world-cta-btn:disabled::before {
+  opacity: 0.45;
+  animation: none;
+}
+@keyframes world-cta-dot-pulse {
+  0%, 100% { opacity: 0.78; transform: translateY(-50%) scale(0.92); }
+  50%      { opacity: 1;    transform: translateY(-50%) scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-cta-btn::before { animation: none; }
+}
 /* v0.32.83 (Ep59 WWWW): hover 时一道扫光从左横扫过去（每次 hover 复播一次） */
 .world-cta-btn::after {
   content: "";
