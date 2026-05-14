@@ -53,6 +53,8 @@ export function BaibaoTownMap({
         <planeGeometry args={[16, 1.4]} />
         <meshStandardMaterial color="#a8a29e" roughness={0.95} />
       </mesh>
+      {/* v0.33.13 (Ep89 DDDDDD): 街道 emissive glow trail — 4 段流光在十字路上流动 */}
+      <RoadGlowTrails />
 
       {/* === 6 个 KayKit 建筑 === */}
       {BAIBAO_BUILDINGS.map((b) => (
@@ -133,6 +135,64 @@ function CenterMascot() {
       <Billboard position={[0, 0.55, 0]}>
         <Text fontSize={0.35} anchorX="center" anchorY="middle">👩‍🏫</Text>
       </Billboard>
+    </group>
+  );
+}
+
+/**
+ * v0.33.13 (Ep89 DDDDDD): 街道流光 — 在十字路两轴上各 2 道光段循环移动，
+ * 给百宝港地图加一点活气，不干扰交互（raycast: () => null）。
+ */
+function RoadGlowTrails() {
+  return (
+    <group renderOrder={3}>
+      <RoadGlowSegment axis="x" offset={0} color="#fde68a" />
+      <RoadGlowSegment axis="x" offset={0.5} color="#38bdf8" />
+      <RoadGlowSegment axis="z" offset={0.25} color="#fde68a" />
+      <RoadGlowSegment axis="z" offset={0.75} color="#38bdf8" />
+    </group>
+  );
+}
+
+function RoadGlowSegment({
+  axis,
+  offset,
+  color,
+}: {
+  axis: "x" | "z";
+  offset: number;
+  color: string;
+}) {
+  const ref = useRef<Group>(null);
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current || !matRef.current) return;
+    const t = (clock.elapsedTime * 0.18 + offset) % 1;
+    const pos = -6.8 + t * 13.6;
+    if (axis === "x") {
+      ref.current.position.x = pos;
+      ref.current.position.z = 0;
+    } else {
+      ref.current.position.z = pos;
+      ref.current.position.x = 0;
+    }
+    // 边缘渐隐 — 流光接近视野边界时变淡
+    const edgeFade = 1 - Math.min(1, Math.abs(pos) / 7.2);
+    matRef.current.opacity = 0.14 + edgeFade * 0.28;
+  });
+  return (
+    <group ref={ref} position={[0, 0.035, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+        <planeGeometry args={axis === "x" ? [3.1, 0.18] : [0.18, 3.1]} />
+        <meshBasicMaterial
+          ref={matRef}
+          color={color}
+          transparent
+          opacity={0.28}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
     </group>
   );
 }
