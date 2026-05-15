@@ -81,7 +81,10 @@ interface Judgment {
 
 /** 单次 LLM 调用上限：50 题 ≈ 25k tokens 总量，留 5s 余量 */
 const MAX_BATCH = 30;
-const PER_CALL_TIMEOUT_MS = 28_000;
+// v0.33.55 (Ep129 P2 fix): 28s 太接近 CF Pages 30s 墙钟，多 provider 尝试时常超
+// 降到 22s 第一次尝试；总 wall budget 26s 让函数有 4s 余量返回 structured error
+const PER_CALL_TIMEOUT_MS = 22_000;
+const TOTAL_WALL_BUDGET_MS = 26_000;
 
 interface QwenChatResponse {
   choices?: { message?: { content?: string } }[];
@@ -352,10 +355,31 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const userPrompt = buildUserPrompt(body);
 
   const errors: { provider: string; model: string; code: string; message: string }[] = [];
+  // v0.33.55 (Ep129 P2 fix): 总 wall clock budget guard, 防 CF 30s 墙钟硬截
+  const wallStart = Date.now();
+  const wallExpired = () => Date.now() - wallStart > TOTAL_WALL_BUDGET_MS - 1000;
 
   for (const ctx of providers) {
+    if (wallExpired()) {
+      errors.push({
+        provider: ctx.label,
+        model: "(skipped)",
+        code: "wall_budget_exhausted",
+        message: `已用 ${Date.now() - wallStart}ms / 上限 ${TOTAL_WALL_BUDGET_MS}ms`,
+      });
+      break;
+    }
     const models = getChatModelsFor(ctx);
     for (const m of models) {
+      if (wallExpired()) {
+        errors.push({
+          provider: ctx.label,
+          model: m,
+          code: "wall_budget_exhausted",
+          message: `已用 ${Date.now() - wallStart}ms`,
+        });
+        break;
+      }
       const r = await callLlm(ctx, m, systemPrompt, userPrompt);
       if (!r.ok) {
         errors.push({ provider: ctx.label, model: m, code: r.code, message: r.message });

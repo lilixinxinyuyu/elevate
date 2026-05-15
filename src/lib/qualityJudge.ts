@@ -19,12 +19,12 @@ import { getStoredPassword } from "../db/cloudSync";
 import type { Question } from "../core/types";
 
 /** 服务端单批上限——对齐 functions/api/agent/judge-questions.ts MAX_BATCH=30。
- * 实测 30 道 ~3500 token 输入 + ~2000 token 输出，qwen-plus 能在 25s 内返回。
- * 如果未来发现稳定性差可以调到 20。 */
-export const JUDGE_BATCH_SIZE = 20;
+ * v0.33.55 (Ep129 P2 fix): 20 道在 CF Pages 30s 墙钟下经常超时（PER_CALL_TIMEOUT_MS=22s + 多 provider 尝试），
+ * 降到 8 道，单批 ~12-15s 稳定返回。CONCURRENCY 3→4 维持总吞吐。 */
+export const JUDGE_BATCH_SIZE = 8;
 
-/** 浏览器侧并发批次数。3 个并发不会触发 Cloudflare 边缘 rate limit。 */
-const CONCURRENCY = 3;
+/** 浏览器侧并发批次数。4 个并发不会触发 Cloudflare 边缘 rate limit。 */
+const CONCURRENCY = 4;
 
 export type JudgeVerdict = "keep" | "delete" | "borderline";
 
@@ -131,27 +131,62 @@ export async function judgeQuestionsInBatches(
   let done = 0;
 
   // 并发池：CONCURRENCY 个 worker，从 batches[] 里 pop 一个就 run
+  // v0.33.55 (Ep129 P2 fix): 单批失败 → 切半重试 1 次；若仍失败再算 error
   let nextIdx = 0;
+  const tryBatchWithFallback = async (
+    batch: Question[],
+    parentIdx: number,
+  ): Promise<void> => {
+    try {
+      const result = await judgeOneBatch(
+        batch,
+        opts.subjectId,
+        opts.scopeLabel,
+        opts.scopeFilter,
+      );
+      for (const j of result) {
+        judgments.set(j.question_id, j);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // 切半 fallback: batch > 2 时拆成两半各自再试一次
+      if (batch.length > 2) {
+        const mid = Math.ceil(batch.length / 2);
+        const left = batch.slice(0, mid);
+        const right = batch.slice(mid);
+        try {
+          const [lRes, rRes] = await Promise.all([
+            judgeOneBatch(left, opts.subjectId, opts.scopeLabel, opts.scopeFilter),
+            judgeOneBatch(right, opts.subjectId, opts.scopeLabel, opts.scopeFilter),
+          ]);
+          for (const j of [...lRes, ...rRes]) judgments.set(j.question_id, j);
+          return;
+        } catch (e2) {
+          const msg2 = e2 instanceof Error ? e2.message : String(e2);
+          errors.push({
+            code: "batch_failed_split",
+            detail: `${msg} | split-retry: ${msg2}`,
+            batchIndex: parentIdx,
+          });
+          return;
+        }
+      }
+      // batch ≤ 2 不再切半，直接记错
+      errors.push({
+        code: "batch_failed",
+        detail: msg,
+        batchIndex: parentIdx,
+      });
+    }
+  };
   const runWorker = async (): Promise<void> => {
     while (nextIdx < batches.length) {
       if (opts.signal?.aborted) return;
       const myIdx = nextIdx++;
       const batch = batches[myIdx]!;
-      try {
-        const result = await judgeOneBatch(batch, opts.subjectId, opts.scopeLabel, opts.scopeFilter);
-        for (const j of result) {
-          judgments.set(j.question_id, j);
-        }
-      } catch (e) {
-        errors.push({
-          code: "batch_failed",
-          detail: e instanceof Error ? e.message : String(e),
-          batchIndex: myIdx,
-        });
-      } finally {
-        done++;
-        opts.onProgress?.({ done, total, judgments, errors });
-      }
+      await tryBatchWithFallback(batch, myIdx);
+      done++;
+      opts.onProgress?.({ done, total, judgments, errors });
     }
   };
   const workers = Array.from({ length: Math.min(CONCURRENCY, batches.length) }, () =>
