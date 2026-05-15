@@ -150,6 +150,7 @@ export function BankPage() {
         currentOrderEmoji="🪙"
         budgetSeconds={45}
         orderKey={orderIdx}
+        skillName="换零 · 单位换算 · 元/角/分"
       />
 
       <CustomerBubble

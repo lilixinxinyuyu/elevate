@@ -39,6 +39,12 @@ interface WorldTopHUDProps {
    * 用 orderIdx 当 key 最简洁
    */
   orderKey?: string | number;
+  /**
+   * v0.33.53 (Ep127 skill-trail-breadcrumb): 当前练习的数学技能名
+   * 如 "12 等分 · 分数" / "解一步方程" / "找零 · 小数加减"
+   * 显示在 title chip 正下方的小 chip，强化"游戏=数学技能"绑定
+   */
+  skillName?: string;
 }
 
 export function WorldTopHUD({
@@ -52,6 +58,7 @@ export function WorldTopHUD({
   currentOrderEmoji,
   budgetSeconds,
   orderKey,
+  skillName,
 }: WorldTopHUDProps) {
   const safeCurrent = Math.min(Math.max(current, 0), total);
   return (
@@ -72,13 +79,22 @@ export function WorldTopHUD({
         {backLabel}
       </button>
 
-      <div className="world-chip world-top-title">
-        {currentOrderEmoji && (
-          <span className="world-top-order-emoji" aria-hidden>
-            {currentOrderEmoji}
-          </span>
+      <div className="world-top-center-stack">
+        <div className="world-chip world-top-title">
+          {currentOrderEmoji && (
+            <span className="world-top-order-emoji" aria-hidden>
+              {currentOrderEmoji}
+            </span>
+          )}
+          <span>{title}</span>
+        </div>
+        {/* v0.33.53 (Ep127 skill-trail-breadcrumb): skill name chip 在标题下方 */}
+        {skillName && (
+          <div className="world-chip world-chip-dark world-top-skill" aria-label="当前数学技能">
+            <span className="world-top-skill-icon" aria-hidden>🎯</span>
+            <span>{skillName}</span>
+          </div>
         )}
-        <span>{title}</span>
       </div>
 
       <div className="world-top-right-stack">

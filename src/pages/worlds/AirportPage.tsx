@@ -142,6 +142,7 @@ export function AirportPage() {
         currentOrderEmoji={order.customerEmoji}
         budgetSeconds={55}
         orderKey={orderIdx}
+        skillName="英文量词 · 复数 · 数物对应"
       />
 
       {/* v0.33.51 (Ep125 airport-departure-board): 机场风格 departure status board */}

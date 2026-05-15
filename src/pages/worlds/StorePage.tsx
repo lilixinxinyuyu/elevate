@@ -175,6 +175,13 @@ export function StorePage() {
         currentOrderEmoji="🛒"
         budgetSeconds={60}
         orderKey={orderIdx}
+        skillName={
+          phase === "scan"
+            ? "扫码 · 小数乘加 · 总价"
+            : phase === "change"
+              ? "找零 · 小数减法 · 货币"
+              : "购物 · 总价与找零"
+        }
       />
 
       {/* 顾客 NPC overlay（HTML，不进 Canvas，避免 Z-fighting） */}

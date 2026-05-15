@@ -144,6 +144,7 @@ export function BakeryPage() {
         currentOrderEmoji={order.emoji}
         budgetSeconds={50}
         orderKey={orderIdx}
+        skillName={`12 等分 · 分数 ${order.fractionLabel}`}
       />
 
       <CustomerBubble
