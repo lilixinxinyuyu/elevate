@@ -173,6 +173,8 @@ export function BankKeypadMiniGame({ order, onOrderComplete, onFeedback }: BankK
               {diff > 0 ? `还差 ${formatYuan(diff)}` : `多了 ${formatYuan(-diff)}`}
             </div>
           )}
+          {/* v0.33.31 (Ep107 bank-coin-stack): 当前金额的"纸币/硬币分解" chip 行 */}
+          <CoinBreakdownRow cent={inputCent} matched={matched} />
         </div>
 
         {/* 键盘 3×4 — v0.32.82 (Ep58 XXXX): ripple + scale press feedback */}
@@ -274,6 +276,155 @@ function KeypadButton({
           />
         )}
       </button>
+    </>
+  );
+}
+
+/* ============================================================
+ * v0.33.31 (Ep107 bank-coin-stack): 金额 → 纸币 + 硬币分解 chip 行
+ * ============================================================
+ * 玩法教育价值：Selena 输入 ¥1.70 时看到 "1× ¥1 + 7× 1角" 直观分解，
+ * 强化"元/角/分"概念 + 货币组合心算。
+ *
+ * 算法：greedy 从大到小贪心 — 国币常用面额。
+ * 渲染：每个面额 chunky chip (count× emoji label)，颜色按面额映射，
+ * matched 时变 emerald + pulse。
+ */
+const DENOM_TABLE: { cent: number; label: string; color: string; bg: string }[] = [
+  { cent: 10000, label: "¥100", color: "#fef2f2", bg: "#dc2626" },
+  { cent: 5000,  label: "¥50",  color: "#fff7ed", bg: "#ea580c" },
+  { cent: 2000,  label: "¥20",  color: "#fef3c7", bg: "#a16207" },
+  { cent: 1000,  label: "¥10",  color: "#eff6ff", bg: "#2563eb" },
+  { cent: 500,   label: "¥5",   color: "#faf5ff", bg: "#7c3aed" },
+  { cent: 100,   label: "¥1",   color: "#fffbeb", bg: "#ca8a04" },
+  { cent: 50,    label: "5角",  color: "#f0fdf4", bg: "#16a34a" },
+  { cent: 20,    label: "2角",  color: "#ecfeff", bg: "#0891b2" },
+  { cent: 10,    label: "1角",  color: "#eff6ff", bg: "#0284c7" },
+  { cent: 5,     label: "5分",  color: "#f8fafc", bg: "#64748b" },
+  { cent: 2,     label: "2分",  color: "#f8fafc", bg: "#94a3b8" },
+  { cent: 1,     label: "1分",  color: "#f8fafc", bg: "#a3a3a3" },
+];
+
+function decomposeCent(cent: number) {
+  const out: { idx: number; count: number }[] = [];
+  let rem = cent;
+  for (let i = 0; i < DENOM_TABLE.length; i++) {
+    const d = DENOM_TABLE[i]!;
+    const n = Math.floor(rem / d.cent);
+    if (n > 0) {
+      out.push({ idx: i, count: n });
+      rem -= n * d.cent;
+    }
+  }
+  return out;
+}
+
+function CoinBreakdownRow({
+  cent,
+  matched,
+}: {
+  cent: number;
+  matched: boolean;
+}) {
+  const breakdown = decomposeCent(cent);
+  return (
+    <>
+      <style>{`
+        .coin-breakdown-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.3rem;
+          margin-top: 0.55rem;
+          min-height: 1.8rem;
+        }
+        .coin-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.22rem;
+          padding: 0.18rem 0.5rem;
+          border-radius: 999px;
+          font-family: ui-monospace, monospace;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.02em;
+          color: var(--chip-fg, #fff);
+          background: linear-gradient(180deg, var(--chip-bg-light, #fbbf24), var(--chip-bg, #f59e0b));
+          border: 1.5px solid rgba(255, 255, 255, 0.7);
+          box-shadow:
+            0 2px 0 rgba(0, 0, 0, 0.18),
+            0 4px 8px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.55);
+          text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+          animation: coin-chip-in 280ms cubic-bezier(.34, 1.56, .64, 1);
+        }
+        .coin-chip-count {
+          font-size: 12px;
+          padding: 0 0.16rem 0 0;
+          opacity: 0.92;
+        }
+        .coin-chip-times {
+          font-size: 9px;
+          opacity: 0.62;
+        }
+        .coin-chip.is-matched {
+          --chip-bg-light: #6ee7b7;
+          --chip-bg: #10b981;
+          animation: coin-chip-in 280ms cubic-bezier(.34, 1.56, .64, 1),
+                     coin-chip-pulse 1.6s ease-in-out infinite;
+        }
+        @keyframes coin-chip-in {
+          0%   { transform: scale(0.3) translateY(6px); opacity: 0; }
+          70%  { transform: scale(1.12) translateY(0); opacity: 1; }
+          100% { transform: scale(1) translateY(0); }
+        }
+        @keyframes coin-chip-pulse {
+          0%, 100% { box-shadow:
+            0 2px 0 rgba(0, 0, 0, 0.18),
+            0 4px 8px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.55); }
+          50%      { box-shadow:
+            0 2px 0 rgba(0, 0, 0, 0.18),
+            0 4px 14px rgba(16, 185, 129, 0.7),
+            0 0 0 2px rgba(167, 243, 208, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+        }
+        .coin-breakdown-empty {
+          font-size: 10px;
+          color: #94a3b8;
+          font-style: italic;
+          margin-top: 0.55rem;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .coin-chip { animation: none; }
+          .coin-chip.is-matched { animation: none; }
+        }
+      `}</style>
+      {breakdown.length === 0 ? (
+        <div className="coin-breakdown-empty">输入数字 → 自动分解成纸币硬币</div>
+      ) : (
+        <div className="coin-breakdown-row" aria-label="金额分解">
+          {breakdown.map(({ idx, count }) => {
+            const d = DENOM_TABLE[idx]!;
+            return (
+              <span
+                key={`${idx}-${count}`}
+                className={`coin-chip ${matched ? "is-matched" : ""}`}
+                style={
+                  {
+                    ["--chip-bg" as string]: d.bg,
+                    ["--chip-bg-light" as string]: d.color,
+                    ["--chip-fg" as string]: "#fff",
+                  } as React.CSSProperties
+                }
+              >
+                <span className="coin-chip-count">{count}</span>
+                <span className="coin-chip-times">×</span>
+                <span>{d.label}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
