@@ -11,7 +11,7 @@
  * 装饰物（barrel/tent/sack/flag）随完成数解锁。
  */
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Billboard, Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -21,6 +21,56 @@ import {
   type BaibaoBuilding,
 } from "../../content/worlds/baibao";
 import { KayBuilding, KayProp } from "./KayBuilding";
+
+// v0.33.29 (Ep105 baibao-time-of-day): 时段主题色 — 按本地时间切换 day / sunset / night
+type TimeMode = "day" | "sunset" | "night";
+interface ThemePalette {
+  grass: string;
+  plaza: string;
+  road: string;
+  mascotEmissive: string;
+  mascotEmissiveIntensity: number;
+  /** 额外环境氛围光（dim 整体） */
+  ambient: number; // 0-1 用于色调饱和度补偿
+}
+const THEMES: Record<TimeMode, ThemePalette> = {
+  day: {
+    grass: "#84cc16",
+    plaza: "#fcd34d",
+    road: "#a8a29e",
+    mascotEmissive: "#fcd34d",
+    mascotEmissiveIntensity: 1.6,
+    ambient: 1.0,
+  },
+  sunset: {
+    grass: "#65a30d",
+    plaza: "#fb923c",
+    road: "#a16207",
+    mascotEmissive: "#fb923c",
+    mascotEmissiveIntensity: 2.0,
+    ambient: 0.85,
+  },
+  night: {
+    grass: "#1e3a2e",
+    plaza: "#3730a3",
+    road: "#1e293b",
+    mascotEmissive: "#fde68a",
+    mascotEmissiveIntensity: 2.8,
+    ambient: 0.55,
+  },
+};
+
+function detectTimeMode(): TimeMode {
+  // URL override: ?baibao_mode=day|sunset|night （方便测试）
+  if (typeof window !== "undefined") {
+    const m = new URLSearchParams(window.location.search).get("baibao_mode");
+    if (m === "day" || m === "sunset" || m === "night") return m;
+  }
+  const h = new Date().getHours();
+  if (h >= 6 && h < 17) return "day";
+  if (h >= 17 && h < 19) return "sunset";
+  return "night";
+}
 
 interface BaibaoTownMapProps {
   onSelectBuilding: (b: BaibaoBuilding) => void;
@@ -34,27 +84,43 @@ export function BaibaoTownMap({
   onHoverBuilding,
   decorationCount = 0,
 }: BaibaoTownMapProps) {
+  // v0.33.29 (Ep105 baibao-time-of-day): 一次性读时段，整 session 不变（避免地图色不停跳）
+  const timeMode = useMemo<TimeMode>(() => detectTimeMode(), []);
+  const theme = THEMES[timeMode];
+  const isNight = timeMode === "night";
+  const isSunsetOrNight = timeMode === "sunset" || timeMode === "night";
   return (
     <group>
-      {/* === 地面：大圆草坪 + 沙土广场 + 十字街 === */}
+      {/* === 地面：大圆草坪 + 沙土广场 + 十字街 ===
+         v0.33.29 (Ep105 baibao-time-of-day): color 走 theme palette */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
         <circleGeometry args={[18, 64]} />
-        <meshStandardMaterial color="#84cc16" roughness={0.95} />
+        <meshStandardMaterial color={theme.grass} roughness={0.95} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <circleGeometry args={[3.5, 32]} />
-        <meshStandardMaterial color="#fcd34d" roughness={0.85} />
+        <meshStandardMaterial
+          color={theme.plaza}
+          emissive={isNight ? theme.plaza : "#000"}
+          emissiveIntensity={isNight ? 0.18 : 0}
+          roughness={0.85}
+        />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
         <planeGeometry args={[16, 1.4]} />
-        <meshStandardMaterial color="#a8a29e" roughness={0.95} />
+        <meshStandardMaterial color={theme.road} roughness={0.95} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, Math.PI / 2]} position={[0, 0.01, 0]}>
         <planeGeometry args={[16, 1.4]} />
-        <meshStandardMaterial color="#a8a29e" roughness={0.95} />
+        <meshStandardMaterial color={theme.road} roughness={0.95} />
       </mesh>
       {/* v0.33.13 (Ep89 DDDDDD): 街道 emissive glow trail — 4 段流光在十字路上流动 */}
       <RoadGlowTrails />
+
+      {/* v0.33.29 (Ep105 baibao-time-of-day): 夜晚 4 角灯笼 + pointLight；
+         sunset/night 都开 ambient 暖色补光 */}
+      {isSunsetOrNight && <NightLanterns night={isNight} />}
+      {isNight && <NightStars />}
 
       {/* === 6 个 KayKit 建筑 === */}
       {BAIBAO_BUILDINGS.map((b) => (
@@ -74,7 +140,10 @@ export function BaibaoTownMap({
       ))}
 
       {/* === 中央小进站位（占位光球） === */}
-      <CenterMascot />
+      <CenterMascot
+        emissive={theme.mascotEmissive}
+        emissiveIntensity={theme.mascotEmissiveIntensity}
+      />
 
       {/* === 永远在的装饰: 用 KayKit 自带云 + 山丘装饰 === */}
       <KayProp gltfUrl="/env/kaykit/medieval/deco/cloud_big.gltf" position={[12, 6, -12]} scale={1.2} />
@@ -113,7 +182,13 @@ export function BaibaoTownMap({
   );
 }
 
-function CenterMascot() {
+function CenterMascot({
+  emissive = "#fcd34d",
+  emissiveIntensity = 1.6,
+}: {
+  emissive?: string;
+  emissiveIntensity?: number;
+}) {
   const ref = useRef<Group>(null);
   useFrame((state) => {
     if (!ref.current) return;
@@ -127,14 +202,128 @@ function CenterMascot() {
         <octahedronGeometry args={[0.3, 0]} />
         <meshStandardMaterial
           color="#fef3c7"
-          emissive="#fcd34d"
-          emissiveIntensity={1.6}
+          emissive={emissive}
+          emissiveIntensity={emissiveIntensity}
           roughness={0.3}
         />
       </mesh>
       <Billboard position={[0, 0.55, 0]}>
         <Text fontSize={0.35} anchorX="center" anchorY="middle">👩‍🏫</Text>
       </Billboard>
+    </group>
+  );
+}
+
+/**
+ * v0.33.29 (Ep105 baibao-time-of-day): 黄昏 / 夜晚的 4 角灯笼。
+ *  - 沿广场圆周外缘（半径 4）放 4 个，每个=小柱子+顶部 emissive 灯笼球+pointLight
+ *  - night 时 emissive intensity 满，sunset 时半亮（"刚点上"感）
+ *  - pointLight 仅 night 开启（性能：4 盏小 distance 灯，能接受）
+ *  - 灯球轻微脉动 (sin)
+ */
+function NightLanterns({ night }: { night: boolean }) {
+  const positions: [number, number, number][] = [
+    [4, 0, 4],
+    [-4, 0, 4],
+    [4, 0, -4],
+    [-4, 0, -4],
+  ];
+  const intensity = night ? 1.0 : 0.55;
+  return (
+    <group>
+      {positions.map((p, i) => (
+        <Lantern key={i} position={p} intensity={intensity} night={night} phaseOffset={i * 0.7} />
+      ))}
+    </group>
+  );
+}
+
+function Lantern({
+  position,
+  intensity,
+  night,
+  phaseOffset,
+}: {
+  position: [number, number, number];
+  intensity: number;
+  night: boolean;
+  phaseOffset: number;
+}) {
+  const lightRef = useRef<THREE.PointLight>(null);
+  const glowMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime() + phaseOffset;
+    const pulse = 1 + Math.sin(t * 2.1) * 0.18;
+    if (glowMatRef.current) {
+      glowMatRef.current.emissiveIntensity = intensity * 2.4 * pulse;
+    }
+    if (lightRef.current) {
+      lightRef.current.intensity = intensity * 0.8 * pulse;
+    }
+  });
+  return (
+    <group position={position}>
+      {/* 柱子 */}
+      <mesh position={[0, 0.6, 0]}>
+        <cylinderGeometry args={[0.05, 0.06, 1.2, 8]} />
+        <meshStandardMaterial color="#3f3f46" roughness={0.7} />
+      </mesh>
+      {/* 灯笼球 */}
+      <mesh position={[0, 1.3, 0]}>
+        <sphereGeometry args={[0.16, 16, 12]} />
+        <meshStandardMaterial
+          ref={glowMatRef}
+          color="#fef3c7"
+          emissive="#fde68a"
+          emissiveIntensity={intensity * 2.4}
+          roughness={0.4}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* 微光点光源（仅 night 加） */}
+      {night && (
+        <pointLight
+          ref={lightRef}
+          position={[0, 1.3, 0]}
+          color="#fde68a"
+          intensity={intensity * 0.8}
+          distance={3.5}
+          decay={1.8}
+        />
+      )}
+    </group>
+  );
+}
+
+/**
+ * v0.33.29 (Ep105 baibao-time-of-day): 夜空星星 —— 散点 emissive 小球，
+ * 高高挂在天上 (y=10~16)，scale 不脉动以省 useFrame。
+ */
+function NightStars() {
+  const stars = useMemo(() => {
+    // 24 颗星 — 用 PRNG seed-like 散点
+    const out: { pos: [number, number, number]; size: number }[] = [];
+    for (let i = 0; i < 24; i++) {
+      const seed = (i + 1) * 9301 + 49297;
+      const r = ((seed * 233280) % 1) / 1;
+      const angle = (i / 24) * Math.PI * 2 + r * 0.3;
+      const radius = 13 + ((seed % 5) * 0.7);
+      const y = 10 + ((i * 0.6) % 6);
+      out.push({
+        pos: [Math.cos(angle) * radius, y, Math.sin(angle) * radius],
+        size: 0.08 + ((seed % 7) * 0.012),
+      });
+    }
+    return out;
+  }, []);
+  return (
+    <group>
+      {stars.map((s, i) => (
+        <mesh key={i} position={s.pos}>
+          <sphereGeometry args={[s.size, 6, 4]} />
+          <meshBasicMaterial color="#fef9c3" toneMapped={false} />
+        </mesh>
+      ))}
     </group>
   );
 }
