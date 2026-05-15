@@ -600,12 +600,68 @@ a.world-chip:focus-visible,
     background-position: 55% 0;
   }
 }
-.world-top-count {
+/* v0.33.45 (Ep119 mini-hud): 右侧 count chip + timer chip 垂直堆叠容器 */
+.world-top-right-stack {
   justify-self: end;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  align-items: flex-end;
+}
+.world-top-count {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   font-variant-numeric: tabular-nums;
+}
+/* v0.33.45 (Ep119 mini-hud): 当前订单 emoji 在 title chip 左侧 */
+.world-top-order-emoji {
+  font-size: 16px;
+  line-height: 1;
+  margin-right: 0.42rem;
+  filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.55));
+}
+/* v0.33.45 (Ep119 mini-hud): 时间进度 chip — 文字 + 细 bar */
+.world-top-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  padding-right: 0.6rem;
+}
+.world-top-timer-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.world-top-timer-text {
+  min-width: 2.6em;
+  text-align: right;
+  font-weight: 800;
+}
+.world-top-timer-bar-wrap {
+  display: inline-block;
+  width: 64px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+  position: relative;
+}
+.world-top-timer-bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--timer-color, #22d3ee);
+  transition: width 200ms linear, background 220ms ease-out;
+  box-shadow: 0 0 8px var(--timer-color, #22d3ee);
+}
+.world-top-timer-cool { --timer-color: #22d3ee; }
+.world-top-timer-warm { --timer-color: #fbbf24; }
+.world-top-timer-hot  { --timer-color: #f43f5e; }
+@media (prefers-reduced-motion: reduce) {
+  .world-top-timer-bar { transition: none; box-shadow: none; }
 }
 .world-top-count-text { white-space: nowrap; }
 .world-top-dots {

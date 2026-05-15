@@ -117,6 +117,9 @@ export function BakeryPage() {
         total={BAKERY_ORDERS.length}
         accent="#ec4899"
         onBack={() => navigate("/worlds/baibao")}
+        currentOrderEmoji={order.emoji}
+        budgetSeconds={50}
+        orderKey={orderIdx}
       />
 
       <CustomerBubble

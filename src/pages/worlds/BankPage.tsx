@@ -124,6 +124,9 @@ export function BankPage() {
         total={BANK_ORDERS.length}
         accent="#3b82f6"
         onBack={() => navigate("/worlds/baibao")}
+        currentOrderEmoji="🪙"
+        budgetSeconds={45}
+        orderKey={orderIdx}
       />
 
       <CustomerBubble

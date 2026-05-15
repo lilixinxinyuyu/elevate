@@ -136,6 +136,9 @@ export function StorePage() {
         total={ORDERS.length}
         accent="#f59e0b"
         onBack={() => navigate("/worlds/baibao")}
+        currentOrderEmoji="🛒"
+        budgetSeconds={60}
+        orderKey={orderIdx}
       />
 
       {/* 顾客 NPC overlay（HTML，不进 Canvas，避免 Z-fighting） */}

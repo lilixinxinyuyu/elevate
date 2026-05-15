@@ -115,6 +115,9 @@ export function AirportPage() {
         unitLabel="旅客"
         accent="#06b6d4"
         onBack={() => navigate("/worlds/xingfan")}
+        currentOrderEmoji={order.customerEmoji}
+        budgetSeconds={55}
+        orderKey={orderIdx}
       />
 
       <CustomerBubble
