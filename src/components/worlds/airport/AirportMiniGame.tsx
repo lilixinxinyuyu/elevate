@@ -291,20 +291,8 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
         <planeGeometry args={[BELT.width, BELT_LOOP]} />
         <meshStandardMaterial color="#27272a" roughness={0.7} metalness={0.3} />
       </mesh>
-      {/* 传送带边缘 / 滚轴提示横条 */}
-      {Array.from({ length: 7 }).map((_, i) => {
-        const z = BELT.startZ + (BELT_LOOP / 6) * i;
-        return (
-          <mesh
-            key={i}
-            position={[BELT.x, COUNTER_Y + 0.005, z]}
-            rotation={[-Math.PI / 2, 0, 0]}
-          >
-            <planeGeometry args={[BELT.width, 0.015]} />
-            <meshStandardMaterial color="#52525b" />
-          </mesh>
-        );
-      })}
+      {/* v0.33.34 (Ep110 airport-conveyor-roller-spin): 传送带滚轴动画 + 双侧 amber emissive 流光 */}
+      <ConveyorBeltDynamics />
       {/* v0.32.80 (Ep56 TTTT): 抓取区动态变色 — 有行李在窗口内时 cyan→amber + 快脉动 */}
       <GrabZoneRing instances={luggageInstances} loadedIds={loadedIds} />
       <Text
@@ -455,6 +443,141 @@ function GrabZoneRing({
         opacity={0.85}
       />
     </mesh>
+  );
+}
+
+/**
+ * v0.33.34 (Ep110 airport-conveyor-roller-spin): 传送带活化
+ *  - 7 滚轴横条 → 沿 z 滚动 + wrap，速度 = BELT.speed × 1.6（视觉上比行李略快感觉合理）
+ *  - 双侧 amber emissive 流光 (左右各一段)，缓速沿 z 流动
+ *  - 边缘 2 条 amber rail (静态)，框出"工业生产线"轮廓
+ *  - prefers-reduced-motion: 横条静态平铺，流光 opacity 半透不动
+ */
+const STRIPE_COUNT = 7;
+const STRIPE_SPACING = BELT_LOOP / STRIPE_COUNT;
+function ConveyorBeltDynamics() {
+  const stripeRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const leftFlowRef = useRef<THREE.Mesh>(null);
+  const rightFlowRef = useRef<THREE.Mesh>(null);
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  useFrame(({ clock }) => {
+    if (reduceMotion) return;
+    const t = clock.elapsedTime;
+    // 横条按 BELT.speed × 1.6 滚动，wrap 在 BELT_LOOP 内
+    const stripeSpeed = BELT.speed * 1.6;
+    for (let i = 0; i < STRIPE_COUNT; i++) {
+      const mesh = stripeRefs.current[i];
+      if (!mesh) continue;
+      const phase = (t * stripeSpeed + i * STRIPE_SPACING) % BELT_LOOP;
+      mesh.position.z = BELT.startZ + phase;
+    }
+    // amber 流光 — 左右独立，速度 BELT.speed × 0.7（慢一点 → 跟横条节奏拉开）
+    const flowSpeed = BELT.speed * 0.7;
+    const flowLength = 0.5;
+    const flowPhase = (t * flowSpeed) % BELT_LOOP;
+    if (leftFlowRef.current) {
+      leftFlowRef.current.position.z = BELT.startZ + flowPhase;
+    }
+    if (rightFlowRef.current) {
+      // 右侧错半个 LOOP，左右不同步
+      const p = (flowPhase + BELT_LOOP * 0.5) % BELT_LOOP;
+      rightFlowRef.current.position.z = BELT.startZ + p;
+    }
+    void flowLength; // suppress unused — flowLength used below in geometry args
+  });
+  // 滚轴横条
+  const stripes = [];
+  for (let i = 0; i < STRIPE_COUNT; i++) {
+    const baseZ = BELT.startZ + i * STRIPE_SPACING;
+    stripes.push(
+      <mesh
+        key={`stripe-${i}`}
+        ref={(m) => {
+          stripeRefs.current[i] = m;
+        }}
+        position={[BELT.x, COUNTER_Y + 0.005, baseZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+      >
+        <planeGeometry args={[BELT.width, 0.022]} />
+        <meshStandardMaterial color="#71717a" />
+      </mesh>,
+    );
+  }
+  return (
+    <group>
+      {stripes}
+      {/* 左侧 rail (静态 amber edge) */}
+      <mesh
+        position={[BELT.x - BELT.width / 2 + 0.012, COUNTER_Y + 0.008, (BELT.startZ + BELT.endZ) / 2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+      >
+        <planeGeometry args={[0.018, BELT_LOOP]} />
+        <meshStandardMaterial
+          color="#a16207"
+          emissive="#f59e0b"
+          emissiveIntensity={0.45}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* 右侧 rail (静态 amber edge) */}
+      <mesh
+        position={[BELT.x + BELT.width / 2 - 0.012, COUNTER_Y + 0.008, (BELT.startZ + BELT.endZ) / 2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+      >
+        <planeGeometry args={[0.018, BELT_LOOP]} />
+        <meshStandardMaterial
+          color="#a16207"
+          emissive="#f59e0b"
+          emissiveIntensity={0.45}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* 左侧 amber flow segment (动态滑动) */}
+      <mesh
+        ref={leftFlowRef}
+        position={[BELT.x - BELT.width / 2 + 0.012, COUNTER_Y + 0.012, BELT.startZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+        renderOrder={2}
+      >
+        <planeGeometry args={[0.026, 0.5]} />
+        <meshBasicMaterial
+          color="#fbbf24"
+          transparent
+          opacity={0.85}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* 右侧 amber flow segment */}
+      <mesh
+        ref={rightFlowRef}
+        position={[BELT.x + BELT.width / 2 - 0.012, COUNTER_Y + 0.012, BELT.startZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+        renderOrder={2}
+      >
+        <planeGeometry args={[0.026, 0.5]} />
+        <meshBasicMaterial
+          color="#fbbf24"
+          transparent
+          opacity={0.85}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
   );
 }
 
