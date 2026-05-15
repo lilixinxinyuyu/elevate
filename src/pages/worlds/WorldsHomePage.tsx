@@ -122,6 +122,9 @@ export function WorldsHomePage() {
           setHoverWorld(w ?? null);
         }}
       />
+
+      {/* v0.33.48 (Ep122 worlds-home-tour-prompt): 首次进 worlds 4 步引导 */}
+      <WorldsHomeTour />
     </div>
   );
 }
@@ -799,4 +802,265 @@ function HoverCapture({ onHover }: { onHover: (id: string | null) => void }) {
     return () => window.removeEventListener("worlds-orb-hover", handler);
   }, [onHover]);
   return null;
+}
+
+/**
+ * v0.33.48 (Ep122 worlds-home-tour-prompt): 首次进 worlds 4 步引导
+ *  - localStorage `worlds_tour_done` 只触发一次
+ *  - 4 步：标题 / 中央 mascot 推荐 / dock 进度 ⭐ / 开始按钮
+ *  - 每步：spotlight ring + 箭头 + chunky speech bubble + Next/跳过
+ *  - 最后一步只 "Got it"
+ *  - URL `?tour=force` 强制再触发（dev/test）
+ *  - prefers-reduced-motion: 关 spotlight 呼吸，仅显示 chunky bubble
+ */
+const TOUR_STORAGE_KEY = "worlds_tour_done_v1";
+
+interface TourStep {
+  title: string;
+  body: string;
+  /** spotlight 矩形（百分比） — 高亮区域，null 则不画 ring */
+  spot?: { left: string; top: string; width: string; height: string };
+  /** 文字 bubble 位置 */
+  bubble: { left?: string; top?: string; right?: string; bottom?: string };
+  /** bubble 朝向（决定箭头方向） */
+  arrow: "up" | "down";
+}
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    title: "✦ 奇遇乐园",
+    body: "欢迎来到 Selena 的 worlds！这里有 3 个魔法世界等你冒险。",
+    bubble: { left: "50%", top: "55%" },
+    arrow: "up",
+  },
+  {
+    title: "👩‍🏫 中央推荐",
+    body: "中间小老师会告诉你建议玩哪个世界。点开始就直接进。",
+    spot: { left: "20%", top: "30%", width: "60%", height: "30%" },
+    bubble: { left: "50%", top: "70%" },
+    arrow: "up",
+  },
+  {
+    title: "⭐ 进度勋章",
+    body: "下面 dock 上面每个世界都有 ⭐ 进度章。做单越多，亮的星越多！",
+    spot: { left: "5%", top: "70%", width: "90%", height: "20%" },
+    bubble: { left: "50%", top: "40%" },
+    arrow: "down",
+  },
+  {
+    title: "🚀 开始冒险",
+    body: "随时点 dock chip 进入任意世界。准备好了吗？",
+    bubble: { left: "50%", top: "50%" },
+    arrow: "up",
+  },
+];
+
+function WorldsHomeTour() {
+  const [stepIdx, setStepIdx] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const forced =
+      new URLSearchParams(window.location.search).get("tour") === "force";
+    if (forced) return 0;
+    try {
+      if (localStorage.getItem(TOUR_STORAGE_KEY)) return null;
+    } catch {
+      /* SSR / no storage */
+    }
+    return 0;
+  });
+  if (stepIdx == null) return null;
+  const step = TOUR_STEPS[stepIdx];
+  if (!step) return null;
+  const isLast = stepIdx === TOUR_STEPS.length - 1;
+  const finish = () => {
+    try {
+      localStorage.setItem(TOUR_STORAGE_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    setStepIdx(null);
+  };
+  const next = () => {
+    if (isLast) finish();
+    else setStepIdx(stepIdx + 1);
+  };
+  return (
+    <div
+      className="absolute inset-0 pointer-events-auto"
+      style={{ zIndex: 90 }}
+      aria-modal="true"
+      role="dialog"
+    >
+      <style>{`
+        .worlds-tour-bg {
+          position: absolute;
+          inset: 0;
+          background: rgba(15, 23, 42, 0.55);
+          backdrop-filter: blur(2px);
+        }
+        .worlds-tour-spot {
+          position: absolute;
+          border: 3px dashed #fde68a;
+          border-radius: 18px;
+          box-shadow:
+            0 0 0 9999px rgba(15, 23, 42, 0.55),
+            0 0 24px rgba(253, 224, 71, 0.7);
+          pointer-events: none;
+          animation: worlds-tour-spot-pulse 2.2s ease-in-out infinite;
+        }
+        @keyframes worlds-tour-spot-pulse {
+          0%, 100% { box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 18px rgba(253, 224, 71, 0.6); }
+          50%      { box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55), 0 0 32px rgba(253, 224, 71, 0.92); }
+        }
+        .worlds-tour-bubble {
+          position: absolute;
+          transform: translate(-50%, -50%);
+          max-width: min(86vw, 360px);
+          padding: 1rem 1.2rem 1rem;
+          background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+          color: #451a03;
+          border: 3px solid #f59e0b;
+          border-radius: 16px;
+          box-shadow:
+            0 0 0 4px rgba(245, 158, 11, 0.28),
+            0 16px 36px rgba(0, 0, 0, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.65);
+          animation: worlds-tour-bubble-in 320ms cubic-bezier(.34, 1.56, .64, 1);
+        }
+        @keyframes worlds-tour-bubble-in {
+          0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+          70%  { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        .worlds-tour-arrow {
+          position: absolute;
+          left: 50%;
+          width: 0;
+          height: 0;
+          border-left: 14px solid transparent;
+          border-right: 14px solid transparent;
+          transform: translateX(-50%);
+        }
+        .worlds-tour-arrow.up {
+          top: -14px;
+          border-bottom: 14px solid #f59e0b;
+        }
+        .worlds-tour-arrow.down {
+          bottom: -14px;
+          border-top: 14px solid #f59e0b;
+        }
+        .worlds-tour-title {
+          font-size: 16px;
+          font-weight: 900;
+          color: #7c2d12;
+          letter-spacing: 0.04em;
+          margin-bottom: 0.4rem;
+        }
+        .worlds-tour-body {
+          font-size: 13px;
+          line-height: 1.5;
+          color: #451a03;
+          margin-bottom: 0.95rem;
+        }
+        .worlds-tour-progress {
+          display: flex;
+          gap: 6px;
+          margin-bottom: 0.85rem;
+        }
+        .worlds-tour-dot {
+          width: 8px; height: 8px; border-radius: 999px;
+          background: rgba(120, 53, 15, 0.28);
+        }
+        .worlds-tour-dot.is-active {
+          background: #f59e0b;
+          box-shadow: 0 0 8px rgba(245, 158, 11, 0.7);
+        }
+        .worlds-tour-actions {
+          display: flex;
+          gap: 0.5rem;
+          justify-content: flex-end;
+        }
+        .worlds-tour-btn {
+          padding: 0.5rem 0.9rem;
+          border-radius: 10px;
+          font-weight: 900;
+          font-size: 12.5px;
+          letter-spacing: 0.05em;
+          cursor: pointer;
+          border: 2px solid #ffffff;
+          box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+        }
+        .worlds-tour-btn-primary {
+          background: linear-gradient(180deg, #fbbf24, #f59e0b);
+          color: #ffffff;
+          text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+          box-shadow:
+            0 3px 0 rgba(0, 0, 0, 0.15),
+            0 6px 14px rgba(245, 158, 11, 0.45);
+        }
+        .worlds-tour-btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+        .worlds-tour-btn-ghost {
+          background: rgba(120, 53, 15, 0.06);
+          color: #92400e;
+          border-color: rgba(120, 53, 15, 0.3);
+        }
+        .worlds-tour-btn-ghost:hover { background: rgba(120, 53, 15, 0.12); }
+        @media (prefers-reduced-motion: reduce) {
+          .worlds-tour-spot { animation: none; }
+          .worlds-tour-bubble { animation: none; }
+        }
+      `}</style>
+      <div className="worlds-tour-bg" />
+      {step.spot && (
+        <div
+          className="worlds-tour-spot"
+          style={{
+            left: step.spot.left,
+            top: step.spot.top,
+            width: step.spot.width,
+            height: step.spot.height,
+          }}
+        />
+      )}
+      <div
+        className="worlds-tour-bubble"
+        style={{
+          left: step.bubble.left,
+          top: step.bubble.top,
+          right: step.bubble.right,
+          bottom: step.bubble.bottom,
+        }}
+      >
+        <div className={`worlds-tour-arrow ${step.arrow}`} aria-hidden />
+        <div className="worlds-tour-title">{step.title}</div>
+        <div className="worlds-tour-body">{step.body}</div>
+        <div className="worlds-tour-progress" aria-hidden>
+          {TOUR_STEPS.map((_, i) => (
+            <span
+              key={i}
+              className={`worlds-tour-dot${i === stepIdx ? " is-active" : ""}`}
+            />
+          ))}
+        </div>
+        <div className="worlds-tour-actions">
+          {!isLast && (
+            <button
+              type="button"
+              className="worlds-tour-btn worlds-tour-btn-ghost"
+              onClick={finish}
+            >
+              跳过
+            </button>
+          )}
+          <button
+            type="button"
+            className="worlds-tour-btn worlds-tour-btn-primary"
+            onClick={next}
+          >
+            {isLast ? "知道啦 ✨" : `下一步 → ${stepIdx + 2}/${TOUR_STEPS.length}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
