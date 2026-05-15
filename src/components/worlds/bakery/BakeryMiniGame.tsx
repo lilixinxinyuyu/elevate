@@ -49,6 +49,8 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
   const [flying, setFlying] = useState<FlyingSlice[]>([]);
   /** v0.32.99 (Ep75 QQQQQ): 切块瞬间的 confirm flash overlay */
   const [sliceFlashes, setSliceFlashes] = useState<FlyingSlice[]>([]);
+  /** v0.33.23 (Ep99 UUUU): 切错红光 — 非相邻 / 切多的 slice red emissive 闪 + 摇 */
+  const [wrongFlashes, setWrongFlashes] = useState<FlyingSlice[]>([]);
   const [hover, setHover] = useState<number | null>(null);
   const wasNotifiedRef = useRef(false);
 
@@ -71,6 +73,15 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
     return false;
   };
 
+  // v0.33.23 (Ep99 UUUU): wrong flash 触发器 — 在 slice idx 上立 600ms red emissive ring
+  const pushWrongFlash = (idx: number) => {
+    const key = Date.now() + Math.random();
+    setWrongFlashes((prev) => [...prev, { idx, key, startedAt: performance.now() }]);
+    window.setTimeout(() => {
+      setWrongFlashes((prev) => prev.filter((f) => f.key !== key));
+    }, 620);
+  };
+
   const handleSliceClick = (idx: number) => {
     if (enough) {
       // v0.32.13: 切够了还点 → wrong 反馈
@@ -79,6 +90,7 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
         "已经切够啦，多了客人吃不下",
         order.hint ?? `${order.fractionLabel} 只要 ${order.needSlices} 块，已经切到啦。`,
       );
+      pushWrongFlash(idx);
       return;
     }
     if (removed.has(idx)) return;
@@ -89,7 +101,8 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
         "要切连成一片！点已切的旁边那块",
         `${order.fractionLabel} = 连续 ${order.needSlices} 块（扇形），不能东切一块西切一块。`,
       );
-      // 用红色 hover 视觉提示该 slice 不能切（短闪）
+      // v0.33.23 (Ep99 UUUU): 红色 mesh 闪 + 摇 — 该 slice 上 SliceWrongFlash overlay
+      pushWrongFlash(idx);
       return;
     }
     setRemoved((prev) => {
@@ -141,6 +154,10 @@ export function BakeryMiniGame({ order, onOrderComplete, onFeedback }: BakeryMin
             startedAt={f.startedAt}
             accentColor={order.cakeAccentColor}
           />
+        ))}
+        {/* v0.33.23 (Ep99 UUUU): 切错红光闪 + 抖 — 非相邻 / 切多时叠在该 slice 上 */}
+        {wrongFlashes.map((f) => (
+          <SliceWrongFlash key={f.key} index={f.idx} startedAt={f.startedAt} />
         ))}
       </group>
 
@@ -315,6 +332,65 @@ function SliceConfirmFlash({
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * v0.33.23 (Ep99 UUUU): 切错时蓝标闪一道"红光 wedge"叠在该 slice 上
+ *  - 600ms 全周期：前 80ms 拉到 1.05 倍 scale + 红 emissive，后 520ms 衰减
+ *  - x 轴 ±0.018 抖一下，模拟 "no!"
+ */
+function SliceWrongFlash({
+  index,
+  startedAt,
+}: {
+  index: number;
+  startedAt: number;
+}) {
+  const groupRef = useRef<Group>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  const FLASH_MS = 600;
+  const thetaLength = (Math.PI * 2) / 12;
+  const thetaStart = index * thetaLength;
+  const gap = thetaLength * 0.04;
+  const drawTheta = thetaLength - gap;
+  useFrame(() => {
+    if (!groupRef.current || !meshRef.current || !matRef.current) return;
+    const elapsed = performance.now() - startedAt;
+    const k = Math.min(1, elapsed / FLASH_MS);
+    // 0~0.15 拉到峰值, 0.15~1 衰减
+    const peakIn = Math.min(1, elapsed / (FLASH_MS * 0.15));
+    const decay = k < 0.15 ? 1 : 1 - (k - 0.15) / 0.85;
+    const intensity = peakIn * decay;
+    matRef.current.opacity = 0.95 * intensity;
+    // wedge 整体放大一点
+    const scale = 1 + intensity * 0.08;
+    meshRef.current.scale.setScalar(scale);
+    // x 轴抖 — 高频 sin 模拟 "震"
+    const shake = Math.sin(elapsed * 0.06) * 0.018 * intensity;
+    groupRef.current.position.x = shake;
+  });
+  return (
+    <group ref={groupRef} rotation={[0, gap / 2, 0]}>
+      <mesh
+        ref={meshRef}
+        position={[0, 0.14, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[0.18, 0.55, 32, 1, thetaStart, drawTheta]} />
+        <meshBasicMaterial
+          ref={matRef}
+          color="#ef4444"
+          transparent
+          opacity={0}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          toneMapped={false}
         />
       </mesh>
     </group>
