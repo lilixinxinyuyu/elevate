@@ -93,6 +93,23 @@ export function StoreMiniGame({
     startedAt: number;
   }
   const [flyingItems, setFlyingItems] = useState<FlyingItemState[]>([]);
+  // v0.33.28 (Ep104 store-scan-laser): 扫码时从 SCAN_ZONE 射向商品的红色 laser beam
+  interface LaserScanState {
+    key: number;
+    fromX: number;
+    fromZ: number;
+    toX: number;
+    toZ: number;
+    startedAt: number;
+  }
+  const [laserScans, setLaserScans] = useState<LaserScanState[]>([]);
+  const scanReduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
 
   // 商品摆放位置 — 柜台台面中后部（远离玩家的扫码篮）
   const itemPositions = useMemo(() => {
@@ -159,6 +176,7 @@ export function StoreMiniGame({
 
   // v0.32.49 (Ep25 B-2): 点击商品 → ghost 飞向 SCAN_ZONE → 落定后才标 scanned
   const FLY_DURATION_MS = 320;
+  const LASER_DURATION_MS = 340;
   const handleScanClick = (instanceId: string, pos: [number, number]) => {
     // 已在飞行 / 已扫过 — 忽略
     if (scannedIds.has(instanceId)) return;
@@ -176,6 +194,24 @@ export function StoreMiniGame({
       },
     ]);
     onFeedback?.("pickup");
+    // v0.33.28 (Ep104 store-scan-laser): 同时射一道红色 laser 从扫码区到商品
+    if (!scanReduceMotion) {
+      const laserKey = Date.now() + Math.random();
+      setLaserScans((prev) => [
+        ...prev,
+        {
+          key: laserKey,
+          fromX: SCAN_ZONE.x,
+          fromZ: SCAN_ZONE.z,
+          toX: pos[0],
+          toZ: pos[1],
+          startedAt: performance.now(),
+        },
+      ]);
+      window.setTimeout(() => {
+        setLaserScans((prev) => prev.filter((l) => l.key !== laserKey));
+      }, LASER_DURATION_MS);
+    }
     window.setTimeout(() => {
       setFlyingItems((prev) => prev.filter((f) => f.instanceId !== instanceId));
       handleScanDrop(instanceId);
@@ -268,6 +304,20 @@ export function StoreMiniGame({
           toX={SCAN_ZONE.x}
           toZ={SCAN_ZONE.z}
           startedAt={f.startedAt}
+        />
+      ))}
+
+      {/* v0.33.28 (Ep104 store-scan-laser): 红色 laser beam + 命中端 emissive 闪 */}
+      {laserScans.map((l) => (
+        <ScanLaser
+          key={l.key}
+          fromX={l.fromX}
+          fromZ={l.fromZ}
+          toX={l.toX}
+          toZ={l.toZ}
+          startedAt={l.startedAt}
+          durationMs={LASER_DURATION_MS}
+          counterY={COUNTER_Y}
         />
       ))}
 
@@ -587,3 +637,141 @@ function ScannableStoreItem({
 
 // Re-export for parent
 export { calcOrderTotalCent, calcOrderChangeCent, formatYuan, ORDERS };
+
+/**
+ * v0.33.28 (Ep104 store-scan-laser): 扫码红色 laser beam
+ *  - 从 SCAN_ZONE 射向商品位置，340ms 全程
+ *  - 包络: 0~15% 拉到峰值（瞬间出光），15~75% 高强度 + 宽度脉动，75~100% 淡出
+ *  - 命中端 emissive disc 同步 pulse，"打到货架上"的爆光感
+ *  - 用 boxGeometry 沿 X 轴（=length 方向）拉长，rotation.y 转到 from→to 方向
+ *  - additiveBlending + toneMapped=false → 真"激光"质感
+ */
+function ScanLaser({
+  fromX,
+  fromZ,
+  toX,
+  toZ,
+  startedAt,
+  durationMs,
+  counterY,
+}: {
+  fromX: number;
+  fromZ: number;
+  toX: number;
+  toZ: number;
+  startedAt: number;
+  durationMs: number;
+  counterY: number;
+}) {
+  const beamRef = useRef<THREE.Mesh>(null);
+  const beamMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const hitRef = useRef<THREE.Mesh>(null);
+  const hitMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const muzzleRef = useRef<THREE.Mesh>(null);
+  const muzzleMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const geom = useMemo(() => {
+    const dx = toX - fromX;
+    const dz = toZ - fromZ;
+    const length = Math.hypot(dx, dz);
+    const midX = (fromX + toX) / 2;
+    const midZ = (fromZ + toZ) / 2;
+    // boxGeometry args[0]=length along local X. World forward = atan2(z,x).
+    // R3F rotation [pitch=x, yaw=y, roll=z]; rotate y by -atan2(dz,dx) so local +X 指向 to。
+    const yaw = -Math.atan2(dz, dx);
+    return { length, midX, midZ, yaw };
+  }, [fromX, fromZ, toX, toZ]);
+  useFrame(() => {
+    const elapsed = performance.now() - startedAt;
+    const k = Math.min(1, elapsed / durationMs);
+    // 包络 envelope
+    let intensity;
+    if (k < 0.15) intensity = k / 0.15;
+    else if (k < 0.75) intensity = 1;
+    else intensity = 1 - (k - 0.75) / 0.25;
+    // 宽度 pulse
+    const pulse = 1 + Math.sin(elapsed * 0.05) * 0.35;
+    if (beamMatRef.current) {
+      beamMatRef.current.opacity = 0.92 * intensity;
+    }
+    if (beamRef.current) {
+      beamRef.current.scale.set(1, pulse, pulse * 0.8);
+    }
+    if (hitMatRef.current) {
+      hitMatRef.current.opacity = 0.88 * intensity;
+    }
+    if (hitRef.current) {
+      const s = 0.04 + intensity * 0.04 * pulse;
+      hitRef.current.scale.setScalar(s);
+    }
+    if (muzzleMatRef.current) {
+      // muzzle 在前 30% 衰减
+      const mk = Math.min(1, elapsed / (durationMs * 0.3));
+      muzzleMatRef.current.opacity = 0.85 * (1 - mk);
+    }
+    if (muzzleRef.current) {
+      const mk = Math.min(1, elapsed / (durationMs * 0.3));
+      muzzleRef.current.scale.setScalar(1 + mk * 0.8);
+    }
+  });
+  return (
+    <group>
+      {/* beam 主体 */}
+      <mesh
+        ref={beamRef}
+        position={[geom.midX, counterY + 0.08, geom.midZ]}
+        rotation={[0, geom.yaw, 0]}
+        raycast={() => null}
+        renderOrder={3}
+      >
+        <boxGeometry args={[geom.length, 0.014, 0.014]} />
+        <meshBasicMaterial
+          ref={beamMatRef}
+          color="#ef4444"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* hit disc — 命中端 */}
+      <mesh
+        ref={hitRef}
+        position={[toX, counterY + 0.08, toZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+        renderOrder={4}
+      >
+        <circleGeometry args={[1, 24]} />
+        <meshBasicMaterial
+          ref={hitMatRef}
+          color="#fca5a5"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          side={THREE.DoubleSide}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* muzzle flash — scanner 端 */}
+      <mesh
+        ref={muzzleRef}
+        position={[fromX, counterY + 0.08, fromZ]}
+        raycast={() => null}
+        renderOrder={4}
+      >
+        <sphereGeometry args={[0.04, 12, 8]} />
+        <meshBasicMaterial
+          ref={muzzleMatRef}
+          color="#fef2f2"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
+  );
+}
