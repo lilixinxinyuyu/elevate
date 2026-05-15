@@ -1081,6 +1081,40 @@ a.world-chip:focus-visible,
   0%, 100% { transform: scale(1) rotate(-6deg); }
   50%      { transform: scale(1.15) rotate(6deg); }
 }
+/* v0.33.49 (Ep123 bakery-customer-emoji-react): 反馈级表情 — 顾客头像左上角弹出 1.2s
+   - 比 mood emote (右上小🎉/💬) 更大更显眼，瞬间反馈"我看到你刚切对/切错"
+   - 入场 spring，0.2s peak hold，0.4s 衰减 — 由 React key 强制 unmount/remount 重启动画 */
+.world-customer-reaction {
+  position: absolute;
+  left: -14px;
+  top: -22px;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  line-height: 1;
+  background: linear-gradient(180deg, #ffffff 0%, #fef3c7 100%);
+  border: 2.5px solid #f59e0b;
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.16),
+    0 8px 18px rgba(245, 158, 11, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  z-index: 3;
+  pointer-events: none;
+  animation: world-customer-reaction-pop 1.2s ease-out;
+}
+@keyframes world-customer-reaction-pop {
+  0%   { transform: scale(0.2) rotate(-12deg); opacity: 0; }
+  18%  { transform: scale(1.22) rotate(8deg); opacity: 1; }
+  35%  { transform: scale(1) rotate(0deg); opacity: 1; }
+  70%  { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0.8) rotate(-4deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-customer-reaction { animation: none; opacity: 1; }
+}
 
 /* v0.32.94 (Ep70 KKKKKK): mood: hello — 新单 intro 时顾客头像 wave-in
    先 wave 进场 620ms，之后切到常驻 idle bob；emote 同步 wave，卡片柔滑入场。 */

@@ -26,6 +26,12 @@ export interface CustomerBubbleProps {
   hint?: string;
   hintIcon?: string;
   ribbon?: { text: string; accent?: string };
+  /**
+   * v0.33.49 (Ep123 bakery-customer-emoji-react): 反馈级表情 overlay
+   * 由 page 端控制：每次 onFeedback 触发就把 reactionEmoji 设为对应 emoji，
+   * 1.2s 自动清空。叠在 emoji 头上短暂显示，比 mood 反应更"颗粒细"。
+   */
+  reactionEmoji?: string | null;
   children: ReactNode;
 }
 
@@ -35,6 +41,7 @@ export function CustomerBubble({
   hint,
   hintIcon = "💡",
   ribbon,
+  reactionEmoji,
   children,
 }: CustomerBubbleProps) {
   const emote = mood === "happy" ? "🎉" : mood === "focus" ? "👀" : "💬";
@@ -65,6 +72,16 @@ export function CustomerBubble({
         <div className="world-customer-bubble-avatar-wrap">
           <div className="world-customer-bubble-avatar">{emoji}</div>
           <span className="world-customer-emote">{emote}</span>
+          {/* v0.33.49 (Ep123 bakery-customer-emoji-react): 反馈表情 overlay */}
+          {reactionEmoji && (
+            <span
+              key={reactionEmoji + Date.now()}
+              className="world-customer-reaction"
+              aria-hidden
+            >
+              {reactionEmoji}
+            </span>
+          )}
         </div>
         <div className="max-w-md">
           <div className="world-customer-bubble-card">
