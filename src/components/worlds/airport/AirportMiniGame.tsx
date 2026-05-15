@@ -16,6 +16,7 @@ import { useFrame } from "@react-three/fiber";
 import type { Group } from "three";
 // v0.32.22: BillboardText 替代 drei Text — 防遮挡
 import { Text } from "../BillboardText";
+import { Billboard } from "@react-three/drei";
 import * as THREE from "three";
 import type { AirportOrder, LuggageId } from "../../../lib/worlds/airportOrders";
 import { LUGGAGE } from "../../../lib/worlds/airportOrders";
@@ -616,20 +617,97 @@ function MovingLuggage({
         onGrab(inWindow);
       }}
     >
-      <Text fontSize={0.16} anchorX="center" anchorY="middle">
+      <Text fontSize={0.18} anchorX="center" anchorY="middle">
         {instance.emoji}
       </Text>
-      <Text
-        position={[0, -0.1, 0]}
-        fontSize={0.04}
-        color="#ffffff"
-        outlineWidth={0.005}
-        outlineColor="#000"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {LUGGAGE[instance.itemId].english}
-      </Text>
+      {/* v0.33.44 (Ep118 airport-baggage-claim-tag): 双语 claim tag billboard */}
+      <BaggageTag
+        english={LUGGAGE[instance.itemId].english}
+        zh={LUGGAGE[instance.itemId].zh}
+      />
+    </group>
+  );
+}
+
+/**
+ * v0.33.44 (Ep118 airport-baggage-claim-tag): 行李挂的双语 claim tag
+ *  - 像真航空公司行李 tag：amber 边框 + cream bg + 双行字（english/中文）
+ *  - 用 Billboard 永远朝相机
+ *  - 微微"摇晃" rotation.z（模拟 tag 挂在行李上随移动晃）
+ *  - 跟在 luggage 下方 y=-0.13，不挡 emoji 视觉
+ */
+function BaggageTag({ english, zh }: { english: string; zh: string }) {
+  const groupRef = useRef<Group>(null);
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  useFrame((state) => {
+    if (!groupRef.current || reduceMotion) return;
+    const t = state.clock.getElapsedTime();
+    // tag 摇晃 (绕 Z 轴小幅 sin)
+    groupRef.current.rotation.z = Math.sin(t * 1.8) * 0.08;
+  });
+  // 根据文本长度动态调宽（避免短词浪费空间 / 长词溢出）
+  const tagW = Math.max(0.28, english.length * 0.026 + 0.08);
+  return (
+    <group ref={groupRef} position={[0, -0.13, 0]}>
+      <Billboard>
+        {/* amber border */}
+        <mesh position={[0, 0, -0.002]}>
+          <planeGeometry args={[tagW + 0.02, 0.13]} />
+          <meshBasicMaterial
+            color="#f59e0b"
+            transparent
+            opacity={0.95}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+        {/* cream bg */}
+        <mesh>
+          <planeGeometry args={[tagW, 0.105]} />
+          <meshBasicMaterial
+            color="#fffbeb"
+            transparent
+            opacity={0.96}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+        {/* 顶部小圆孔 (real luggage tag 的串绳孔) */}
+        <mesh position={[0, 0.052, 0.001]}>
+          <circleGeometry args={[0.008, 12]} />
+          <meshBasicMaterial color="#78350f" toneMapped={false} />
+        </mesh>
+        {/* English 名 */}
+        <Text
+          position={[0, 0.018, 0.002]}
+          fontSize={0.034}
+          color="#7c2d12"
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.002}
+          outlineColor="#fffbeb"
+          maxWidth={tagW - 0.03}
+        >
+          {english}
+        </Text>
+        {/* 中文名 */}
+        <Text
+          position={[0, -0.025, 0.002]}
+          fontSize={0.03}
+          color="#451a03"
+          anchorX="center"
+          anchorY="middle"
+          maxWidth={tagW - 0.03}
+        >
+          {zh}
+        </Text>
+      </Billboard>
     </group>
   );
 }
