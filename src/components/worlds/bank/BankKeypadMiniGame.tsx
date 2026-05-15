@@ -327,66 +327,94 @@ function CoinBreakdownRow({
   matched: boolean;
 }) {
   const breakdown = decomposeCent(cent);
+  const MAX_VISIBLE = 6;
   return (
     <>
       <style>{`
-        .coin-breakdown-row {
+        /* v0.33.47 (Ep121 bank-coin-pyramid-3d): 3D 钱币堆叠塔
+           - flex-row 多列，每列 = 一个面额的竖塔
+           - 每枚硬币 = 椭圆 disc (perspective 顶部稍宽，底部稍窄)
+           - margin-top: -10px 让 coin 叠在前一枚之上 (硬币堆感)
+           - max 6 枚可见，多了显示 "+N" 顶 chip
+        */
+        .coin-stack-row {
           display: flex;
           flex-wrap: wrap;
-          gap: 0.3rem;
-          margin-top: 0.55rem;
-          min-height: 1.8rem;
+          align-items: flex-end;
+          gap: 0.42rem;
+          margin-top: 0.5rem;
+          min-height: 2.5rem;
+          padding: 0.3rem 0.2rem 0.3rem;
         }
-        .coin-chip {
-          display: inline-flex;
+        .coin-stack-col {
+          display: flex;
+          flex-direction: column-reverse;
           align-items: center;
-          gap: 0.22rem;
-          padding: 0.18rem 0.5rem;
-          border-radius: 999px;
+          position: relative;
+        }
+        .coin-stack-label {
+          margin-top: 0.25rem;
           font-family: ui-monospace, monospace;
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 900;
+          color: #1e293b;
+          background: rgba(255, 255, 255, 0.92);
+          padding: 0.08rem 0.36rem;
+          border-radius: 999px;
+          border: 1.5px solid var(--coin-bg, #f59e0b);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
           letter-spacing: 0.02em;
-          color: var(--chip-fg, #fff);
-          background: linear-gradient(180deg, var(--chip-bg-light, #fbbf24), var(--chip-bg, #f59e0b));
-          border: 1.5px solid rgba(255, 255, 255, 0.7);
+        }
+        .coin-disc {
+          width: 30px;
+          height: 12px;
+          border-radius: 50%;
+          background: radial-gradient(
+            ellipse at 50% 30%,
+            var(--coin-bg-light, #fde68a) 0%,
+            var(--coin-bg, #f59e0b) 65%,
+            color-mix(in srgb, var(--coin-bg, #f59e0b) 80%, #000) 100%
+          );
+          border: 1.2px solid color-mix(in srgb, var(--coin-bg, #f59e0b) 70%, #000);
           box-shadow:
-            0 2px 0 rgba(0, 0, 0, 0.18),
-            0 4px 8px rgba(0, 0, 0, 0.2),
-            inset 0 1px 0 rgba(255, 255, 255, 0.55);
-          text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
-          animation: coin-chip-in 280ms cubic-bezier(.34, 1.56, .64, 1);
+            0 1.5px 0 color-mix(in srgb, var(--coin-bg, #f59e0b) 70%, #000),
+            0 2px 3px rgba(0, 0, 0, 0.32);
+          margin-top: -8px;
+          position: relative;
+          animation: coin-disc-stack 320ms cubic-bezier(.34, 1.56, .64, 1);
         }
-        .coin-chip-count {
-          font-size: 12px;
-          padding: 0 0.16rem 0 0;
-          opacity: 0.92;
+        .coin-disc:first-child {
+          margin-top: 0;
         }
-        .coin-chip-times {
-          font-size: 9px;
-          opacity: 0.62;
+        @keyframes coin-disc-stack {
+          0%   { transform: translateY(-14px) scale(1.08); opacity: 0; }
+          70%  { transform: translateY(1px) scale(1); opacity: 1; }
+          100% { transform: translateY(0) scale(1); opacity: 1; }
         }
-        .coin-chip.is-matched {
-          --chip-bg-light: #6ee7b7;
-          --chip-bg: #10b981;
-          animation: coin-chip-in 280ms cubic-bezier(.34, 1.56, .64, 1),
-                     coin-chip-pulse 1.6s ease-in-out infinite;
+        .coin-stack-overflow {
+          font-size: 9.5px;
+          font-weight: 900;
+          color: #ffffff;
+          background: rgba(15, 23, 42, 0.78);
+          padding: 0.06rem 0.3rem;
+          border-radius: 999px;
+          margin-bottom: -3px;
+          margin-top: 1px;
+          letter-spacing: 0.02em;
+          border: 1px solid rgba(255, 255, 255, 0.5);
         }
-        @keyframes coin-chip-in {
-          0%   { transform: scale(0.3) translateY(6px); opacity: 0; }
-          70%  { transform: scale(1.12) translateY(0); opacity: 1; }
-          100% { transform: scale(1) translateY(0); }
+        .coin-stack-col.is-matched .coin-disc {
+          animation: coin-disc-stack 320ms cubic-bezier(.34, 1.56, .64, 1),
+                     coin-disc-glow 1.6s ease-in-out infinite;
         }
-        @keyframes coin-chip-pulse {
-          0%, 100% { box-shadow:
-            0 2px 0 rgba(0, 0, 0, 0.18),
-            0 4px 8px rgba(0, 0, 0, 0.2),
-            inset 0 1px 0 rgba(255, 255, 255, 0.55); }
-          50%      { box-shadow:
-            0 2px 0 rgba(0, 0, 0, 0.18),
-            0 4px 14px rgba(16, 185, 129, 0.7),
-            0 0 0 2px rgba(167, 243, 208, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+        .coin-stack-col.is-matched .coin-stack-label {
+          background: #d1fae5;
+          color: #065f46;
+          border-color: #10b981;
+        }
+        @keyframes coin-disc-glow {
+          0%, 100% { filter: brightness(1) drop-shadow(0 0 0 transparent); }
+          50%      { filter: brightness(1.18) drop-shadow(0 0 6px rgba(16, 185, 129, 0.7)); }
         }
         .coin-breakdown-empty {
           font-size: 10px;
@@ -395,32 +423,42 @@ function CoinBreakdownRow({
           margin-top: 0.55rem;
         }
         @media (prefers-reduced-motion: reduce) {
-          .coin-chip { animation: none; }
-          .coin-chip.is-matched { animation: none; }
+          .coin-disc { animation: none; }
+          .coin-stack-col.is-matched .coin-disc { animation: none; }
         }
       `}</style>
       {breakdown.length === 0 ? (
-        <div className="coin-breakdown-empty">输入数字 → 自动分解成纸币硬币</div>
+        <div className="coin-breakdown-empty">输入数字 → 自动堆成纸币硬币</div>
       ) : (
-        <div className="coin-breakdown-row" aria-label="金额分解">
+        <div className="coin-stack-row" aria-label="金额分解">
           {breakdown.map(({ idx, count }) => {
             const d = DENOM_TABLE[idx]!;
+            const visible = Math.min(count, MAX_VISIBLE);
+            const overflow = count - visible;
             return (
-              <span
+              <div
                 key={`${idx}-${count}`}
-                className={`coin-chip ${matched ? "is-matched" : ""}`}
+                className={`coin-stack-col ${matched ? "is-matched" : ""}`}
                 style={
                   {
-                    ["--chip-bg" as string]: d.bg,
-                    ["--chip-bg-light" as string]: d.color,
-                    ["--chip-fg" as string]: "#fff",
+                    ["--coin-bg" as string]: d.bg,
+                    ["--coin-bg-light" as string]: d.color,
                   } as React.CSSProperties
                 }
+                aria-label={`${count} 枚 ${d.label}`}
               >
-                <span className="coin-chip-count">{count}</span>
-                <span className="coin-chip-times">×</span>
-                <span>{d.label}</span>
-              </span>
+                <span className="coin-stack-label">{d.label}</span>
+                {overflow > 0 && (
+                  <span className="coin-stack-overflow">+{overflow}</span>
+                )}
+                {Array.from({ length: visible }).map((_, i) => (
+                  <span
+                    key={i}
+                    className="coin-disc"
+                    style={{ animationDelay: `${i * 40}ms` }}
+                  />
+                ))}
+              </div>
             );
           })}
         </div>
