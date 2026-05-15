@@ -331,6 +331,33 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
           position: relative;
           overflow: visible;
           padding-top: 1.4rem !important;
+          /* v0.33.21 (Ep97 GGGGG): hover float + amber glow halo
+             pointer-events-auto 让 hover 起作用（外层 wrapper 是 none）
+             transition box-shadow 拉到 320ms 缓出，lift 220ms 弹性 cubic */
+          transition:
+            transform 220ms cubic-bezier(.34, 1.56, .64, 1),
+            box-shadow 320ms ease-out,
+            filter 220ms ease-out;
+          cursor: default;
+        }
+        .baibao-hero-card:hover {
+          transform: translateY(-4px) scale(1.015);
+          filter: brightness(1.04) saturate(1.06);
+          box-shadow:
+            0 14px 30px rgba(245, 158, 11, 0.42),
+            0 0 0 4px rgba(252, 211, 77, 0.32),
+            0 0 22px rgba(251, 191, 36, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .baibao-hero-card { transition: none; }
+          .baibao-hero-card:hover {
+            transform: none;
+            filter: none;
+            box-shadow:
+              0 8px 18px rgba(0, 0, 0, 0.25),
+              0 0 0 3px rgba(252, 211, 77, 0.4);
+          }
         }
         .baibao-hero-banner {
           position: absolute;
@@ -386,7 +413,7 @@ function HUD({ decorations, hoverBuilding, buildingStats }: HUDProps) {
         {/* v0.32.57 (Ep33 M): Hero 横幅 — 标题 + 进度条 + 各店奖牌 */}
         <div className="pointer-events-none flex-1 mx-3 flex justify-center">
           <div
-            className="baibao-hero-card rounded-2xl border-[3px] border-amber-400 px-5 py-3 shadow-2xl"
+            className="baibao-hero-card pointer-events-auto rounded-2xl border-[3px] border-amber-400 px-5 py-3 shadow-2xl"
             style={{
               background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,251,235,0.92))",
               backdropFilter: "blur(10px)",
