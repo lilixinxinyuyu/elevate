@@ -11,7 +11,7 @@
  *  - Sprint 1: 百宝港 unlocked，其他 2 个 locked
  */
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Stars, OrbitControls } from "@react-three/drei";
 import { WorldsCanvas } from "../../components/worlds/WorldsCanvas";
@@ -90,6 +90,9 @@ export function WorldsHomePage() {
 
       {/* v0.32.59 (Ep35 N): SVG 装饰星座 + 上方 hero ribbon */}
       <WorldsHomeDecor />
+
+      {/* v0.33.32 (Ep108 worlds-bg-particles): 14 颗飘浮 sparkle 粒子，主入口 hub 活气 */}
+      <WorldsBgParticles />
 
       {/* ===== 中央台词 / 推荐按钮 ===== */}
       <CenterPanel
@@ -272,6 +275,114 @@ function WorldsHomeDecor() {
           </circle>
         ))}
       </svg>
+    </div>
+  );
+}
+
+/**
+ * v0.33.32 (Ep108 worlds-bg-particles): 14 颗飘浮 sparkle 粒子
+ *  - PRNG seed 一次性生成位置 / size / phase（不每帧 new）
+ *  - 6 种 emoji glyph 循环用
+ *  - 3 套独立 CSS 动画 keyframe（float Y / spin / twinkle 透明度），每颗独立 duration + delay
+ *  - z-index 50（hero ribbon=51 之下，世界 canvas 之上）
+ *  - prefers-reduced-motion: reduce → 全静态显示，仅低 opacity
+ */
+function WorldsBgParticles() {
+  const PARTICLES = 14;
+  const GLYPHS = ["✨", "⭐", "💫", "🌟", "🪐", "☄️"];
+  const particles = useMemo(() => {
+    const out: {
+      glyph: string;
+      left: number;
+      top: number;
+      size: number;
+      floatDur: number;
+      spinDur: number;
+      twinkleDur: number;
+      delay: number;
+    }[] = [];
+    for (let i = 0; i < PARTICLES; i++) {
+      // PRNG seed 风格 — 跟 Ep105 NightStars 同套路
+      const s1 = (i * 9301 + 49297) % 233280;
+      const s2 = ((i + 7) * 4093 + 31477) % 233280;
+      const s3 = ((i + 13) * 6151 + 12289) % 233280;
+      const r1 = s1 / 233280;
+      const r2 = s2 / 233280;
+      const r3 = s3 / 233280;
+      // 8% inset 避开边缘
+      const left = 6 + r1 * 88;
+      const top = 8 + r2 * 84;
+      const size = 14 + r3 * 14; // 14-28 px
+      const floatDur = 6 + (i % 5) * 1.3; // 6-11s
+      const spinDur = 14 + (i % 4) * 3.5; // 14-25s
+      const twinkleDur = 2.4 + (i % 3) * 0.8; // 2.4-4s
+      const delay = r1 * 6;
+      const glyph = GLYPHS[i % GLYPHS.length]!;
+      out.push({ glyph, left, top, size, floatDur, spinDur, twinkleDur, delay });
+    }
+    return out;
+  }, []);
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      aria-hidden
+      style={{ zIndex: 50, overflow: "hidden" }}
+    >
+      <style>{`
+        .worlds-bg-particle {
+          position: absolute;
+          line-height: 1;
+          filter: drop-shadow(0 0 6px rgba(253, 224, 71, 0.55));
+          will-change: transform, opacity;
+        }
+        .worlds-bg-particle-inner {
+          display: inline-block;
+          animation-name: worlds-bg-particle-spin, worlds-bg-particle-twinkle;
+          animation-iteration-count: infinite, infinite;
+          animation-timing-function: linear, ease-in-out;
+        }
+        @keyframes worlds-bg-particle-float {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-22px); }
+        }
+        @keyframes worlds-bg-particle-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes worlds-bg-particle-twinkle {
+          0%, 100% { opacity: 0.22; }
+          50%      { opacity: 0.78; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .worlds-bg-particle,
+          .worlds-bg-particle-inner {
+            animation: none !important;
+            opacity: 0.35 !important;
+          }
+        }
+      `}</style>
+      {particles.map((p, i) => (
+        <span
+          key={i}
+          className="worlds-bg-particle"
+          style={{
+            left: `${p.left}%`,
+            top: `${p.top}%`,
+            fontSize: `${p.size}px`,
+            animation: `worlds-bg-particle-float ${p.floatDur}s ease-in-out ${p.delay}s infinite`,
+          }}
+        >
+          <span
+            className="worlds-bg-particle-inner"
+            style={{
+              animationDuration: `${p.spinDur}s, ${p.twinkleDur}s`,
+              animationDelay: `${p.delay * 0.5}s, ${p.delay * 0.7}s`,
+            }}
+          >
+            {p.glyph}
+          </span>
+        </span>
+      ))}
     </div>
   );
 }
