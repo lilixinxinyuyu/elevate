@@ -11,7 +11,7 @@
  * 装饰物（barrel/tent/sack/flag）随完成数解锁。
  */
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Billboard, Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -144,6 +144,9 @@ export function BaibaoTownMap({
         emissive={theme.mascotEmissive}
         emissiveIntensity={theme.mascotEmissiveIntensity}
       />
+
+      {/* v0.33.33 (Ep109 mascot-dialog-bubble): mascot 头顶 speech 泡，按 timeMode + 进度切换 */}
+      <MascotDialogBubble timeMode={timeMode} decorationCount={decorationCount} />
 
       {/* === 永远在的装饰: 用 KayKit 自带云 + 山丘装饰 === */}
       <KayProp gltfUrl="/env/kaykit/medieval/deco/cloud_big.gltf" position={[12, 6, -12]} scale={1.2} />
@@ -382,6 +385,153 @@ function RoadGlowSegment({
           depthWrite={false}
         />
       </mesh>
+    </group>
+  );
+}
+
+/**
+ * v0.33.33 (Ep109 mascot-dialog-bubble): mascot 头顶 speech 泡。
+ *  - 每 11s 轮换一条 line，line 池按 timeMode 分（day/sunset/night 三套）
+ *  - 完成进度高时混入 progress-aware 鼓励语
+ *  - 渲染：Billboard 锁朝向相机；2 层 plane (border + bg) + Text 浮在上方
+ *  - 切换时 400ms fade-in (opacity 0→1)，避免硬切
+ *  - prefers-reduced-motion: 关 fade，直接显示新 line
+ */
+const DIALOG_LINES: Record<TimeMode, string[]> = {
+  day: [
+    "今天先选哪家？",
+    "选个建筑试试 ✨",
+    "扫码店总有惊喜",
+    "你今天好棒！",
+    "面包店等你切蛋糕",
+    "再做 3 单解锁新装饰",
+    "百宝银行教你换零",
+    "机场带你装行李",
+  ],
+  sunset: [
+    "夕阳真美 🌇",
+    "晚饭前来一单？",
+    "灯笼快亮了",
+    "选个店吧，慢慢做",
+    "今天差不多收工咯",
+    "再做一单就奖励",
+  ],
+  night: [
+    "晚上好 🌙",
+    "灯笼亮了，挑个店",
+    "夜场也有惊喜",
+    "做完早点睡哦",
+    "今天辛苦了",
+    "再加一单就更棒",
+    "灯笼下做题特别静",
+  ],
+};
+const PROGRESS_LINES: { min: number; lines: string[] }[] = [
+  { min: 10, lines: ["✨ 你已经完成 10+ 单啦！", "Selena 你越来越厉害"] },
+  { min: 5, lines: ["💪 5 单达成，继续！", "再来！"] },
+  { min: 1, lines: ["很好的开始！", "继续加油 ✨"] },
+];
+
+function MascotDialogBubble({
+  timeMode,
+  decorationCount,
+}: {
+  timeMode: TimeMode;
+  decorationCount: number;
+}) {
+  // 组装当前时段可用 line 池（混入 progress-aware 1-2 条）
+  const lines = useMemo(() => {
+    const base = [...DIALOG_LINES[timeMode]];
+    for (const tier of PROGRESS_LINES) {
+      if (decorationCount >= tier.min) {
+        base.push(...tier.lines);
+        break;
+      }
+    }
+    return base;
+  }, [timeMode, decorationCount]);
+  const [lineIdx, setLineIdx] = useState(() => Math.floor(Math.random() * Math.max(1, lines.length)));
+  // 切换 line — 11s 周期，避免连续同一条用 shuffle 步长
+  useEffect(() => {
+    if (lines.length <= 1) return;
+    const id = window.setInterval(() => {
+      setLineIdx((i) => {
+        const step = 1 + Math.floor(Math.random() * (lines.length - 1));
+        return (i + step) % lines.length;
+      });
+    }, 11000);
+    return () => clearInterval(id);
+  }, [lines.length]);
+  const currentLine = lines[lineIdx % lines.length] ?? "";
+  // fade-in: 切换后 400ms 内 opacity 0 → 1
+  const fadeStartRef = useRef(performance.now());
+  useEffect(() => {
+    fadeStartRef.current = performance.now();
+  }, [lineIdx]);
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  const borderMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const bgMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const groupRef = useRef<Group>(null);
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime();
+    const elapsed = performance.now() - fadeStartRef.current;
+    const k = reduceMotion ? 1 : Math.min(1, elapsed / 400);
+    if (borderMatRef.current) borderMatRef.current.opacity = 0.95 * k;
+    if (bgMatRef.current) bgMatRef.current.opacity = 0.96 * k;
+    // 整体微浮 (跟 mascot bob 错峰，速度差异，2.4s 周期)
+    if (groupRef.current) {
+      groupRef.current.position.y = 2.05 + Math.sin(t * 1.6 + 0.7) * 0.08;
+    }
+  });
+  return (
+    <group ref={groupRef} position={[0, 2.05, 0]}>
+      <Billboard>
+        {/* border (大一点的 plane) */}
+        <mesh position={[0, 0, -0.002]}>
+          <planeGeometry args={[1.92, 0.62]} />
+          <meshBasicMaterial
+            ref={borderMatRef}
+            color="#f59e0b"
+            transparent
+            opacity={0}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+        {/* bg */}
+        <mesh>
+          <planeGeometry args={[1.84, 0.54]} />
+          <meshBasicMaterial
+            ref={bgMatRef}
+            color="#fffbeb"
+            transparent
+            opacity={0}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+        {/* text */}
+        <Text
+          key={lineIdx}
+          position={[0, 0, 0.002]}
+          fontSize={0.18}
+          maxWidth={1.7}
+          textAlign="center"
+          color="#7c2d12"
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.012}
+          outlineColor="#fffbeb"
+        >
+          {currentLine}
+        </Text>
+      </Billboard>
     </group>
   );
 }
