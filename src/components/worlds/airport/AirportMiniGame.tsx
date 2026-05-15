@@ -45,6 +45,22 @@ interface AirportMiniGameProps {
   onFeedback?: (kind: "pickup" | "drop" | "wrong", label?: string, hint?: string) => void;
 }
 
+// v0.33.26 (Ep102 airport-trail): 抓到的行李飞向 cart 的状态条目
+interface FlyingLuggageItem {
+  key: number;
+  emoji: string;
+  fromX: number;
+  fromY: number;
+  fromZ: number;
+  toX: number;
+  toY: number;
+  toZ: number;
+  startedAt: number;
+}
+const FLY_DURATION_MS = 720;
+const SPLASH_DURATION_MS = 520;
+const TRAIL_LENGTH = 10;
+
 interface LuggageInstance {
   instanceId: string;
   itemId: LuggageId;
@@ -82,6 +98,10 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
 
   // 已装到 cart 的行李 id 集合，分别按 itemId 统计
   const [loadedIds, setLoadedIds] = useState<Set<string>>(new Set());
+  // v0.33.26 (Ep102 airport-trail): 抓到的行李从传送带飞到 cart 的视觉
+  const [flyingItems, setFlyingItems] = useState<FlyingLuggageItem[]>([]);
+  // 落地 splash ring
+  const [splashes, setSplashes] = useState<{ key: number; startedAt: number }[]>([]);
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const inst of luggageInstances) {
@@ -156,7 +176,37 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
       return false;
     }
     setLoadedIds((prev) => new Set(prev).add(instanceId));
-    onFeedback?.("drop");
+    // pickup sfx 立刻播 — count 立即 +1，feel responsive
+    onFeedback?.("pickup");
+    // v0.33.26 (Ep102 airport-trail): 起飞动画 + particle trail + 落地 splash
+    // 行李从抓取窗口起飞 → arc 到 cart → 落地后 splash ring + drop sfx
+    const flyKey = Date.now() + Math.random();
+    setFlyingItems((prev) => [
+      ...prev,
+      {
+        key: flyKey,
+        emoji: inst.emoji,
+        fromX: BELT.x + inst.laneOffset,
+        fromY: COUNTER_Y + 0.08,
+        fromZ: BELT.grabZ,
+        toX: CART_ZONE.x,
+        toY: COUNTER_Y + 0.05,
+        toZ: CART_ZONE.z,
+        startedAt: performance.now(),
+      },
+    ]);
+    window.setTimeout(() => {
+      setFlyingItems((prev) => prev.filter((f) => f.key !== flyKey));
+      const splashKey = Date.now() + Math.random();
+      setSplashes((prev) => [
+        ...prev,
+        { key: splashKey, startedAt: performance.now() },
+      ]);
+      window.setTimeout(() => {
+        setSplashes((prev) => prev.filter((s) => s.key !== splashKey));
+      }, SPLASH_DURATION_MS);
+      onFeedback?.("drop");
+    }, FLY_DURATION_MS);
     return true;
   };
 
@@ -281,6 +331,14 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
           />
         );
       })}
+
+      {/* v0.33.26 (Ep102 airport-trail): 飞行行李 + particle trail + 落地 splash */}
+      {flyingItems.map((f) => (
+        <FlyingLuggage key={f.key} item={f} />
+      ))}
+      {splashes.map((s) => (
+        <CartSplash key={s.key} startedAt={s.startedAt} />
+      ))}
     </group>
   );
 }
@@ -450,5 +508,134 @@ function MovingLuggage({
         {LUGGAGE[instance.itemId].english}
       </Text>
     </group>
+  );
+}
+
+/**
+ * v0.33.26 (Ep102 airport-trail): 抓到的行李从传送带 arc 飞向 cart。
+ *  - 720ms 全程，xz 线性 lerp，y 用 sin(πk) 给 0.4 高度抛物
+ *  - 后面拖 10 颗逐渐衰减的 cyan particle trail（环形 buffer 存历史位置）
+ *  - prefers-reduced-motion: 关 trail，直接闪现 emoji 到 cart（仍然有 splash）
+ */
+function FlyingLuggage({ item }: { item: FlyingLuggageItem }) {
+  const groupRef = useRef<Group>(null);
+  const trailRef = useRef<THREE.Group>(null);
+  // 环形 buffer：保留最近 TRAIL_LENGTH 帧的世界坐标
+  const trailPos = useMemo<THREE.Vector3[]>(
+    () => Array.from({ length: TRAIL_LENGTH }, () => new THREE.Vector3()),
+    [],
+  );
+  const trailFrame = useRef(0);
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  useFrame(() => {
+    if (!groupRef.current) return;
+    const elapsed = performance.now() - item.startedAt;
+    const k = Math.min(1, elapsed / FLY_DURATION_MS);
+    const ease = 1 - Math.pow(1 - k, 2); // ease-out
+    // xz 线性 lerp
+    const x = item.fromX + (item.toX - item.fromX) * ease;
+    const z = item.fromZ + (item.toZ - item.fromZ) * ease;
+    // y 抛物 (sin(πk) 给最大值 1 at k=0.5)
+    const baseY = item.fromY + (item.toY - item.fromY) * ease;
+    const arcLift = Math.sin(Math.PI * k) * 0.35;
+    const y = baseY + arcLift;
+    groupRef.current.position.set(x, y, z);
+    // 落地前轻微缩小 + 落地姿态：scale 1 → 0.78
+    const sc = 1 - ease * 0.22;
+    groupRef.current.scale.setScalar(sc);
+    // 旋转：随飞行轴小幅 spin
+    groupRef.current.rotation.y = ease * Math.PI * 1.4;
+    // trail 更新（reduceMotion 时跳过）
+    if (!reduceMotion && trailRef.current) {
+      trailFrame.current = (trailFrame.current + 1) % TRAIL_LENGTH;
+      trailPos[trailFrame.current]!.set(x, y, z);
+      const children = trailRef.current.children;
+      for (let i = 0; i < TRAIL_LENGTH; i++) {
+        // age: 0 = newest, 1 = oldest
+        const idx = (trailFrame.current - i + TRAIL_LENGTH) % TRAIL_LENGTH;
+        const p = trailPos[idx];
+        const child = children[i] as THREE.Mesh | undefined;
+        if (!child || !p) continue;
+        child.position.copy(p);
+        const age = i / TRAIL_LENGTH;
+        const fade = 1 - age;
+        child.scale.setScalar(0.05 + fade * 0.07);
+        const mat = child.material as THREE.MeshBasicMaterial;
+        mat.opacity = 0.85 * fade * fade;
+      }
+    }
+  });
+  return (
+    <>
+      <group ref={groupRef} position={[item.fromX, item.fromY, item.fromZ]}>
+        <Text fontSize={0.16} anchorX="center" anchorY="middle">
+          {item.emoji}
+        </Text>
+      </group>
+      {!reduceMotion && (
+        <group ref={trailRef}>
+          {Array.from({ length: TRAIL_LENGTH }).map((_, i) => (
+            <mesh key={i} raycast={() => null} renderOrder={1}>
+              <sphereGeometry args={[1, 8, 6]} />
+              <meshBasicMaterial
+                color="#22d3ee"
+                transparent
+                opacity={0}
+                depthWrite={false}
+                blending={THREE.AdditiveBlending}
+                toneMapped={false}
+              />
+            </mesh>
+          ))}
+        </group>
+      )}
+    </>
+  );
+}
+
+/**
+ * v0.33.26 (Ep102 airport-trail): 落地 splash —— cart 上一道 emerald ring 散开 520ms。
+ * 比 CartHalo 更短促，是"砰"的瞬间反馈。
+ */
+function CartSplash({ startedAt }: { startedAt: number }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame(() => {
+    const m = meshRef.current;
+    const mat = matRef.current;
+    if (!m || !mat) return;
+    const elapsed = performance.now() - startedAt;
+    const k = Math.min(1, elapsed / SPLASH_DURATION_MS);
+    const ease = 1 - Math.pow(1 - k, 3); // ease-out cubic
+    const scale = 0.4 + ease * 1.6;
+    m.scale.setScalar(scale);
+    mat.opacity = 0.85 * (1 - ease);
+  });
+  return (
+    <mesh
+      ref={meshRef}
+      position={[CART_ZONE.x, COUNTER_Y + 0.04, CART_ZONE.z]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      raycast={() => null}
+      renderOrder={3}
+    >
+      <ringGeometry args={[CART_ZONE.radius * 0.6, CART_ZONE.radius * 0.85, 32]} />
+      <meshBasicMaterial
+        ref={matRef}
+        color="#34d399"
+        transparent
+        opacity={0.85}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        side={THREE.DoubleSide}
+        toneMapped={false}
+      />
+    </mesh>
   );
 }
