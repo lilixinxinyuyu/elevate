@@ -75,6 +75,10 @@ export function WorldOrb({ world, position, onSelect }: WorldOrbProps) {
       {world.unlocked && (
         <OrbBaseAura accent={world.accent} hovered={hovered} seed={position[0]} />
       )}
+      {/* v0.33.43 (Ep117 world-orb-spin): unlocked orb 加 3 颗卫星 + 倾斜 counter-spin ring */}
+      {world.unlocked && (
+        <OrbSatellites accent={world.accent} hovered={hovered} seed={position[0]} />
+      )}
       {/* KayKit 真素材组合（hex tile + 建筑 + 装饰） */}
       <OrbMiniScene assets={world.orbAssets} locked={!world.unlocked} />
 
@@ -309,6 +313,112 @@ function OrbAuraParticle({
         depthWrite={false}
       />
     </mesh>
+  );
+}
+
+/**
+ * v0.33.43 (Ep117 world-orb-spin): unlocked orb 加 3 颗卫星 + 倾斜 counter-spin ring
+ *  - 3 颗 emissive 小球绕 orb 3 个不同倾角的轨道运行（原子电子风）
+ *  - 1 个倾斜 ring 反方向缓转（base aura 是 +0.15, 这里 -0.22）
+ *  - hover 时轨道速度加快 + 半径微缩
+ *  - prefers-reduced-motion: 卫星静止在 phase 0 位置，ring 不转
+ */
+function OrbSatellites({
+  accent,
+  hovered,
+  seed,
+}: {
+  accent: string;
+  hovered: boolean;
+  seed: number;
+}) {
+  const ringRef = useRef<Group>(null);
+  const sat0 = useRef<THREE.Mesh>(null);
+  const sat1 = useRef<THREE.Mesh>(null);
+  const sat2 = useRef<THREE.Mesh>(null);
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  // 3 颗卫星各自轨道参数（不同倾角 + 速度 + phase）
+  const orbits = useMemo(
+    () => [
+      { tiltX: Math.PI / 5, tiltZ: 0, speed: 0.6, radius: 1.25, phase: seed * 0.7 },
+      { tiltX: -Math.PI / 4, tiltZ: Math.PI / 6, speed: -0.5, radius: 1.35, phase: seed * 1.1 + Math.PI / 3 },
+      { tiltX: Math.PI / 3, tiltZ: -Math.PI / 4, speed: 0.42, radius: 1.45, phase: seed * 1.3 + (Math.PI * 2) / 3 },
+    ],
+    [seed],
+  );
+  const sats = [sat0, sat1, sat2];
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    // 倾斜 ring 反向 counter-spin
+    if (ringRef.current) {
+      ringRef.current.rotation.z = reduceMotion ? 0 : t * -0.22 * (hovered ? 1.4 : 1);
+    }
+    // 3 颗卫星
+    orbits.forEach((orb, i) => {
+      const mesh = sats[i]?.current;
+      if (!mesh) return;
+      const speed = reduceMotion ? 0 : orb.speed * (hovered ? 1.5 : 1);
+      const angle = t * speed + orb.phase;
+      const r = orb.radius * (hovered ? 0.95 : 1);
+      // 在 XZ 平面上转，再用 tilt 旋转整个轨道平面
+      const x0 = Math.cos(angle) * r;
+      const y0 = 0;
+      const z0 = Math.sin(angle) * r;
+      // 应用 tiltX (绕 X 轴) + tiltZ (绕 Z 轴) 旋转点
+      const cy = Math.cos(orb.tiltX);
+      const sy = Math.sin(orb.tiltX);
+      let x1 = x0;
+      let y1 = y0 * cy - z0 * sy;
+      let z1 = y0 * sy + z0 * cy;
+      const cz = Math.cos(orb.tiltZ);
+      const sz = Math.sin(orb.tiltZ);
+      const x2 = x1 * cz - y1 * sz;
+      const y2 = x1 * sz + y1 * cz;
+      x1 = x2;
+      y1 = y2;
+      mesh.position.set(x1, y1 + 0.6, z1);
+      const pulse = reduceMotion ? 1 : 1 + Math.sin(t * 3 + i * 1.3) * 0.18;
+      mesh.scale.setScalar(pulse);
+    });
+  });
+  return (
+    <group>
+      {/* 倾斜 counter-spin ring (Saturn-style) */}
+      <group ref={ringRef} position={[0, 0.6, 0]} rotation={[Math.PI / 2.4, 0, 0]}>
+        <mesh raycast={() => null}>
+          <ringGeometry args={[1.5, 1.62, 64]} />
+          <meshBasicMaterial
+            color={accent}
+            transparent
+            opacity={hovered ? 0.55 : 0.32}
+            side={THREE.DoubleSide}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      </group>
+      {/* 3 颗卫星 sphere */}
+      {orbits.map((_, i) => (
+        <mesh key={i} ref={sats[i]} raycast={() => null}>
+          <sphereGeometry args={[0.06, 12, 8]} />
+          <meshBasicMaterial
+            color={accent}
+            transparent
+            opacity={hovered ? 0.95 : 0.78}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
