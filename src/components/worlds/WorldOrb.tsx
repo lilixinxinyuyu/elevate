@@ -84,6 +84,8 @@ export function WorldOrb({ world, position, onSelect }: WorldOrbProps) {
           <Text fontSize={0.7} anchorX="center" anchorY="middle">🔒</Text>
         </Billboard>
       )}
+      {/* v0.33.42 (Ep116 moxi-locked-tease): locked 世界加 construction tease */}
+      {!world.unlocked && <LockedOrbTease seed={position[0]} />}
       {/* v0.32.93 (Ep69 BBBBB): 名字标签 + chunky badge 背景 (替代裸 Text) */}
       <OrbNameBadge world={world} hovered={hovered} />
       {/* tagline / lock hint */}
@@ -368,6 +370,174 @@ function OrbNameBadge({ world, hovered }: { world: WorldDef; hovered: boolean })
         </Text>
       </group>
     </Billboard>
+  );
+}
+
+/**
+ * v0.33.42 (Ep116 moxi-locked-tease): locked 世界的"建设中"视觉预告
+ *  - 3 颗 construction emoji (🚧 🔨 ⚙️) 绕 orb 轨道环绕
+ *  - 上方"建设中"chunky badge ribbon（cyan accent）
+ *  - 底部 progress-bar 风格的 4 颗暗 sparkle 慢闪
+ *  - prefers-reduced-motion: emoji 静止站位，badge / sparkle 关呼吸
+ */
+function LockedOrbTease({ seed }: { seed: number }) {
+  const groupRef = useRef<Group>(null);
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  const emojiData = useMemo(
+    () => [
+      { emoji: "🚧", phase: 0, baseY: 0.6 },
+      { emoji: "🔨", phase: (Math.PI * 2) / 3, baseY: 0.85 },
+      { emoji: "⚙️", phase: (Math.PI * 4) / 3, baseY: 0.45 },
+    ],
+    [],
+  );
+  const orbitR = 1.1;
+  useFrame((state) => {
+    if (!groupRef.current) return;
+    if (reduceMotion) return;
+    const t = state.clock.getElapsedTime();
+    groupRef.current.children.forEach((child, i) => {
+      const d = emojiData[i];
+      if (!d) return;
+      const angle = t * 0.5 + d.phase + seed * 0.3;
+      child.position.set(
+        Math.cos(angle) * orbitR,
+        d.baseY + Math.sin(t * 1.4 + d.phase) * 0.06,
+        Math.sin(angle) * orbitR,
+      );
+    });
+  });
+  // sparkle 数据
+  const sparkleData = useMemo(
+    () =>
+      [0, 1, 2, 3].map((i) => ({
+        x: -0.6 + i * 0.4,
+        phase: i * 0.7,
+      })),
+    [],
+  );
+  return (
+    <group>
+      {/* 3 颗 construction emoji 绕轨道 */}
+      <group ref={groupRef}>
+        {emojiData.map((d, i) => (
+          <Billboard key={i} position={[0, d.baseY, 0]}>
+            <Text
+              fontSize={0.22}
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.01}
+              outlineColor="#000000"
+            >
+              {d.emoji}
+            </Text>
+          </Billboard>
+        ))}
+      </group>
+      {/* "建设中" chunky badge —— mascot-dialog 同款双 plane */}
+      <Billboard position={[0, 2.25, 0]}>
+        <BuildingSoonBadge />
+      </Billboard>
+      {/* progress sparkle row 在 orb 底部 */}
+      <group position={[0, 0.1, 0]}>
+        {sparkleData.map((s, i) => (
+          <ProgressSparkle key={i} x={s.x} phase={s.phase} reduceMotion={reduceMotion} />
+        ))}
+      </group>
+    </group>
+  );
+}
+
+function BuildingSoonBadge() {
+  const bgMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const borderMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime();
+    const pulse = 0.78 + Math.sin(t * 1.8) * 0.16;
+    if (bgMatRef.current) bgMatRef.current.opacity = pulse;
+    if (borderMatRef.current) borderMatRef.current.opacity = pulse;
+  });
+  return (
+    <group>
+      <mesh position={[0, 0, -0.002]}>
+        <planeGeometry args={[1.5, 0.4]} />
+        <meshBasicMaterial
+          ref={borderMatRef}
+          color="#facc15"
+          transparent
+          opacity={0.9}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh>
+        <planeGeometry args={[1.42, 0.32]} />
+        <meshBasicMaterial
+          ref={bgMatRef}
+          color="#1f2937"
+          transparent
+          opacity={0.92}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      <Text
+        position={[0, 0, 0.002]}
+        fontSize={0.16}
+        color="#fef3c7"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.008}
+        outlineColor="#1f2937"
+      >
+        🏗️ 建设中
+      </Text>
+    </group>
+  );
+}
+
+function ProgressSparkle({
+  x,
+  phase,
+  reduceMotion,
+}: {
+  x: number;
+  phase: number;
+  reduceMotion: boolean;
+}) {
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    if (reduceMotion) {
+      if (matRef.current) matRef.current.opacity = 0.45;
+      return;
+    }
+    const t = state.clock.getElapsedTime();
+    const pulse = 0.3 + (Math.sin(t * 2 + phase) + 1) * 0.3; // 0.3 - 0.9
+    if (matRef.current) matRef.current.opacity = pulse;
+    if (meshRef.current) {
+      const sc = 1 + Math.sin(t * 2 + phase) * 0.18;
+      meshRef.current.scale.setScalar(sc);
+    }
+  });
+  return (
+    <mesh ref={meshRef} position={[x, 0, 0]} raycast={() => null}>
+      <sphereGeometry args={[0.045, 8, 6]} />
+      <meshBasicMaterial
+        ref={matRef}
+        color="#facc15"
+        transparent
+        opacity={0.6}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </mesh>
   );
 }
 
