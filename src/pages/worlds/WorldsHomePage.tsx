@@ -105,6 +105,7 @@ export function WorldsHomePage() {
         recommended={recommended}
         hoverWorld={hoverWorld}
         onStart={() => navigate(recommended.route)}
+        progressByWorld={worldsProgress}
       />
 
       {/* v0.32.59 (Ep35 N): 底部 dock — 3 world 缩略 chip，永远可见，提示玩家全图 */}
@@ -658,9 +659,10 @@ interface CenterPanelProps {
   recommended: WorldDef;
   hoverWorld: WorldDef | null;
   onStart: () => void;
+  progressByWorld: Record<string, number>;
 }
 
-function CenterPanel({ recommended, hoverWorld, onStart }: CenterPanelProps) {
+function CenterPanel({ recommended, hoverWorld, onStart, progressByWorld }: CenterPanelProps) {
   // 鼠标 hover 一个 orb 时显示该 world 的信息；否则显示推荐
   const focus = hoverWorld ?? recommended;
   return (
@@ -744,6 +746,13 @@ function CenterPanel({ recommended, hoverWorld, onStart }: CenterPanelProps) {
             <div className="mt-1 text-xs font-extrabold text-slate-600 leading-snug">
               {focus.unlocked ? focus.tagline : (focus.lockHint ?? "敬请期待")}
             </div>
+            {/* v0.33.52 (Ep126 worlds-orb-tooltip): 进度 chip + 3 ⭐ tier */}
+            {focus.unlocked && (
+              <CenterPanelProgress
+                accent={focus.accent}
+                done={progressByWorld[focus.id] ?? 0}
+              />
+            )}
           </div>
           {/* 对话气泡尾巴 - accent 描边 + 白填充, 双层 */}
           <span
@@ -784,6 +793,92 @@ function CenterPanel({ recommended, hoverWorld, onStart }: CenterPanelProps) {
       >
         {recommended.emoji} 出发去 {recommended.name}
       </button>
+    </div>
+  );
+}
+
+/**
+ * v0.33.52 (Ep126 worlds-orb-tooltip): CenterPanel 进度 chip 行
+ *  - "✅ 已完成 N 单" chip （N=0 时显示 "还没开始 - 点击出发"）
+ *  - 3 颗 ⭐ tier（沿用 Ep112 阈值：1+/5+/15+）
+ *  - hover 不同 world 切换时 chip 内容随之更新
+ */
+function CenterPanelProgress({
+  accent,
+  done,
+}: {
+  accent: string;
+  done: number;
+}) {
+  const tier = done >= 15 ? 3 : done >= 5 ? 2 : done >= 1 ? 1 : 0;
+  return (
+    <div
+      className="mt-1.5 flex items-center gap-2"
+      style={
+        { ["--cp-accent" as string]: accent } as React.CSSProperties
+      }
+    >
+      <style>{`
+        .cp-progress-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.32rem;
+          padding: 0.18rem 0.52rem;
+          border-radius: 999px;
+          font-family: ui-monospace, monospace;
+          font-size: 10.5px;
+          font-weight: 900;
+          letter-spacing: 0.04em;
+          background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--cp-accent, #fbbf24) 18%, #ffffff) 100%);
+          color: #0f172a;
+          border: 1.5px solid var(--cp-accent, #fbbf24);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+        }
+        .cp-stars-row {
+          display: inline-flex;
+          gap: 1px;
+          line-height: 1;
+        }
+        .cp-star {
+          font-size: 11px;
+          line-height: 1;
+          filter: drop-shadow(0 0 4px var(--cp-accent, rgba(251, 191, 36, 0.8)));
+          animation: cp-star-twinkle 2.1s ease-in-out infinite;
+        }
+        .cp-star.empty { opacity: 0.22; filter: none; animation: none; }
+        @keyframes cp-star-twinkle {
+          0%, 100% { transform: scale(0.92); opacity: 0.82; }
+          50%      { transform: scale(1.18); opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cp-star { animation: none; }
+        }
+      `}</style>
+      <span className="cp-progress-chip">
+        {done > 0 ? (
+          <>
+            <span aria-hidden>✅</span>
+            <span>{done} 单</span>
+          </>
+        ) : (
+          <>
+            <span aria-hidden>🚀</span>
+            <span>未开始</span>
+          </>
+        )}
+      </span>
+      <span className="cp-stars-row" aria-label={`${tier}/3 星`}>
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className={`cp-star${i < tier ? "" : " empty"}`}
+            style={{ animationDelay: `${i * 280}ms` }}
+            aria-hidden
+          >
+            ⭐
+          </span>
+        ))}
+      </span>
     </div>
   );
 }
