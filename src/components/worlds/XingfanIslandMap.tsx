@@ -5,7 +5,7 @@
  * Sprint 2 Day 1: 登机口 active；其他 3 建设中。
  */
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Billboard, Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -66,6 +66,9 @@ export function XingfanIslandMap({
 
       {/* 中央 mascot 占位 */}
       <CenterMascot />
+
+      {/* v0.33.41 (Ep115 xingfan-mascot-dialog): xingfan 时段对话泡 (mirror Ep109 baibao) */}
+      <XingfanMascotDialog />
 
       {/* 装饰：barrel / flag / 山 / 云 / 沙滩 buoys */}
       <KayProp gltfUrl="/env/kaykit/medieval/deco/barrel.gltf" position={[-3, 0, 2]} scale={1.0} />
@@ -292,6 +295,139 @@ function HarborPaths() {
           </mesh>
         </group>
       ))}
+    </group>
+  );
+}
+
+/**
+ * v0.33.41 (Ep115 xingfan-mascot-dialog): xingfan 中央 mascot 头顶 speech 泡
+ *  - mirror Ep109 baibao 模板：3 套 timeMode line 池 + 11s 轮换 + Billboard plane bg + fade-in
+ *  - 主题：海洋/远航/旅游 vibe（xingfan 是星帆岛）
+ *  - 边框 cyan accent（呼应 xingfan 主题色 #06b6d4）
+ */
+type XingfanTimeMode = "day" | "sunset" | "night";
+
+function detectXingfanTimeMode(): XingfanTimeMode {
+  if (typeof window !== "undefined") {
+    const m = new URLSearchParams(window.location.search).get("xingfan_mode");
+    if (m === "day" || m === "sunset" || m === "night") return m;
+  }
+  const h = new Date().getHours();
+  if (h >= 6 && h < 17) return "day";
+  if (h >= 17 && h < 19) return "sunset";
+  return "night";
+}
+
+const XINGFAN_DIALOG_LINES: Record<XingfanTimeMode, string[]> = {
+  day: [
+    "今天去哪个 island? 🏝️",
+    "机场带你装行李 ✈️",
+    "Selena 准备远航！",
+    "海风很轻 🌊",
+    "选一站开始冒险",
+    "今天英文也加油哦",
+    "海面好平静 ⛵",
+  ],
+  sunset: [
+    "夕阳染红了海面 🌅",
+    "晚班机要起飞了",
+    "再做一单回家吧",
+    "天空像水彩画",
+    "灯塔快亮咯",
+  ],
+  night: [
+    "月光下的星帆岛 🌙",
+    "夜航灯亮起来了",
+    "做完早点休息哦",
+    "你已经很厉害了 ✨",
+    "海上有星星倒影",
+  ],
+};
+
+function XingfanMascotDialog() {
+  const timeMode = useMemo<XingfanTimeMode>(() => detectXingfanTimeMode(), []);
+  const lines = XINGFAN_DIALOG_LINES[timeMode];
+  const [lineIdx, setLineIdx] = useState(() =>
+    Math.floor(Math.random() * Math.max(1, lines.length)),
+  );
+  useEffect(() => {
+    if (lines.length <= 1) return;
+    const id = window.setInterval(() => {
+      setLineIdx((i) => {
+        const step = 1 + Math.floor(Math.random() * (lines.length - 1));
+        return (i + step) % lines.length;
+      });
+    }, 11000);
+    return () => clearInterval(id);
+  }, [lines.length]);
+  const currentLine = lines[lineIdx % lines.length] ?? "";
+  const fadeStartRef = useRef(performance.now());
+  useEffect(() => {
+    fadeStartRef.current = performance.now();
+  }, [lineIdx]);
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  const borderMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const bgMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const groupRef = useRef<Group>(null);
+  useFrame((state) => {
+    const t = state.clock.getElapsedTime();
+    const elapsed = performance.now() - fadeStartRef.current;
+    const k = reduceMotion ? 1 : Math.min(1, elapsed / 400);
+    if (borderMatRef.current) borderMatRef.current.opacity = 0.95 * k;
+    if (bgMatRef.current) bgMatRef.current.opacity = 0.96 * k;
+    if (groupRef.current) {
+      // mascot 在 0.7，bubble 浮在 1.95，跟 mascot 1.2Hz bob 错峰用 1.6Hz
+      groupRef.current.position.y = 1.95 + Math.sin(t * 1.6 + 0.7) * 0.08;
+    }
+  });
+  return (
+    <group ref={groupRef} position={[0, 1.95, 0]}>
+      <Billboard>
+        {/* cyan border 大 plane */}
+        <mesh position={[0, 0, -0.002]}>
+          <planeGeometry args={[1.92, 0.62]} />
+          <meshBasicMaterial
+            ref={borderMatRef}
+            color="#06b6d4"
+            transparent
+            opacity={0}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+        {/* light cyan bg */}
+        <mesh>
+          <planeGeometry args={[1.84, 0.54]} />
+          <meshBasicMaterial
+            ref={bgMatRef}
+            color="#ecfeff"
+            transparent
+            opacity={0}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+        <Text
+          key={lineIdx}
+          position={[0, 0, 0.002]}
+          fontSize={0.18}
+          maxWidth={1.7}
+          textAlign="center"
+          color="#0e7490"
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.012}
+          outlineColor="#ecfeff"
+        >
+          {currentLine}
+        </Text>
+      </Billboard>
     </group>
   );
 }
