@@ -29,6 +29,20 @@ const FORMAT_MAP: Record<string, GameTemplate> = {
 };
 
 export function resolveTemplate(q: Question): GameTemplate {
+  // v0.33.40 (bug fix): play_as=balance_lab 但缺 eq: tag → 退回 speed_match/plain_choice
+  // 否则 BalanceLab parseEq fail → fallback state → 自动判错 bug
+  if (q.play_as === "balance_lab") {
+    const hasEqTag = (q.tags ?? []).some((t) => t.startsWith("eq:") && (t.includes("=") || t.includes("|")));
+    if (!hasEqTag) {
+      console.warn(
+        `[resolveTemplate] q=${q.question_id} 标 play_as=balance_lab 但缺 eq: tag → fallback`,
+      );
+      // numeric 走 speed_match，single_choice 走 plain_choice
+      if (q.question_format === "numeric") return "speed_match";
+      if (q.question_format === "single_choice") return "plain_choice";
+      return "speed_match";
+    }
+  }
   if (q.play_as) return q.play_as;
   // Phase 2 Axis 2：带 dot_grid spec 的题统一走 dot_grid_draw
   if (q.dot_grid) return "dot_grid_draw";
