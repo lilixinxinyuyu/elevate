@@ -144,6 +144,14 @@ export function AirportPage() {
         orderKey={orderIdx}
       />
 
+      {/* v0.33.51 (Ep125 airport-departure-board): 机场风格 departure status board */}
+      <AirportDepartureBoard
+        phase={phase}
+        orderIdx={orderIdx}
+        order={order}
+        justCompleted={justCompleted}
+      />
+
       <CustomerBubble
         emoji={order.customerEmoji}
         mood={justCompleted ? "happy" : phase === "intro" ? "hello" : "focus"}
@@ -269,6 +277,150 @@ function RewardOverlay() {
         <div className="mt-2 text-cyan-900 text-sm font-medium drop-shadow">
           旅客们都顺利登机～回到星帆岛
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * v0.33.51 (Ep125 airport-departure-board): 机场风格 departure status board
+ *  - 顶部偏下、HUD 下方位置，3 个状态 chip：准备 / 装载中 / 已完成
+ *  - 当前 phase 对应 chip 高亮 cyan + glow，其他 dim slate
+ *  - 切换时 flip-y 翻牌动画（机场翻牌效果）
+ *  - 航班号 (FL### 自动生成) + 旅客 emoji + 目的地（随机海岛 emoji）
+ *  - prefers-reduced-motion: 关 flip，直接显示
+ */
+const DESTINATIONS = ["🏝️ Bali", "🗼 Tokyo", "🌴 Maui", "🏛️ Athens", "🌋 Iceland", "🏔️ Banff"];
+
+function AirportDepartureBoard({
+  phase,
+  orderIdx,
+  order,
+  justCompleted,
+}: {
+  phase: Phase;
+  orderIdx: number;
+  order: AirportOrder;
+  justCompleted: boolean;
+}) {
+  const flightNo = `FL${(101 + orderIdx * 7) % 999}`;
+  const dest = DESTINATIONS[orderIdx % DESTINATIONS.length]!;
+  // 状态推导
+  const activeStatus: "ready" | "loading" | "done" = justCompleted
+    ? "done"
+    : phase === "loading"
+      ? "loading"
+      : "ready";
+  return (
+    <div className="airport-departure-board" aria-label="航班状态板">
+      <style>{`
+        .airport-departure-board {
+          position: absolute;
+          top: 5.2rem;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 56;
+          pointer-events: none;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.45rem;
+        }
+        .airport-flight-line {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.6rem;
+          padding: 0.36rem 0.95rem;
+          border-radius: 12px;
+          background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+          color: #e0f2fe;
+          border: 2px solid rgba(6, 182, 212, 0.55);
+          box-shadow:
+            0 4px 12px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 rgba(255, 255, 255, 0.12);
+          font-family: ui-monospace, monospace;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.06em;
+        }
+        .airport-flight-no { color: #67e8f9; }
+        .airport-flight-emoji { font-size: 16px; line-height: 1; }
+        .airport-flight-arrow { color: #94a3b8; }
+        .airport-flight-dest { color: #fef3c7; }
+        .airport-status-row {
+          display: inline-flex;
+          gap: 0.32rem;
+          font-family: ui-monospace, monospace;
+        }
+        .airport-status-chip {
+          padding: 0.32rem 0.7rem;
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.78);
+          border: 2px solid rgba(148, 163, 184, 0.45);
+          color: #94a3b8;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          opacity: 0.6;
+          transition: opacity 220ms ease-out, color 220ms ease-out, border 220ms ease-out, background 220ms ease-out;
+          transform-style: preserve-3d;
+        }
+        .airport-status-chip.is-active {
+          background: linear-gradient(180deg, #0e7490 0%, #155e75 100%);
+          border-color: #06b6d4;
+          color: #ecfeff;
+          opacity: 1;
+          box-shadow:
+            0 0 0 2px rgba(6, 182, 212, 0.3),
+            0 0 14px rgba(6, 182, 212, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
+          animation: airport-chip-flip 520ms cubic-bezier(.34, 1.56, .64, 1);
+        }
+        @keyframes airport-chip-flip {
+          0%   { transform: rotateX(-92deg); opacity: 0.2; }
+          55%  { transform: rotateX(8deg); opacity: 1; }
+          100% { transform: rotateX(0deg); opacity: 1; }
+        }
+        .airport-status-chip.is-done {
+          background: linear-gradient(180deg, #047857 0%, #065f46 100%);
+          border-color: #10b981;
+          color: #d1fae5;
+          box-shadow:
+            0 0 0 2px rgba(16, 185, 129, 0.3),
+            0 0 12px rgba(16, 185, 129, 0.55);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .airport-status-chip.is-active { animation: none; }
+        }
+      `}</style>
+      <div className="airport-flight-line">
+        <span className="airport-flight-no">{flightNo}</span>
+        <span className="airport-flight-emoji" aria-hidden>
+          {order.customerEmoji}
+        </span>
+        <span className="airport-flight-arrow">→</span>
+        <span className="airport-flight-dest">{dest}</span>
+      </div>
+      <div className="airport-status-row">
+        <span
+          key={`ready-${activeStatus === "ready" ? orderIdx : "off"}`}
+          className={`airport-status-chip${activeStatus === "ready" ? " is-active" : ""}`}
+        >
+          ✈️ 准备
+        </span>
+        <span
+          key={`loading-${activeStatus === "loading" ? orderIdx : "off"}`}
+          className={`airport-status-chip${activeStatus === "loading" ? " is-active" : ""}`}
+        >
+          🛄 装载中
+        </span>
+        <span
+          key={`done-${activeStatus === "done" ? orderIdx : "off"}`}
+          className={`airport-status-chip${activeStatus === "done" ? " is-active is-done" : ""}`}
+        >
+          ✅ 已起飞
+        </span>
       </div>
     </div>
   );
