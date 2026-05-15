@@ -25,6 +25,7 @@ import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverl
 import { useBgm } from "../../lib/worlds/useBGM";
 import { BgmMuteButton } from "../../components/worlds/BgmMuteButton";
 import { WorldTopHUD } from "../../components/worlds/WorldTopHUD";
+import { CustomerBubble } from "../../components/worlds/CustomerBubble";
 
 type Phase = "intro" | "exchange";
 
@@ -127,14 +128,19 @@ export function BankPage() {
 
       <CustomerBubble
         emoji={order.customerEmoji}
-        line={order.customerLine}
         mood={justCompleted ? "happy" : phase === "intro" ? "hello" : "focus"}
         hint={
           phase === "exchange"
             ? `需要换零: ${formatYuan(order.targetCent)}`
             : undefined
         }
-      />
+        ribbon={{
+          text: `换 ${formatYuan(order.targetCent)}`,
+          accent: "#3b82f6",
+        }}
+      >
+        {order.customerLine}
+      </CustomerBubble>
 
       {phase === "intro" && !showReward && (
         <div className={introExiting ? "world-intro-exit" : ""}>
@@ -167,43 +173,7 @@ export function BankPage() {
 
 // v0.32.58 (Ep34 L): TopHUD 抽到 src/components/worlds/WorldTopHUD.tsx
 
-function CustomerBubble({
-  emoji,
-  line,
-  hint,
-  mood = "hello",
-}: {
-  emoji: string;
-  line: string;
-  hint?: string;
-  mood?: "hello" | "focus" | "happy";
-}) {
-  const emote = mood === "happy" ? "🎉" : mood === "focus" ? "👀" : "💬";
-  return (
-    <div
-      className="absolute pointer-events-none"
-      style={{
-        zIndex: 55,
-        left: "50%",
-        transform: "translateX(-50%)",
-        top: "12%",
-      }}
-    >
-      <div className={`world-customer-bubble world-customer-bubble-${mood}`}>
-        <div className="world-customer-bubble-avatar-wrap">
-          <div className="world-customer-bubble-avatar">{emoji}</div>
-          <span className="world-customer-emote">{emote}</span>
-        </div>
-        <div className="max-w-md">
-          <div className="world-customer-bubble-card">
-            {line}
-            {hint && <div className="world-customer-bubble-hint">💡 {hint}</div>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// v0.33.30 (Ep106 customer-ribbon): 已抽到 src/components/worlds/CustomerBubble.tsx
 
 function IntroPanel({
   order,

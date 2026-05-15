@@ -20,6 +20,7 @@ import { WorldFeedbackOverlay } from "../../components/worlds/WorldFeedbackOverl
 import { useBgm } from "../../lib/worlds/useBGM";
 import { BgmMuteButton } from "../../components/worlds/BgmMuteButton";
 import { WorldTopHUD } from "../../components/worlds/WorldTopHUD";
+import { CustomerBubble } from "../../components/worlds/CustomerBubble";
 
 type Phase = "intro" | "loading";
 
@@ -118,9 +119,8 @@ export function AirportPage() {
 
       <CustomerBubble
         emoji={order.customerEmoji}
-        lineEn={order.customerLineEn}
-        lineZh={order.customerLineZh}
         mood={justCompleted ? "happy" : phase === "intro" ? "hello" : "focus"}
+        hintIcon="🛄 装:"
         hint={
           phase === "loading"
             ? order.requests
@@ -128,7 +128,16 @@ export function AirportPage() {
                 .join(", ")
             : undefined
         }
-      />
+        ribbon={{
+          text: order.requests
+            .map((r) => `${LUGGAGE[r.itemId].emoji}×${r.quantity}`)
+            .join(" + "),
+          accent: "#06b6d4",
+        }}
+      >
+        <div className="font-bold text-cyan-700">{order.customerLineEn}</div>
+        <div className="text-xs text-slate-500 mt-0.5 font-medium">{order.customerLineZh}</div>
+      </CustomerBubble>
 
       {phase === "intro" && !showReward && (
         <div className={introExiting ? "world-intro-exit" : ""}>
@@ -157,46 +166,7 @@ export function AirportPage() {
 
 // v0.32.58 (Ep34 L): TopHUD 抽到 src/components/worlds/WorldTopHUD.tsx
 
-function CustomerBubble({
-  emoji,
-  lineEn,
-  lineZh,
-  hint,
-  mood = "hello",
-}: {
-  emoji: string;
-  lineEn: string;
-  lineZh: string;
-  hint?: string;
-  mood?: "hello" | "focus" | "happy";
-}) {
-  const emote = mood === "happy" ? "🎉" : mood === "focus" ? "👀" : "💬";
-  return (
-    <div
-      className="absolute pointer-events-none"
-      style={{
-        zIndex: 55,
-        left: "50%",
-        transform: "translateX(-50%)",
-        top: "12%",
-      }}
-    >
-      <div className={`world-customer-bubble world-customer-bubble-${mood}`}>
-        <div className="world-customer-bubble-avatar-wrap">
-          <div className="world-customer-bubble-avatar">{emoji}</div>
-          <span className="world-customer-emote">{emote}</span>
-        </div>
-        <div className="max-w-md">
-          <div className="world-customer-bubble-card">
-            <div className="font-bold text-cyan-700">{lineEn}</div>
-            <div className="text-xs text-slate-500 mt-0.5 font-medium">{lineZh}</div>
-            {hint && <div className="world-customer-bubble-hint">🛄 装: {hint}</div>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// v0.33.30 (Ep106 customer-ribbon): CustomerBubble 已抽到 src/components/worlds/CustomerBubble.tsx
 
 function IntroPanel({
   order,
