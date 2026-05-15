@@ -16,6 +16,10 @@ import { useNavigate } from "react-router-dom";
 import { Stars, OrbitControls } from "@react-three/drei";
 import { WorldsCanvas } from "../../components/worlds/WorldsCanvas";
 import { WORLDS, type WorldDef } from "../../content/worlds/worlds";
+import {
+  getAllBaibaoStats,
+  getAllXingfanStats,
+} from "../../lib/worlds/worldsProgress";
 import { WorldOrb } from "../../components/worlds/WorldOrb";
 
 // 3 orb 在 X 轴上等距分布（左 / 中 / 右），间距拉大避免拥挤
@@ -29,6 +33,8 @@ export function WorldsHomePage() {
   const navigate = useNavigate();
   const [hoverWorld, setHoverWorld] = useState<WorldDef | null>(null);
   const recommended = WORLDS.find((w) => w.unlocked) ?? WORLDS[0]!;
+  // v0.33.36 (Ep112 dock-progress-stars): 加载 per-world 完成总数，给 dock chip 显示 1-3 颗 ⭐ 进度
+  const worldsProgress = useWorldsProgress();
 
   const handleSelect = (world: WorldDef) => {
     if (!world.unlocked) return;
@@ -106,6 +112,7 @@ export function WorldsHomePage() {
         focusId={(hoverWorld ?? recommended).id}
         onHover={setHoverWorld}
         onSelect={handleSelect}
+        progressByWorld={worldsProgress}
       />
 
       {/* ===== Hover overlay (不可见，仅捕获 hover 状态用于 CenterPanel) ===== */}
@@ -387,15 +394,64 @@ function WorldsBgParticles() {
   );
 }
 
+/**
+ * v0.33.36 (Ep112 dock-progress-stars): 加载所有世界总完成数
+ *  - baibao: sum(getAllBaibaoStats)
+ *  - xingfan: sum(getAllXingfanStats)
+ *  - 其他世界（如 moxi 待解锁）: 0
+ *  - 用 dexie meta 读，async 一次性 mount load
+ */
+function useWorldsProgress(): Record<string, number> {
+  const [progress, setProgress] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [baibao, xingfan] = await Promise.all([
+          getAllBaibaoStats(),
+          getAllXingfanStats(),
+        ]);
+        if (cancelled) return;
+        setProgress({
+          baibao: Object.values(baibao).reduce((a, b) => a + b, 0),
+          xingfan: Object.values(xingfan).reduce((a, b) => a + b, 0),
+        });
+      } catch {
+        // 静默 — 失败就保持 0
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return progress;
+}
+
+/**
+ * v0.33.36 (Ep112 dock-progress-stars): 完成数 → 星级 (0-3)
+ *  - 0:  0 单（新手 / 未玩）
+ *  - 1+: 1 ⭐
+ *  - 5+: 2 ⭐
+ *  - 15+: 3 ⭐ (满级)
+ */
+function progressToStarTier(n: number): number {
+  if (n >= 15) return 3;
+  if (n >= 5) return 2;
+  if (n >= 1) return 1;
+  return 0;
+}
+
 // v0.32.59 (Ep35 N): 底部 3 world dock chip
 function WorldDock({
   focusId,
   onHover,
   onSelect,
+  progressByWorld,
 }: {
   focusId: string;
   onHover: (w: WorldDef | null) => void;
   onSelect: (w: WorldDef) => void;
+  progressByWorld: Record<string, number>;
 }) {
   return (
     <div
@@ -454,6 +510,32 @@ function WorldDock({
         @media (prefers-reduced-motion: reduce) {
           .worlds-dock-chip { transition: none; }
         }
+        /* v0.33.36 (Ep112 dock-progress-stars): chip 内 ⭐ 行 — 1-3 颗按完成数显示 */
+        .worlds-dock-stars-row {
+          display: inline-flex;
+          gap: 1px;
+          margin-top: 0.18rem;
+          line-height: 1;
+        }
+        .worlds-dock-star {
+          font-size: 10.5px;
+          display: inline-block;
+          line-height: 1;
+          filter: drop-shadow(0 0 4px var(--star-glow, rgba(251, 191, 36, 0.85)));
+          animation: worlds-dock-star-twinkle 1.9s ease-in-out infinite;
+        }
+        .worlds-dock-star.empty {
+          opacity: 0.18;
+          filter: none;
+          animation: none;
+        }
+        @keyframes worlds-dock-star-twinkle {
+          0%, 100% { transform: scale(0.92); opacity: 0.82; }
+          50%      { transform: scale(1.18); opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .worlds-dock-star { animation: none; }
+        }
       `}</style>
       {WORLDS.map((w) => {
         const isFocus = w.id === focusId;
@@ -505,6 +587,34 @@ function WorldDock({
             </div>
             {!w.unlocked && (
               <div className="text-[9px] font-bold text-slate-500 mt-0.5">🔒 锁定</div>
+            )}
+            {/* v0.33.36 (Ep112 dock-progress-stars): unlocked chip 显示 1-3 颗 ⭐ 进度勋章
+               永远渲染 3 个槽（已得点亮，未得灰），保持 chip 高度恒定 */}
+            {w.unlocked && (
+              <div
+                className="worlds-dock-stars-row"
+                aria-label={`完成 ${progressByWorld[w.id] ?? 0} 单`}
+                style={
+                  {
+                    ["--star-glow" as string]: `${w.accent}cc`,
+                  } as React.CSSProperties
+                }
+              >
+                {Array.from({ length: 3 }).map((_, i) => {
+                  const tier = progressToStarTier(progressByWorld[w.id] ?? 0);
+                  const lit = i < tier;
+                  return (
+                    <span
+                      key={i}
+                      className={`worlds-dock-star${lit ? "" : " empty"}`}
+                      style={{ animationDelay: `${i * 0.32}s` }}
+                      aria-hidden
+                    >
+                      ⭐
+                    </span>
+                  );
+                })}
+              </div>
             )}
             {/* v0.32.89 (Ep65 EEEEEE): focus chip 主题色发光下划线 indicator
                 hover 时其他 chip 也 preview 一道暗淡线（仅 unlocked） */}
