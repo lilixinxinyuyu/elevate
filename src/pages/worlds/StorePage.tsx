@@ -16,9 +16,11 @@ import {
 } from "../../components/worlds/store/StoreMiniGame";
 import {
   ORDERS,
+  STORE_ITEMS,
   calcOrderTotalCent,
   calcOrderChangeCent,
   formatYuan,
+  type Order,
 } from "../../lib/worlds/storeOrders";
 import { incrementBuildingComplete } from "../../lib/worlds/worldsProgress";
 import { MascotPIP } from "../../components/atelier/MascotPIP";
@@ -70,22 +72,32 @@ export function StorePage() {
   // v0.32.21: BGM
   useBgm("store");
 
+  // v0.33.46 (Ep120 store-receipt-summary): 弹"购物小票"再 advance
+  const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const handleOrderComplete = async () => {
     const newCount = completedCount + 1;
     setCompletedCount(newCount);
     setJustCompleted(true);
     window.setTimeout(() => setJustCompleted(false), 1800);
-    if (newCount >= ORDERS.length) {
-      // 3 单完成 → 入库 + 奖励 + 回地图
-      trigger("complete", "+5 XP · 客人都满意！");
+    // v0.33.46: 先弹小票，由 onDismiss 推进
+    setReceiptOrder(order);
+    const isFinal = newCount >= ORDERS.length;
+    if (isFinal) {
       await incrementBuildingComplete("store");
+    }
+  };
+  const dismissReceipt = () => {
+    setReceiptOrder(null);
+    const newCount = completedCount;
+    const isFinal = newCount >= ORDERS.length;
+    if (isFinal) {
+      trigger("complete", "+5 XP · 客人都满意！");
       setShowReward(true);
       window.setTimeout(() => {
         navigate("/worlds/baibao");
-      }, 2800);
+      }, 2200);
     } else {
       trigger("correct", `${newCount}/${ORDERS.length} 单完成`);
-      // 进入下一单 intro
       setOrderIdx(newCount);
       setPhase("intro");
     }
@@ -180,6 +192,11 @@ export function StorePage() {
 
       {/* 完成奖励弹窗 */}
       {showReward && <RewardOverlay />}
+
+      {/* v0.33.46 (Ep120 store-receipt-summary): 单完成弹小票 → 用户确认推进 */}
+      {receiptOrder && (
+        <ReceiptOverlay order={receiptOrder} onDismiss={dismissReceipt} />
+      )}
 
       {/* 老师小进 PIP — 实时反应玩家进度 */}
       <MascotPIP
@@ -280,4 +297,185 @@ function RewardOverlay() {
 // helper for typing
 function getOrder() {
   return ORDERS[0]!;
+}
+
+/**
+ * v0.33.46 (Ep120 store-receipt-summary): 购物小票 modal
+ *  - paper texture amber/cream 背景 + dashed 切边 (rect chunky)
+ *  - itemized list: emoji + name + 单价×数量 = 小计
+ *  - total + paid + change due 三行分账
+ *  - 入场 paper-unroll-style scale-y animation (0 → 1, 380ms)
+ *  - 下方按钮"继续 →" 用户主动 dismiss
+ *  - prefers-reduced-motion: 关入场动画，直接 fade-in
+ */
+function ReceiptOverlay({
+  order,
+  onDismiss,
+}: {
+  order: Order;
+  onDismiss: () => void;
+}) {
+  const total = calcOrderTotalCent(order);
+  const change = calcOrderChangeCent(order);
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center pointer-events-auto"
+      style={{
+        zIndex: 75,
+        background: "rgba(0, 0, 0, 0.45)",
+        backdropFilter: "blur(4px)",
+      }}
+    >
+      <style>{`
+        .store-receipt {
+          position: relative;
+          width: min(86vw, 380px);
+          padding: 1.4rem 1.2rem 1.1rem;
+          background:
+            repeating-linear-gradient(
+              0deg,
+              rgba(120, 53, 15, 0.04) 0px,
+              rgba(120, 53, 15, 0.04) 1px,
+              transparent 1px,
+              transparent 24px
+            ),
+            linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+          color: #451a03;
+          border: 3px solid #f59e0b;
+          border-radius: 14px;
+          box-shadow:
+            0 0 0 4px rgba(245, 158, 11, 0.22),
+            0 18px 40px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 rgba(255, 255, 255, 0.65);
+          transform-origin: top center;
+          animation: store-receipt-unroll 380ms cubic-bezier(.34, 1.56, .64, 1);
+        }
+        @keyframes store-receipt-unroll {
+          0%   { transform: scaleY(0.02); opacity: 0; }
+          60%  { transform: scaleY(1.06); opacity: 1; }
+          100% { transform: scaleY(1); opacity: 1; }
+        }
+        .store-receipt-title {
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 0.2em;
+          text-align: center;
+          color: #7c2d12;
+          text-transform: uppercase;
+          margin-bottom: 0.3rem;
+        }
+        .store-receipt-subtitle {
+          font-size: 10.5px;
+          text-align: center;
+          color: #92400e;
+          letter-spacing: 0.12em;
+          margin-bottom: 0.85rem;
+          padding-bottom: 0.65rem;
+          border-bottom: 1.5px dashed #d97706;
+        }
+        .store-receipt-row {
+          display: flex;
+          align-items: center;
+          font-family: ui-monospace, monospace;
+          font-size: 13px;
+          font-weight: 700;
+          padding: 0.3rem 0;
+          border-bottom: 1px dotted rgba(217, 119, 6, 0.4);
+        }
+        .store-receipt-row-emoji { font-size: 18px; line-height: 1; margin-right: 0.45rem; }
+        .store-receipt-row-name { flex: 1; color: #451a03; }
+        .store-receipt-row-calc { color: #7c2d12; }
+        .store-receipt-totals {
+          margin-top: 0.7rem;
+          padding-top: 0.65rem;
+          border-top: 2px dashed #d97706;
+          font-family: ui-monospace, monospace;
+          font-size: 13px;
+        }
+        .store-receipt-totals-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 0.18rem 0;
+          font-weight: 800;
+        }
+        .store-receipt-totals-row.grand {
+          font-size: 16px;
+          margin-top: 0.35rem;
+          padding-top: 0.45rem;
+          border-top: 1px solid rgba(120, 53, 15, 0.35);
+          color: #15803d;
+        }
+        .store-receipt-dismiss {
+          margin-top: 1.1rem;
+          width: 100%;
+          padding: 0.7rem 1rem;
+          background: linear-gradient(180deg, #fbbf24, #f59e0b);
+          color: #ffffff;
+          border-radius: 14px;
+          border: 3px solid #ffffff;
+          box-shadow:
+            0 4px 0 rgba(0, 0, 0, 0.18),
+            0 8px 20px rgba(245, 158, 11, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.55);
+          font-weight: 900;
+          font-size: 16px;
+          letter-spacing: 0.05em;
+          text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+          cursor: pointer;
+        }
+        .store-receipt-dismiss:hover {
+          filter: brightness(1.08);
+          transform: translateY(-1px);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .store-receipt { animation: none; }
+        }
+      `}</style>
+      <div className="store-receipt" role="dialog" aria-label="购物小票">
+        <div className="store-receipt-title">🧾 和平小卖部</div>
+        <div className="store-receipt-subtitle">
+          客人 · {order.customerEmoji} · 第 {order.index} 单
+        </div>
+        {order.requests.map((req) => {
+          const item = STORE_ITEMS[req.itemId];
+          if (!item) return null;
+          const subtotal = item.priceCent * req.quantity;
+          return (
+            <div key={req.itemId} className="store-receipt-row">
+              <span className="store-receipt-row-emoji" aria-hidden>
+                {item.emoji}
+              </span>
+              <span className="store-receipt-row-name">
+                {item.name} × {req.quantity}
+              </span>
+              <span className="store-receipt-row-calc">
+                {formatYuan(item.priceCent)} → {formatYuan(subtotal)}
+              </span>
+            </div>
+          );
+        })}
+        <div className="store-receipt-totals">
+          <div className="store-receipt-totals-row">
+            <span>总价</span>
+            <span>{formatYuan(total)}</span>
+          </div>
+          <div className="store-receipt-totals-row">
+            <span>客付</span>
+            <span>{formatYuan(order.paidCent)}</span>
+          </div>
+          <div className="store-receipt-totals-row grand">
+            <span>找零 ✅</span>
+            <span>{formatYuan(change)}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="store-receipt-dismiss"
+          onClick={onDismiss}
+        >
+          继续 → 下一单
+        </button>
+      </div>
+    </div>
+  );
 }
