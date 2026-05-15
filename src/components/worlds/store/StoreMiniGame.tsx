@@ -221,6 +221,24 @@ export function StoreMiniGame({
   // 检测 scan 阶段完成
   const allScanned = scannedIds.size === itemInstances.length;
 
+  // v0.33.35 (Ep111 store-coin-tray-arc): 飞行硬币 + 落盘 splash
+  interface FlyingCoinItem {
+    key: number;
+    coin: Coin;
+    fromX: number;
+    fromZ: number;
+    startedAt: number;
+  }
+  const [flyingCoins, setFlyingCoins] = useState<FlyingCoinItem[]>([]);
+  const [traySplashes, setTraySplashes] = useState<{ key: number; startedAt: number }[]>([]);
+  const coinReduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+
   /** v0.32.13: 超额放币 → wrong + reject（DraggableObject 自动 snap 回） */
   const handleCoinDrop = (instanceId: string, valueCent: number): boolean => {
     const newTotal = trayCent + valueCent;
@@ -235,6 +253,34 @@ export function StoreMiniGame({
     setCoinsUsed((prev) => new Set(prev).add(instanceId));
     setTrayCent(newTotal);
     onFeedback?.("drop");
+    // v0.33.35 (Ep111 store-coin-tray-arc): 找到原硬币 origin，spawn 飞行 + splash
+    if (!coinReduceMotion) {
+      const inst = coinInstances.find((c) => c.instanceId === instanceId);
+      if (inst) {
+        const flyKey = Date.now() + Math.random();
+        setFlyingCoins((prev) => [
+          ...prev,
+          {
+            key: flyKey,
+            coin: inst.coin,
+            fromX: inst.origin[0],
+            fromZ: inst.origin[1],
+            startedAt: performance.now(),
+          },
+        ]);
+        window.setTimeout(() => {
+          setFlyingCoins((prev) => prev.filter((f) => f.key !== flyKey));
+          const splashKey = Date.now() + Math.random();
+          setTraySplashes((prev) => [
+            ...prev,
+            { key: splashKey, startedAt: performance.now() },
+          ]);
+          window.setTimeout(() => {
+            setTraySplashes((prev) => prev.filter((s) => s.key !== splashKey));
+          }, 520);
+        }, 680);
+      }
+    }
     return true;
   };
 
@@ -305,6 +351,14 @@ export function StoreMiniGame({
           toZ={SCAN_ZONE.z}
           startedAt={f.startedAt}
         />
+      ))}
+
+      {/* v0.33.35 (Ep111 store-coin-tray-arc): change phase 硬币飞行 + 落盘 splash */}
+      {flyingCoins.map((f) => (
+        <FlyingCoin key={f.key} item={f} />
+      ))}
+      {traySplashes.map((s) => (
+        <TraySplash key={s.key} startedAt={s.startedAt} />
       ))}
 
       {/* v0.33.28 (Ep104 store-scan-laser): 红色 laser beam + 命中端 emissive 闪 */}
@@ -772,6 +826,129 @@ function ScanLaser({
           toneMapped={false}
         />
       </mesh>
+    </group>
+  );
+}
+
+/**
+ * v0.33.35 (Ep111 store-coin-tray-arc): 找零阶段硬币飞行
+ *  - 680ms arc: xz 线性 lerp + y sin(πk) * 0.28 抛物 + scale 1→0.85 + Y 自旋 2.4 圈
+ *  - 用 Coin3D 真实硬币几何（不是虚化 ghost）
+ */
+function FlyingCoin({
+  item,
+}: {
+  item: {
+    coin: Coin;
+    fromX: number;
+    fromZ: number;
+    startedAt: number;
+  };
+}) {
+  const groupRef = useRef<Group>(null);
+  const DURATION_MS = 680;
+  useFrame(() => {
+    if (!groupRef.current) return;
+    const elapsed = performance.now() - item.startedAt;
+    const k = Math.min(1, elapsed / DURATION_MS);
+    const ease = 1 - Math.pow(1 - k, 2);
+    const x = item.fromX + (TRAY_ZONE.x - item.fromX) * ease;
+    const z = item.fromZ + (TRAY_ZONE.z - item.fromZ) * ease;
+    const baseY = COUNTER_Y + 0.04;
+    const arc = Math.sin(Math.PI * k) * 0.28;
+    groupRef.current.position.set(x, baseY + arc, z);
+    groupRef.current.rotation.y = ease * Math.PI * 2.4;
+    const sc = 1 - ease * 0.15;
+    groupRef.current.scale.setScalar(sc);
+  });
+  return (
+    <group ref={groupRef} position={[item.fromX, COUNTER_Y + 0.04, item.fromZ]}>
+      <Coin3D coin={item.coin} />
+    </group>
+  );
+}
+
+/**
+ * v0.33.35 (Ep111 store-coin-tray-arc): 落盘 splash —— emerald ring 散开 + 8 颗 amber spark
+ */
+function TraySplash({ startedAt }: { startedAt: number }) {
+  const ringMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const ringMeshRef = useRef<THREE.Mesh>(null);
+  const sparkGroupRef = useRef<Group>(null);
+  const sparkData = useMemo(() => {
+    const arr: { vx: number; vy: number; vz: number }[] = [];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.random() * 0.4;
+      const speed = 0.25 + Math.random() * 0.18;
+      arr.push({
+        vx: Math.cos(a) * speed,
+        vy: 0.5 + Math.random() * 0.3,
+        vz: Math.sin(a) * speed,
+      });
+    }
+    return arr;
+  }, []);
+  const DURATION_MS = 520;
+  useFrame(() => {
+    const ringMat = ringMatRef.current;
+    const ringMesh = ringMeshRef.current;
+    const sparkGroup = sparkGroupRef.current;
+    if (!ringMat || !ringMesh || !sparkGroup) return;
+    const elapsed = (performance.now() - startedAt) / 1000;
+    const tMax = DURATION_MS / 1000;
+    const k = Math.min(1, elapsed / tMax);
+    const ease = 1 - Math.pow(1 - k, 3);
+    ringMesh.scale.setScalar(0.4 + ease * 1.8);
+    ringMat.opacity = 0.85 * (1 - ease);
+    sparkGroup.children.forEach((child, i) => {
+      const d = sparkData[i];
+      if (!d) return;
+      const mesh = child as THREE.Mesh;
+      mesh.position.set(
+        d.vx * elapsed,
+        0.05 + d.vy * elapsed - 1.5 * elapsed * elapsed,
+        d.vz * elapsed,
+      );
+      mesh.scale.setScalar(0.025 * (1 - ease));
+      const mat = mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.95 * (1 - ease) * (1 - ease);
+    });
+  });
+  return (
+    <group position={[TRAY_ZONE.x, COUNTER_Y + 0.02, TRAY_ZONE.z]}>
+      <mesh
+        ref={ringMeshRef}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+        renderOrder={3}
+      >
+        <ringGeometry args={[TRAY_ZONE.radius * 0.55, TRAY_ZONE.radius * 0.78, 32]} />
+        <meshBasicMaterial
+          ref={ringMatRef}
+          color="#10b981"
+          transparent
+          opacity={0.85}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          side={THREE.DoubleSide}
+          toneMapped={false}
+        />
+      </mesh>
+      <group ref={sparkGroupRef}>
+        {sparkData.map((_, i) => (
+          <mesh key={i} raycast={() => null}>
+            <sphereGeometry args={[1, 6, 4]} />
+            <meshBasicMaterial
+              color="#fde68a"
+              transparent
+              opacity={0}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+              toneMapped={false}
+            />
+          </mesh>
+        ))}
+      </group>
     </group>
   );
 }
