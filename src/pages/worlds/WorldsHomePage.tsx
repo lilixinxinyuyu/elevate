@@ -200,6 +200,31 @@ function WorldsHomeDecor() {
           .worlds-hero-ribbon,
           .worlds-hero-ribbon-sparkle { animation: none; }
         }
+        /* v0.33.22 (Ep98 FFFFFFFF): 星座连线 idle drift —
+           stroke-dashoffset 让虚线沿连线"能量流动"，左/右两条反方向跑，
+           节奏一长一短，配合现有 SMIL twinkle 让背景活起来。 */
+        @media (prefers-reduced-motion: no-preference) {
+          .worlds-constellation-line {
+            animation: worlds-constellation-flow 4.8s linear infinite;
+          }
+          .worlds-constellation-line.alt {
+            animation-duration: 6.2s;
+            animation-direction: reverse;
+          }
+          @keyframes worlds-constellation-flow {
+            0%   { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: -2; }
+          }
+          /* 整 SVG 极慢漂移 — 0.6° 倾斜回摆，模拟夜空缓行 */
+          .worlds-constellation-svg {
+            transform-origin: 50% 30%;
+            animation: worlds-constellation-sway 14s ease-in-out infinite;
+          }
+          @keyframes worlds-constellation-sway {
+            0%, 100% { transform: rotate(-0.4deg) translateY(0); }
+            50%      { transform: rotate(0.4deg)  translateY(-0.6px); }
+          }
+        }
       `}</style>
       <div className="worlds-hero-ribbon-wrap">
         <span className="worlds-hero-ribbon-sparkle left" aria-hidden>✦</span>
@@ -207,23 +232,26 @@ function WorldsHomeDecor() {
         <span className="worlds-hero-ribbon-sparkle right" aria-hidden>✦</span>
       </div>
 
-      {/* 装饰 SVG: 顶部 + 两侧的星座线 + 散点星星 */}
+      {/* 装饰 SVG: 顶部 + 两侧的星座线 + 散点星星
+         v0.33.22 (Ep98 FFFFFFFF): 整 SVG 加 sway class — 左右轻摆模拟夜空缓行 */}
       <svg
-        className="absolute inset-0 w-full h-full"
+        className="worlds-constellation-svg absolute inset-0 w-full h-full"
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
         style={{ opacity: 0.5 }}
       >
-        {/* 星座连线（左上）*/}
+        {/* 星座连线（左上）— stroke-dashoffset 流动 */}
         <polyline
+          className="worlds-constellation-line"
           points="6,18 14,12 22,20 30,14"
           stroke="rgba(167,139,250,0.7)"
           strokeWidth="0.18"
           strokeDasharray="0.6,0.4"
           fill="none"
         />
-        {/* 星座连线（右上）*/}
+        {/* 星座连线（右上）— 反方向、更慢 */}
         <polyline
+          className="worlds-constellation-line alt"
           points="78,16 86,24 94,18"
           stroke="rgba(251,191,36,0.7)"
           strokeWidth="0.18"
