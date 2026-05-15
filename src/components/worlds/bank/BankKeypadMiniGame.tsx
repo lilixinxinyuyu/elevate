@@ -11,7 +11,7 @@
  *   - 比较: 输错时显示"还差 / 多了 ¥X.XX" → 大小比较
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BankOrder } from "../../../lib/worlds/bankOrders";
 import { formatYuan } from "../../../lib/worlds/storeOrders";
 
@@ -30,6 +30,17 @@ export function BankKeypadMiniGame({ order, onOrderComplete, onFeedback }: BankK
   const [locked, setLocked] = useState(false);
   const inputCent = digits === "" ? 0 : parseInt(digits, 10);
   const diff = order.targetCent - inputCent;
+  // v0.33.24 (Ep100 RRRRR): match 时大数字 360° flip + emerald glow
+  // flipKey 每次"非匹配 → 匹配"过渡时 +1，给大数字 div 当 React key 让 animation 重启
+  const matched = inputCent > 0 && inputCent === order.targetCent;
+  const [flipKey, setFlipKey] = useState(0);
+  const prevMatchedRef = useRef(false);
+  useEffect(() => {
+    if (matched && !prevMatchedRef.current) {
+      setFlipKey((k) => k + 1);
+    }
+    prevMatchedRef.current = matched;
+  }, [matched]);
 
   const press = (d: string) => {
     if (locked) return;
@@ -87,13 +98,49 @@ export function BankKeypadMiniGame({ order, onOrderComplete, onFeedback }: BankK
       style={{ zIndex: 60 }}
     >
       <div className="pointer-events-auto world-panel" style={{ maxWidth: "min(92vw, 380px)", width: "100%" }}>
+        {/* v0.33.24 (Ep100 RRRRR): bank big-number flip + emerald glow */}
+        <style>{`
+          .bank-big-amount {
+            display: inline-block;
+            perspective: 700px;
+            transform-style: preserve-3d;
+            transition: text-shadow 220ms ease-out;
+          }
+          .bank-big-amount.is-matched {
+            animation: bank-big-flip 720ms cubic-bezier(.34, 1.56, .64, 1);
+            text-shadow:
+              0 0 8px rgba(16, 185, 129, 0.6),
+              0 0 18px rgba(52, 211, 153, 0.55),
+              0 0 32px rgba(16, 185, 129, 0.35);
+          }
+          @keyframes bank-big-flip {
+            0%   { transform: rotateY(0deg)   scale(1); }
+            35%  { transform: rotateY(180deg) scale(1.2); }
+            70%  { transform: rotateY(360deg) scale(1.08); }
+            100% { transform: rotateY(360deg) scale(1); }
+          }
+          .bank-display-frame.is-matched {
+            box-shadow:
+              0 0 0 3px rgba(16, 185, 129, 0.55),
+              0 0 24px rgba(52, 211, 153, 0.45),
+              inset 0 0 14px rgba(167, 243, 208, 0.45) !important;
+            transition: box-shadow 260ms ease-out;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .bank-big-amount.is-matched { animation: none; }
+          }
+        `}</style>
         <div className="world-panel-title flex items-center justify-between">
           <span>🏧 柜台终端</span>
           <span className="text-[10px] text-blue-700 font-mono">BANK-T01</span>
         </div>
 
         {/* 显示屏 */}
-        <div className="rounded-xl border-2 border-blue-300 bg-gradient-to-b from-blue-50 to-blue-100 p-3 mb-3 shadow-inner">
+        <div
+          className={`bank-display-frame rounded-xl border-2 border-blue-300 bg-gradient-to-b from-blue-50 to-blue-100 p-3 mb-3 shadow-inner ${
+            matched ? "is-matched" : ""
+          }`}
+        >
           <div className="text-[10px] text-blue-700 font-bold uppercase tracking-wide flex justify-between">
             <span>目标 / 当前</span>
             <span className="font-mono">{order.targetCent} ¢</span>
@@ -103,10 +150,13 @@ export function BankKeypadMiniGame({ order, onOrderComplete, onFeedback }: BankK
               {formatYuan(order.targetCent)}
             </div>
             <div
-              className={`font-mono text-2xl font-black ${
+              key={flipKey}
+              className={`bank-big-amount font-mono text-2xl font-black ${
+                matched ? "is-matched" : ""
+              } ${
                 inputCent === 0
                   ? "text-slate-300"
-                  : inputCent === order.targetCent
+                  : matched
                     ? "text-emerald-600"
                     : "text-blue-900"
               }`}
