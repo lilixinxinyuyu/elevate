@@ -104,7 +104,11 @@ export function WorldsHomePage() {
       <CenterPanel
         recommended={recommended}
         hoverWorld={hoverWorld}
-        onStart={() => navigate(recommended.route)}
+        onStart={() => {
+          // v0.33.54 (Ep128 world-cta-particle-burst): 点 CTA 时延迟 320ms navigate，给粒子爆裂时间
+          // 实际 burst 由 CenterPanel 内部触发（不需要从外面 prop drilling state）
+          window.setTimeout(() => navigate(recommended.route), 320);
+        }}
         progressByWorld={worldsProgress}
       />
 
@@ -781,18 +785,12 @@ function CenterPanel({ recommended, hoverWorld, onStart, progressByWorld }: Cent
           />
         </div>
       </div>
-      {/* 推荐 / 开始按钮 — v0.32.59 (Ep35 N): chunky cta + accent glow */}
-      <button
-        type="button"
-        onClick={onStart}
-        className="pointer-events-auto world-cta-btn"
-        style={{
-          ["--world-accent" as string]: recommended.accent,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 0 32px ${recommended.accent}aa, inset 0 1px 0 rgba(255,255,255,0.4)`,
-        } as React.CSSProperties}
-      >
-        {recommended.emoji} 出发去 {recommended.name}
-      </button>
+      {/* 推荐 / 开始按钮 — v0.32.59 (Ep35 N): chunky cta + accent glow
+         v0.33.54 (Ep128 world-cta-particle-burst): 点击 burst 12 颗 sparkle */}
+      <CtaStartButton
+        recommended={recommended}
+        onStart={onStart}
+      />
     </div>
   );
 }
@@ -803,6 +801,111 @@ function CenterPanel({ recommended, hoverWorld, onStart, progressByWorld }: Cent
  *  - 3 颗 ⭐ tier（沿用 Ep112 阈值：1+/5+/15+）
  *  - hover 不同 world 切换时 chip 内容随之更新
  */
+/**
+ * v0.33.54 (Ep128 world-cta-particle-burst): "出发去 X" CTA 按钮 + 点击 burst
+ *  - 点击瞬间在按钮中心 spawn 12 颗 sparkle emoji 向外飞 + fade
+ *  - 320ms 后 navigate (与外部 setTimeout 配套)
+ *  - 单次性 burst：用 burstKey 递增触发 React re-render
+ *  - prefers-reduced-motion: 跳过 burst，直接 navigate
+ */
+function CtaStartButton({
+  recommended,
+  onStart,
+}: {
+  recommended: WorldDef;
+  onStart: () => void;
+}) {
+  const [burstKey, setBurstKey] = useState(0);
+  const handleClick = () => {
+    setBurstKey((k) => k + 1);
+    onStart();
+  };
+  return (
+    <div className="relative inline-block pointer-events-auto">
+      <style>{`
+        .cta-burst-particle {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          font-size: 16px;
+          line-height: 1;
+          pointer-events: none;
+          filter: drop-shadow(0 0 6px var(--cta-glow, rgba(251, 191, 36, 0.85)));
+          animation: cta-burst-fly 520ms cubic-bezier(.22, 1, .36, 1) forwards;
+        }
+        @keyframes cta-burst-fly {
+          0%   { transform: translate(-50%, -50%) scale(0.4) rotate(0deg); opacity: 0; }
+          18%  { transform: translate(calc(-50% + var(--burst-mx) * 0.3), calc(-50% + var(--burst-my) * 0.3)) scale(1.2) rotate(60deg); opacity: 1; }
+          100% { transform: translate(calc(-50% + var(--burst-mx)), calc(-50% + var(--burst-my))) scale(0.6) rotate(220deg); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .cta-burst-particle { animation: none; opacity: 0; }
+        }
+      `}</style>
+      <button
+        type="button"
+        onClick={handleClick}
+        className="world-cta-btn"
+        style={
+          {
+            ["--world-accent" as string]: recommended.accent,
+            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 0 32px ${recommended.accent}aa, inset 0 1px 0 rgba(255,255,255,0.4)`,
+          } as React.CSSProperties
+        }
+      >
+        {recommended.emoji} 出发去 {recommended.name}
+      </button>
+      {/* burst particles —— key 变才 re-mount 触发 animation */}
+      {burstKey > 0 && (
+        <CtaBurst key={burstKey} accent={recommended.accent} />
+      )}
+    </div>
+  );
+}
+
+function CtaBurst({ accent }: { accent: string }) {
+  const glyphs = ["✨", "⭐", "💫", "🌟", "✦", "✧"];
+  const N = 12;
+  const particles = Array.from({ length: N }, (_, i) => {
+    const angle = (i / N) * Math.PI * 2 + (i % 2) * 0.18;
+    const dist = 80 + (i % 4) * 14; // 80-122px
+    const mx = Math.cos(angle) * dist;
+    const my = Math.sin(angle) * dist;
+    const g = glyphs[i % glyphs.length]!;
+    const delay = (i % 3) * 35;
+    return { mx, my, g, delay, i };
+  });
+  return (
+    <span
+      aria-hidden
+      style={
+        {
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          ["--cta-glow" as string]: `${accent}d0`,
+        } as React.CSSProperties
+      }
+    >
+      {particles.map((p) => (
+        <span
+          key={p.i}
+          className="cta-burst-particle"
+          style={
+            {
+              ["--burst-mx" as string]: `${p.mx}px`,
+              ["--burst-my" as string]: `${p.my}px`,
+              animationDelay: `${p.delay}ms`,
+            } as React.CSSProperties
+          }
+        >
+          {p.g}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function CenterPanelProgress({
   accent,
   done,
