@@ -206,6 +206,9 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
             opacity={0.9}
           />
         </mesh>
+        {/* v0.33.25 (Ep101 ZZZZ): cart 外圈宽 halo —— exact 时翠绿强脉动；
+           未完成时淡 cyan 微亮提示"这是放置区" */}
+        <CartHalo active={exact} />
         <Text
           position={[0, 0.2, 0]}
           fontSize={0.035}
@@ -290,6 +293,65 @@ export function AirportMiniGame({ order, onOrderComplete, onFeedback }: AirportM
  * v0.32.80 (Ep56 TTTT): 抓取区 ring 动态变色 — 有行李进窗口时切 cyan→amber + 快脉动。
  * 用 useFrame 实时检测，不接 React state（避免每帧重渲）。
  */
+/**
+ * v0.33.25 (Ep101 ZZZZ): cart 外圈 halo —— additive 大圈 ring + 透明度/scale 脉动
+ *  - active (exact 正确): emerald 强光 + 4.5Hz 大幅脉动 + scale ±8%
+ *  - idle (未对): 弱 cyan + 2Hz 微脉动 + scale ±2%
+ *  - prefers-reduced-motion: 关脉动，保留静态光圈
+ */
+function CartHalo({ active }: { active: boolean }) {
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
+  useFrame(({ clock }) => {
+    const mat = matRef.current;
+    const m = meshRef.current;
+    if (!mat || !m) return;
+    if (reduceMotion) {
+      mat.opacity = active ? 0.6 : 0.14;
+      m.scale.setScalar(1);
+      mat.color.set(active ? "#10b981" : "#06b6d4");
+      return;
+    }
+    const t = clock.elapsedTime;
+    const freq = active ? 4.5 : 2;
+    const baseOp = active ? 0.55 : 0.12;
+    const opAmp = active ? 0.22 : 0.05;
+    const scaleAmp = active ? 0.08 : 0.02;
+    const phase = Math.sin(t * freq);
+    mat.opacity = baseOp + phase * opAmp;
+    m.scale.setScalar(1 + phase * scaleAmp);
+    mat.color.set(active ? "#10b981" : "#06b6d4");
+  });
+  return (
+    <mesh
+      ref={meshRef}
+      position={[0, 0.012, 0]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      raycast={() => null}
+      renderOrder={2}
+    >
+      <ringGeometry args={[CART_ZONE.radius + 0.05, CART_ZONE.radius + 0.22, 48]} />
+      <meshBasicMaterial
+        ref={matRef}
+        color="#06b6d4"
+        transparent
+        opacity={0.12}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        side={THREE.DoubleSide}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
 function GrabZoneRing({
   instances,
   loadedIds,
