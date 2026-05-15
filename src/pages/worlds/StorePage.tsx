@@ -6,7 +6,7 @@
  * 流程: 3 单 cycle (扫码 → 找零) → +XP + 装饰碎片 → 回 baibao 地图
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { WorldsCanvas } from "../../components/worlds/WorldsCanvas";
 import { StoreEnvironment } from "../../components/worlds/store/StoreScene";
@@ -59,6 +59,30 @@ export function StorePage() {
   // v0.32.23: rootRef → screen shake / zoom on reaction
   // v0.32.41: useWorldFeedback 提前，给 useMascotReaction 用 lastReaction
   const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+
+  // v0.33.50 (Ep124 customer-reaction-propagate): 顾客反馈表情 (mirror Ep123 bakery)
+  const [reactionEmoji, setReactionEmoji] = useState<string | null>(null);
+  const reactionTimerRef = useRef<number | null>(null);
+  const triggerWithReaction: typeof trigger = (kind, label, hint) => {
+    trigger(kind, label, hint);
+    const emoji =
+      kind === "complete"
+        ? "🥳"
+        : kind === "correct" || kind === "drop"
+          ? "😋"
+          : kind === "pickup"
+            ? "👌"
+            : kind === "wrong"
+              ? "😟"
+              : null;
+    if (emoji) {
+      if (reactionTimerRef.current) window.clearTimeout(reactionTimerRef.current);
+      setReactionEmoji(emoji);
+      reactionTimerRef.current = window.setTimeout(() => {
+        setReactionEmoji(null);
+      }, 1200);
+    }
+  };
 
   // Mascot 反应：mood 由 game state 决定 + reaction 短暂覆盖
   const mood: MascotMood = showReward
@@ -136,7 +160,7 @@ export function StorePage() {
             phase={phase}
             onPhaseChange={setPhase}
             onOrderComplete={handleOrderComplete}
-            onFeedback={trigger}
+            onFeedback={triggerWithReaction}
           />
         )}
       </WorldsCanvas>
@@ -157,6 +181,7 @@ export function StorePage() {
       <CustomerBubble
         emoji={order.customerEmoji}
         mood={justCompleted ? "happy" : phase === "intro" ? "hello" : "focus"}
+        reactionEmoji={reactionEmoji}
         hint={
           phase === "scan"
             ? `要扫: ${order.requests

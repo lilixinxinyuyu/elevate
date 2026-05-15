@@ -6,7 +6,7 @@
  * 玩法: 3 单装行李 cycle (英语量词+复数) → +XP + 装饰碎片 → 回 xingfan 地图
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { WorldsCanvas } from "../../components/worlds/WorldsCanvas";
 import { StoreEnvironment } from "../../components/worlds/store/StoreScene";
@@ -47,6 +47,30 @@ export function AirportPage() {
 
   // v0.32.41: useWorldFeedback 提前
   const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+
+  // v0.33.50 (Ep124 customer-reaction-propagate): 顾客反馈表情
+  const [reactionEmoji, setReactionEmoji] = useState<string | null>(null);
+  const reactionTimerRef = useRef<number | null>(null);
+  const triggerWithReaction: typeof trigger = (kind, label, hint) => {
+    trigger(kind, label, hint);
+    const emoji =
+      kind === "complete"
+        ? "🥳"
+        : kind === "correct" || kind === "drop"
+          ? "😋"
+          : kind === "pickup"
+            ? "👌"
+            : kind === "wrong"
+              ? "😟"
+              : null;
+    if (emoji) {
+      if (reactionTimerRef.current) window.clearTimeout(reactionTimerRef.current);
+      setReactionEmoji(emoji);
+      reactionTimerRef.current = window.setTimeout(() => {
+        setReactionEmoji(null);
+      }, 1200);
+    }
+  };
 
   const mood: MascotMood = showReward
     ? "allDone"
@@ -103,7 +127,7 @@ export function AirportPage() {
           <AirportMiniGame
             order={order}
             onOrderComplete={handleOrderComplete}
-            onFeedback={trigger}
+            onFeedback={triggerWithReaction}
           />
         )}
       </WorldsCanvas>
@@ -123,6 +147,7 @@ export function AirportPage() {
       <CustomerBubble
         emoji={order.customerEmoji}
         mood={justCompleted ? "happy" : phase === "intro" ? "hello" : "focus"}
+        reactionEmoji={reactionEmoji}
         hintIcon="🛄 装:"
         hint={
           phase === "loading"

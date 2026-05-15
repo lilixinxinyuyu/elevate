@@ -8,7 +8,7 @@
  * 跟 StorePage 共用 KayKit StoreEnvironment（柜台+装饰），只换 mini-game 内容。
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { WorldsCanvas } from "../../components/worlds/WorldsCanvas";
 import { StoreEnvironment } from "../../components/worlds/store/StoreScene";
@@ -52,6 +52,29 @@ export function BankPage() {
 
   // v0.32.41: useWorldFeedback 提前给 useMascotReaction 用
   const { trigger, pulses, lastReaction, rootRef } = useWorldFeedback();
+
+  // v0.33.50 (Ep124 customer-reaction-propagate): 顾客反馈表情
+  // Bank "pickup" 每按键就触发 — skip 避免 emoji 闪太频
+  const [reactionEmoji, setReactionEmoji] = useState<string | null>(null);
+  const reactionTimerRef = useRef<number | null>(null);
+  const triggerWithReaction: typeof trigger = (kind, label, hint) => {
+    trigger(kind, label, hint);
+    const emoji =
+      kind === "complete"
+        ? "🥳"
+        : kind === "correct" || kind === "drop"
+          ? "😋"
+          : kind === "wrong"
+            ? "😟"
+            : null; // bank skip pickup（每按键不闪）
+    if (emoji) {
+      if (reactionTimerRef.current) window.clearTimeout(reactionTimerRef.current);
+      setReactionEmoji(emoji);
+      reactionTimerRef.current = window.setTimeout(() => {
+        setReactionEmoji(null);
+      }, 1200);
+    }
+  };
 
   const mood: MascotMood = showReward
     ? "allDone"
@@ -114,7 +137,7 @@ export function BankPage() {
         <BankKeypadMiniGame
           order={order}
           onOrderComplete={handleOrderComplete}
-          onFeedback={trigger}
+          onFeedback={triggerWithReaction}
         />
       )}
 
@@ -132,6 +155,7 @@ export function BankPage() {
       <CustomerBubble
         emoji={order.customerEmoji}
         mood={justCompleted ? "happy" : phase === "intro" ? "hello" : "focus"}
+        reactionEmoji={reactionEmoji}
         hint={
           phase === "exchange"
             ? `需要换零: ${formatYuan(order.targetCent)}`
