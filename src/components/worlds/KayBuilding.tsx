@@ -48,6 +48,9 @@ export function KayBuilding({
   onHoverChange,
 }: KayBuildingProps) {
   const groupRef = useRef<Group>(null);
+  // v0.33.20 (Ep96 LLLLL): hover ring 在地面下显光 — 用 mesh + basicMaterial
+  const ringRef = useRef<THREE.Mesh>(null);
+  const ringMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const [hovered, setHovered] = useState(false);
   const { scene } = useGLTF(gltfUrl);
 
@@ -65,10 +68,24 @@ export function KayBuilding({
     return c;
   }, [scene]);
 
-  useFrame(() => {
+  useFrame((state) => {
     if (!groupRef.current) return;
     const targetLift = hovered && active ? 0.25 : 0;
     groupRef.current.position.y += (targetLift - groupRef.current.position.y) * 0.15;
+    // v0.33.20 (Ep96 LLLLL): hover 整体缓速放大 +8%；松手缓回 1.0
+    const targetScale = hovered && active ? 1.08 : 1.0;
+    const curScale = groupRef.current.scale.x;
+    const nextScale = curScale + (targetScale - curScale) * 0.15;
+    groupRef.current.scale.setScalar(nextScale);
+    // v0.33.20 (Ep96 LLLLL): hover ring 透明度 + 呼吸 pulse
+    if (ringMatRef.current && ringRef.current) {
+      const targetOp = hovered && active ? 0.72 : 0;
+      ringMatRef.current.opacity +=
+        (targetOp - ringMatRef.current.opacity) * 0.18;
+      const t = state.clock.getElapsedTime();
+      const pulse = 1 + Math.sin(t * 3.5) * 0.04;
+      ringRef.current.scale.setScalar(pulse);
+    }
   });
 
   const handleOver = (e: { stopPropagation: () => void }) => {
@@ -99,6 +116,28 @@ export function KayBuilding({
       onPointerOut={handleOut}
     >
       <primitive object={clonedScene} scale={scale} />
+
+      {/* v0.33.20 (Ep96 LLLLL): hover 地面 ring — accent 主题色光圈 + 呼吸脉动
+         renderOrder + depthWrite=false 保证压在草坪上不被遮挡 */}
+      {active && (
+        <mesh
+          ref={ringRef}
+          position={[0, 0.03, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          renderOrder={2}
+          raycast={() => null}
+        >
+          <ringGeometry args={[1.05, 1.42, 48]} />
+          <meshBasicMaterial
+            ref={ringMatRef}
+            color={accentColor}
+            transparent
+            opacity={0}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      )}
 
       {/* 状态光球 (active 才显示) */}
       {active && (
