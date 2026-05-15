@@ -377,12 +377,19 @@ function buildUserPrompt(args: GenerateRequest, batchIndex: number): string {
   // v0.31.86: 把 caller-known fields 提前算好喂给 composer（v0.31.72 4 P 原则的
   // "已知字段不让 AI 反复猜"轴）。之前 composeQuestionUserPrompt 接 prefilledFields
   // 但调用方从来不传，整段 prefilled 渲染块运行时不可达。现在补上 wiring。
+  // v0.33.39 (bug fix): 加 examPriority + abilityDimension prefill —— 之前 AI 自己猜
+  // 在 balance_lab 等复杂题型上经常把 exam_priority 填成 number → schema fail
+  const skillMeta = args.skillId
+    ? (PROMPTS.skillMetadata as Record<string, { ability: string[]; examPriority: string } | undefined>)[args.skillId]
+    : undefined;
   const prefilledFields = {
     grade: 4,
     cognitiveLevel: cognitiveLevelFor(args.skillId ?? "", gameType),
     questionFormat: questionFormatFor(gameType),
     estimatedTimeSeconds: estimatedTimeFor(gameType, difficulty),
     status: "approved",
+    examPriority: skillMeta?.examPriority,
+    abilityDimension: skillMeta?.ability,
   };
 
   return composeQuestionUserPrompt({

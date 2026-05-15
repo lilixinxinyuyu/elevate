@@ -1544,6 +1544,357 @@ export const PROMPTS = {
       ]
     }
   },
+  "skillMetadata": {
+    "large_place_value": {
+      "ability": [
+        "concept"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "large_read_write": {
+      "ability": [
+        "concept",
+        "calculation"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "large_compare": {
+      "ability": [
+        "concept",
+        "reasoning"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "large_rewrite_wan_yi": {
+      "ability": [
+        "concept",
+        "calculation"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "large_approx_rounding": {
+      "ability": [
+        "concept",
+        "strategy"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "angle_types": {
+      "ability": [
+        "concept",
+        "spatial"
+      ],
+      "examPriority": "HIGH_SMALL"
+    },
+    "angle_measure": {
+      "ability": [
+        "spatial",
+        "strategy"
+      ],
+      "examPriority": "HIGH_SMALL"
+    },
+    "int_mul_3_by_2": {
+      "ability": [
+        "calculation"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "int_mul_estimation": {
+      "ability": [
+        "calculation",
+        "strategy"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "mixed_ops_brackets": {
+      "ability": [
+        "calculation",
+        "strategy"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "distributive_law": {
+      "ability": [
+        "strategy",
+        "reasoning"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "simplify_integer": {
+      "ability": [
+        "strategy",
+        "calculation"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "grid_coordinates": {
+      "ability": [
+        "spatial",
+        "concept"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "div_3_by_2_trial": {
+      "ability": [
+        "calculation",
+        "strategy"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "div_adjust_quotient": {
+      "ability": [
+        "calculation",
+        "strategy"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "speed_time_distance": {
+      "ability": [
+        "modeling",
+        "calculation"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "negative_temperature": {
+      "ability": [
+        "concept",
+        "modeling"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "zero_not_pos_neg": {
+      "ability": [
+        "concept"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "probability_compare": {
+      "ability": [
+        "reasoning",
+        "data"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "decimal_meaning_place": {
+      "ability": [
+        "concept"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "decimal_unit_conversion": {
+      "ability": [
+        "concept",
+        "modeling"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "decimal_compare": {
+      "ability": [
+        "concept",
+        "reasoning"
+      ],
+      "examPriority": "NORMAL"
+    },
+    "decimal_add_sub_vertical": {
+      "ability": [
+        "calculation"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "decimal_add_sub_simplify": {
+      "ability": [
+        "strategy",
+        "calculation"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "decimal_inverse_problem": {
+      "ability": [
+        "modeling",
+        "reasoning"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "triangle_inequality": {
+      "ability": [
+        "reasoning",
+        "spatial"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "triangle_angle_sum": {
+      "ability": [
+        "calculation",
+        "spatial"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "triangle_classification": {
+      "ability": [
+        "concept",
+        "spatial"
+      ],
+      "examPriority": "HIGH_SMALL"
+    },
+    "decimal_mul_meaning": {
+      "ability": [
+        "concept"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "decimal_point_shift": {
+      "ability": [
+        "concept",
+        "strategy"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "decimal_mul_vertical": {
+      "ability": [
+        "calculation"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "decimal_product_digits": {
+      "ability": [
+        "strategy",
+        "calculation"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "decimal_mul_mix": {
+      "ability": [
+        "calculation",
+        "modeling"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "decimal_mul_simplify": {
+      "ability": [
+        "strategy",
+        "reasoning"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "decimal_price_quantity": {
+      "ability": [
+        "modeling",
+        "calculation"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "decimal_speed_distance": {
+      "ability": [
+        "modeling",
+        "calculation"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "decimal_work_total": {
+      "ability": [
+        "modeling",
+        "calculation"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "decimal_segment_pricing": {
+      "ability": [
+        "modeling",
+        "reasoning"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "observe_front_top_left": {
+      "ability": [
+        "spatial"
+      ],
+      "examPriority": "LOW_SMALL"
+    },
+    "letter_expression": {
+      "ability": [
+        "concept",
+        "modeling"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "equation_meaning_balance": {
+      "ability": [
+        "concept",
+        "reasoning"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "equation_solve_simple": {
+      "ability": [
+        "calculation",
+        "strategy"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "equation_one_step_word": {
+      "ability": [
+        "modeling",
+        "calculation"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "equation_two_step_word": {
+      "ability": [
+        "modeling",
+        "reasoning"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "equation_meeting_problem": {
+      "ability": [
+        "modeling",
+        "reasoning"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "equation_sum_difference": {
+      "ability": [
+        "modeling",
+        "reasoning"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "data_bar_chart": {
+      "ability": [
+        "data",
+        "calculation"
+      ],
+      "examPriority": "HIGH_SMALL"
+    },
+    "average_meaning": {
+      "ability": [
+        "concept",
+        "data"
+      ],
+      "examPriority": "MUST_SMALL"
+    },
+    "average_compute": {
+      "ability": [
+        "calculation",
+        "data"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "average_inverse_total": {
+      "ability": [
+        "modeling",
+        "data"
+      ],
+      "examPriority": "MUST_BIG"
+    },
+    "average_inverse_missing": {
+      "ability": [
+        "modeling",
+        "reasoning"
+      ],
+      "examPriority": "MUST_BIG"
+    }
+  },
   "qualityPrinciples": "# 题库质量四原则（rock-solid · 出题与质检共用）\n\n> 这是出题模型和质检模型共享的**唯一**判定依据。优先级高于一切训练偏好和习惯。\n> 出题前过一遍这 4 条；质检时按这 4 条出 verdict。\n\n四原则故意只有 4 条 —— 多了 LLM 注意力会被切散，新场景反而 generalize 不动。所有 vfail 模式都应该能映射到这 4 条之一；如果不能，去精炼现有原则的\"判定细节\"，**不要**加 P5。\n\n---\n\n## P1：题面纯净 — 学生看到的字段不带元注解 + stem 不嵌入 filler\n\n**核心**：学生 UI 渲染路径上的所有字段（`stem` / `subquestions[].clues` / `subquestions[].prompt` / `options[].text` / `hints[].text` / `feedback_correct` / `feedback_wrong`）都是\"老师在讲台上说的话\"。元信息（哪个错、为什么错、归类是什么）属于\"老师备课本\"，永不进 UI。\n\n**判定方法**：把这段文字念给 4 年级 Selena 听，**不变味**才合格。一旦念出来等于直接告诉她\"哪个不选 / 哪个无关 / 该用什么思路\"，就 fail。\n\n### P1.5：stem 极简，不嵌入无关人物/句子\n\nword_problem_lab 的 stem 应该**只描述数学情境**，**不要**嵌入无关 filler（如\"技术员赵叔叔说设备运行稳定\"、\"水果店在市中心\"、\"今年是植树节\"等社交/装饰性句子）。\n\n**原因**：\n1. clue_pick 阶段已经给学生 4-5 条 clue 让她自己判断哪些有用。无关信息**应该放 clues**，不应该 stem 重复。\n2. stem 多一句无关，Selena 读题时间多 3-5 秒。4 年级读字慢，filler 是认知负担。\n\n**反例（v0.31.80 实际看到）**：\n```\nstem: \"工厂一台机器每分钟生产零件 2.75 个，今天上午工作了 36 分钟，下午工作了 24 分钟。\n       技术员赵叔叔说设备运行稳定。今天一共生产多少个零件？\"\n                                          ↑ 这句应放 clues 或删除\n```\n\n**正例**：\n```\nstem: \"工厂一台机器每分钟生产零件 2.75 个，今天上午工作了 36 分钟，下午工作了 24 分钟。\n       今天一共生产多少个零件？\"\nclues: [\n  \"每分钟生产零件 2.75 个\",\n  \"上午工作了 36 分钟\",\n  \"下午工作了 24 分钟\",\n  \"技术员赵叔叔说设备运行稳定\",   ← 无关 filler 在这里，让学生自己判断\n  \"零件是金属做的\"\n]\ncorrect: [0, 1, 2]\n```\n\n**判定**：stem 里如果有\"X 叔叔说\"、\"今年是 Y 节\"、\"地点在 Z\"、\"今天天气 W\"等不进入计算的句子 → 移到 clues 数组。\n\n### 反例（必须 reject）\n\n```jsonc\n// ❌ clue 文本里挂元注解\n\"clues\": [\n  \"苹果树和橘子树共 156 棵\",\n  \"果园占地 2 公顷（无关）\",            // ← \"（无关）\" 直接告诉学生别选\n  \"设橘子树为 x（解题设定，非已知）\"      // ← \"（非已知）\" 同上\n]\n\n// ❌ option 上挂 errorTag 这种 meta 字段\n\"options\": [\n  { \"id\": \"A\", \"text\": \"x + 6x = 156\", \"correct\": true },\n  { \"id\": \"B\", \"text\": \"6x - x = 156\", \"correct\": false,\n    \"errorTag\": \"sum_vs_difference_confusion\" }   // ← errorTag 不能在 student-visible 字段\n]\n\n// ❌ hint 文本里直接给关键运算\n\"hints\": [{ \"text\": \"156 ÷ 7 除不尽，用小数表示\", ... }]\n//                ↑ 这是答案不是 hint，把核心步骤暴露了\n\n// ❌ feedback_wrong 复述\"错答路径\"\n\"feedback_wrong\": \"再读一遍，注意别用差倍式 6x - x = 156\"\n//                              ↑ 直接点名错答的具体形式\n```\n\n### 正例\n\n```jsonc\n// ✅ clue 是中性陈述，让学生自己判断哪些有用\n\"clues\": [\n  \"苹果树和橘子树共 156 棵\",\n  \"苹果树是橘子树的 6 倍\",\n  \"果园占地 2 公顷\",                  // ← 不挂\"（无关）\"标签，让学生判断\n  \"果树都是三年生\"\n]\n\n// ✅ errorTag 信息保留在 admin-only 字段（带 _internal_ 前缀），不在 options 上\n\"options\": [\n  { \"id\": \"A\", \"text\": \"x + 6x = 156\", \"correct\": true },\n  { \"id\": \"B\", \"text\": \"6x - x = 156\", \"correct\": false }\n],\n\"_internal_option_diagnostics\": [\n  { \"id\": \"B\", \"errorTag\": \"sum_vs_difference_confusion\" }\n]\n\n// ✅ hint 给思路方向，不给关键运算结果\n\"hints\": [{ \"text\": \"把橘子树看成 1 份，苹果树看成 6 份，一共多少份？\", ... }]\n\n// ✅ feedback 鼓励 + 概念引导，不复述错答\n\"feedback_wrong\": \"再仔细读一次「一共有」这三个字提示什么关系？\"\n```\n\n---\n\n## P2：数学闭合 + 现实合常识\n\n**核心**：质检模型自己跑一遍这两步：\n1. **数学闭合**：把题面给的关系列方程，能在题目要求的数域里有解？（整数情境必须整除；小数情境最多 2 位小数）\n2. **现实约束**：答案在该 unit 下合常识？（果树 / 人数 / 本数必须整数；钱数 ≥ 0；距离 / 时间合理；不能出现\"小数棵\"或\"负年龄\"）\n\n**判定方法**：在 verdict 里写\"我把数学跑了一遍：x = ?，是否整数 / 是否合常识\"。\n\n### 反例\n\n- \"苹果树是橘子树的 6 倍，共 156 棵\" → 7x = 156 → x ≈ 22.29 棵 ❌（果树不能小数）\n- \"正方形周长 25 厘米\" → 边长 6.25 厘米（4 年级范围 OK，但若要求\"用整数厘米\"就 fail）\n- \"Selena 比妹妹大 -3 岁\" → 年龄差不能负\n\n### 正例\n\n- \"苹果树是橘子树的 6 倍，共 154 棵\" → 7x = 154 → x = 22 ✓\n- \"正方形周长 24 厘米\" → 边长 6 厘米 ✓\n\n**重要**：generation 模型出题前必须自查\"我设计的数字能整除 / 答案合常识吗\"。reject 由 generation 自己提前避免，比 judge 后筛 cheaper。\n\n---\n\n## P3：干扰项独立 — 不能靠\"题中数字的衍生\"凑数\n\n**核心**：每个 distractor 必须代表\"4 年级 Selena 真实会犯的一种具体错误\"，每个 distractor 都要能用一句话说清\"这个数从哪种误解来\"。\n\n**判定方法**：对每个干扰项问：\"这个值，学生用什么走偏的思路会算出来？\" 答不上来或者答的是\"题中另一个量的数值\" → reject。\n\n### 反例\n\n题：x + 6x = 156，正答 22。\n- distractor `133.71` ❌ —— 这是 6x 的值（苹果树棵数）。学生看到一个奇葩小数 vs 三个整数，秒识别\"这肯定不是 x\"，等于排除一个 + 暗示正答也是奇葩小数（22.29）。\n- distractor `6` ❌ —— 题面给的\"6 倍\"的 6，原样塞进选项 = 学生最先排除的。\n- distractor `156` ❌ —— 题面给的总数，原样塞进选项 = 同上。\n\n### 正例\n\n- distractor `26` ✓ —— 来源：\"总数 ÷ 倍数 = 156 ÷ 6 = 26\"，是把和倍当差倍 / 漏 +1 的典型错。\n- distractor `20` ✓ —— 来源：\"总数 ÷ (倍数+2) = 156 ÷ 8 = 19.5 ≈ 20\"，把\"+1\"算成\"+2\"。\n- distractor `18` ✓ —— 来源：\"倍数 × 3 = 18\"，凭直觉乱猜小整数。\n\n四个选项 1 正 + 3 错，每个错都\"看起来合理 + 走的是真实学生会走的思路\"。\n\n---\n\n## P4：skill 真考 —— 不能蒙对、不能取巧\n\n**核心**：题目必须迫使学生**用那个 skill 的核心思路**才能做出来。能用排除法、量级估算、看选项长相秒杀的题，等于没考 skill。\n\n**判定方法**：把题给一个\"会基础算术但不会该 skill\"的孩子做，能不能凭运气 / 量级 / 选项相对长度蒙对一半以上？能蒙对 → fail。\n\n### 反例\n\n- 选项 `[22, 22.29, 26, 134]`：看到 22.29 这种奇葩小数立刻排除，134 是另一个量的衍生立刻排除，剩下 22 / 26 二选一。**未列方程也能 50% 蒙对**。\n- 数学倍数题选项 `[1, 2, 1000000, 22]`：量级唯一合理的 22。**直接看出**，不用计算。\n- 选择\"最佳数量关系\"，4 个选项里只有 1 个是加号、其他都是减号 → 题面\"一共\"立刻暴露。\n\n### 正例\n\n- 选项 `[18, 20, 22, 26]`：4 个量级一致，区分度只来自\"是否抓住了 7 份的关系\"。\n- 数量关系 4 选项：`x + 6x = 156` / `6x - x = 156` / `x + 6 = 156` / `x × 6 = 156`，都是\"看起来合理的设方程方式\"，必须真懂\"和倍 / 差倍 / 数量积\"才能选对。\n\n---\n\n## 共用提示\n\n- 每条原则**违反 = 该题应被 reject**（severity 4-5），但保留路径如下：\n  - **P1 违反** = 一定 reject（题面 leak 不可修，数据已 contam）\n  - **P2 违反** = 一定 reject（数学错就是错，不能\"修 hint\" 救活）\n  - **P3 违反** = borderline（可以重新设计 distractor 救活）\n  - **P4 违反** = borderline（可以调 distractor 区分度救活）\n- 出题时**4 条同时考虑**，不分先后。\n- 如果某新出现的 vfail 模式 4 条都覆盖不到，先想想能不能精炼现有原则的\"判定细节\"；不要轻易加 P5。",
   "qualityRubric": {
     "math": "# Selena 题库附加要求（搭配四原则使用）\n\n> 本文是**机械约束**清单（题型、字段、时间、字数等可工程化检查的事项）。\n> 价值观层面的判定见 [quality-principles.md](./quality-principles.md) — 那 4 条是核心，本文是辅助。\n\n---\n\n## 1. 教材范围\n\n### 数学（北师大版四年级）\n\n- **下册** 涵盖：小数的意义和加减、认识方程、观察物体、三角形、小数乘法、平均数、复式条形图。（unit_id 以 `G4B_` 开头，term 字段值是 `\"下册\"`）\n- **上册** 涵盖：大数认识、线与角、三位数乘两位数、运算律、方向与位置、除法、生活中的负数、可能性。（unit_id 以 `G4A_` 开头，term 字段值是 `\"上册\"`）\n- ⛔ **不许超纲**：比例、百分数、函数、图形旋转坐标、立体体积公式（5 年级及以上禁止）。\n- ⛔ **不许跑题**：题干必须紧扣 `skill_id` 主题。出\"积的小数位数\"却写\"求平均数\"是严重错误。\n\n---\n\n## 2. 题型必备字段\n\n所有题型都必须包含：\n\n| 字段 | 说明 |\n|---|---|\n| `question_id` | 唯一 id，AI 题以 `AI_` 开头 |\n| `stem` | 题干，**≥ 8 个汉字**，紧扣 skill_id |\n| `solution_steps` | 至少 1 步分析（字符串数组） |\n| `hints` | 至少 1 条 `{ text, penalty }`（penalty 整数 1-3） |\n| `feedback_correct` / `feedback_wrong` | 各一句话，儿童化语气 |\n| `common_errors` | ≥ 2 项 `{ tag, error, remediation }` |\n| `tags` | 数组，AI 题必须含 `\"ai_generated\"` |\n\n> **注意**：`subjectId` / `term` / `unit_id` / `unit_name` / `skill_id` / `skill_name` / `grade` / `difficulty` / `game_type` / `question_format` / `estimated_time_seconds` / `exam_priority` / `ability_dimension` / `cognitive_level` / `status` 这些字段**会由系统在 user prompt 的「已确定的元数据」段告诉你确切的值，原样抄进每道题即可，不要自行造值**。\n\n按题型差异化的字段：\n\n- **plain_choice / cube_view / balance_lab / decimal_shifter / triangle_judge / shop_counter**\n  → `options: [{id:\"A\",text:\"...\"}, ...]` (4 选 1) + `answer: { type:\"choice\", value:\"A\" }`\n- **word_problem_lab**\n  → `subquestions: [...]` (clue_pick / choose / numeric 三步) + `answer: { type:\"multi_step\", steps:[...] }`\n- **vertical_repair / equation_builder / speed_match** 等迷你游戏\n  → 题型特定 schema，不需要 options\n\n---\n\n## 3. 时间表（estimated_time_seconds）\n\n> 调用方会在「已确定的元数据」给你 `estimated_time_seconds` 的具体值。下表只是参考。\n\n系统按 `elapsed/estimated` 算速度奖励：< 50% 闪电 +5 / < 80% 迅速 +3 / ≤ 100% 及时 +2 / > 100% 0 分 / > 150% 自动判错。\n\n| game_type | 难度 1-2 | 难度 3 | 难度 4-5 |\n|---|---|---|---|\n| `speed_match`（口算/快判） | 10s | 15s | 20s |\n| `plain_choice`（4 选 1） | 20s | 30s | 40s |\n| `decimal_shifter`（小数点） | 18s | 25s | 35s |\n| `cube_view`（立体观察） | 25s | 35s | 50s |\n| `triangle_judge`（三角形） | 22s | 30s | 40s |\n| `vertical_repair`（竖式） | 25s | 35s | 45s |\n| `balance_lab`（天平） | 35s | 50s | 65s |\n| `shop_counter`（购物） | 35s | 50s | 70s |\n| `clue_finder`（应用题读题） | 35s | 45s | 60s |\n| `word_problem_lab`（分阶段应用题） | 70s | 90s | 130s |\n\n### 长题加成\n\nstem 60-119 字 +15s；stem ≥ 120 字 +25s（不与上一条叠加）；任一 option > 20 字 / 多行 +15s；含图示/表格/竖式 +20s。最终 20-180s 内（语文阅读理解可到 240s）。\n\n---\n\n## 4. 题干语言质量\n\n### 4.1 ⛔ 禁用动词（数学）\n\n- **输 / 输入 / 报 / 送 / 提交 / 填入数字** → 用 \"答\" / \"选\" / \"写出\"\n- ❌ `x = 7 是不是方程的解？是输 1，否输 0`\n- ✅ `x = 7 是不是方程 x + 5 = 12 的解？是 → 答 1，不是 → 答 0`\n\n### 4.2 ⛔ 禁用句式\n\n- ❌ `0.30 和 0.3，相等输 0` — \"输 N\" 指令式\n- ❌ `0.6 表示 6 个？(输入数值：0.1 输 0.1)` — 题干嵌指令带括号注释\n- ❌ `0.45 中的 5 在哪一位？(1=十分位 2=百分位)` — 选项解释藏括号\n\n### 4.3 ✅ 正确写法\n\n- ✅ `0.30 和 0.3 相等吗？相等→答 0，不等→答 1`\n- ✅ 是非题用 plain_choice，options 是 \"是\" / \"不是\" / \"无法判断\"\n- ✅ `0.6 里面有几个 0.1？` → 直接问数量\n\n### 4.4 stem 长度\n\n**≥ 8 个汉字字符**。少于 8 字几乎肯定是失误。\n\n### 4.5 stem ↔ options 类型一致\n\n| stem 形式 | options 必须是 |\n|---|---|\n| `多少 / 几 / 是 X / 等于多少` 问数字 | 全部数字（含单位前缀也算） |\n| `哪个对 / 下面…正确的是` 问选项 | 完整短句或表达式 |\n\n⛔ **禁止**：stem 是数值题但 options 混入纯中文短语；或反过来。\n\n---\n\n## 5. 4 选 1 干扰项设计（具体落地见原则 P3）\n\n**1 正确 + 3 高质量干扰项的常见来源**：\n\n- 1 个 \"操作反了\"（比较时方向反 / 加减反 / 单位错）\n- 1 个 \"漏一步\"（少进位 / 少借位 / 少乘）\n- 1 个 \"接近但典型错误\"（小数点放错位 / 多个零少个零）\n\n⛔ **不要让 4 个选项相邻 1**（如 5/6/7/8）— 区分度太低。\n⛔ **不要使用题中给定数字的直接衍生**（如 6x 的值、总数 / 倍数 等）— 见原则 P3。\n\n---\n\n## 6. 答案与解析\n\n- `answer.value` **必须**指向真实存在的 option id（A/B/C/D）。\n- `solution_steps` 至少 1 步，简洁说明思路。\n- `feedback_correct` / `feedback_wrong` 各一句话，儿童化鼓励语气。\n- `common_errors` ≥ 2 项，`tag` 用学科常用 error tag。\n- `hints` ≥ 1 条，每条带 `penalty`（提示越具体扣分越多）。\n\n---\n\n## 7. 内容守则\n\n- ⛔ 不重复题干（参考已有 stems 列表，换情境/换数字/换字词）\n- ⛔ 不出现真实姓名（用 \"小明\" / \"小红\" 虚拟角色）\n- ⛔ 不放广告、政治、负面词\n- ✅ 题干用中文标点 + 半角数字\n- ✅ 选项之间区分度大\n\n---\n\n## 8. 难度标准\n\n| difficulty | 含义 |\n|---|---|\n| 1 | 单元最基础（识别概念、读数、对照表格） |\n| 2 | 一步运算 / 简单应用 |\n| 3 | 单元中等（默认 difficulty） |\n| 4 | 多步运算 / 较复杂应用题 |\n| 5 | 综合（跨概念，期末压轴级别） |\n\n⛔ **不要给 4 年级出难度 5 的奥数题**（复杂数论、组合数学）。",

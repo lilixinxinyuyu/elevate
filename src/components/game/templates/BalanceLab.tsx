@@ -22,7 +22,10 @@ export function BalanceLabPanel(props: TemplateRenderProps) {
 
   useEffect(() => {
     // 化简到 x = N 自动判定
+    // v0.33.39 (bug fix): 必须用户至少操作过一次 (history.length >= 1) 才允许自动判定
+    // 否则 parser 失败 / 初始状态就是 coef=1 & constLeft=0 时会立即误判错
     if (locked) return;
+    if (history.length === 0) return;
     if (state.coef === 1 && state.constLeft === 0) {
       // x = state.constRight
       const ok = Math.abs(state.constRight - target) <= 1e-9;
@@ -38,7 +41,7 @@ export function BalanceLabPanel(props: TemplateRenderProps) {
         });
       }, 350);
     }
-  }, [state, locked, target, onFinish, triggerFx]);
+  }, [state, locked, target, onFinish, triggerFx, history.length]);
 
   const apply = (op: Op) => {
     if (disabled || locked) return;
@@ -161,34 +164,65 @@ function parseEq(q: Question): EqState {
   let raw = "";
   for (const t of q.tags ?? []) if (t.startsWith("eq:")) raw = t.slice(3);
   if (!raw) {
-    if (q.answer.type === "number") {
-      return { coef: 1, constLeft: 0, constRight: q.answer.value };
-    }
-    return { coef: 1, constLeft: 0, constRight: 0 };
+    // v0.33.39 (bug fix): 无 eq: tag 时**不要 fallback 到 constRight=answer**
+    // 否则会立刻满足 useEffect 条件 → 自动判正 (无 hint visible) 或判错
+    // 给个不会立即自动 finish 的虚假状态：让 user 至少要 trigger 1 op
+    return { coef: 1, constLeft: 1, constRight: 1 };
   }
+  // v0.33.39 (bug fix): 兼容 prompt 教 AI 用的 `eq:left|right` 格式（| 分隔等号两边）
+  // 也兼容历史 `eq:left=right` 格式
+  const norm = raw
+    .replace(/\s+/g, "")
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/\|/g, "="); // | → = 统一处理
   // 极简 parser：支持 "ax+b=c" "ax-b=c" "x+b=c" "x-b=c" "ax=c"
-  const norm = raw.replace(/\s+/g, "").replace(/×/g, "*").replace(/÷/g, "/");
-  const m = norm.match(/^(\d*\.?\d*)x([+-]\d+\.?\d*)?=(-?\d+\.?\d*)$/);
+  const m = norm.match(/^(-?\d*\.?\d*)x([+-]\d+\.?\d*)?=(-?\d+\.?\d*)$/);
   if (m) {
-    const a = m[1] === "" || m[1] === undefined ? 1 : Number(m[1]);
+    const aRaw = m[1];
+    const a =
+      aRaw === "" || aRaw === undefined
+        ? 1
+        : aRaw === "-"
+          ? -1
+          : Number(aRaw);
     const b = m[2] === undefined ? 0 : Number(m[2]);
     const c = Number(m[3]);
     return { coef: a, constLeft: b, constRight: c };
   }
-  return { coef: 1, constLeft: 0, constRight: 0 };
+  // v0.33.39 (bug fix): parse 失败也不要 fallback 到 constLeft=0 / coef=1
+  // 那样会让 useEffect 在 user 操作后立刻判定 — 给个非 trivial state
+  return { coef: 1, constLeft: 1, constRight: 1 };
 }
 
 function suggestOps(s: EqState): Op[] {
+  // v0.33.39 (bug fix): 永远返回 4 个 op (正确操作 + 干扰项)，避免只显示 1 选项
   const out: Op[] = [];
+  // 1. 主操作：消除 constLeft（如果存在）
   if (s.constLeft > 0) out.push({ kind: "subRight", n: s.constLeft });
-  if (s.constLeft < 0) out.push({ kind: "addRight", n: -s.constLeft });
-  if (s.coef !== 1 && s.constLeft === 0) out.push({ kind: "div", n: s.coef });
-  // 干扰项
-  if (out.length < 2) {
-    if (s.constLeft >= 0) out.push({ kind: "addRight", n: 1 });
-    if (s.coef !== 1) out.push({ kind: "mul", n: 2 });
+  else if (s.constLeft < 0) out.push({ kind: "addRight", n: -s.constLeft });
+  // 2. 主操作：消除 coef（如果 constLeft 已 0）
+  if (s.coef !== 1 && s.coef !== 0 && s.constLeft === 0)
+    out.push({ kind: "div", n: s.coef });
+  // 3. 干扰项填充到 ≥ 4 个：始终有"两边加/减/乘/除"4 个方向
+  const distractorN = [1, 2, 3, 5, 10];
+  const candidates: Op[] = [
+    { kind: "addRight", n: distractorN[0]! },
+    { kind: "subRight", n: distractorN[1]! },
+    { kind: "mul", n: distractorN[1]! },
+    { kind: "div", n: distractorN[1]! },
+    { kind: "addRight", n: distractorN[2]! },
+    { kind: "subRight", n: distractorN[2]! },
+  ];
+  const labelKey = (op: Op) => `${op.kind}:${op.n}`;
+  const seen = new Set(out.map(labelKey));
+  for (const c of candidates) {
+    if (out.length >= 4) break;
+    const k = labelKey(c);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(c);
   }
-  // 最多 4 个
   return out.slice(0, 4);
 }
 

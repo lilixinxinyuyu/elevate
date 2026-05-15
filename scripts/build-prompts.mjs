@@ -134,6 +134,30 @@ try {
   /* 文件不存在 → 回落到 skill_name + global rubric */
 }
 
+// v0.33.39 (bug fix): 从 src/content/skills.ts 解析 skill → examPriority/ability metadata
+// 用于 functions/api/generate/questions.ts 在 prefilledFields 里注入正确 enum 值
+// (之前 AI 自己猜 → 经常 "received number" schema fail)
+const skillMetadata = (() => {
+  const out = {};
+  const skillsTsPath = join(PROJECT_ROOT, "src/content/skills.ts");
+  try {
+    const src = readFileSync(skillsTsPath, "utf8");
+    // 每行形如:  { id: "xxx", unitId: "...", name: "...", ability: ["a","b"], difficultyBase: N, priority: "...", examPriority: "ENUM" },
+    const lineRe = /\{\s*id:\s*"([^"]+)"[^}]*?ability:\s*\[([^\]]*)\][^}]*?examPriority:\s*"([^"]+)"/g;
+    let m;
+    while ((m = lineRe.exec(src)) !== null) {
+      const id = m[1];
+      const abilityRaw = m[2];
+      const examPriority = m[3];
+      const ability = [...abilityRaw.matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+      out[id] = { ability, examPriority };
+    }
+  } catch (e) {
+    console.warn("[build-prompts] WARN: src/content/skills.ts read failed:", e.message);
+  }
+  return out;
+})();
+
 const data = {
   /**
    * v0.31.72: 按 subject 拆分两份 — 数学 prompt 不再混入语文规则，反之亦然。
@@ -153,6 +177,8 @@ const data = {
   formatRubrics,
   /** v0.31.34：每个 skill 的精确教学范围（in/out scope + key formulas + common mistakes） */
   skillScope,
+  /** v0.33.39 (bug fix): skillId → { ability, examPriority } —— 让 functions 拿到 enum 值 prefill */
+  skillMetadata,
   /** v0.31.72：四原则 — 出题和质检共用 */
   qualityPrinciples: readMd("quality-principles.md"),
   /** 附加机械约束（题型字段 / 时间表 / 题干语言等），按 subject 过滤 */
