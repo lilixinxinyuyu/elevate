@@ -683,7 +683,9 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;
 let pushDirtyAfterFlight = false;
-const PUSH_DEBOUNCE_MS = 8000;
+// v0.33.57 (Ep131 P0 sync 近实时): 8000 → 2500ms — Selena 答完题最多 2.5s 上云
+// 代价：更多 fetch（但 D1 cheap）+ tab 关闭时 pending 风险大幅降低
+const PUSH_DEBOUNCE_MS = 2500;
 
 const pushListeners = new Set<(state: SyncState) => void>();
 
@@ -787,7 +789,9 @@ export function flushPushNow(): void {
 let lastPullAttemptAt = 0;
 export async function pullIfStale(opts: { minIntervalMs?: number } = {}): Promise<void> {
   const now = Date.now();
-  const minInterval = opts.minIntervalMs ?? 60_000;
+  // v0.33.57 (Ep131 P0 sync 近实时): 默认节流 60s → 15s
+  // visibility/focus 切换时拉得更勤；周期 pull (Layout 内 setInterval) 还是显式传 0/小数
+  const minInterval = opts.minIntervalMs ?? 15_000;
   if (pullInFlight) return;
   if (now - lastPullAttemptAt < minInterval) return;
   lastPullAttemptAt = now;

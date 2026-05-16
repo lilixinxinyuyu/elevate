@@ -55,16 +55,18 @@ export function Layout() {
   // pending 的防抖 push 立刻发出（fetch keepalive=true 让请求继续完成）。
   // v0.31.86: 把 4 个 listener 全部用具名 handler 注册并在 cleanup 里成对移除，
   // 避免 HMR / StrictMode 下叠加（之前只 cleanup 了 focus）。
+  // v0.33.57 (Ep131 P0 sync 近实时): 加 20s 周期 pull —— tab 一直可见时也持续拉
+  //   爸爸盯着 dashboard 也能看到 Selena 几秒前的进度，不再依赖 focus 事件
   useEffect(() => {
     function onVisibilityChange() {
       if (document.visibilityState === "visible") {
-        void pullIfStale();
+        void pullIfStale({ minIntervalMs: 5_000 }); // 切回可见 → 5s 内可重拉
       } else if (document.visibilityState === "hidden") {
         flushPushNow();
       }
     }
     function onFocus() {
-      void pullIfStale();
+      void pullIfStale({ minIntervalMs: 5_000 });
     }
     function onPageHide() {
       flushPushNow();
@@ -74,10 +76,36 @@ export function Layout() {
     window.addEventListener("pagehide", onPageHide);
     // 进 layout 立刻拉一次（覆盖"刷新页面没拉新数据"的情况）
     void pullIfStale({ minIntervalMs: 0 });
+    // v0.33.57 周期 pull：20s 间隔，只在 tab 可见时跑
+    const periodic = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void pullIfStale({ minIntervalMs: 18_000 });
+      }
+    }, 20_000);
+    // v0.33.57 周期 push retry：每 30s 检查 sync 错误状态，若有 lastError 触发 push 重试
+    // 处理"网络一次性 glitch 让 push 失败但本地仍有 dirty data"的场景
+    import("../db/cloudSync").then(({ getSyncState, schedulePushToCloud }) => {
+      const retryTimer = window.setInterval(() => {
+        if (document.visibilityState !== "visible") return;
+        const s = getSyncState();
+        if (s.lastError && s.lastError !== "no_password" && s.lastError !== "unauthorized" && !s.pushing) {
+          // 触发一次 immediate push（非 debounce），可能拯救之前失败的同步
+          schedulePushToCloud(0);
+        }
+      }, 30_000);
+      // 把 retry timer 也挂到 cleanup 上 — 用 closure 引用 periodic 同样模式
+      (window as unknown as { __syncRetryTimer?: number }).__syncRetryTimer = retryTimer;
+    });
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("pagehide", onPageHide);
+      window.clearInterval(periodic);
+      const retryTimer = (window as unknown as { __syncRetryTimer?: number }).__syncRetryTimer;
+      if (retryTimer) {
+        window.clearInterval(retryTimer);
+        (window as unknown as { __syncRetryTimer?: number }).__syncRetryTimer = undefined;
+      }
     };
   }, []);
 

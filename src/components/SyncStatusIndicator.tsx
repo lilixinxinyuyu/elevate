@@ -44,9 +44,25 @@ export function SyncStatusIndicator() {
     label = "同步中";
     title = state.pushing ? "正在上传到云端…" : "正在拉取最新进度…";
   } else if (state.lastError && state.lastError !== "no_password") {
+    // v0.33.57 (Ep131 P0 sync 近实时): 错误码 → 友好语言
     dotClass = "bg-rose-400";
-    label = "同步异常";
-    title = `上次失败：${state.lastError}（点击重试）`;
+    const err = state.lastError;
+    if (err === "unauthorized") {
+      label = "未授权";
+      title = "云端密码不对，去设置页重新输一次（点击重试）";
+    } else if (err.startsWith("network")) {
+      label = "网络异常";
+      title = `网络问题，2.5s 后自动重试（${err.slice(0, 60)}）`;
+    } else if (err.includes("payload_too_large")) {
+      label = "数据太大";
+      title = `本地缓存超过 8MB，去管理页清勋章图缓存（${err.slice(0, 80)}）`;
+    } else if (err.startsWith("http_5")) {
+      label = "服务器忙";
+      title = `云端 ${err.replace("http_", "")}, 自动重试中（点击立即重试）`;
+    } else {
+      label = "同步异常";
+      title = `${err}（点击重试）`;
+    }
   } else if (state.pendingPush) {
     dotClass = "bg-amber-300";
     label = "待同步";
