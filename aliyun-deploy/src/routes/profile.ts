@@ -20,6 +20,7 @@ import { Hono } from "hono";
 import type { Env } from "../lib/env";
 import { requireAuth, getUserId } from "../lib/auth";
 import { getOssConfig, ossGet, ossPut } from "../lib/oss";
+import { patchUserInIndex } from "../lib/users-index";
 
 const profile = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -168,6 +169,11 @@ profile.post("/", async (c) => {
   if (!put.ok) {
     return c.json({ ok: false, error: put.error }, 502);
   }
+  // Ep153 同步到 users-index
+  await patchUserInIndex(c.env, userId, {
+    profile: merged as unknown as Record<string, unknown>,
+    displayName: (merged.displayName as string) ?? userId,
+  });
   const missing = missingFields(merged);
   return c.json({
     ok: true,

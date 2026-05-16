@@ -27,6 +27,7 @@ import {
   resetPasswordForUser,
   addNewStudent,
 } from "../lib/auth-store";
+import { readUsersIndex, patchUserInIndex, rebuildIndexFromUserIds, type UserIndexEntry } from "../lib/users-index";
 
 const superAdmin = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -68,43 +69,46 @@ superAdmin.get("/users", async (c) => {
   const ids = await listKnownUserIdsAsync(c.env);
   const admins = getSuperAdmins(c.env);
 
-  const users = await Promise.all(
-    ids.map(async (uid) => {
-      // 关键限制：ESA EdgeRoutine 单次请求最多 **8 fetch**。
-      // 之前 4 reads × 3 users = 12 → 报 fetch_call_limit_exceeded。
-      // 回退到 2 reads per user (profile + snap HEAD) = 6 total for 3 users.
-      // KPI / summary preview 改成前端按需点 📊 / 🤖 时再单独 fetch (走自己的 endpoints).
-      const profileGet = await ossGet(cfg, `users/${uid}/profile.json`);
-      const snapHead = await ossHead(cfg, snapshotKey(uid));
-      let profile: Record<string, unknown> | null = null;
-      if (profileGet.ok && profileGet.text) {
-        try { profile = JSON.parse(profileGet.text); } catch { /* */ }
-      }
-      // KPI / summary preview 字段保留 null - 前端按需点 📊 / 🤖 拉
-      const latestSummary: { generatedAt?: number; preview?: string } | null = null;
-      const statsKpi: { todayAttempts?: number; last7Attempts?: number; correctRate?: number } | null = null;
-      return {
-        userId: uid,
-        isSuperAdmin: admins.has(uid),
-        profile,
-        snapshot: {
-          present: snapHead.ok,
-          lastModifiedMs: snapHead.lastModifiedMs ?? null,
-          etag: snapHead.etag ?? null,
-          bytes: snapHead.contentLength ?? null,
-        },
-        statsKpi,
-        latestSummary,
-      };
-    }),
-  );
+  // Ep153: 走 users-index.json (单 fetch)，避开 ESA 8 fetch 限制
+  const idx = await readUsersIndex(c.env);
+
+  const users = ids.map((uid) => {
+    const entry = idx.users[uid];
+    return {
+      userId: uid,
+      isSuperAdmin: admins.has(uid),
+      profile: entry?.profile ?? null,
+      snapshot: {
+        present: !!entry?.snapshotMs,
+        lastModifiedMs: entry?.snapshotMs ?? null,
+        etag: null,
+        bytes: entry?.snapshotBytes ?? null,
+      },
+      statsKpi: entry?.statsKpi ?? null,
+      latestSummary: entry?.latestSummary ?? null,
+      indexedAt: entry?.lastIndexedAt ?? null,
+    };
+  });
 
   return c.json({
     ok: true,
     count: users.length,
     superAdminCount: users.filter((u) => u.isSuperAdmin).length,
     asOf: Date.now(),
+    indexUpdatedAt: idx.updatedAt,
+    indexHasEntries: Object.keys(idx.users).length,
     users,
+  });
+});
+
+/** POST /api/super-admin/rebuild-index — 重建 users-index.json from per-user files */
+superAdmin.post("/rebuild-index", async (c) => {
+  const ids = await listKnownUserIdsAsync(c.env);
+  const idx = await rebuildIndexFromUserIds(c.env, ids);
+  return c.json({
+    ok: true,
+    rebuilt: Object.keys(idx.users).length,
+    indexUpdatedAt: idx.updatedAt,
   });
 });
 
@@ -199,6 +203,8 @@ superAdmin.post("/users/:userId/profile", async (c) => {
   if (!put.ok) {
     return c.json({ ok: false, error: put.error }, 502);
   }
+  // Ep153 同步到 users-index
+  await patchUserInIndex(c.env, targetUserId, { profile: merged, displayName: merged.displayName as string });
   return c.json({
     ok: true,
     targetUserId,
@@ -408,6 +414,14 @@ superAdmin.post("/users/:userId/agent-summary", async (c) => {
       { contentType: "application/json; charset=utf-8" },
     );
 
+    // Ep153 同步到 users-index
+    await patchUserInIndex(c.env, targetUserId, {
+      latestSummary: {
+        generatedAt: result.generatedAt,
+        preview: (result.summary ?? "").slice(0, 50),
+      },
+    });
+
     return c.json({ ok: true, ...result });
   } catch (e) {
     return c.json(
@@ -484,14 +498,19 @@ superAdmin.post("/users", async (c) => {
   if (body.displayName) {
     const cfg = getOssConfig(c.env);
     if (cfg) {
-      await ossPut(cfg, `users/${body.userId}/profile.json`, JSON.stringify({
+      const profile = {
         schemaVersion: 1,
         userId: body.userId,
         displayName: body.displayName.slice(0, 50),
         createdAt: Date.now(),
         createdBy: `super-admin:${getUserId(c)}`,
-      }, null, 2), { contentType: "application/json; charset=utf-8" });
+      };
+      await ossPut(cfg, `users/${body.userId}/profile.json`, JSON.stringify(profile, null, 2), { contentType: "application/json; charset=utf-8" });
+      await patchUserInIndex(c.env, body.userId, { profile, displayName: body.displayName.slice(0, 50) });
     }
+  } else {
+    // 即使没 displayName 也要 insert index entry
+    await patchUserInIndex(c.env, body.userId, { displayName: body.userId });
   }
   console.log(`[super-admin] ${getUserId(c)} created new user ${body.userId}`);
   return c.json({

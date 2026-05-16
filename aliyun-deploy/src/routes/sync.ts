@@ -20,6 +20,7 @@ import {
   snapshotKey,
   aiQuestionsKey,
 } from "../lib/oss";
+import { patchUserInIndex } from "../lib/users-index";
 
 type Ctx = Context<{ Bindings: Env; Variables: { userId: string } }>;
 
@@ -106,6 +107,7 @@ async function uploadHandler(c: Ctx): Promise<Response> {
 
   const sizeKB = (bodyText.length / 1024).toFixed(1);
   const key = snapshotKey(userId);
+  const version = Date.now();
 
   // 防 truncate（Ep148 救火）—— 不用 ossHead（V8 fetch HEAD 拿不到 Content-Length），
   // 而是读 stats.json sidecar（每次 push 都写 snapshotBytes）。
@@ -155,11 +157,25 @@ async function uploadHandler(c: Ctx): Promise<Response> {
       JSON.stringify({ ...stats, fetchedAt: Date.now(), snapshotBytes: bodyText.length }),
       { contentType: "application/json; charset=utf-8" },
     );
+    // Ep153 同步 users-index
+    const s = stats as {
+      today?: { attempts?: number };
+      last7Days?: { attempts?: number };
+      correctRateRecent100?: number;
+    };
+    await patchUserInIndex(c.env, userId, {
+      snapshotMs: version,
+      snapshotBytes: bodyText.length,
+      statsKpi: {
+        todayAttempts: s.today?.attempts ?? 0,
+        last7Attempts: s.last7Days?.attempts ?? 0,
+        correctRate: s.correctRateRecent100 ?? 0,
+      },
+    });
   } catch (e) {
     console.warn(`[sync/upload] stats compute failed for ${userId}:`, (e as Error).message);
   }
 
-  const version = Date.now();
   return c.json({
     ok: true,
     userId,
