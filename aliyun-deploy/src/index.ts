@@ -24,6 +24,7 @@ import sync from "./routes/sync";
 import auth from "./routes/auth";
 import staticProxy from "./routes/static";
 import proxyFallback from "./routes/proxy-fallback";
+import generate from "./routes/generate";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -67,9 +68,14 @@ app.get("/api/health", (c) =>
 app.route("/api/auth", auth);
 app.route("/api/sync", sync);
 
+// 已部分移植 endpoint
+// NOTE: /api/generate/image 同步实现在 generate.ts 但 ESA EdgeRoutine 11s 硬超时 <
+//       图生 30-60s → 504。Episode 5 实现 async (start task → OSS 存 task state →
+//       client poll status) 后再 mount。现在 fall back 到 proxy-fallback。
+// app.route("/api/generate", generate);
+void generate; // 保留 import，避免 unused 警告
+
 // 未移植 endpoint 过渡 proxy → 老 CF Pages backend
-// 顺序：放在已移植的之后，CF 路由匹配最长前缀，但 hono 是按声明顺序，
-// 已经匹配上面 /api/auth、/api/sync 的不会走到这里。
 app.route("/api/admin", proxyFallback);
 app.route("/api/agent", proxyFallback);
 app.route("/api/generate", proxyFallback);
