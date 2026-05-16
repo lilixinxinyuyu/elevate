@@ -9,6 +9,7 @@ import { SkillPickerPage } from "./pages/SkillPicker";
 import { MistakesPage } from "./pages/Mistakes";
 import { ReportPage } from "./pages/Report";
 import { AdminPage } from "./pages/Admin";
+import { SuperAdminPage } from "./pages/SuperAdmin";
 import { ChineseHomePage } from "./pages/chinese/ChineseHome";
 import { ChineseTrainPage } from "./pages/chinese/ChineseTrain";
 import { ChinesePickerPage } from "./pages/chinese/ChinesePicker";
@@ -207,6 +208,10 @@ export const router = createBrowserRouter([
   { path: "/mistakes", element: <LegacyRedirect to="/math/mistakes" /> },
   { path: "/report", element: <LegacyRedirect to="/math/report" /> },
   { path: "/admin", element: <LegacyRedirect to="/math/admin" /> },
+
+  // Ep9 (Ep145): super-admin dashboard. backend 自己鉴 isSuperAdmin，
+  // 不是 super-admin 会被自动跳回 home。
+  { path: "/super-admin", element: <SuperAdminPage /> },
 ]);
 
 /** 老路径 → 新路径重定向，保留 query string + hash。 */

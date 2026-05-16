@@ -39,6 +39,7 @@ const BAKED_KEYS = [
   "BAILIAN_API_KEY",
   "TOKEN_PLAN_API_KEY",
   "DASHSCOPE_API_KEY",
+  "SUPER_ADMINS",
 ];
 const bakedEnv = {};
 for (const k of BAKED_KEYS) {

@@ -29,4 +29,9 @@ export interface Env {
   /** 旧 intl 兼容（迁完可删） */
   TOKEN_PLAN_API_KEY?: string;
   DASHSCOPE_API_KEY?: string;
+  /**
+   * v0.34.15 (Ep145) super-admin 白名单：JSON array `["selena","admin"]` 或
+   * 逗号分隔 `selena,admin`。默认 ["selena"]（爸爸 currently uses Selena's password）。
+   */
+  SUPER_ADMINS?: string;
 }
