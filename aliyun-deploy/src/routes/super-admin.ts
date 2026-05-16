@@ -70,44 +70,19 @@ superAdmin.get("/users", async (c) => {
 
   const users = await Promise.all(
     ids.map(async (uid) => {
-      // 并行拉 profile + snapshot HEAD + 最新 AI 摘要 + stats (KPI)
-      const [profileGet, snapHead, summaryGet, statsGet] = await Promise.all([
-        ossGet(cfg, `users/${uid}/profile.json`),
-        ossHead(cfg, snapshotKey(uid)),
-        ossGet(cfg, `users/${uid}/agent-summaries/latest.json`),
-        ossGet(cfg, `users/${uid}/stats.json`),
-      ]);
+      // 关键限制：ESA EdgeRoutine 单次请求最多 **8 fetch**。
+      // 之前 4 reads × 3 users = 12 → 报 fetch_call_limit_exceeded。
+      // 回退到 2 reads per user (profile + snap HEAD) = 6 total for 3 users.
+      // KPI / summary preview 改成前端按需点 📊 / 🤖 时再单独 fetch (走自己的 endpoints).
+      const profileGet = await ossGet(cfg, `users/${uid}/profile.json`);
+      const snapHead = await ossHead(cfg, snapshotKey(uid));
       let profile: Record<string, unknown> | null = null;
       if (profileGet.ok && profileGet.text) {
         try { profile = JSON.parse(profileGet.text); } catch { /* */ }
       }
-      // 提 summary preview (first 50 chars + ts)
-      let latestSummary: { generatedAt?: number; preview?: string } | null = null;
-      if (summaryGet.ok && summaryGet.text) {
-        try {
-          const s = JSON.parse(summaryGet.text) as { generatedAt?: number; summary?: string };
-          latestSummary = {
-            generatedAt: s.generatedAt,
-            preview: (s.summary ?? "").slice(0, 50),
-          };
-        } catch { /* */ }
-      }
-      // 提 stats KPI (today / last7 / correct rate)
-      let statsKpi: { todayAttempts?: number; last7Attempts?: number; correctRate?: number } | null = null;
-      if (statsGet.ok && statsGet.text) {
-        try {
-          const st = JSON.parse(statsGet.text) as {
-            today?: { attempts?: number };
-            last7Days?: { attempts?: number };
-            correctRateRecent100?: number;
-          };
-          statsKpi = {
-            todayAttempts: st.today?.attempts ?? 0,
-            last7Attempts: st.last7Days?.attempts ?? 0,
-            correctRate: st.correctRateRecent100 ?? 0,
-          };
-        } catch { /* */ }
-      }
+      // KPI / summary preview 字段保留 null - 前端按需点 📊 / 🤖 拉
+      const latestSummary: { generatedAt?: number; preview?: string } | null = null;
+      const statsKpi: { todayAttempts?: number; last7Attempts?: number; correctRate?: number } | null = null;
       return {
         userId: uid,
         isSuperAdmin: admins.has(uid),

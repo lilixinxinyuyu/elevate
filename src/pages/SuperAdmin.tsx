@@ -125,6 +125,15 @@ export function SuperAdminPage() {
   const [newBusy, setNewBusy] = useState(false);
   const [newErr, setNewErr] = useState<string | null>(null);
 
+  // Ep16: 批量刷新摘要（client-side 一个一个调，避开 ESA 11s 单 routine 限制）
+  const [bulkRefreshState, setBulkRefreshState] = useState<{
+    running: boolean;
+    done: number;
+    total: number;
+    currentUser: string | null;
+    failed: string[];
+  } | null>(null);
+
   // Ep14: 🤖 agent summary modal
   interface AgentSummary {
     targetUserId?: string;
@@ -234,6 +243,42 @@ export function SuperAdminPage() {
       guardianPhone: u.profile?.guardianPhone ?? "",
     });
     setEditErr(null);
+  }
+
+  async function bulkRefreshSummaries() {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    if (users.length === 0) return;
+    const ok = window.confirm(
+      `给 ${users.length} 个同学逐个刷新 AI 摘要？\n\n每个约 5-10s，串行执行（避开 ESA 11s 单次限制）。\n总耗时约 ${users.length * 8} 秒。`,
+    );
+    if (!ok) return;
+    setBulkRefreshState({
+      running: true,
+      done: 0,
+      total: users.length,
+      currentUser: null,
+      failed: [],
+    });
+    const failed: string[] = [];
+    for (let i = 0; i < users.length; i++) {
+      const uid = users[i]!.userId;
+      setBulkRefreshState((s) => s && { ...s, currentUser: uid });
+      try {
+        const r = await fetch(`/api/super-admin/users/${encodeURIComponent(uid)}/agent-summary`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${pwd}` },
+        });
+        if (!r.ok) failed.push(uid);
+      } catch {
+        failed.push(uid);
+      }
+      setBulkRefreshState((s) => s && { ...s, done: i + 1, failed });
+    }
+    // Refresh list to pull new previews
+    await refreshUsers();
+    setBulkRefreshState((s) => s && { ...s, running: false, currentUser: null });
+    setTimeout(() => setBulkRefreshState(null), 4000);
   }
 
   async function openAgent(userId: string) {
@@ -459,15 +504,40 @@ export function SuperAdminPage() {
         >
           ➕ 加新同学
         </button>
+        <button
+          type="button"
+          onClick={bulkRefreshSummaries}
+          disabled={bulkRefreshState?.running}
+          className="text-xs px-3 py-1.5 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-100 font-bold disabled:opacity-40"
+        >
+          {bulkRefreshState?.running
+            ? `🔄 ${bulkRefreshState.done}/${bulkRefreshState.total}${bulkRefreshState.currentUser ? " · " + bulkRefreshState.currentUser : ""}`
+            : "🔄 刷新所有摘要"}
+        </button>
         <Link to="/" className="ml-auto text-xs text-violet-300 underline">
           返回首页
         </Link>
       </div>
 
       <div className="text-xs text-slate-300 mb-4">
-        所有同学的账户 + profile + 上次活跃。后续会加：编辑账户 / 重置密码 /
-        24h AI agent 学习摘要。
+        所有同学的账户 + profile + 上次活跃。点 ✏️ 编辑 / 🔑 重置密码 /
+        📊 学情 / 🤖 AI 摘要 操作。"🔄 刷新所有摘要" 给所有同学跑一遍最新 AI 摘要。
       </div>
+
+      {/* 批量刷新结果 toast */}
+      {bulkRefreshState && !bulkRefreshState.running && (
+        <div
+          className={`rounded p-3 mb-3 text-xs ${
+            bulkRefreshState.failed.length === 0
+              ? "bg-emerald-500/10 border border-emerald-400/40 text-emerald-200"
+              : "bg-amber-500/10 border border-amber-400/40 text-amber-200"
+          }`}
+        >
+          {bulkRefreshState.failed.length === 0
+            ? `✅ ${bulkRefreshState.done} 个摘要全部刷新成功`
+            : `⚠️ ${bulkRefreshState.done - bulkRefreshState.failed.length}/${bulkRefreshState.done} 成功；失败：${bulkRefreshState.failed.join(", ")}`}
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
