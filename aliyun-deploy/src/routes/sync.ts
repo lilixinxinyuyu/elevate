@@ -68,14 +68,39 @@ async function uploadHandler(c: Ctx): Promise<Response> {
   const cfg = getOssConfig(c.env);
   if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
 
-  const contentType = c.req.header("Content-Type") ?? "application/json";
-  const contentEncoding = c.req.header("Content-Encoding") ?? null;
-  const body = await c.req.arrayBuffer();
-  const sizeKB = (body.byteLength / 1024).toFixed(1);
+  // 跟 CF Pages 对齐：支持 gzip body（client 用 X-Body-Encoding，老 spec），
+  // 也支持 Content-Encoding（HTTP 标准）。读出来后解压成 plain JSON 文本再存 OSS。
+  // 这样 OSS 里始终是纯 JSON，下次 download 直接 parse 不会踩 "Unexpected token ''".
+  const enc =
+    (c.req.header("X-Body-Encoding") ?? c.req.header("Content-Encoding") ?? "").toLowerCase();
+  let bodyText: string;
+  try {
+    if (enc === "gzip" && c.req.raw.body) {
+      const decompressed = c.req.raw.body.pipeThrough(new DecompressionStream("gzip"));
+      bodyText = await new Response(decompressed).text();
+    } else {
+      bodyText = await c.req.text();
+    }
+  } catch (e) {
+    return c.json(
+      { ok: false, error: "body_read_failed", detail: (e as Error).message },
+      400,
+    );
+  }
+  // 校验 JSON 合法（防止存进去后下次 download crash 客户端）
+  try {
+    const parsed = JSON.parse(bodyText);
+    if (!parsed || typeof parsed !== "object") {
+      return c.json({ ok: false, error: "invalid_payload" }, 400);
+    }
+  } catch (e) {
+    return c.json({ ok: false, error: "invalid_json", detail: (e as Error).message }, 400);
+  }
 
+  const sizeKB = (bodyText.length / 1024).toFixed(1);
   const key = snapshotKey(userId);
-  const result = await ossPut(cfg, key, body, {
-    contentType: contentEncoding === "gzip" ? "application/json+gzip" : contentType,
+  const result = await ossPut(cfg, key, bodyText, {
+    contentType: "application/json; charset=utf-8",
   });
   if (!result.ok) {
     return c.json(
@@ -83,9 +108,12 @@ async function uploadHandler(c: Ctx): Promise<Response> {
       502,
     );
   }
+  const version = Date.now();
   return c.json({
     ok: true,
     userId,
+    version,
+    bytes: bodyText.length,
     sizeKB,
     etag: result.etag,
     versionId: result.versionId,
@@ -101,30 +129,48 @@ async function downloadHandler(c: Ctx): Promise<Response> {
   const since = sinceStr ? Number(sinceStr) : 0;
   const key = snapshotKey(userId);
 
+  // 跟 CF Pages 对齐：返回 wrapped {ok, latest:{payload,version,...}} | {ok, latest:null}
+  // 不返 304 / 不返 raw —— 老 client (pullMainSnapshotOss) parse 这个 shape。
   const head = await ossHead(cfg, key);
   if (!head.ok && head.status === 404) {
-    return c.json({ ok: false, error: "no_snapshot_yet" }, 404);
+    return c.json({ ok: true, latest: null, userId });
   }
   if (!head.ok) {
-    return c.json({ ok: false, error: head.error, status: head.status }, 502);
+    return c.json(
+      { ok: false, error: "oss_head_failed", detail: head.error, status: head.status },
+      502,
+    );
   }
-  if (since > 0 && head.lastModifiedMs && head.lastModifiedMs <= since) {
-    return c.body(null, 304);
+  const lastModifiedMs = head.lastModifiedMs ?? 0;
+  if (since > 0 && lastModifiedMs > 0 && lastModifiedMs <= since) {
+    return c.json({ ok: true, latest: null, currentVersion: lastModifiedMs, userId });
   }
 
   const got = await ossGet(cfg, key);
-  if (!got.ok || !got.text) {
-    return c.json({ ok: false, error: got.error ?? "get_failed" }, 502);
+  if (!got.ok || got.text === undefined) {
+    return c.json(
+      { ok: false, error: "oss_get_failed", detail: got.error, status: got.status },
+      502,
+    );
   }
-
-  const isGzip = (got.contentType ?? "").includes("gzip");
-  return new Response(got.text, {
-    status: 200,
-    headers: {
-      "Content-Type": isGzip ? "application/json" : "application/json; charset=utf-8",
-      ...(isGzip ? { "Content-Encoding": "gzip" } : {}),
-      "X-Snapshot-LastModified": String(head.lastModifiedMs ?? 0),
-      "X-Snapshot-Etag": head.etag ?? "",
+  // payload 应该是有效 JSON（upload 时已校验过）
+  let payload: unknown;
+  try {
+    payload = JSON.parse(got.text);
+  } catch (e) {
+    return c.json(
+      { ok: false, error: "corrupt_snapshot", detail: (e as Error).message },
+      500,
+    );
+  }
+  return c.json({
+    ok: true,
+    userId,
+    latest: {
+      payload,
+      version: lastModifiedMs || Date.now(),
+      etag: got.etag,
+      versionId: got.versionId,
     },
   });
 }

@@ -107,25 +107,63 @@ export function AdminPage() {
     setImportResult({ ok: okItems.length, failed });
   };
 
+  /**
+   * v0.34.9 (Ep139): 全表导出。
+   * 之前的版本只导 7 个表，丢了 meta（小进经验/streak/setting）/ trophyImages /
+   * tutorSessions / fluencyAttempts / fluencyStats / mascotWardrobe / units / skills，
+   * 导致 import 后发现"语文/英语/小进经验/勋章图/装扮"都没回来。
+   *
+   * 现在导全 15 个 dexie 表。文件名 heping-backup-FULL-... 跟旧 partial 区分。
+   *
+   * 注：这只是 backward-compat 老路径。新路径用 BackupRestorePanel 的 📥 导出全部数据
+   * （它写嵌套 {data:{...}} shape，import 也兼容）。两套都全表。
+   */
   const handleExport = async () => {
-    const all = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      students: await db.students.toArray(),
-      questions: await db.questions.toArray(),
-      sessions: await db.sessions.toArray(),
-      attempts: await db.attempts.toArray(),
-      mastery: await db.mastery.toArray(),
-      mistakes: await db.mistakes.toArray(),
-      trophies: await db.trophies.toArray(),
+    const dump = async (name: string): Promise<unknown[]> => {
+      try {
+        const tbl = (db as unknown as Record<string, { toArray?(): Promise<unknown[]> }>)[name];
+        if (!tbl || typeof tbl.toArray !== "function") return [];
+        return await tbl.toArray();
+      } catch (e) {
+        console.warn(`[export] dump ${name} failed:`, (e as Error).message);
+        return [];
+      }
     };
+    const all = {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      // 用户/内容
+      students: await dump("students"),
+      units: await dump("units"),
+      skills: await dump("skills"),
+      questions: await dump("questions"),
+      // 训练记录
+      sessions: await dump("sessions"),
+      attempts: await dump("attempts"),
+      mastery: await dump("mastery"),
+      mistakes: await dump("mistakes"),
+      // 奖励
+      trophies: await dump("trophies"),
+      trophyImages: await dump("trophyImages"),
+      // 学情 meta（小进经验、streak、setting、wardrobe 余额 等）
+      meta: await dump("meta"),
+      // 多学科 / 多形态
+      tutorSessions: await dump("tutorSessions"),
+      fluencyAttempts: await dump("fluencyAttempts"),
+      fluencyStats: await dump("fluencyStats"),
+      mascotWardrobe: await dump("mascotWardrobe"),
+    };
+    const totalRows = Object.entries(all)
+      .filter(([_, v]) => Array.isArray(v))
+      .reduce((s, [_, v]) => s + (v as unknown[]).length, 0);
     const blob = new Blob([JSON.stringify(all, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `heping-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `heping-backup-FULL-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    alert(`✅ 已导出 ${totalRows} 条记录（15 个表全量）。文件已下载。`);
   };
 
   const stats = buildStats(questions ?? []);

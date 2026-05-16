@@ -24,6 +24,10 @@ import {
   type SyncState,
 } from "../../db/cloudSync";
 
+/**
+ * v0.34.9 (Ep139): 全表导出 — 含 units/skills/mascotWardrobe.
+ * 跟 src/db/dexie.ts schema 完全一致（15 个表）。
+ */
 const BACKUP_TABLES = [
   "attempts",
   "mastery",
@@ -32,11 +36,14 @@ const BACKUP_TABLES = [
   "trophies",
   "meta",
   "students",
+  "units",
+  "skills",
   "tutorSessions",
   "fluencyAttempts",
   "fluencyStats",
   "questions",
   "trophyImages",
+  "mascotWardrobe",
 ] as const;
 
 type BackupTable = (typeof BACKUP_TABLES)[number];
