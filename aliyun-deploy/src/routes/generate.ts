@@ -1,23 +1,28 @@
 /**
  * /api/generate/* —— 图片 / 题目生成
  *
- * v0.34.8 (Ep138): 移植自 functions/api/generate/image.ts, 走 TOKEN_PLAN_CN 主路径。
+ * v0.34.12 (Ep142): image async pattern (跨 ESA EdgeRoutine 11s 限制)。
  *
- * 3 个出图通路（按优先级）：
- *   1. TOKEN_PLAN_CN chat-completions（实测 token-plan 出图必经路径，不走 /images/generations）
- *   2. BAILIAN /compatible-mode/v1/images/generations 同步
- *   3. BAILIAN /api/v1/services/aigc/text2image/image-synthesis 异步 + 轮询
+ * 设计：
+ *   POST /api/generate/image
+ *     → BAILIAN createTask (返 task_id, ~1-2s)
+ *     → 写 OSS users/{uid}/image-tasks/{taskId}.json 状态 pending
+ *     → 立刻返 {ok:true, taskId, status:"pending", statusUrl}
  *
- * 模型链（按优先级）：
- *   wan2.7-image-pro → wan2.7-image → qwen-image-2.0-pro → qwen-image-2.0
+ *   GET /api/generate/image/status/:taskId
+ *     → 读 OSS 状态
+ *     → 如果 pending → 调 upstream poll 一次 → 更新 OSS → 返新状态
+ *     → 如果 done/failed → 直接返
  *
- * 其他 generate 端点（questions / variant）暂走 proxy-fallback 到 CF Pages，
- * 后续 episode 移植。
+ * 前端 generateImage() 改为 start + poll (每 2s 拉一次 status，最多 90s)。
+ *
+ * 其他 generate/* 仍走 proxy fallback。
  */
 
 import { Hono } from "hono";
 import type { Env } from "../lib/env";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, getUserId } from "../lib/auth";
+import { getOssConfig, ossPut, ossGet } from "../lib/oss";
 import proxyFallback from "./proxy-fallback";
 
 const generate = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
@@ -30,82 +35,79 @@ interface GenImageRequest {
   n?: number;
 }
 
-interface ImageProvider {
-  label: "token-plan-cn" | "bailian";
-  baseUrl: string;
-  apiKey: string;
+interface ImageTaskState {
+  taskId: string;
+  userId: string;
+  upstreamProvider: "bailian" | "token-plan-cn";
+  upstreamBaseUrl: string;
+  upstreamTaskId: string;
+  model: string;
+  prompt: string;
+  size: string;
+  status: "pending" | "done" | "failed";
+  urls: string[];
+  error: string | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
-function getImageProviders(env: Env): ImageProvider[] {
-  const ps: ImageProvider[] = [];
-  if (env.TOKEN_PLAN_CN_API_KEY) {
-    ps.push({
-      label: "token-plan-cn",
-      baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com",
-      apiKey: env.TOKEN_PLAN_CN_API_KEY,
-    });
-  }
-  if (env.BAILIAN_API_KEY) {
-    ps.push({
-      label: "bailian",
-      baseUrl: "https://dashscope.aliyuncs.com",
-      apiKey: env.BAILIAN_API_KEY,
-    });
-  }
-  return ps;
-}
-
+// BAILIAN async /image-synthesis 实测可用模型（2026-05）：
+//   wanx2.1-t2i-turbo, wanx2.1-t2i-plus, qwen-image, wanx-v1
+// 不可用：wan2.7-image-pro / wan2.7-image / qwen-image-2.0-pro / qwen-image-2.0
+//   （这些只在 TOKEN_PLAN_CN chat-completions 同步出图工作，不适合 async）
 const DEFAULT_MODELS = [
-  "wan2.7-image-pro",
-  "wan2.7-image",
-  "qwen-image-2.0-pro",
-  "qwen-image-2.0",
+  "wanx2.1-t2i-plus",
+  "wanx2.1-t2i-turbo",
+  "qwen-image",
+  "wanx-v1",
 ];
 
-interface CallResult {
-  ok: boolean;
-  urls?: string[];
-  status: number;
-  code?: string;
-  message?: string;
+function imageTaskKey(userId: string, taskId: string): string {
+  return `users/${userId}/image-tasks/${taskId}.json`;
 }
 
-/** TOKEN_PLAN: chat-completions multimodal content list (返回 output.choices[0].message.content[].image) */
-async function callChatCompletionImage(
-  p: ImageProvider,
+function pickAsyncProvider(env: Env): { baseUrl: string; apiKey: string; label: "bailian" } | null {
+  if (env.BAILIAN_API_KEY) {
+    return {
+      baseUrl: "https://dashscope.aliyuncs.com",
+      apiKey: env.BAILIAN_API_KEY,
+      label: "bailian",
+    };
+  }
+  return null;
+}
+
+/** 调 DashScope async create-task. 返 task_id 或 error */
+async function createUpstreamTask(
+  provider: { baseUrl: string; apiKey: string },
   model: string,
   prompt: string,
-): Promise<CallResult> {
+  size: string,
+  n: number,
+): Promise<{ ok: true; taskId: string } | { ok: false; status: number; code: string; message: string }> {
   try {
     const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 25_000);
-    const r = await fetch(`${p.baseUrl}/compatible-mode/v1/chat/completions`, {
+    const to = setTimeout(() => ctrl.abort(), 8_000);
+    const r = await fetch(`${provider.baseUrl}/api/v1/services/aigc/text2image/image-synthesis`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${p.apiKey}`,
+        Authorization: `Bearer ${provider.apiKey}`,
         "Content-Type": "application/json",
+        "X-DashScope-Async": "enable",
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
-        max_tokens: 2000,
+        input: { prompt },
+        parameters: { size, n: Math.max(1, Math.min(4, n)) },
       }),
       signal: ctrl.signal,
     });
     clearTimeout(to);
-    let json: {
-      output?: {
-        choices?: {
-          message?: { content?: { image?: string; type?: string; text?: string }[] };
-        }[];
-      };
-      code?: string;
-      message?: string;
-    };
+    let json: { output?: { task_id?: string }; code?: string; message?: string };
     try {
       json = await r.json();
     } catch {
-      return { ok: false, status: r.status, code: "non_json", message: "chat image non-JSON" };
+      return { ok: false, status: r.status, code: "non_json", message: "create non-JSON" };
     }
     if (!r.ok || json.code) {
       return {
@@ -115,165 +117,75 @@ async function callChatCompletionImage(
         message: json.message ?? `upstream ${r.status}`,
       };
     }
-    const contentArr = json.output?.choices?.[0]?.message?.content ?? [];
-    const urls = contentArr
-      .map((c) => c.image)
-      .filter((u): u is string => typeof u === "string" && u.startsWith("http"));
-    if (urls.length === 0) {
-      return {
-        ok: false,
-        status: r.status,
-        code: "no_urls",
-        message: `chat returned no image urls`,
-      };
-    }
-    return { ok: true, urls, status: r.status };
+    const taskId = json.output?.task_id;
+    if (!taskId) return { ok: false, status: r.status, code: "no_task_id", message: "no task_id" };
+    return { ok: true, taskId };
   } catch (e) {
     return { ok: false, status: 0, code: "fetch_failed", message: (e as Error).message };
   }
 }
 
-/** OpenAI-compatible 同步 /images/generations */
-async function callSyncImage(
-  p: ImageProvider,
-  model: string,
-  prompt: string,
-  size: string,
-  n: number,
-): Promise<CallResult> {
+/** 调 DashScope poll. 返 status + urls (if done) */
+async function pollUpstreamTask(
+  provider: { baseUrl: string; apiKey: string },
+  upstreamTaskId: string,
+): Promise<
+  | { status: "done"; urls: string[] }
+  | { status: "pending" }
+  | { status: "failed"; error: string }
+> {
   try {
-    const sizeOA = size.replace("*", "x");
     const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 25_000);
-    const r = await fetch(`${p.baseUrl}/compatible-mode/v1/images/generations`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${p.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model, prompt, n: Math.max(1, Math.min(4, n)), size: sizeOA }),
+    const to = setTimeout(() => ctrl.abort(), 8_000);
+    const r = await fetch(`${provider.baseUrl}/api/v1/tasks/${upstreamTaskId}`, {
+      headers: { Authorization: `Bearer ${provider.apiKey}` },
       signal: ctrl.signal,
     });
     clearTimeout(to);
-    let json: {
-      data?: { url?: string }[];
-      error?: { code?: string; message?: string };
+    let j: {
+      output?: {
+        task_status?: string;
+        results?: { url?: string }[];
+        code?: string;
+        message?: string;
+      };
     };
     try {
-      json = await r.json();
+      j = await r.json();
     } catch {
-      return { ok: false, status: r.status, code: "non_json", message: "sync image non-JSON" };
+      return { status: "failed", error: "non_json" };
     }
-    if (!r.ok || json.error) {
-      return {
-        ok: false,
-        status: r.status,
-        code: json.error?.code ?? "http_error",
-        message: json.error?.message ?? `upstream ${r.status}`,
-      };
+    const st = j.output?.task_status;
+    if (st === "SUCCEEDED") {
+      const urls = (j.output?.results ?? [])
+        .map((rr) => rr.url)
+        .filter((u): u is string => typeof u === "string");
+      if (urls.length === 0) return { status: "failed", error: "succeeded_no_urls" };
+      return { status: "done", urls };
     }
-    const urls = (json.data ?? [])
-      .map((d) => d.url)
-      .filter((u): u is string => typeof u === "string");
-    if (urls.length === 0) {
-      return { ok: false, status: 200, code: "no_urls", message: "sync returned no urls" };
+    if (st === "FAILED" || st === "CANCELED") {
+      return { status: "failed", error: j.output?.code ?? `task_${st}` };
     }
-    return { ok: true, urls, status: r.status };
+    return { status: "pending" };
   } catch (e) {
-    return { ok: false, status: 0, code: "fetch_failed", message: (e as Error).message };
-  }
-}
-
-/** DashScope async create + poll */
-async function callAsyncImage(
-  p: ImageProvider,
-  model: string,
-  prompt: string,
-  size: string,
-  n: number,
-): Promise<CallResult> {
-  try {
-    const r1 = await fetch(`${p.baseUrl}/api/v1/services/aigc/text2image/image-synthesis`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${p.apiKey}`,
-        "Content-Type": "application/json",
-        "X-DashScope-Async": "enable",
-      },
-      body: JSON.stringify({
-        model,
-        input: { prompt },
-        parameters: { size, n: Math.max(1, Math.min(4, n)) },
-      }),
-    });
-    let j1: { output?: { task_id?: string }; code?: string; message?: string };
-    try {
-      j1 = await r1.json();
-    } catch {
-      return { ok: false, status: r1.status, code: "non_json", message: "create non-JSON" };
-    }
-    if (!r1.ok || j1.code) {
-      return {
-        ok: false,
-        status: r1.status,
-        code: j1.code ?? "http_error",
-        message: j1.message ?? `upstream ${r1.status}`,
-      };
-    }
-    const taskId = j1.output?.task_id;
-    if (!taskId) return { ok: false, status: r1.status, code: "no_task_id", message: "no task_id" };
-
-    for (let i = 0; i < 30; i++) {
-      await new Promise((res) => setTimeout(res, 2000));
-      const r2 = await fetch(`${p.baseUrl}/api/v1/tasks/${taskId}`, {
-        headers: { Authorization: `Bearer ${p.apiKey}` },
-      });
-      let j2: {
-        output?: {
-          task_status?: string;
-          results?: { url?: string }[];
-          code?: string;
-          message?: string;
-        };
-      };
-      try {
-        j2 = await r2.json();
-      } catch {
-        continue;
-      }
-      const st = j2.output?.task_status;
-      if (st === "SUCCEEDED") {
-        const urls = (j2.output?.results ?? [])
-          .map((r) => r.url)
-          .filter((u): u is string => typeof u === "string");
-        if (urls.length === 0) {
-          return { ok: false, status: 200, code: "no_urls", message: "succeeded but no urls" };
-        }
-        return { ok: true, urls, status: 200 };
-      }
-      if (st === "FAILED" || st === "CANCELED") {
-        return {
-          ok: false,
-          status: 200,
-          code: j2.output?.code ?? "task_failed",
-          message: j2.output?.message ?? `task ${st}`,
-        };
-      }
-    }
-    return { ok: false, status: 408, code: "timeout", message: "polling timeout" };
-  } catch (e) {
-    return { ok: false, status: 0, code: "fetch_failed", message: (e as Error).message };
+    return { status: "failed", error: (e as Error).message };
   }
 }
 
 generate.use("*", requireAuth);
 
-/** POST /api/generate/image */
+/**
+ * POST /api/generate/image
+ * 返 202 + {ok:true, taskId, status:"pending", statusUrl}
+ * 客户端调 GET /api/generate/image/status/:taskId 轮询
+ */
 generate.post("/image", async (c) => {
-  const providers = getImageProviders(c.env);
-  if (providers.length === 0) {
-    return c.json({ ok: false, error: "image_gen_not_configured" }, 503);
-  }
+  const userId = getUserId(c);
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  const provider = pickAsyncProvider(c.env);
+  if (!provider) return c.json({ ok: false, error: "image_gen_not_configured" }, 503);
 
   let body: GenImageRequest;
   try {
@@ -281,105 +193,214 @@ generate.post("/image", async (c) => {
   } catch {
     return c.json({ ok: false, error: "invalid_json" }, 400);
   }
-  if (!body.prompt) {
-    return c.json({ ok: false, error: "missing_prompt" }, 400);
-  }
+  if (!body.prompt) return c.json({ ok: false, error: "missing_prompt" }, 400);
 
   const fullPrompt = body.style ? `${body.prompt}, ${body.style}` : body.prompt;
   const size = body.size ?? "1024*1024";
   const n = body.n ?? 1;
+  const model = body.model ?? DEFAULT_MODELS[0]!;
+
+  // 试模型链直到 createTask 成功（不轮询，只取 task_id）
+  const tried: { model: string; code: string; message: string }[] = [];
   const models = body.model ? [body.model] : DEFAULT_MODELS;
-
-  const tried: {
-    provider: string;
-    model: string;
-    endpoint: string;
-    status: number;
-    code: string;
-    message: string;
-  }[] = [];
-
-  for (const p of providers) {
-    for (const m of models) {
-      // TOKEN_PLAN_CN: 用 chat-completions
-      if (p.label === "token-plan-cn") {
-        const r = await callChatCompletionImage(p, m, fullPrompt);
-        if (r.ok && r.urls) {
-          return c.json({
-            ok: true,
-            urls: r.urls,
-            model: m,
-            provider: p.label,
-            endpoint: "chat",
-          });
-        }
-        tried.push({
-          provider: p.label,
-          model: m,
-          endpoint: "chat",
-          status: r.status,
-          code: r.code ?? "?",
-          message: r.message ?? "?",
-        });
-        if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
-        continue;
-      }
-      // BAILIAN: sync 优先（wan2.7 / qwen-image 都支持），失败再 async
-      const sync = await callSyncImage(p, m, fullPrompt, size, n);
-      if (sync.ok && sync.urls) {
-        return c.json({
-          ok: true,
-          urls: sync.urls,
-          model: m,
-          provider: p.label,
-          endpoint: "sync",
-        });
-      }
-      tried.push({
-        provider: p.label,
-        model: m,
-        endpoint: "sync",
-        status: sync.status,
-        code: sync.code ?? "?",
-        message: sync.message ?? "?",
-      });
-      if (sync.code === "InvalidApiKey" || sync.code === "AccessDenied") break;
-
-      const async_ = await callAsyncImage(p, m, fullPrompt, size, n);
-      if (async_.ok && async_.urls) {
-        return c.json({
-          ok: true,
-          urls: async_.urls,
-          model: m,
-          provider: p.label,
-          endpoint: "async",
-        });
-      }
-      tried.push({
-        provider: p.label,
-        model: m,
-        endpoint: "async",
-        status: async_.status,
-        code: async_.code ?? "?",
-        message: async_.message ?? "?",
-      });
-      if (async_.code === "InvalidApiKey" || async_.code === "AccessDenied") break;
+  let upstreamTaskId: string | null = null;
+  let pickedModel = model;
+  for (const m of models) {
+    const r = await createUpstreamTask(provider, m, fullPrompt, size, n);
+    if (r.ok) {
+      upstreamTaskId = r.taskId;
+      pickedModel = m;
+      break;
     }
+    tried.push({ model: m, code: r.code, message: r.message });
+    if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
+  }
+  if (!upstreamTaskId) {
+    return c.json(
+      {
+        ok: false,
+        error: "create_task_failed",
+        tried,
+      },
+      502,
+    );
   }
 
-  console.error("[generate/image] all failed", tried);
-  const brief = tried
-    .slice(0, 6)
-    .map((t) => `${t.provider}/${t.model}(${t.endpoint}):${t.code}`)
-    .join(", ");
+  // 我们的 internal taskId（也用 upstream id 简单点）
+  const taskId = upstreamTaskId;
+  const now = Date.now();
+  const state: ImageTaskState = {
+    taskId,
+    userId,
+    upstreamProvider: provider.label,
+    upstreamBaseUrl: provider.baseUrl,
+    upstreamTaskId,
+    model: pickedModel,
+    prompt: fullPrompt,
+    size,
+    status: "pending",
+    urls: [],
+    error: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const putR = await ossPut(cfg, imageTaskKey(userId, taskId), JSON.stringify(state), {
+    contentType: "application/json; charset=utf-8",
+  });
+  if (!putR.ok) {
+    console.error("[generate/image] save task state failed:", putR.error);
+    // 即使存 OSS 失败也返回 taskId, client 仍可查 upstream（虽然没有元数据）
+  }
+
   return c.json(
-    { ok: false, error: "no_model_worked", detail: brief, tried },
-    502,
+    {
+      ok: true,
+      taskId,
+      status: "pending",
+      model: pickedModel,
+      statusUrl: `/api/generate/image/status/${taskId}`,
+    },
+    202,
   );
 });
 
+/**
+ * GET /api/generate/image/status/:taskId
+ * 读 OSS 状态；如果 pending → poll upstream → 更新 → 返新状态
+ */
+generate.get("/image/status/:taskId", async (c) => {
+  const userId = getUserId(c);
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  const taskId = c.req.param("taskId");
+  const key = imageTaskKey(userId, taskId);
+  const got = await ossGet(cfg, key);
+  if (!got.ok || !got.text) {
+    if (got.status === 404) {
+      return c.json({ ok: false, error: "task_not_found" }, 404);
+    }
+    return c.json({ ok: false, error: got.error ?? "get_failed" }, 502);
+  }
+  let state: ImageTaskState;
+  try {
+    state = JSON.parse(got.text);
+  } catch {
+    return c.json({ ok: false, error: "corrupt_task_state" }, 500);
+  }
+
+  // 终态直接返
+  if (state.status === "done" || state.status === "failed") {
+    return c.json({
+      ok: true,
+      taskId,
+      status: state.status,
+      urls: state.urls,
+      error: state.error,
+      model: state.model,
+    });
+  }
+
+  // pending → poll upstream 一次
+  const provider = {
+    baseUrl: state.upstreamBaseUrl,
+    apiKey:
+      state.upstreamProvider === "bailian"
+        ? (c.env.BAILIAN_API_KEY ?? "")
+        : (c.env.TOKEN_PLAN_CN_API_KEY ?? ""),
+  };
+  const polled = await pollUpstreamTask(provider, state.upstreamTaskId);
+
+  if (polled.status === "done") {
+    state.status = "done";
+    state.urls = polled.urls;
+    state.updatedAt = Date.now();
+    await ossPut(cfg, key, JSON.stringify(state), {
+      contentType: "application/json; charset=utf-8",
+    });
+    // 把 dashscope URL 转成 routine-proxied URL，避开 CORS
+    const proxiedUrls = polled.urls.map(
+      (u) => `/api/generate/image/proxy?url=${encodeURIComponent(u)}`,
+    );
+    return c.json({
+      ok: true,
+      taskId,
+      status: "done",
+      urls: proxiedUrls,
+      rawUrls: polled.urls,
+      model: state.model,
+    });
+  }
+  if (polled.status === "failed") {
+    state.status = "failed";
+    state.error = polled.error;
+    state.updatedAt = Date.now();
+    await ossPut(cfg, key, JSON.stringify(state), {
+      contentType: "application/json; charset=utf-8",
+    });
+    return c.json({
+      ok: true,
+      taskId,
+      status: "failed",
+      error: polled.error,
+      model: state.model,
+    });
+  }
+  return c.json({ ok: true, taskId, status: "pending", model: state.model });
+});
+
+/**
+ * GET /api/generate/image/proxy?url=<encoded>
+ *
+ * DashScope 把生成的图丢在 dashscope-result-*.oss-cn-wulanchabu.aliyuncs.com，
+ * 那个 bucket 没开 CORS，浏览器直接 fetch 会被拒。
+ *
+ * 客户端要把图缓存进 IDB（DashScope URL 24h 过期）需要拿到 bytes 转 base64，
+ * 必须 fetch。所以加个 proxy：routine 拉 image → 加 Access-Control-Allow-Origin
+ * → 透传 bytes。
+ *
+ * 安全：只允许 dashscope-* 域名，免被滥用当通用 fetch 代理。
+ */
+generate.get("/image/proxy", async (c) => {
+  const urlParam = c.req.query("url");
+  if (!urlParam) return c.json({ ok: false, error: "missing_url" }, 400);
+  let u: URL;
+  try {
+    u = new URL(urlParam);
+  } catch {
+    return c.json({ ok: false, error: "invalid_url" }, 400);
+  }
+  // 白名单：只 proxy dashscope 域
+  const okHost =
+    u.hostname.endsWith(".aliyuncs.com") &&
+    (u.hostname.startsWith("dashscope-") || u.hostname.startsWith("dashscope.") ||
+      u.hostname.startsWith("xiaojinapp."));
+  if (!okHost) {
+    return c.json({ ok: false, error: "host_not_allowed", host: u.hostname }, 403);
+  }
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 9_000);
+    const upstream = await fetch(u.toString(), { signal: ctrl.signal });
+    clearTimeout(to);
+    if (!upstream.ok) {
+      return c.json({ ok: false, error: `upstream_${upstream.status}` }, 502);
+    }
+    const ct = upstream.headers.get("Content-Type") ?? "image/png";
+    return new Response(upstream.body, {
+      status: 200,
+      headers: {
+        "Content-Type": ct,
+        "Cache-Control": "public, max-age=86400",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (e) {
+    return c.json({ ok: false, error: "fetch_failed", detail: (e as Error).message }, 502);
+  }
+});
+
 // 其他 /api/generate/* 暂未移植 → 代理到老 CF Pages（questions / variant）
-// hono 的子路由 fall-through：用 .all("*") catch unmatched + 透传给 proxyFallback
 generate.all("*", async (c) => {
   return proxyFallback.fetch(c.req.raw, c.env);
 });

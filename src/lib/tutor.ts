@@ -226,19 +226,26 @@ export interface GenerateImageResult {
   taskId: string;
 }
 
+/**
+ * v0.34.12 (Ep142) async pattern：
+ * - POST /api/generate/image → 200/202 {taskId, status:"pending"|"done", urls?}
+ *   - 老 CF Pages backend 同步返 200 {ok, urls, model, taskId}
+ *   - 新 ESA backend 异步返 202 {ok, taskId, status:"pending", statusUrl}
+ * - 如果 status===pending → GET /api/generate/image/status/{taskId} 每 2s 轮询
+ * - 最长 polling 120s（图生模型一般 30-60s）
+ *
+ * 兼容两套 backend：解析响应里有 urls 就直接用，否则进 polling。
+ */
 export async function generateImage(args: GenerateImageArgs): Promise<GenerateImageResult> {
   const r = await fetch("/api/generate/image", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify(args),
   });
-  if (!r.ok) {
+  // 接受 200 + 202
+  if (r.status >= 400) {
     let parsed: { error?: string; detail?: string } | null = null;
-    try {
-      parsed = await r.json();
-    } catch {
-      /* */
-    }
+    try { parsed = await r.json(); } catch { /* */ }
     throw new TutorError(parsed?.error ?? "request_failed", r.status, parsed?.detail);
   }
   const j = (await r.json()) as {
@@ -246,11 +253,48 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
     urls?: string[];
     model?: string;
     taskId?: string;
+    status?: "pending" | "done" | "failed";
   };
-  if (!j.ok || !Array.isArray(j.urls) || j.urls.length === 0) {
-    throw new TutorError("empty_response", r.status, "no images in body");
+
+  // 老 sync 路径：直接给了 urls
+  if (Array.isArray(j.urls) && j.urls.length > 0) {
+    return { urls: j.urls, model: j.model ?? "unknown", taskId: j.taskId ?? "" };
   }
-  return { urls: j.urls, model: j.model ?? "unknown", taskId: j.taskId ?? "" };
+
+  // 新 async 路径：需要 polling
+  const taskId = j.taskId;
+  if (!taskId) {
+    throw new TutorError("empty_response", r.status, "no urls and no taskId");
+  }
+
+  const MAX_POLLS = 60; // 60 × 2s = 120s
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await new Promise((res) => setTimeout(res, 2000));
+    const sr = await fetch(`/api/generate/image/status/${taskId}`, {
+      headers: authHeader(),
+    });
+    if (!sr.ok) {
+      // 401/404 不重试；其他状态码继续
+      if (sr.status === 401) throw new TutorError("unauthorized", 401);
+      if (sr.status === 404) throw new TutorError("task_not_found", 404);
+      continue;
+    }
+    const sj = (await sr.json()) as {
+      ok?: boolean;
+      status?: "pending" | "done" | "failed";
+      urls?: string[];
+      error?: string;
+      model?: string;
+    };
+    if (sj.status === "done" && Array.isArray(sj.urls) && sj.urls.length > 0) {
+      return { urls: sj.urls, model: sj.model ?? j.model ?? "unknown", taskId };
+    }
+    if (sj.status === "failed") {
+      throw new TutorError("gen_failed", 502, sj.error);
+    }
+    // pending → continue polling
+  }
+  throw new TutorError("polling_timeout", 408, `image gen exceeded ${MAX_POLLS * 2}s`);
 }
 
 // ============================================================
