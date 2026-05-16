@@ -29,6 +29,7 @@ import tts from "./routes/tts";
 import profile from "./routes/profile";
 import superAdmin from "./routes/super-admin";
 import tutor from "./routes/tutor";
+import admin from "./routes/admin";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -76,9 +77,9 @@ app.route("/api/super-admin", superAdmin);   // Ep9: 超级管理员
 app.route("/api/tts", tts);
 app.route("/api/generate", generate);        // Ep7: async pattern
 app.route("/api/tutor", tutor);              // Ep18: /explain native, others proxy
+app.route("/api/admin", admin);              // Ep19: report-question + list-reports native
 
 // 未移植 endpoint 过渡 proxy → 老 CF Pages backend
-app.route("/api/admin", proxyFallback);
 app.route("/api/agent", proxyFallback);
 
 // 非 api 请求 → OSS web/* 代理（SPA fallback 在 staticProxy 内）
