@@ -125,13 +125,23 @@ export function SuperAdminPage() {
   const [newBusy, setNewBusy] = useState(false);
   const [newErr, setNewErr] = useState<string | null>(null);
 
-  // Ep16: 批量刷新摘要（client-side 一个一个调，避开 ESA 11s 单 routine 限制）
+  // Ep16: 批量刷新摘要
   const [bulkRefreshState, setBulkRefreshState] = useState<{
     running: boolean;
     done: number;
     total: number;
     currentUser: string | null;
     failed: string[];
+  } | null>(null);
+
+  // Ep24: 一键修所有同学的 pending reports
+  const [bulkFixState, setBulkFixState] = useState<{
+    running: boolean;
+    scanned: number;
+    fixed: number;
+    failed: number;
+    skipped: number;
+    log: string[];
   } | null>(null);
 
   // Ep14: 🤖 agent summary modal
@@ -257,6 +267,70 @@ export function SuperAdminPage() {
       guardianPhone: u.profile?.guardianPhone ?? "",
     });
     setEditErr(null);
+  }
+
+  async function bulkFixPendingReports() {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    if (users.length === 0) return;
+    const ok = window.confirm(
+      `扫所有 ${users.length} 同学的报告，AI 修所有 pending 的？\n\n每条 ~5s。串行执行。`,
+    );
+    if (!ok) return;
+    setBulkFixState({ running: true, scanned: 0, fixed: 0, failed: 0, skipped: 0, log: [] });
+    const log: string[] = [];
+    let scanned = 0, fixed = 0, failed = 0, skipped = 0;
+
+    for (const u of users) {
+      try {
+        const lr = await fetch(`/api/super-admin/users/${encodeURIComponent(u.userId)}/reports`, {
+          headers: { Authorization: `Bearer ${pwd}` },
+        });
+        const lj = (await lr.json()) as {
+          ok?: boolean;
+          reports?: Array<{ id: string; fixStatus: string | null; questionId: string }>;
+        };
+        if (!lj.ok || !lj.reports) {
+          log.push(`${u.userId}: list_failed`);
+          continue;
+        }
+        const pending = lj.reports.filter((r) => r.fixStatus === "pending");
+        if (pending.length === 0) {
+          log.push(`${u.userId}: no pending`);
+          continue;
+        }
+        for (const r of pending) {
+          scanned++;
+          setBulkFixState((s) => s && { ...s, scanned, log: [...log] });
+          try {
+            const fr = await fetch(
+              `/api/super-admin/users/${encodeURIComponent(u.userId)}/reports/${encodeURIComponent(r.id)}/fix`,
+              { method: "POST", headers: { Authorization: `Bearer ${pwd}` } },
+            );
+            const fj = (await fr.json()) as { ok?: boolean; alreadyFixed?: boolean; changesSummary?: string };
+            if (fj.alreadyFixed) {
+              skipped++;
+              log.push(`${u.userId}/${r.questionId}: 已修过`);
+            } else if (fj.ok) {
+              fixed++;
+              log.push(`${u.userId}/${r.questionId}: ✓ ${fj.changesSummary?.slice(0, 50) ?? ""}`);
+            } else {
+              failed++;
+              log.push(`${u.userId}/${r.questionId}: ✗`);
+            }
+            setBulkFixState((s) => s && { ...s, scanned, fixed, failed, skipped, log: [...log] });
+          } catch (e) {
+            failed++;
+            log.push(`${u.userId}/${r.questionId}: err ${(e as Error).message.slice(0, 50)}`);
+          }
+        }
+      } catch (e) {
+        log.push(`${u.userId}: err ${(e as Error).message.slice(0, 50)}`);
+      }
+    }
+
+    setBulkFixState((s) => s && { ...s, running: false, scanned, fixed, failed, skipped, log: [...log] });
+    await refreshUsers();
   }
 
   async function bulkRefreshSummaries() {
@@ -521,12 +595,22 @@ export function SuperAdminPage() {
         <button
           type="button"
           onClick={bulkRefreshSummaries}
-          disabled={bulkRefreshState?.running}
+          disabled={bulkRefreshState?.running || bulkFixState?.running}
           className="text-xs px-3 py-1.5 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-100 font-bold disabled:opacity-40"
         >
           {bulkRefreshState?.running
             ? `🔄 ${bulkRefreshState.done}/${bulkRefreshState.total}${bulkRefreshState.currentUser ? " · " + bulkRefreshState.currentUser : ""}`
             : "🔄 刷新所有摘要"}
+        </button>
+        <button
+          type="button"
+          onClick={bulkFixPendingReports}
+          disabled={bulkRefreshState?.running || bulkFixState?.running}
+          className="text-xs px-3 py-1.5 rounded bg-amber-500/30 hover:bg-amber-500/50 text-amber-100 font-bold disabled:opacity-40"
+        >
+          {bulkFixState?.running
+            ? `🔧 修中 (扫${bulkFixState.scanned} 修${bulkFixState.fixed})`
+            : "🔧 修所有 pending 报题"}
         </button>
         <Link to="/" className="ml-auto text-xs text-violet-300 underline">
           返回首页
@@ -537,6 +621,27 @@ export function SuperAdminPage() {
         所有同学的账户 + profile + 上次活跃。点 ✏️ 编辑 / 🔑 重置密码 /
         📊 学情 / 🤖 AI 摘要 操作。"🔄 刷新所有摘要" 给所有同学跑一遍最新 AI 摘要。
       </div>
+
+      {/* 批量修题结果 toast */}
+      {bulkFixState && !bulkFixState.running && (
+        <div
+          className={`rounded p-3 mb-3 text-xs ${
+            bulkFixState.failed === 0
+              ? "bg-emerald-500/10 border border-emerald-400/40 text-emerald-200"
+              : "bg-amber-500/10 border border-amber-400/40 text-amber-200"
+          }`}
+        >
+          <div className="font-bold mb-1">
+            🔧 修题结束：扫 {bulkFixState.scanned} · 修 ✓ {bulkFixState.fixed} · 失败 ✗ {bulkFixState.failed} · 跳过 (已修) {bulkFixState.skipped}
+          </div>
+          {bulkFixState.log.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-slate-300">展开日志 ({bulkFixState.log.length} 条)</summary>
+              <pre className="mt-2 text-[10px] text-slate-400 max-h-64 overflow-y-auto">{bulkFixState.log.join("\n")}</pre>
+            </details>
+          )}
+        </div>
+      )}
 
       {/* 批量刷新结果 toast */}
       {bulkRefreshState && !bulkRefreshState.running && (

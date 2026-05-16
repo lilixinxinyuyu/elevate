@@ -134,6 +134,191 @@ superAdmin.get("/users", async (c) => {
   });
 });
 
+/**
+ * GET /api/super-admin/users/:userId/reports
+ * super-admin 看任意同学的报题列表（不限于自己的）
+ */
+superAdmin.get("/users/:userId/reports", async (c) => {
+  const targetUserId = c.req.param("userId");
+  if (!isValidUserId(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_target_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const got = await ossGet(cfg, `users/${targetUserId}/reports/index.json`);
+  if (!got.ok || !got.text) {
+    return c.json({ ok: true, targetUserId, count: 0, reports: [] });
+  }
+  try {
+    const idx = JSON.parse(got.text) as {
+      entries?: Array<{ id: string; questionId: string; reason: string; fixStatus: string | null; createdAt: number }>;
+    };
+    const entries = idx.entries ?? [];
+    const pendingCount = entries.filter((e) => e.fixStatus === "pending").length;
+    return c.json({
+      ok: true,
+      targetUserId,
+      count: entries.length,
+      pendingCount,
+      reports: entries,
+    });
+  } catch {
+    return c.json({ ok: false, error: "corrupt_index" }, 500);
+  }
+});
+
+/**
+ * POST /api/super-admin/users/:userId/reports/:reportId/fix
+ * super-admin 触发任意同学某条 pending 报告的 AI 修题。
+ * 直接复用 admin.ts fix 逻辑 — 通过 internal fetch 转发（避免代码重复）。
+ */
+superAdmin.post("/users/:userId/reports/:reportId/fix", async (c) => {
+  const targetUserId = c.req.param("userId");
+  const reportId = c.req.param("reportId");
+  if (!isValidUserId(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_target_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  // 复用 admin.ts 修题逻辑：读 report → call LLM → 写回。
+  // 但 admin.ts 鉴权是 own userId only，所以这里内联同样的代码片段。
+  const apiKey = c.env.TOKEN_PLAN_CN_API_KEY ?? c.env.BAILIAN_API_KEY;
+  if (!apiKey) return c.json({ ok: false, error: "no_llm_api_key" }, 503);
+
+  const reportKey = `users/${targetUserId}/reports/${reportId}.json`;
+  const got = await ossGet(cfg, reportKey);
+  if (!got.ok || !got.text) {
+    return c.json({ ok: false, error: "not_found" }, got.status === 404 ? 404 : 502);
+  }
+  let report: {
+    id: string;
+    reason: string;
+    reasonText: string | null;
+    originalPayload: Record<string, unknown>;
+    userAnswer: unknown;
+    fixStatus: string | null;
+    fixedPayload: Record<string, unknown> | null;
+  };
+  try { report = JSON.parse(got.text); } catch { return c.json({ ok: false, error: "corrupt_report" }, 500); }
+  if (report.fixStatus === "fixed" && report.fixedPayload) {
+    return c.json({ ok: true, alreadyFixed: true, fixedPayload: report.fixedPayload });
+  }
+
+  // Build prompt (same as admin.ts)
+  const REASON_HINT: Record<string, string> = {
+    answer_wrong: "用户报告：答案不对",
+    stem_unclear: "用户报告：题面看不懂 / 措辞不清",
+    options_same: "用户报告：4 个选项看起来一样或区分度太低",
+    options_no_correct: "用户报告：4 个选项里没有正确答案",
+    math_error: "用户报告：数字 / 计算有错",
+    other: "用户报告：其他问题",
+  };
+  const reasonHint = REASON_HINT[report.reason] ?? `用户报告（${report.reason}）`;
+  const reasonText = report.reasonText ? `\n用户额外补充：${report.reasonText}` : "";
+  const userAnswerLine = report.userAnswer !== null && report.userAnswer !== undefined
+    ? `\nSelena 这次选/答了：${JSON.stringify(report.userAnswer)}` : "";
+  const userPrompt = `# 报告
+${reasonHint}${reasonText}${userAnswerLine}
+
+# 原题 JSON
+\`\`\`json
+${JSON.stringify(report.originalPayload, null, 2)}
+\`\`\`
+
+按 system 要求修这道题，输出 { "question": {...}, "changesSummary": "..." } JSON。`;
+
+  const FIX_SYS = `你是题库修复 AI。给你一道有问题的小学题 + 用户报告的具体问题。
+你只输出修后的整道题 JSON，结构完全跟原题一样，只改有问题的字段。
+
+修复原则：
+1. 保 enum 字段不变 (subjectId/skill_id/grade/difficulty/game_type/...)
+2. 数学闭合：答案合常识
+3. 题面纯净：不写"（无关）/（误算）"等元注解
+4. distractor 区分度：错误选项源自学生具体误解思路
+5. 保题型保结构：选项数量/字段名都不动
+
+返回 { "question": {...}, "changesSummary": "一句话说改了啥" } JSON。`;
+
+  const baseUrl = c.env.TOKEN_PLAN_CN_API_KEY
+    ? "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    : "https://dashscope.aliyuncs.com/compatible-mode/v1";
+
+  let fixedPayload: Record<string, unknown> | null = null;
+  let changesSummary: string | null = null;
+  let llmError: string | null = null;
+  for (const m of ["qwen3.6-flash", "qwen3.6-plus"]) {
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 9_500);
+      const r = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: m,
+          messages: [{ role: "system", content: FIX_SYS }, { role: "user", content: userPrompt }],
+          temperature: 0.5, max_tokens: 2500,
+          response_format: { type: "json_object" }, enable_thinking: false,
+        }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(to);
+      const j = await r.json().catch(() => null) as { choices?: { message?: { content?: string } }[]; error?: { code?: string } } | null;
+      if (!r.ok || !j || j.error) { llmError = j?.error?.code ?? `http_${r.status}`; continue; }
+      const text = j.choices?.[0]?.message?.content?.trim();
+      if (!text) { llmError = "empty"; continue; }
+      let parsed: { question?: Record<string, unknown>; changesSummary?: string };
+      try { parsed = JSON.parse(text); } catch { llmError = "parse_failed"; continue; }
+      const q = parsed.question;
+      if (!q || typeof q !== "object" || typeof q.stem !== "string") { llmError = "missing_field"; continue; }
+      const orig = report.originalPayload;
+      fixedPayload = {
+        ...q,
+        question_id: orig.question_id, subjectId: orig.subjectId, skill_id: orig.skill_id,
+        skill_name: orig.skill_name, unit_id: orig.unit_id, unit_name: orig.unit_name,
+        term: orig.term, grade: orig.grade ?? 4, difficulty: orig.difficulty,
+        game_type: orig.game_type, play_as: orig.play_as, question_format: orig.question_format,
+        cognitive_level: orig.cognitive_level, ability_dimension: orig.ability_dimension,
+        exam_priority: orig.exam_priority, status: "approved",
+        version: (typeof orig.version === "number" ? orig.version : 1) + 1,
+        tags: Array.from(new Set([...((orig.tags as string[] | undefined) ?? []), "ai_fixed", `fixed_after:${report.reason}`])),
+      };
+      changesSummary = parsed.changesSummary ?? null;
+      llmError = null;
+      break;
+    } catch (e) {
+      llmError = "fetch_failed: " + (e as Error).message.slice(0, 80);
+    }
+  }
+
+  const updated = {
+    ...report,
+    fixedPayload, changesSummary,
+    fixStatus: fixedPayload ? "fixed" : "failed",
+    fixedAt: Date.now(),
+    llmError,
+  };
+  await ossPut(cfg, reportKey, JSON.stringify(updated, null, 2), {
+    contentType: "application/json; charset=utf-8",
+  });
+  // Update index entry status
+  try {
+    const idxKey = `users/${targetUserId}/reports/index.json`;
+    const idxGet = await ossGet(cfg, idxKey);
+    if (idxGet.ok && idxGet.text) {
+      const idx = JSON.parse(idxGet.text);
+      const entry = idx.entries?.find((e: { id: string }) => e.id === reportId);
+      if (entry) { entry.fixStatus = updated.fixStatus; idx.updatedAt = Date.now(); }
+      await ossPut(cfg, idxKey, JSON.stringify(idx, null, 2), { contentType: "application/json; charset=utf-8" });
+    }
+  } catch { /* */ }
+
+  if (!fixedPayload) {
+    return c.json({ ok: false, error: "fix_failed", llmError }, 502);
+  }
+  return c.json({ ok: true, targetUserId, reportId, fixStatus: "fixed", changesSummary, fixedPayload });
+});
+
 /** POST /api/super-admin/rebuild-index — 重建 users-index.json from per-user files */
 superAdmin.post("/rebuild-index", async (c) => {
   const ids = await listKnownUserIdsAsync(c.env);
