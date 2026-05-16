@@ -22,6 +22,7 @@
 | [Boss battle](boss-battle.md) | 闯关流程、生命系统、讲题 escalate、enraged 变体 | 改难度 / 加新 boss / 调 hint 流 |
 | [User report → AI fix](report-and-fix.md) | 学生 / 用户报告坏题 + AI 立刻修题 | debug AI 修题失败 / 看历史 reports |
 | [Feature flag + rollout](feature-flags-and-rollout.md) | Phase 2 flag + 当前 gated 内容 | 加 flag-gated 功能 |
+| [**AI 模型注册表**](ai-models-registry.md) | Provider / endpoint / API key / 模型清单 / 任务→模型映射 | 改 endpoint / 加 key / 选 model 时 |
 
 ### 工作流 docs
 
