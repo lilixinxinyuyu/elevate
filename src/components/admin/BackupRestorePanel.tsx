@@ -49,6 +49,56 @@ interface BackupFile {
   data: Record<string, unknown[]>;
 }
 
+/**
+ * 把任意 backup 格式归一化成 { data, version, exportedAt }。
+ *
+ * 历史上有两套 backup shape：
+ *   1. **嵌套**（BackupRestorePanel handleExport）：
+ *      { version, exportedAt, appVersion, tableCounts, data: { attempts, mastery, ... } }
+ *   2. **扁平**（Admin.tsx handleExport，老版"heping-backup-*.json"）：
+ *      { version, exportedAt, students, questions, sessions, attempts, mastery,
+ *        mistakes, trophies }
+ *
+ * 都要能 import。否则 Selena 的老备份导不回来。
+ */
+function normalizeBackup(raw: unknown): {
+  data: Record<string, unknown[]>;
+  version: number;
+  exportedAt: number | string | undefined;
+  format: "nested" | "flat";
+} {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("不是 JSON 对象");
+  }
+  const r = raw as Record<string, unknown>;
+  // 嵌套
+  if (r.data && typeof r.data === "object" && !Array.isArray(r.data)) {
+    return {
+      data: r.data as Record<string, unknown[]>,
+      version: (r.version as number) ?? 1,
+      exportedAt: r.exportedAt as number | string | undefined,
+      format: "nested",
+    };
+  }
+  // 扁平：从顶层抽出已知表名的数组
+  const data: Record<string, unknown[]> = {};
+  for (const t of BACKUP_TABLES) {
+    const v = r[t];
+    if (Array.isArray(v)) data[t] = v as unknown[];
+  }
+  if (Object.keys(data).length === 0) {
+    throw new Error(
+      "不是有效的 backup 文件 —— 既找不到 data 字段，也找不到任何已知的表（attempts/mastery/sessions 等）顶层数组",
+    );
+  }
+  return {
+    data,
+    version: (r.version as number) ?? 1,
+    exportedAt: r.exportedAt as number | string | undefined,
+    format: "flat",
+  };
+}
+
 interface CloudCheck {
   ok: boolean;
   userId?: string;
@@ -179,11 +229,11 @@ export function BackupRestorePanel() {
     setImportStats(null);
     try {
       const text = await file.text();
-      const backup = JSON.parse(text) as BackupFile;
-      if (!backup || typeof backup !== "object" || !backup.data) {
-        throw new Error("不是有效的 backup 文件（缺 data 字段）");
-      }
-      setStatus("📤 正在写回 IDB（union-merge）…");
+      const raw = JSON.parse(text);
+      const backup = normalizeBackup(raw);
+      setStatus(
+        `📤 解析成功（${backup.format} 格式）→ 写回 IDB（union-merge）…`,
+      );
       const imported: Record<string, number> = {};
       let totalRows = 0;
       for (const t of BACKUP_TABLES) {
