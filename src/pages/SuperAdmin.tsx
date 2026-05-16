@@ -115,6 +115,33 @@ export function SuperAdminPage() {
   const [newBusy, setNewBusy] = useState(false);
   const [newErr, setNewErr] = useState<string | null>(null);
 
+  // Ep13: 📊 stats modal
+  interface StatsBlob {
+    userId?: string;
+    counts?: {
+      attempts?: number;
+      mistakes?: number;
+      trophies?: number;
+      sessions?: number;
+      mastery?: number;
+      fluencyAttempts?: number;
+      tutorSessions?: number;
+    };
+    today?: { attempts?: number; sessions?: number };
+    last7Days?: { attempts?: number };
+    bySubject?: Record<string, number>;
+    topMistakeSkills?: Array<{ skillId: string; count: number }>;
+    correctRateRecent100?: number;
+    lastActivityMs?: number | null;
+    snapshotBytes?: number;
+    fetchedAt?: number;
+    empty?: boolean;
+    note?: string;
+  }
+  const [statsOf, setStatsOf] = useState<string | null>(null);
+  const [statsData, setStatsData] = useState<StatsBlob | null>(null);
+  const [statsBusy, setStatsBusy] = useState(false);
+
   useEffect(() => {
     (async () => {
       const pwd = getStoredPassword();
@@ -176,6 +203,28 @@ export function SuperAdminPage() {
       guardianPhone: u.profile?.guardianPhone ?? "",
     });
     setEditErr(null);
+  }
+
+  async function openStats(userId: string) {
+    setStatsOf(userId);
+    setStatsData(null);
+    setStatsBusy(true);
+    const pwd = getStoredPassword();
+    if (!pwd) {
+      setStatsBusy(false);
+      return;
+    }
+    try {
+      const r = await fetch(`/api/super-admin/users/${encodeURIComponent(userId)}/stats`, {
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const j = (await r.json()) as StatsBlob & { ok?: boolean };
+      setStatsData(j);
+    } catch (e) {
+      setStatsData({ note: `加载失败: ${(e as Error).message}` });
+    } finally {
+      setStatsBusy(false);
+    }
   }
 
   async function resetPassword(userId: string) {
@@ -423,6 +472,13 @@ export function SuperAdminPage() {
                     <div className="flex flex-col gap-1">
                       <button
                         type="button"
+                        onClick={() => openStats(u.userId)}
+                        className="text-xs px-2 py-1 rounded bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-100"
+                      >
+                        📊 学情
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => openEdit(u)}
                         className="text-xs px-2 py-1 rounded bg-violet-500/30 hover:bg-violet-500/50 text-violet-100"
                       >
@@ -592,6 +648,122 @@ export function SuperAdminPage() {
                 {newBusy ? "创建中…" : "创建账号"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📊 学情 stats modal */}
+      {statsOf && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4 overflow-y-auto"
+          style={{ backdropFilter: "blur(4px)" }}
+        >
+          <div className="card-glow max-w-lg w-full bg-slate-900/95 border-emerald-400/40 p-5 my-8">
+            <div className="flex items-baseline gap-2 mb-2">
+              <div className="font-display font-bold text-emerald-200 text-lg">
+                📊 {statsOf} 学情
+              </div>
+              {statsData?.fetchedAt && (
+                <span className="text-[10px] text-slate-500">
+                  ({fmtRel(statsData.fetchedAt)} 缓存)
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setStatsOf(null)}
+                className="ml-auto text-xs px-2 py-1 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-300"
+              >
+                关闭
+              </button>
+            </div>
+
+            {statsBusy && (
+              <div className="text-xs text-slate-400">⏳ 加载中…</div>
+            )}
+
+            {!statsBusy && statsData?.empty && (
+              <div className="text-xs text-amber-300 bg-amber-900/20 rounded p-3 mt-2">
+                ⚠️ 暂无 stats。<br/>
+                {statsData.note ?? "等同学下次开 app 自动 push 后再看。"}
+              </div>
+            )}
+
+            {!statsBusy && statsData && !statsData.empty && (
+              <div className="space-y-4 mt-3 text-sm">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded bg-emerald-500/10 border border-emerald-400/30 p-3 text-center">
+                    <div className="text-xl font-bold text-emerald-200">
+                      {statsData.today?.attempts ?? 0}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">今天答题</div>
+                  </div>
+                  <div className="rounded bg-violet-500/10 border border-violet-400/30 p-3 text-center">
+                    <div className="text-xl font-bold text-violet-200">
+                      {statsData.last7Days?.attempts ?? 0}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">7 天答题</div>
+                  </div>
+                  <div className="rounded bg-amber-500/10 border border-amber-400/30 p-3 text-center">
+                    <div className="text-xl font-bold text-amber-200">
+                      {statsData.correctRateRecent100 ?? 0}%
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">近 100 正确率</div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-slate-400 mb-1.5">累计</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs">
+                    {Object.entries(statsData.counts ?? {}).map(([k, v]) => (
+                      <div key={k} className="rounded bg-slate-800/60 p-2">
+                        <div className="text-slate-500 text-[10px]">{k}</div>
+                        <div className="font-bold text-slate-200">{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {statsData.bySubject && Object.keys(statsData.bySubject).length > 0 && (
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1.5">学科分布（attempts）</div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {Object.entries(statsData.bySubject).map(([subj, n]) => (
+                        <div key={subj} className="rounded bg-slate-800/60 px-3 py-1.5">
+                          <span className="text-slate-500">{subj}: </span>
+                          <span className="font-bold text-slate-200">{n}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {statsData.topMistakeSkills && statsData.topMistakeSkills.length > 0 && (
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1.5">Top 错题集中点</div>
+                    <div className="space-y-1 text-xs">
+                      {statsData.topMistakeSkills.map((m, idx) => (
+                        <div key={m.skillId} className="flex justify-between bg-slate-800/60 rounded px-2 py-1">
+                          <span className="text-slate-300">
+                            <span className="text-slate-500">#{idx + 1}</span>{" "}
+                            <code className="text-rose-300">{m.skillId}</code>
+                          </span>
+                          <span className="font-bold text-rose-200">{m.count} 题</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-[10px] text-slate-500 pt-1">
+                  上次活跃 {fmtRel(statsData.lastActivityMs)}
+                  {statsData.snapshotBytes && (
+                    <> · snapshot {(statsData.snapshotBytes / 1024).toFixed(0)}KB</>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
