@@ -21,7 +21,7 @@
 import { Hono } from "hono";
 import type { Env } from "../lib/env";
 import { requireAuth, getUserId } from "../lib/auth";
-import { getOssConfig, ossGet, ossHead, snapshotKey } from "../lib/oss";
+import { getOssConfig, ossGet, ossHead, ossPut, snapshotKey } from "../lib/oss";
 
 const superAdmin = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -123,6 +123,93 @@ superAdmin.get("/me", async (c) => {
     userId,
     isSuperAdmin: admins.has(userId),
     superAdmins: [...admins],
+  });
+});
+
+/**
+ * POST /api/super-admin/users/:userId/profile
+ * 超级管理员代任意同学改 profile（家长不会用 / 偷懒不补的时候）。
+ * Body: 同 POST /api/profile (部分 patch)，但目标 userId 来自 URL（不是 auth）。
+ */
+const ALLOWED_FIELDS = new Set([
+  "displayName", "gradeBand", "school", "city", "grade", "class",
+  "birthday", "guardianRole", "guardianPhone",
+]);
+
+superAdmin.post("/users/:userId/profile", async (c) => {
+  const targetUserId = c.req.param("userId");
+  if (!isValidUserId(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_target_userId" }, 400);
+  }
+  // 必须是已知 userId（防意外创建）
+  const known = new Set(listKnownUserIds(c.env));
+  if (!known.has(targetUserId)) {
+    return c.json({ ok: false, error: "unknown_userId", target: targetUserId }, 404);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  let patch: Record<string, unknown>;
+  try {
+    patch = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  if (!patch || typeof patch !== "object") {
+    return c.json({ ok: false, error: "invalid_body" }, 400);
+  }
+
+  // 读现有 profile
+  const profileKey = `users/${targetUserId}/profile.json`;
+  let current: Record<string, unknown> = {
+    schemaVersion: 1,
+    userId: targetUserId,
+    createdAt: Date.now(),
+    createdBy: "super-admin",
+  };
+  const got = await ossGet(cfg, profileKey);
+  if (got.ok && got.text) {
+    try {
+      current = JSON.parse(got.text);
+    } catch {
+      /* 重建 */
+    }
+  }
+
+  const merged = { ...current };
+  let changed = 0;
+  for (const [k, v] of Object.entries(patch)) {
+    if (!ALLOWED_FIELDS.has(k)) continue;
+    if (v === null) {
+      merged[k] = null;
+      changed++;
+      continue;
+    }
+    if (typeof v !== "string") continue;
+    const trimmed = v.trim();
+    if (trimmed.length > 100) continue;
+    merged[k] = trimmed;
+    changed++;
+  }
+  merged.userId = targetUserId;
+  merged.updatedAt = Date.now();
+  merged.lastEditedBy = `super-admin:${getUserId(c)}`;
+
+  if (changed === 0) {
+    return c.json({ ok: false, error: "no_valid_fields" }, 400);
+  }
+
+  const put = await ossPut(cfg, profileKey, JSON.stringify(merged, null, 2), {
+    contentType: "application/json; charset=utf-8",
+  });
+  if (!put.ok) {
+    return c.json({ ok: false, error: put.error }, 502);
+  }
+  return c.json({
+    ok: true,
+    targetUserId,
+    profile: merged,
+    updated: changed,
   });
 });
 
