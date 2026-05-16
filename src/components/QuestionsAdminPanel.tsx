@@ -14,6 +14,7 @@ import { db } from "../db/dexie";
 import type { Question } from "../core/types";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
+import { BackupRestorePanel } from "./admin/BackupRestorePanel";
 import { recordDeletedQuestionIds } from "../db/seed";
 import {
   applyQuestionFix,
@@ -270,6 +271,9 @@ export function QuestionsAdminPanel() {
 
   return (
     <div className="text-sm space-y-3">
+      {/* v0.33.59 (Ep132): 备份 / 恢复 — 迁移阿里云期间安全网 */}
+      <BackupRestorePanel />
+
       {/* 顶部统计卡 — v0.31.37：去掉"损坏"stat box，规则检测的可疑题
           交给下方 AI 质检判定（更准），不让 admin 看到没法处理的数字 */}
       <div className="grid grid-cols-3 gap-2">

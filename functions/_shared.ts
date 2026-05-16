@@ -19,6 +19,20 @@ export interface Env {
    * 没设就 fallback 到 DashScope intl。
    */
   TOKEN_PLAN_API_KEY?: string;
+  /**
+   * v0.33.59 (Ep132 OSS sync): 阿里云 OSS 配置（多租户云同步主路径）
+   * 都设了 → OSS 启用；任一没设 → fallback D1
+   */
+  ALIYUN_OSS_REGION?: string;       // e.g. "oss-cn-hongkong"
+  ALIYUN_OSS_BUCKET?: string;       // e.g. "xiaojinapp"
+  ALIYUN_OSS_ACCESS_KEY_ID?: string;
+  ALIYUN_OSS_ACCESS_KEY_SECRET?: string;
+  /**
+   * v0.33.59: 多租户密码映射 (JSON map password→userId)
+   * 例：'{"selena-2026":"selena","alice-pwd":"alice"}'
+   * 不设 → 全部 fallback 到 APP_PASSWORD → userId="selena"
+   */
+  APP_USERS?: string;
 }
 
 /**
@@ -166,16 +180,55 @@ export function unauthorized(): Response {
  * 返回 null 表示通过；否则返回 401 Response 直接给调用者 return。
  */
 export function checkAuth(req: Request, env: Env): Response | null {
-  if (!env.APP_PASSWORD) {
-    // 没设密码：开发期跳过，但日志一下
-    console.warn("APP_PASSWORD env var not set; skipping auth");
-    return null;
-  }
+  const r = getUserId(req, env);
+  if (r instanceof Response) return r;
+  return null;
+}
+
+/**
+ * v0.33.59 (Ep132 OSS sync multi-tenant):
+ * 从 Authorization: Bearer <password> 解出 userId。
+ * - 先查 APP_USERS JSON map (e.g. {"alice-pwd":"alice"}) → 返 alice
+ * - fallback 到 APP_PASSWORD → 返 "selena"（默认家庭，向后兼容）
+ * - 都不匹配 → 401 Response
+ *
+ * 返回 string (userId) 或 Response (401，调用方直接 return)
+ */
+export function getUserId(req: Request, env: Env): string | Response {
   const auth = req.headers.get("Authorization") ?? "";
   const m = /^Bearer\s+(.+)$/.exec(auth);
-  if (!m) return unauthorized();
-  if (!safeEq(m[1]!, env.APP_PASSWORD)) return unauthorized();
-  return null;
+  if (!m) {
+    // 完全没 Authorization header 且未配 APP_PASSWORD → 开发模式跳过
+    if (!env.APP_PASSWORD && !env.APP_USERS) {
+      console.warn("[getUserId] no APP_PASSWORD / APP_USERS — dev mode, userId=selena");
+      return "selena";
+    }
+    return unauthorized();
+  }
+  const pwd = m[1]!;
+  // 1. 查 APP_USERS map（多租户）
+  if (env.APP_USERS) {
+    try {
+      const map = JSON.parse(env.APP_USERS) as Record<string, string>;
+      for (const [k, v] of Object.entries(map)) {
+        if (safeEq(pwd, k)) {
+          // 简单 sanitize：userId 只能 a-zA-Z0-9-_
+          if (!/^[a-zA-Z0-9_-]{1,64}$/.test(v)) {
+            console.error(`[getUserId] invalid userId in APP_USERS: ${v}`);
+            return unauthorized();
+          }
+          return v;
+        }
+      }
+    } catch (e) {
+      console.error("[getUserId] APP_USERS parse failed:", (e as Error).message);
+    }
+  }
+  // 2. fallback 老 APP_PASSWORD → userId="selena"（Selena 家保留 default）
+  if (env.APP_PASSWORD && safeEq(pwd, env.APP_PASSWORD)) {
+    return "selena";
+  }
+  return unauthorized();
 }
 
 export async function ensureSchema(db: D1Database): Promise<void> {

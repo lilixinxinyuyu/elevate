@@ -473,6 +473,95 @@ export interface SyncResult {
  *
  * 即使 pull 失败（网络抖动），仍然继续 push（本地优先策略）。
  */
+/**
+ * v0.33.59 (Ep132 OSS sync): 推 main snapshot 到阿里云 OSS（新主路径）。
+ * 内部用 gzip 压缩 body 节省带宽（OSS 接受任何尺寸，但带宽算钱）。
+ * 返回 {ok, version, error}.
+ */
+async function pushMainSnapshotOss(
+  payload: SnapshotPayload,
+  pwd: string,
+): Promise<SyncResult> {
+  const bodyStr = JSON.stringify(payload);
+  let body: BodyInit = bodyStr;
+  let useGzip = false;
+  try {
+    if (typeof CompressionStream !== "undefined" && bodyStr.length > 50_000) {
+      const stream = new Response(bodyStr).body!.pipeThrough(
+        new CompressionStream("gzip"),
+      );
+      body = await new Response(stream).arrayBuffer();
+      useGzip = true;
+    }
+  } catch (e) {
+    console.warn("[pushMainSnapshotOss] gzip failed, sending raw:", e);
+  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${pwd}`,
+  };
+  if (useGzip) headers["X-Body-Encoding"] = "gzip";
+  try {
+    const resp = await fetch("/api/sync/oss/upload", {
+      method: "POST",
+      headers,
+      body,
+    });
+    if (resp.status === 401) return { ok: false, error: "unauthorized" };
+    if (resp.status === 503) return { ok: false, error: "oss_not_configured" };
+    if (!resp.ok) {
+      const t = await resp.text().catch(() => "");
+      return { ok: false, error: `oss_http_${resp.status}: ${t.slice(0, 160)}` };
+    }
+    const data = (await resp.json()) as {
+      ok: boolean;
+      version?: number;
+      userId?: string;
+      bytes?: number;
+    };
+    if (!data.ok) return { ok: false, error: "oss_server_error" };
+    if (data.version) setLastPushAt(data.version);
+    return { ok: true, version: data.version };
+  } catch (e) {
+    return { ok: false, error: "oss_network: " + (e as Error).message };
+  }
+}
+
+/**
+ * v0.33.59 (Ep132 OSS sync): 从 OSS 拉 main snapshot, merge 到本地。
+ */
+async function pullMainSnapshotOss(
+  pwd: string,
+  opts: { force?: boolean } = {},
+): Promise<SyncResult> {
+  const since = opts.force ? 0 : getLastPullAt();
+  try {
+    const resp = await fetch(`/api/sync/oss/download?since=${since}`, {
+      headers: { Authorization: `Bearer ${pwd}` },
+    });
+    if (resp.status === 401) return { ok: false, error: "unauthorized" };
+    if (resp.status === 503) return { ok: false, error: "oss_not_configured" };
+    if (!resp.ok) {
+      return { ok: false, error: `oss_http_${resp.status}` };
+    }
+    const data = (await resp.json()) as {
+      ok: boolean;
+      latest: null | { payload: SnapshotPayload; version: number };
+      userId?: string;
+    };
+    if (!data.ok) return { ok: false, error: "oss_server_error" };
+    if (data.latest) {
+      await applyPayloadMerged(data.latest.payload);
+      await cleanupOrphanMistakes().catch(() => {});
+      setLastPullAt(data.latest.version);
+      return { ok: true, changed: true, version: data.latest.version };
+    }
+    return { ok: true, changed: false };
+  } catch (e) {
+    return { ok: false, error: "oss_network: " + (e as Error).message };
+  }
+}
+
 export async function pushToCloud(
   opts: { skipPrePull?: boolean } = {},
 ): Promise<SyncResult> {
@@ -511,6 +600,28 @@ export async function pushToCloud(
   } catch (e) {
     return { ok: false, error: "dump_failed: " + (e as Error).message };
   }
+
+  // v0.33.59 (Ep132): 优先走 OSS 新主路径 — payload 大小不再受 D1 限制
+  // OSS 失败才 fallback D1（保证旧路径可用）
+  const ossR = await pushMainSnapshotOss(payload, pwd);
+  if (ossR.ok) {
+    // OSS 主路径成功 → 仍然 push trophyImages + aiQuestions（这俩还在独立 D1 端点）
+    try {
+      const r = await pushTrophyImages();
+      if (!r.ok) console.warn("[pushToCloud] trophyImages push failed:", r.error);
+    } catch (e) {
+      console.warn("[pushToCloud] trophyImages threw:", e);
+    }
+    try {
+      const r = await pushAiQuestions();
+      if (!r.ok) console.warn("[pushToCloud] aiQuestions push failed:", r.error);
+    } catch (e) {
+      console.warn("[pushToCloud] aiQuestions threw:", e);
+    }
+    return { ok: true, version: ossR.version };
+  }
+  // OSS 不可用 / 错配（503 oss_not_configured） / 真错 → fallback D1
+  console.warn("[pushToCloud] OSS push failed, falling back to D1:", ossR.error);
 
   // v0.29.7: 最后一道防线 — 总 payload > 8 MB 直接 fail，告诉用户去 admin 清
   const estSizeMb = JSON.stringify(payload).length / 1024 / 1024;
@@ -630,32 +741,46 @@ export async function pushToCloud(
 export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<SyncResult> {
   const pwd = getStoredPassword();
   if (!pwd) return { ok: false, error: "no_password" };
-  const since = opts.force ? 0 : getLastPullAt();
   let changed = false;
   let version: number | undefined;
-  try {
-    const resp = await fetch(`/api/sync/download?since=${since}`, {
-      headers: { Authorization: `Bearer ${pwd}` },
-    });
-    if (resp.status === 401) return { ok: false, error: "unauthorized" };
-    if (!resp.ok) return { ok: false, error: `http_${resp.status}` };
-    const data = (await resp.json()) as {
-      ok: boolean;
-      latest: null | { payload: SnapshotPayload; version: number };
-    };
-    if (!data.ok) return { ok: false, error: "server_error" };
-    if (data.latest) {
-      // v0.26.1：用 merge 而非覆盖。本地新写入永远不会被远程旧快照清掉
-      await applyPayloadMerged(data.latest.payload);
-      // v0.31.16: 合并是 union-by-id，云端旧快照里已删的孤儿错题会被合回来。
-      // 立刻清一次（按 questions 表为 source of truth）。幂等，0 孤儿时无副作用。
-      await cleanupOrphanMistakes().catch(() => {/* 不阻塞 sync */});
-      setLastPullAt(data.latest.version);
+
+  // v0.33.59 (Ep132): 优先走 OSS 新主路径
+  const ossR = await pullMainSnapshotOss(pwd, opts);
+  if (ossR.ok) {
+    if (ossR.changed) {
       changed = true;
-      version = data.latest.version;
+      version = ossR.version;
     }
-  } catch (e) {
-    return { ok: false, error: "network: " + (e as Error).message };
+    // OSS 主路径 OK → trophyImages + aiQuestions 继续走 D1 端点
+    // 跳过下面 D1 main snapshot 拉取
+  } else {
+    // OSS 不可用 → fallback D1
+    console.warn("[pullFromCloud] OSS pull failed, falling back to D1:", ossR.error);
+    const since = opts.force ? 0 : getLastPullAt();
+    try {
+      const resp = await fetch(`/api/sync/download?since=${since}`, {
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      if (resp.status === 401) return { ok: false, error: "unauthorized" };
+      if (!resp.ok) return { ok: false, error: `http_${resp.status}` };
+      const data = (await resp.json()) as {
+        ok: boolean;
+        latest: null | { payload: SnapshotPayload; version: number };
+      };
+      if (!data.ok) return { ok: false, error: "server_error" };
+      if (data.latest) {
+        // v0.26.1：用 merge 而非覆盖。本地新写入永远不会被远程旧快照清掉
+        await applyPayloadMerged(data.latest.payload);
+        // v0.31.16: 合并是 union-by-id，云端旧快照里已删的孤儿错题会被合回来。
+        // 立刻清一次（按 questions 表为 source of truth）。幂等，0 孤儿时无副作用。
+        await cleanupOrphanMistakes().catch(() => {/* 不阻塞 sync */});
+        setLastPullAt(data.latest.version);
+        changed = true;
+        version = data.latest.version;
+      }
+    } catch (e) {
+      return { ok: false, error: "network: " + (e as Error).message };
+    }
   }
 
   // v0.30.0: 拉 trophyImages（增量；force=true 时强制全量重拉）
