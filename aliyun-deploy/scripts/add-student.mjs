@@ -25,6 +25,7 @@ import { readFileSync, writeFileSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import crypto from "node:crypto";
+import OSS from "ali-oss";
 
 const DEV_VARS = process.env.DEV_VARS ?? "/Users/yong/Desktop/xy/.dev.vars";
 const SAFE_CHARS = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -136,6 +137,14 @@ const remove = arg("remove");
 const userId = arg("userId");
 const displayName = arg("displayName");
 const gradeBand = arg("gradeBand");
+// Ep8 新加 onboarding 字段（爸爸 2026-05-17 加单）
+const school = arg("school");           // 学校名 "成都锦江和平街小学"
+const city = arg("city");               // 城市 "成都"
+const grade = arg("grade");             // 年级 "4"
+const klass = arg("class");             // 班级 "3" (不能叫 class，JS 保留字)
+const birthday = arg("birthday");       // ISO "2016-03-13"
+const guardianRole = arg("guardianRole"); // "妈妈" / "爸爸" / "爷爷" / 自定义
+const guardianPhone = arg("guardianPhone"); // "13800138000"
 
 if (list) {
   listUsers();
@@ -197,14 +206,56 @@ users[password] = userId;
 map.APP_USERS = JSON.stringify(users);
 saveDevVars(map);
 
+// Ep8 (爸爸 2026-05-17): 学生 profile 持久化到 OSS users/{userId}/profile.json
+// 前端首登读这里渲染；缺字段时弹 onboarding form 让家长补
+const profile = {
+  schemaVersion: 1,
+  userId,
+  displayName: displayName ?? userId,
+  gradeBand: gradeBand ?? null,
+  school: school ?? null,
+  city: city ?? null,
+  grade: grade ?? null,
+  class: klass ?? null,
+  birthday: birthday ?? null,
+  guardianRole: guardianRole ?? null,
+  guardianPhone: guardianPhone ?? null,
+  createdAt: Date.now(),
+  createdBy: "add-student-cli",
+};
+
+let profilePushed = false;
+try {
+  const client = new OSS({
+    endpoint: `https://${map.ALIYUN_OSS_REGION}.aliyuncs.com`,
+    bucket: map.ALIYUN_OSS_BUCKET,
+    accessKeyId: map.ALIYUN_OSS_ACCESS_KEY_ID,
+    accessKeySecret: map.ALIYUN_OSS_ACCESS_KEY_SECRET,
+    secure: true,
+  });
+  await client.put(`users/${userId}/profile.json`, Buffer.from(JSON.stringify(profile, null, 2)), {
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+  profilePushed = true;
+} catch (e) {
+  console.warn(`[profile] OSS push failed: ${e.message}（之后可以让同学登录后补）`);
+}
+
 console.log("\n✓ 已加：");
-console.log(`  userId       : ${userId}`);
-console.log(`  displayName  : ${displayName ?? "(未传)"}`);
-console.log(`  gradeBand    : ${gradeBand ?? "(未传)"}`);
-console.log(`  登录 URL     : https://${userId}.xiaojin.app`);
-console.log(`  备用 URL     : https://xiaojin.app    (apex, 密码也认)`);
-console.log(`  密码         : ${password}`);
-console.log(`\n  → 把上面"登录 URL + 密码"发给同学家长。`);
+console.log(`  userId         : ${userId}`);
+console.log(`  displayName    : ${profile.displayName}`);
+console.log(`  school         : ${profile.school ?? "(待补)"}`);
+console.log(`  city           : ${profile.city ?? "(待补)"}`);
+console.log(`  grade/class    : ${profile.grade ?? "?"}年级 / ${profile.class ?? "?"}班`);
+console.log(`  birthday       : ${profile.birthday ?? "(待补)"}`);
+console.log(`  guardianRole   : ${profile.guardianRole ?? "(待补)"}`);
+console.log(`  guardianPhone  : ${profile.guardianPhone ?? "(待补)"}`);
+console.log(`  OSS profile    : ${profilePushed ? "✓ users/" + userId + "/profile.json" : "✗ 未推"}`);
+console.log(`  登录 URL       : https://${userId}.xiaojin.app`);
+console.log(`  备用 URL       : https://xiaojin.app    (apex 密码也认)`);
+console.log(`  密码           : ${password}`);
+console.log(`\n  → 把"登录 URL + 密码"发给监护人。`);
+console.log(`  → profile 缺的字段同学/家长首登后补（onboarding modal）`);
 
 rebuildAndDeploy();
 
@@ -212,3 +263,4 @@ console.log("\n✓ 部署完成。同学现在就可以登录了。");
 console.log("\n再确认一遍：");
 console.log(`  curl -X POST -H "Authorization: Bearer ${password}" https://xiaojin.app/api/auth/check`);
 console.log(`  应返回 {"ok":true,"userId":"${userId}"}`);
+console.log(`  curl https://${userId}.xiaojin.app/api/profile  # (新 endpoint, Ep8b 实现)`);

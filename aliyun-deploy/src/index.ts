@@ -26,6 +26,7 @@ import staticProxy from "./routes/static";
 import proxyFallback from "./routes/proxy-fallback";
 import generate from "./routes/generate";
 import tts from "./routes/tts";
+import profile from "./routes/profile";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -68,8 +69,7 @@ app.get("/api/health", (c) =>
 // 已移植到 Aliyun 的 endpoint
 app.route("/api/auth", auth);
 app.route("/api/sync", sync);
-
-// 已移植到 Aliyun
+app.route("/api/profile", profile);    // Ep8: onboarding 字段读写
 app.route("/api/tts", tts);
 app.route("/api/generate", generate);  // Ep7: async pattern, POST /image + GET /image/status/:id
 
