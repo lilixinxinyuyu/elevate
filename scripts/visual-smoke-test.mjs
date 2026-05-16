@@ -17,7 +17,7 @@ import puppeteer from "puppeteer-core";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const BASE = "https://xiaojin.app";
+const BASE = process.env.SMOKE_BASE ?? "https://xiaojin.app";
 const OUT = "/tmp/xiaojin-smoke";
 mkdirSync(OUT, { recursive: true });
 
