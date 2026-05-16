@@ -22,6 +22,11 @@ import { Hono } from "hono";
 import type { Env } from "../lib/env";
 import { requireAuth, getUserId } from "../lib/auth";
 import { getOssConfig, ossGet, ossHead, ossPut, snapshotKey } from "../lib/oss";
+import {
+  listKnownUserIds as listKnownUserIdsAsync,
+  resetPasswordForUser,
+  addNewStudent,
+} from "../lib/auth-store";
 
 const superAdmin = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -44,21 +49,7 @@ function isValidUserId(v: string): boolean {
   return /^[a-zA-Z0-9_-]{1,64}$/.test(v);
 }
 
-function listKnownUserIds(env: Env): string[] {
-  const ids = new Set<string>();
-  if (env.APP_PASSWORD) ids.add("selena"); // legacy default
-  if (env.APP_USERS) {
-    try {
-      const m = JSON.parse(env.APP_USERS) as Record<string, string>;
-      for (const v of Object.values(m)) {
-        if (typeof v === "string" && isValidUserId(v)) ids.add(v);
-      }
-    } catch {
-      /* */
-    }
-  }
-  return [...ids].sort();
-}
+/** legacy sync — 现在不用了，全部走 async listKnownUserIdsAsync (OSS-aware) */
 
 // 所有 super-admin endpoints 都先校验权限
 superAdmin.use("*", requireAuth, async (c, next) => {
@@ -74,7 +65,7 @@ superAdmin.get("/users", async (c) => {
   const cfg = getOssConfig(c.env);
   if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
 
-  const ids = listKnownUserIds(c.env);
+  const ids = await listKnownUserIdsAsync(c.env);
   const admins = getSuperAdmins(c.env);
 
   const users = await Promise.all(
@@ -142,7 +133,7 @@ superAdmin.post("/users/:userId/profile", async (c) => {
     return c.json({ ok: false, error: "invalid_target_userId" }, 400);
   }
   // 必须是已知 userId（防意外创建）
-  const known = new Set(listKnownUserIds(c.env));
+  const known = new Set(await listKnownUserIdsAsync(c.env));
   if (!known.has(targetUserId)) {
     return c.json({ ok: false, error: "unknown_userId", target: targetUserId }, 404);
   }
@@ -210,6 +201,72 @@ superAdmin.post("/users/:userId/profile", async (c) => {
     targetUserId,
     profile: merged,
     updated: changed,
+  });
+});
+
+/**
+ * POST /api/super-admin/users/:userId/password
+ * 重置任意同学的密码。返回新密码（明文，仅这次显示，super-admin 自己抄走给监护人）
+ */
+superAdmin.post("/users/:userId/password", async (c) => {
+  const targetUserId = c.req.param("userId");
+  const r = await resetPasswordForUser(c.env, targetUserId);
+  if (!r.ok) {
+    const status = r.error === "unknown_userId" ? 404 : r.error === "oss_not_configured" ? 503 : 400;
+    return c.json({ ok: false, error: r.error, targetUserId }, status);
+  }
+  console.log(`[super-admin] ${getUserId(c)} reset password for ${targetUserId} (rotated ${r.rotated})`);
+  return c.json({
+    ok: true,
+    targetUserId,
+    newPassword: r.newPassword,
+    rotatedOldPasswords: r.rotated,
+    loginUrl: `https://${targetUserId}.xiaojin.app`,
+    fallbackUrl: "https://xiaojin.app",
+  });
+});
+
+/**
+ * POST /api/super-admin/users
+ * 新建同学账户（不需要 redeploy）。Body: { userId, displayName? }
+ * 返回 { newPassword } 给 super-admin 复制给监护人。
+ * 监护人首次登录会被 ProfileGate 提示补全档案。
+ */
+superAdmin.post("/users", async (c) => {
+  let body: { userId?: string; displayName?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  if (!body.userId) {
+    return c.json({ ok: false, error: "missing_userId" }, 400);
+  }
+  const r = await addNewStudent(c.env, body.userId);
+  if (!r.ok) {
+    const status = r.error === "userId_exists" ? 409 : r.error === "reserved_userId" ? 400 : 400;
+    return c.json({ ok: false, error: r.error }, status);
+  }
+  // optional displayName → seed profile
+  if (body.displayName) {
+    const cfg = getOssConfig(c.env);
+    if (cfg) {
+      await ossPut(cfg, `users/${body.userId}/profile.json`, JSON.stringify({
+        schemaVersion: 1,
+        userId: body.userId,
+        displayName: body.displayName.slice(0, 50),
+        createdAt: Date.now(),
+        createdBy: `super-admin:${getUserId(c)}`,
+      }, null, 2), { contentType: "application/json; charset=utf-8" });
+    }
+  }
+  console.log(`[super-admin] ${getUserId(c)} created new user ${body.userId}`);
+  return c.json({
+    ok: true,
+    userId: body.userId,
+    newPassword: r.password,
+    loginUrl: `https://${body.userId}.xiaojin.app`,
+    fallbackUrl: "https://xiaojin.app",
   });
 });
 

@@ -19,6 +19,7 @@
 
 import type { Context } from "hono";
 import type { Env } from "./env";
+import { readEffectivePasswords } from "./auth-store";
 
 export function safeEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -51,28 +52,29 @@ export function extractSubdomainUserId(host: string): string | null {
   return sub;
 }
 
-/** 把 password 查映射到 userId。返回 null 表示密码不对 */
-function passwordToUserId(pwd: string, env: Env): string | null {
-  // 1. APP_USERS map
-  if (env.APP_USERS) {
-    try {
-      const map = JSON.parse(env.APP_USERS) as Record<string, string>;
-      for (const [k, v] of Object.entries(map)) {
-        if (safeEq(pwd, k)) {
-          if (!isValidUserId(v)) {
-            console.error(`[auth] invalid userId in APP_USERS: ${v}`);
-            return null;
-          }
-          return v;
+/**
+ * 把 password 查映射到 userId。返回 null 表示密码不对。
+ *
+ * v0.34.17 (Ep147): 改成 async，先查 OSS _auth/users.json（动态、可改），
+ * 没找到再回 baked APP_USERS + APP_PASSWORD（启动种子）。
+ *
+ * OSS 优先就支持了 super-admin 在线重置密码（不用 redeploy）。
+ */
+async function passwordToUserId(pwd: string, env: Env): Promise<string | null> {
+  // 1. OSS 动态 store + baked merge
+  try {
+    const map = await readEffectivePasswords(env);
+    for (const [k, v] of Object.entries(map)) {
+      if (safeEq(pwd, k)) {
+        if (!isValidUserId(v)) {
+          console.error(`[auth] invalid userId in store: ${v}`);
+          return null;
         }
+        return v;
       }
-    } catch (e) {
-      console.error("[auth] APP_USERS parse failed:", (e as Error).message);
     }
-  }
-  // 2. 老 APP_PASSWORD fallback → "selena"
-  if (env.APP_PASSWORD && safeEq(pwd, env.APP_PASSWORD)) {
-    return "selena";
+  } catch (e) {
+    console.error("[auth] auth-store read failed:", (e as Error).message);
   }
   return null;
 }
@@ -87,7 +89,7 @@ function passwordToUserId(pwd: string, env: Env): string | null {
  *   4. 无 password 且没设 APP_PASSWORD/APP_USERS（dev mode）→ "selena"
  *   5. 其他 → null
  */
-export function resolveUserId(req: Request, env: Env): string | null {
+export async function resolveUserId(req: Request, env: Env): Promise<string | null> {
   const host = req.headers.get("Host") ?? "";
   const subClaim = extractSubdomainUserId(host);
 
@@ -102,7 +104,7 @@ export function resolveUserId(req: Request, env: Env): string | null {
     return null;
   }
   const pwd = m[1]!;
-  const pwdUserId = passwordToUserId(pwd, env);
+  const pwdUserId = await passwordToUserId(pwd, env);
   if (!pwdUserId) return null;
 
   // subdomain 声明必须跟 password 解出来的对上
@@ -121,7 +123,7 @@ export async function requireAuth(
   c: Context<{ Bindings: Env; Variables: { userId: string } }>,
   next: () => Promise<void>,
 ): Promise<Response | void> {
-  const userId = resolveUserId(c.req.raw, c.env);
+  const userId = await resolveUserId(c.req.raw, c.env);
   if (!userId) {
     return c.json({ ok: false, error: "unauthorized" }, 401);
   }

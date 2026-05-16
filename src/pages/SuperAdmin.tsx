@@ -98,6 +98,23 @@ export function SuperAdminPage() {
   const [editBusy, setEditBusy] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
 
+  // Ep11: 新密码 / 新建同学结果 modal
+  const [credResult, setCredResult] = useState<{
+    title: string;
+    userId: string;
+    password: string;
+    loginUrl: string;
+    fallbackUrl: string;
+  } | null>(null);
+  const [credCopied, setCredCopied] = useState(false);
+
+  // Ep11: 新同学 modal
+  const [newOpen, setNewOpen] = useState(false);
+  const [newUserId, setNewUserId] = useState("");
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [newBusy, setNewBusy] = useState(false);
+  const [newErr, setNewErr] = useState<string | null>(null);
+
   useEffect(() => {
     (async () => {
       const pwd = getStoredPassword();
@@ -161,6 +178,98 @@ export function SuperAdminPage() {
     setEditErr(null);
   }
 
+  async function resetPassword(userId: string) {
+    const ok = window.confirm(
+      `确认重置 ${userId} 的密码？\n\n` +
+        `所有该 userId 的旧密码会失效。新密码只在保存后这次显示一次。`,
+    );
+    if (!ok) return;
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    try {
+      const r = await fetch(`/api/super-admin/users/${encodeURIComponent(userId)}/password`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        error?: string;
+        newPassword?: string;
+        loginUrl?: string;
+        fallbackUrl?: string;
+      };
+      if (!j.ok || !j.newPassword) {
+        alert(`重置失败：${j.error ?? "未知"}`);
+        return;
+      }
+      setCredResult({
+        title: `🔑 ${userId} 新密码`,
+        userId,
+        password: j.newPassword,
+        loginUrl: j.loginUrl ?? `https://${userId}.xiaojin.app`,
+        fallbackUrl: j.fallbackUrl ?? "https://xiaojin.app",
+      });
+      setCredCopied(false);
+      await refreshUsers();
+    } catch (e) {
+      alert(`重置失败：${(e as Error).message}`);
+    }
+  }
+
+  async function submitNewStudent() {
+    if (!newUserId.trim()) {
+      setNewErr("userId 不能空");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(newUserId.trim())) {
+      setNewErr("userId 只能 a-z A-Z 0-9 _ - 长度 1-64");
+      return;
+    }
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    setNewBusy(true);
+    setNewErr(null);
+    try {
+      const r = await fetch("/api/super-admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${pwd}` },
+        body: JSON.stringify({
+          userId: newUserId.trim(),
+          displayName: newDisplayName.trim() || undefined,
+        }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        error?: string;
+        userId?: string;
+        newPassword?: string;
+        loginUrl?: string;
+        fallbackUrl?: string;
+      };
+      if (!j.ok || !j.newPassword || !j.userId) {
+        setNewErr(j.error ?? "创建失败");
+        setNewBusy(false);
+        return;
+      }
+      setNewOpen(false);
+      setNewUserId("");
+      setNewDisplayName("");
+      setCredResult({
+        title: `🎉 新同学 ${j.userId} 已创建`,
+        userId: j.userId,
+        password: j.newPassword,
+        loginUrl: j.loginUrl ?? `https://${j.userId}.xiaojin.app`,
+        fallbackUrl: j.fallbackUrl ?? "https://xiaojin.app",
+      });
+      setCredCopied(false);
+      await refreshUsers();
+    } catch (e) {
+      setNewErr((e as Error).message);
+    } finally {
+      setNewBusy(false);
+    }
+  }
+
   async function submitEdit() {
     if (!editing) return;
     const pwd = getStoredPassword();
@@ -213,13 +322,20 @@ export function SuperAdminPage() {
 
   return (
     <div className="p-3 md:p-6 max-w-5xl mx-auto">
-      <div className="flex items-baseline gap-3 mb-4">
+      <div className="flex items-baseline gap-3 mb-4 flex-wrap">
         <h1 className="font-display font-bold text-violet-200 text-xl">
           🛠 项目超级管理员
         </h1>
         <span className="text-xs text-slate-400">
           ({me?.userId} · 共 {users.length} 同学)
         </span>
+        <button
+          type="button"
+          onClick={() => { setNewOpen(true); setNewErr(null); }}
+          className="text-xs px-3 py-1.5 rounded bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-100 font-bold"
+        >
+          ➕ 加新同学
+        </button>
         <Link to="/" className="ml-auto text-xs text-violet-300 underline">
           返回首页
         </Link>
@@ -312,6 +428,13 @@ export function SuperAdminPage() {
                       >
                         ✏️ 编辑
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => resetPassword(u.userId)}
+                        className="text-xs px-2 py-1 rounded bg-amber-500/30 hover:bg-amber-500/50 text-amber-100"
+                      >
+                        🔑 重置密码
+                      </button>
                       <details className="text-xs">
                         <summary className="cursor-pointer text-slate-400 hover:text-slate-300">
                           JSON
@@ -399,8 +522,137 @@ export function SuperAdminPage() {
       )}
 
       <div className="text-[10px] text-slate-500 mt-4">
-        加同学走 CLI: <code className="text-slate-300">node aliyun-deploy/scripts/add-student.mjs --userId xxx --displayName 名字 ...</code>
+        加同学也可以 CLI（不需要点 UI）:{" "}
+        <code className="text-slate-300">node aliyun-deploy/scripts/add-student.mjs ...</code>
       </div>
+
+      {/* 新建同学 modal */}
+      {newOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4"
+          style={{ backdropFilter: "blur(4px)" }}
+        >
+          <div className="card-glow max-w-md w-full bg-slate-900/95 border-emerald-400/40 p-5">
+            <div className="font-display font-bold text-emerald-200 text-lg mb-3">
+              ➕ 加新同学
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  userId * (登录子域用，比如 <code className="text-slate-300">alice</code> → alice.xiaojin.app)
+                </label>
+                <input
+                  type="text"
+                  value={newUserId}
+                  onChange={(e) => setNewUserId(e.target.value.toLowerCase())}
+                  placeholder="alice"
+                  className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-slate-100 text-sm font-mono"
+                  maxLength={64}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  显示名 (可选；首登 ProfileGate 也可补)
+                </label>
+                <input
+                  type="text"
+                  value={newDisplayName}
+                  onChange={(e) => setNewDisplayName(e.target.value)}
+                  placeholder="爱丽丝"
+                  className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-slate-100 text-sm"
+                  maxLength={20}
+                />
+              </div>
+            </div>
+            {newErr && (
+              <div className="text-xs text-rose-300 mt-3">⚠️ {newErr}</div>
+            )}
+            <div className="text-[10px] text-slate-500 mt-3">
+              系统自动生成 20 字符随机密码，下个 modal 会显示一次。其余档案
+              字段（学校/年级/监护人...）由家长首登 ProfileGate 自己补，或
+              在此 super-admin 页 ✏️ 编辑 代填。
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <button
+                type="button"
+                onClick={() => setNewOpen(false)}
+                disabled={newBusy}
+                className="text-xs px-3 py-2 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-300"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={submitNewStudent}
+                disabled={newBusy}
+                className="text-sm px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-400 text-white font-bold disabled:opacity-40"
+              >
+                {newBusy ? "创建中…" : "创建账号"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 新密码 / 新账号成功 modal */}
+      {credResult && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[1001] bg-black/80 flex items-center justify-center p-4"
+          style={{ backdropFilter: "blur(4px)" }}
+        >
+          <div className="card-glow max-w-md w-full bg-slate-900/95 border-amber-400/60 p-5">
+            <div className="font-display font-bold text-amber-200 text-lg mb-2">
+              {credResult.title}
+            </div>
+            <div className="text-xs text-amber-300/80 mb-3">
+              ⚠️ 这串密码只显示这一次。立刻复制发给监护人，关掉 modal 后再也
+              拉不到。
+            </div>
+            <div className="space-y-2 text-sm">
+              <div>
+                <div className="text-xs text-slate-400">登录 URL</div>
+                <div className="font-mono text-slate-200 break-all">
+                  {credResult.loginUrl}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  备用：{credResult.fallbackUrl}（apex，密码也认）
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400">密码</div>
+                <div className="font-mono text-amber-200 break-all bg-slate-900/50 p-2 rounded">
+                  {credResult.password}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `登录: ${credResult.loginUrl}\n密码: ${credResult.password}`,
+                  );
+                  setCredCopied(true);
+                }}
+                className="text-sm px-3 py-2 rounded bg-violet-500/30 hover:bg-violet-500/50 text-violet-100 font-bold"
+              >
+                {credCopied ? "✓ 已复制" : "复制 登录+密码"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCredResult(null)}
+                className="text-sm px-4 py-2 rounded bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold"
+              >
+                我已抄走，关掉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

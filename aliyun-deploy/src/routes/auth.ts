@@ -16,7 +16,7 @@ import { resolveUserId } from "../lib/auth";
 const auth = new Hono<{ Bindings: Env }>();
 
 auth.post("/check", async (c) => {
-  const userId = resolveUserId(c.req.raw, c.env);
+  const userId = await resolveUserId(c.req.raw, c.env);
   if (!userId) return c.json({ ok: false, error: "unauthorized" }, 401);
   return c.json({ ok: true, userId });
 });
