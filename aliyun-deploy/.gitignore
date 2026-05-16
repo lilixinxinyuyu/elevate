@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.esa/
+*.log
+src/lib/baked-env.generated.ts

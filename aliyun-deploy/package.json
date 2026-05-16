@@ -1,0 +1,22 @@
+{
+  "name": "xiaojinapp-aliyun-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "deploy:routine": "node scripts/deploy-routine.mjs",
+    "deploy:frontend": "node scripts/deploy-frontend.mjs",
+    "deploy:all": "npm run build && npm run deploy:routine && npm run deploy:frontend"
+  },
+  "dependencies": {
+    "hono": "^4.12.19"
+  },
+  "devDependencies": {
+    "ali-oss": "^6.23.0",
+    "esa-cli": "^1.0.10",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.6.2"
+  }
+}
