@@ -35,7 +35,60 @@ function isValidUserId(v: string): boolean {
   return /^[a-zA-Z0-9_-]{1,64}$/.test(v);
 }
 
-/** Host header 里抽 subdomain。返回 null 表示 apex / www / api 等无 claim 域名 */
+/**
+ * v0.34.30 (Ep159): 预留 subdomain 大单。
+ * 任何同学创建账号时这些 userId 全拒，防止：
+ *   - 占用我们未来要用的系统域 (api / admin / dashboard / agent...)
+ *   - 占用通用 marketing / auth / status 域
+ *   - 占用品牌词 (xiaojin / selena, Selena 是 legacy 默认家)
+ *   - 中文 / 1-2 字符 / 全数字（含 unicode）默认拒
+ *
+ * 任何子域 host 也走这个列表 → null userId（不能 claim）。
+ *
+ * 注：Selena 是 legacy 默认家的 userId（APP_PASSWORD fallback），所以这里
+ * 不能拒 "selena"（会自家撞）。但禁止再有新同学拿到 "selena" userId（在
+ * addNewStudent 里另外卡）。
+ */
+export const RESERVED_SUBDOMAINS = new Set([
+  // 系统 / 基础设施
+  "api", "www", "mail", "admin", "dashboard", "console", "ops", "operator",
+  "system", "super", "superadmin", "root", "host", "hostmaster", "webmaster",
+  "postmaster", "abuse", "security", "monitor", "monitoring", "log", "logs",
+  "status", "health", "metrics", "ping", "edge", "cdn", "static", "assets",
+  "media", "files", "img", "images", "video", "audio",
+  // 认证 / 账户
+  "auth", "login", "signin", "sso", "oauth", "identity", "account",
+  "accounts", "register", "signup", "join", "password", "reset",
+  // 邮件 / 通信
+  "smtp", "imap", "pop", "pop3", "ws", "wss", "websocket",
+  // 应用入口 / Marketing
+  "app", "web", "mobile", "ios", "android", "home", "landing",
+  "marketing", "about", "contact", "terms", "privacy", "legal",
+  "support", "help", "docs", "doc", "wiki", "blog", "news", "changelog",
+  // 开发环境
+  "dev", "develop", "staging", "stage", "test", "qa", "beta", "alpha",
+  "preview", "sandbox", "demo", "canary",
+  // AI / agent / 未来产品入口
+  "ai", "agent", "bot", "chat", "voice", "tutor", "teacher", "coach",
+  "tts", "stt", "asr",
+  // 品牌词（防混淆）
+  "xiaojin", "elevate", "official", "verified",
+  // 通用 noise
+  "null", "undefined", "default", "guest", "anonymous", "anon",
+  "everyone", "all", "nobody",
+  // 1-2 字母 / 数字（粗略防短码占用）
+  "a", "b", "c", "i", "x", "z",
+  "ad", "ai", "an", "am", "at", "av", "ax", "be", "bi", "bo", "by",
+  "co", "cs", "di", "do", "eh", "el", "em", "en", "ex",
+  "fa", "fi", "fy", "go", "hi", "id", "if", "in", "is", "it",
+  "jo", "ju", "ka", "ki", "la", "lo", "ma", "me", "mi", "mo", "my",
+  "na", "no", "nu", "of", "oh", "ok", "on", "or", "ow", "ox",
+  "pa", "pi", "qi", "ra", "re", "rx", "sh", "so", "to", "ug",
+  "um", "un", "up", "us", "vi", "vs", "we", "wo", "ya", "ye", "yo",
+  "ad",
+]);
+
+/** Host header 里抽 subdomain。返回 null 表示 apex / 系统域 等无 claim */
 export function extractSubdomainUserId(host: string): string | null {
   // host 可能含 :port，先去掉
   const h = host.split(":")[0]!.toLowerCase();
@@ -45,11 +98,17 @@ export function extractSubdomainUserId(host: string): string | null {
   const m = /^([a-zA-Z0-9_-]{1,64})\.xiaojin\.app$/.exec(h);
   if (!m) return null;
   const sub = m[1]!;
-  // 保留字：api / www / mail / admin —— 不当 userId
-  if (["api", "www", "mail", "admin", "static", "cdn", "assets", "edge"].includes(sub)) {
+  // 保留字 — 不当 userId claim
+  if (RESERVED_SUBDOMAINS.has(sub)) {
     return null;
   }
   return sub;
+}
+
+/** 给 add-student / API 校验：返 true 表示这个 userId **不允许**给同学用 */
+export function isReservedUserId(userId: string): boolean {
+  const lc = userId.toLowerCase();
+  return RESERVED_SUBDOMAINS.has(lc);
 }
 
 /**

@@ -186,8 +186,25 @@ if (!/^[a-zA-Z0-9_-]{1,64}$/.test(userId)) {
   process.exit(1);
 }
 
-if (["api", "www", "mail", "admin", "static", "cdn", "assets", "edge"].includes(userId)) {
-  console.error(`userId '${userId}' 是保留字（子域用），换一个`);
+// 大 reserved 列表 — 跟 backend aliyun-deploy/src/lib/auth.ts 保持一致
+const RESERVED = new Set([
+  "api","www","mail","admin","dashboard","console","ops","operator","system",
+  "super","superadmin","root","host","hostmaster","webmaster","postmaster",
+  "abuse","security","monitor","monitoring","log","logs","status","health",
+  "metrics","ping","edge","cdn","static","assets","media","files","img",
+  "images","video","audio","auth","login","signin","sso","oauth","identity",
+  "account","accounts","register","signup","join","password","reset","smtp",
+  "imap","pop","pop3","ws","wss","websocket","app","web","mobile","ios",
+  "android","home","landing","marketing","about","contact","terms","privacy",
+  "legal","support","help","docs","doc","wiki","blog","news","changelog",
+  "dev","develop","staging","stage","test","qa","beta","alpha","preview",
+  "sandbox","demo","canary","ai","agent","bot","chat","voice","tutor",
+  "teacher","coach","tts","stt","asr","xiaojin","elevate","official",
+  "verified","null","undefined","default","guest","anonymous","anon",
+  "everyone","all","nobody","selena",
+]);
+if (RESERVED.has(userId.toLowerCase()) || userId.length <= 2) {
+  console.error(`userId '${userId}' 是保留字（系统/品牌/通用词或太短 ≤2 字），换一个`);
   process.exit(1);
 }
 

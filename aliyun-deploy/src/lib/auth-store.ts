@@ -27,6 +27,7 @@
 
 import type { Env } from "./env";
 import { getOssConfig, ossGet, ossPut, type OssConfig } from "./oss";
+import { isReservedUserId } from "./auth";
 
 const AUTH_KEY = "_auth/users.json";
 
@@ -173,8 +174,13 @@ export async function addNewStudent(
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(userId)) {
     return { ok: false, error: "invalid_userId" };
   }
-  if (["api", "www", "mail", "admin", "static", "cdn", "assets", "edge"].includes(userId)) {
+  // 大 reserved 列表（系统/marketing/auth/AI/品牌词/1-2 字母 等 80+ 项）
+  if (isReservedUserId(userId)) {
     return { ok: false, error: "reserved_userId" };
+  }
+  // Selena 是 legacy 默认家，不能再分配新同学
+  if (userId.toLowerCase() === "selena") {
+    return { ok: false, error: "userId_reserved_for_legacy" };
   }
   const known = await listKnownUserIds(env);
   if (known.includes(userId)) {

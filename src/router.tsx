@@ -9,7 +9,11 @@ import { SkillPickerPage } from "./pages/SkillPicker";
 import { MistakesPage } from "./pages/Mistakes";
 import { ReportPage } from "./pages/Report";
 import { AdminPage } from "./pages/Admin";
-import { SuperAdminPage } from "./pages/SuperAdmin";
+// Ep159: super-admin 走 lazy import 拆 chunk，学生 bundle 不带管理员代码
+import { lazy, Suspense } from "react";
+const SuperAdminPage = lazy(() =>
+  import("./pages/SuperAdmin").then((m) => ({ default: m.SuperAdminPage })),
+);
 import { ChineseHomePage } from "./pages/chinese/ChineseHome";
 import { ChineseTrainPage } from "./pages/chinese/ChineseTrain";
 import { ChinesePickerPage } from "./pages/chinese/ChinesePicker";
@@ -211,7 +215,15 @@ export const router = createBrowserRouter([
 
   // Ep9 (Ep145): super-admin dashboard. backend 自己鉴 isSuperAdmin，
   // 不是 super-admin 会被自动跳回 home。
-  { path: "/super-admin", element: <SuperAdminPage /> },
+  // Ep159: lazy load — 学生 bundle 不含此页代码
+  {
+    path: "/super-admin",
+    element: (
+      <Suspense fallback={<div className="p-6 text-slate-400 text-sm">⏳ 加载管理员后台…</div>}>
+        <SuperAdminPage />
+      </Suspense>
+    ),
+  },
 ]);
 
 /** 老路径 → 新路径重定向，保留 query string + hash。 */
