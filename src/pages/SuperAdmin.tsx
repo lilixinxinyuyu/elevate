@@ -37,7 +37,17 @@ interface UserRow {
     present: boolean;
     lastModifiedMs: number | null;
     etag: string | null;
+    bytes?: number | null;
   };
+  statsKpi?: {
+    todayAttempts?: number;
+    last7Attempts?: number;
+    correctRate?: number;
+  } | null;
+  latestSummary?: {
+    generatedAt?: number;
+    preview?: string;
+  } | null;
 }
 
 interface UsersResp {
@@ -527,6 +537,21 @@ export function SuperAdminPage() {
                         <div className="text-[10px] text-slate-500">
                           {fmtDate(u.snapshot.lastModifiedMs)}
                         </div>
+                        {u.statsKpi && (
+                          <div className="text-[10px] text-slate-400 mt-1">
+                            今 <span className="text-emerald-300">{u.statsKpi.todayAttempts ?? 0}</span> ·
+                            7天 <span className="text-violet-300">{u.statsKpi.last7Attempts ?? 0}</span> ·
+                            正确 <span className="text-amber-300">{u.statsKpi.correctRate ?? 0}%</span>
+                          </div>
+                        )}
+                        {u.latestSummary?.preview && (
+                          <div
+                            className="text-[10px] text-sky-300/80 mt-1 max-w-[180px] truncate"
+                            title={`AI 摘要 (${fmtRel(u.latestSummary.generatedAt ?? null)}): ${u.latestSummary.preview}...`}
+                          >
+                            🤖 {u.latestSummary.preview}…
+                          </div>
+                        )}
                       </>
                     ) : (
                       <span className="text-slate-500 text-xs">从未同步</span>
