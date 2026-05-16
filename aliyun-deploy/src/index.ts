@@ -25,6 +25,7 @@ import auth from "./routes/auth";
 import staticProxy from "./routes/static";
 import proxyFallback from "./routes/proxy-fallback";
 import generate from "./routes/generate";
+import tts from "./routes/tts";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -75,11 +76,13 @@ app.route("/api/sync", sync);
 // app.route("/api/generate", generate);
 void generate; // 保留 import，避免 unused 警告
 
+// 已移植到 Aliyun
+app.route("/api/tts", tts);
+
 // 未移植 endpoint 过渡 proxy → 老 CF Pages backend
 app.route("/api/admin", proxyFallback);
 app.route("/api/agent", proxyFallback);
 app.route("/api/generate", proxyFallback);
-app.route("/api/tts", proxyFallback);
 app.route("/api/tutor", proxyFallback);
 
 // 非 api 请求 → OSS web/* 代理（SPA fallback 在 staticProxy 内）
