@@ -260,6 +260,182 @@ superAdmin.get("/users/:userId/stats", async (c) => {
 });
 
 /**
+ * POST /api/super-admin/users/:userId/agent-summary
+ *
+ * v0.34.20 (Ep150) 爸爸路线图：24h AI agent Phase 0 —— 按需生成摘要。
+ *
+ * 读 profile + stats，用 TOKEN_PLAN_CN qwen3.6-flash 生成 3 段中文：
+ *   1. 学习状态总结（给 super-admin 看）
+ *   2. 给同学的鼓励（亲切，可发给同学）
+ *   3. 给监护人的反馈（按 guardianRole 调用称呼，可发给监护人）
+ *
+ * 结果存 OSS users/{uid}/agent-summaries/latest.json + 历史 {ts}.json，
+ * 后续 Phase 1 cron 可定期跑。
+ */
+superAdmin.post("/users/:userId/agent-summary", async (c) => {
+  const targetUserId = c.req.param("userId");
+  if (!isValidUserId(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_target_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  const apiKey = c.env.TOKEN_PLAN_CN_API_KEY ?? c.env.BAILIAN_API_KEY;
+  if (!apiKey) return c.json({ ok: false, error: "no_llm_api_key" }, 503);
+
+  // 并行拉 profile + stats
+  const [profileGet, statsGet] = await Promise.all([
+    ossGet(cfg, `users/${targetUserId}/profile.json`),
+    ossGet(cfg, `users/${targetUserId}/stats.json`),
+  ]);
+
+  let profile: Record<string, unknown> = { userId: targetUserId };
+  if (profileGet.ok && profileGet.text) {
+    try {
+      profile = JSON.parse(profileGet.text);
+    } catch {
+      /* */
+    }
+  }
+  let stats: Record<string, unknown> = {};
+  if (statsGet.ok && statsGet.text) {
+    try {
+      stats = JSON.parse(statsGet.text);
+    } catch {
+      /* */
+    }
+  }
+
+  const displayName = (profile.displayName as string) ?? targetUserId;
+  const guardianRole = (profile.guardianRole as string) ?? "家长";
+
+  const systemPrompt = `你是一位耐心、专业的小学生学习教练。你会根据同学的学习数据 (attempts/mistakes/正确率/学科分布等)，写出 3 段简短中文：
+1. **学习状态摘要**（80-120字）—— 给项目管理者看的内部洞察，客观分析进展和瓶颈
+2. **给同学的鼓励**（40-80字）—— 亲切、具体、有正向反馈和小目标，能直接发给同学
+3. **给${guardianRole}的反馈**（80-120字）—— 平和、建设性、给家庭学习建议，能直接发给${guardianRole}
+
+输出 JSON：
+{"summary":"...", "messageToStudent":"...", "messageToGuardian":"..."}
+
+只输出 JSON，不要 markdown 包裹，不要任何前后缀。`;
+
+  const userPrompt = `同学：${displayName}（${profile.school ?? "未填学校"}，${profile.grade ?? "?"}年级${profile.class ?? "?"}班）
+监护人：${guardianRole}（手机 ${profile.guardianPhone ?? "未填"}）
+生日：${profile.birthday ?? "未填"}
+
+学习数据（截至 ${new Date(Number(stats.fetchedAt ?? Date.now())).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}）：
+- 累计：${JSON.stringify(stats.counts ?? {})}
+- 今天答题：${(stats.today as { attempts?: number })?.attempts ?? 0}
+- 7天答题：${(stats.last7Days as { attempts?: number })?.attempts ?? 0}
+- 学科分布：${JSON.stringify(stats.bySubject ?? {})}
+- 近100题正确率：${stats.correctRateRecent100 ?? "?"}%
+- Top错题skill：${JSON.stringify(stats.topMistakeSkills ?? [])}
+- 上次活跃：${stats.lastActivityMs ? new Date(Number(stats.lastActivityMs)).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }) : "未知"}
+
+按上面要求输出 JSON。`;
+
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 9_500);
+    const baseUrl = c.env.TOKEN_PLAN_CN_API_KEY
+      ? "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      : "https://dashscope.aliyuncs.com/compatible-mode/v1";
+    const r = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "qwen3.6-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.6,
+        max_tokens: 1200,
+        // 关键：关掉 reasoning thinking。开着的话 qwen3.6-flash 6s+ 触发
+        // ESA 11s timeout；关掉 0.5-2s 内返。我们的 task 是纯写作，不需推理。
+        enable_thinking: false,
+      }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(to);
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      return c.json({ ok: false, error: "llm_http_error", status: r.status, detail: text.slice(0, 300) }, 502);
+    }
+    const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
+    const content = j.choices?.[0]?.message?.content ?? "";
+    if (!content) {
+      return c.json({ ok: false, error: "empty_llm_response", raw: JSON.stringify(j).slice(0, 300) }, 502);
+    }
+    // Strip code fences if model still wrapped
+    const cleaned = content.replace(/```json\s*|\s*```/g, "").trim();
+    let parsed: { summary?: string; messageToStudent?: string; messageToGuardian?: string };
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      // fallback: return raw text
+      return c.json({ ok: true, targetUserId, raw: cleaned, parseError: true });
+    }
+
+    const result = {
+      targetUserId,
+      displayName,
+      guardianRole,
+      summary: parsed.summary,
+      messageToStudent: parsed.messageToStudent,
+      messageToGuardian: parsed.messageToGuardian,
+      generatedAt: Date.now(),
+      model: "qwen3.6-flash",
+      generatedBy: getUserId(c),
+    };
+
+    // 存档：latest + 历史
+    await ossPut(
+      cfg,
+      `users/${targetUserId}/agent-summaries/latest.json`,
+      JSON.stringify(result, null, 2),
+      { contentType: "application/json; charset=utf-8" },
+    );
+    await ossPut(
+      cfg,
+      `users/${targetUserId}/agent-summaries/${result.generatedAt}.json`,
+      JSON.stringify(result, null, 2),
+      { contentType: "application/json; charset=utf-8" },
+    );
+
+    return c.json({ ok: true, ...result });
+  } catch (e) {
+    return c.json(
+      { ok: false, error: "llm_fetch_failed", detail: (e as Error).message },
+      502,
+    );
+  }
+});
+
+/** GET 上次生成的 summary（不重新调 LLM） */
+superAdmin.get("/users/:userId/agent-summary", async (c) => {
+  const targetUserId = c.req.param("userId");
+  if (!isValidUserId(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_target_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const got = await ossGet(cfg, `users/${targetUserId}/agent-summaries/latest.json`);
+  if (!got.ok || !got.text) {
+    return c.json({ ok: true, targetUserId, hasLatest: false });
+  }
+  try {
+    const parsed = JSON.parse(got.text);
+    return c.json({ ok: true, targetUserId, hasLatest: true, ...parsed });
+  } catch {
+    return c.json({ ok: false, error: "corrupt_summary" }, 500);
+  }
+});
+
+/**
  * POST /api/super-admin/users/:userId/password
  * 重置任意同学的密码。返回新密码（明文，仅这次显示，super-admin 自己抄走给监护人）
  */

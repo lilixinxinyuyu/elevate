@@ -115,6 +115,27 @@ export function SuperAdminPage() {
   const [newBusy, setNewBusy] = useState(false);
   const [newErr, setNewErr] = useState<string | null>(null);
 
+  // Ep14: 🤖 agent summary modal
+  interface AgentSummary {
+    targetUserId?: string;
+    displayName?: string;
+    guardianRole?: string;
+    summary?: string;
+    messageToStudent?: string;
+    messageToGuardian?: string;
+    generatedAt?: number;
+    model?: string;
+    generatedBy?: string;
+    raw?: string;
+    parseError?: boolean;
+    hasLatest?: boolean;
+    error?: string;
+  }
+  const [agentOf, setAgentOf] = useState<string | null>(null);
+  const [agentData, setAgentData] = useState<AgentSummary | null>(null);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentCopied, setAgentCopied] = useState<string | null>(null);
+
   // Ep13: 📊 stats modal
   interface StatsBlob {
     userId?: string;
@@ -203,6 +224,49 @@ export function SuperAdminPage() {
       guardianPhone: u.profile?.guardianPhone ?? "",
     });
     setEditErr(null);
+  }
+
+  async function openAgent(userId: string) {
+    setAgentOf(userId);
+    setAgentData(null);
+    setAgentBusy(true);
+    setAgentCopied(null);
+    const pwd = getStoredPassword();
+    if (!pwd) {
+      setAgentBusy(false);
+      return;
+    }
+    try {
+      // First fetch latest cached if any
+      const cached = await fetch(`/api/super-admin/users/${encodeURIComponent(userId)}/agent-summary`, {
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const cj = (await cached.json()) as AgentSummary;
+      if (cj.hasLatest) setAgentData(cj);
+    } catch {
+      /* */
+    } finally {
+      setAgentBusy(false);
+    }
+  }
+
+  async function regenAgent(userId: string) {
+    setAgentBusy(true);
+    setAgentCopied(null);
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    try {
+      const r = await fetch(`/api/super-admin/users/${encodeURIComponent(userId)}/agent-summary`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const j = (await r.json()) as AgentSummary & { ok?: boolean };
+      setAgentData(j);
+    } catch (e) {
+      setAgentData({ error: (e as Error).message });
+    } finally {
+      setAgentBusy(false);
+    }
   }
 
   async function openStats(userId: string) {
@@ -479,6 +543,13 @@ export function SuperAdminPage() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => openAgent(u.userId)}
+                        className="text-xs px-2 py-1 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-100"
+                      >
+                        🤖 AI 摘要
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => openEdit(u)}
                         className="text-xs px-2 py-1 rounded bg-violet-500/30 hover:bg-violet-500/50 text-violet-100"
                       >
@@ -647,6 +718,135 @@ export function SuperAdminPage() {
               >
                 {newBusy ? "创建中…" : "创建账号"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🤖 AI 摘要 modal */}
+      {agentOf && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4 overflow-y-auto"
+          style={{ backdropFilter: "blur(4px)" }}
+        >
+          <div className="card-glow max-w-xl w-full bg-slate-900/95 border-sky-400/40 p-5 my-8">
+            <div className="flex items-baseline gap-2 mb-2 flex-wrap">
+              <div className="font-display font-bold text-sky-200 text-lg">
+                🤖 {agentOf} AI 学习摘要
+              </div>
+              {agentData?.generatedAt && (
+                <span className="text-[10px] text-slate-500">
+                  ({fmtRel(agentData.generatedAt)} · {agentData.model})
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => regenAgent(agentOf)}
+                disabled={agentBusy}
+                className="ml-auto text-xs px-3 py-1.5 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-100 disabled:opacity-40"
+              >
+                {agentBusy ? "生成中…" : agentData?.hasLatest || agentData?.summary ? "↻ 重新生成" : "✨ 生成"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAgentOf(null)}
+                disabled={agentBusy}
+                className="text-xs px-3 py-1.5 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-300"
+              >
+                关闭
+              </button>
+            </div>
+
+            {agentBusy && !agentData && (
+              <div className="text-xs text-slate-400 mt-3">⏳ 拉缓存 / 调 LLM…</div>
+            )}
+
+            {agentData?.error && (
+              <div className="text-xs text-rose-300 bg-rose-900/20 rounded p-3 mt-3">
+                ⚠️ {agentData.error}
+              </div>
+            )}
+
+            {agentData?.parseError && agentData.raw && (
+              <div className="text-xs text-amber-300 bg-amber-900/20 rounded p-3 mt-3 whitespace-pre-wrap">
+                <div className="font-bold mb-1">⚠️ LLM 没返回 JSON，给原文：</div>
+                {agentData.raw}
+              </div>
+            )}
+
+            {agentData && !agentData.error && !agentData.parseError && (agentData.summary || agentData.messageToStudent || agentData.messageToGuardian) && (
+              <div className="space-y-3 mt-3">
+                {agentData.summary && (
+                  <div className="rounded bg-slate-800/60 p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-xs font-bold text-slate-300">📝 内部学习状态摘要</div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(agentData.summary ?? "");
+                          setAgentCopied("summary");
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                      >
+                        {agentCopied === "summary" ? "✓ 已复制" : "复制"}
+                      </button>
+                    </div>
+                    <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{agentData.summary}</div>
+                  </div>
+                )}
+
+                {agentData.messageToStudent && (
+                  <div className="rounded bg-emerald-500/10 border border-emerald-400/30 p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-xs font-bold text-emerald-300">💌 发给同学的鼓励</div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(agentData.messageToStudent ?? "");
+                          setAgentCopied("student");
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded bg-emerald-700/50 hover:bg-emerald-600/50 text-emerald-100"
+                      >
+                        {agentCopied === "student" ? "✓ 已复制" : "复制"}
+                      </button>
+                    </div>
+                    <div className="text-sm text-emerald-100 whitespace-pre-wrap leading-relaxed">{agentData.messageToStudent}</div>
+                  </div>
+                )}
+
+                {agentData.messageToGuardian && (
+                  <div className="rounded bg-violet-500/10 border border-violet-400/30 p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-xs font-bold text-violet-300">
+                        📨 发给 {agentData.guardianRole ?? "监护人"} 的反馈
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(agentData.messageToGuardian ?? "");
+                          setAgentCopied("guardian");
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded bg-violet-700/50 hover:bg-violet-600/50 text-violet-100"
+                      >
+                        {agentCopied === "guardian" ? "✓ 已复制" : "复制"}
+                      </button>
+                    </div>
+                    <div className="text-sm text-violet-100 whitespace-pre-wrap leading-relaxed">{agentData.messageToGuardian}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {agentData && !agentBusy && !agentData.error && !agentData.summary && !agentData.parseError && (
+              <div className="text-xs text-slate-400 mt-3">
+                没有缓存。点 ✨ 生成 拿首次摘要（约 5-10 秒）。
+              </div>
+            )}
+
+            <div className="text-[10px] text-slate-500 mt-3">
+              基于 profile + stats.json + qwen3.6-flash。后续 Phase 1 会改成 cron 自动跑。
             </div>
           </div>
         </div>
