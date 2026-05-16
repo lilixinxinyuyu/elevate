@@ -530,19 +530,44 @@ export async function pushToCloud(
   // v0.31.109: CF Pages Functions 偶发 503（冷启动 / D1 临时不可用）。
   // 重试 2 次，指数退避 500ms → 1500ms。401/400 等业务错误不重试。
   const bodyStr = JSON.stringify({ payload, ...meta });
+  // v0.33.58 (P0 sync fix): gzip 压缩 body 防止超 D1 单参数限制 (~1-2MB)
+  // CompressionStream 现代浏览器 Chrome 80+/Safari 16.4+/FF 113+ 都有
+  // 服务端 DecompressionStream (Workers runtime) 解压。
+  // 5MB+ 的全量 snapshot 压缩后通常 < 500KB → 远低于 D1 limit
+  let body: BodyInit = bodyStr;
+  let useGzip = false;
+  try {
+    if (typeof CompressionStream !== "undefined" && bodyStr.length > 50_000) {
+      const stream = new Response(bodyStr).body!.pipeThrough(
+        new CompressionStream("gzip"),
+      );
+      const compressed = await new Response(stream).arrayBuffer();
+      body = compressed;
+      useGzip = true;
+      console.log(
+        `[pushToCloud] gzip: ${bodyStr.length} → ${compressed.byteLength} bytes (${Math.round((compressed.byteLength / bodyStr.length) * 100)}%)`,
+      );
+    }
+  } catch (e) {
+    console.warn("[pushToCloud] gzip failed, sending raw:", e);
+    body = bodyStr;
+    useGzip = false;
+  }
   let lastErr: string | null = null;
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) {
         await new Promise((r) => setTimeout(r, attempt === 1 ? 500 : 1500));
       }
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${pwd}`,
+      };
+      if (useGzip) headers["X-Body-Encoding"] = "gzip";
       const resp = await fetch("/api/sync/upload", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${pwd}`,
-        },
-        body: bodyStr,
+        headers,
+        body,
       });
       if (resp.status === 401) return { ok: false, error: "unauthorized" };
       if (resp.status === 400) {
@@ -551,8 +576,8 @@ export async function pushToCloud(
       }
       if (resp.status >= 500 && resp.status < 600) {
         // 5xx → 可重试
-        lastErr = `http_${resp.status}`;
         const detail = await resp.text().catch(() => "");
+        lastErr = `http_${resp.status}: ${detail.slice(0, 120)}`;
         console.warn(
           `[pushToCloud] attempt ${attempt + 1}/3 got ${resp.status}: ${detail.slice(0, 200)}`,
         );
