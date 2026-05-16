@@ -19,6 +19,7 @@ import { generateAiQuestions, generateImage } from "../lib/tutor";
 import { TrophyImagesAdminPanel } from "../components/TrophyImagesAdminPanel";
 import { QuestionsAdminPanel } from "../components/QuestionsAdminPanel";
 import { SkillBankDashboard } from "../components/admin/SkillBankDashboard";
+import { BackupRestorePanel } from "../components/admin/BackupRestorePanel";
 import { ReportsPanel } from "../components/ReportsPanel";
 // v0.31.88: 周报 + 试玩台 改为 admin 内 tab（nav 上不再露面）
 import { ReportPage } from "./Report";
@@ -243,6 +244,9 @@ export function AdminPage() {
       {/* ============ 同步 / 备份 ============ */}
       {tab === "sync" && (
         <div className="space-y-4 pt-2">
+          {/* v0.34.6: 数据恢复 / 备份面板（云端状态 + 推/拉 + import/export） */}
+          <BackupRestorePanel />
+
           <div className="card" id="cloud-sync">
             <div className="font-semibold mb-2">☁️ 云同步</div>
             <CloudSyncPanel />

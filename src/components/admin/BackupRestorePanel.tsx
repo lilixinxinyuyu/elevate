@@ -1,18 +1,28 @@
 /**
- * v0.33.59 (Ep132): 数据备份 / 恢复 — 安全网
+ * v0.34.6 (Ep137): 数据备份 / 恢复 + 云端状态面板
  *
- * 用户在迁移阿里云期间随时可：
- *   1. 📥 导出全部本地 IDB → 下载 selena-backup-<timestamp>.json
- *   2. 📤 选 JSON 文件 → 写回 IDB + 触发 cloud push
+ * 功能：
+ *   1. 📥 导出全部本地 IDB → 下载 selena-backup-<ts>.json
+ *   2. 📤 导入 JSON → bulkPut IDB → 自动 push OSS → 验证
+ *   3. ☁️ 云端状态：bucket / snapshotKey / 上次推送 / 上次拉取 / 大小 / etag
+ *   4. ↻ 立即推送到 OSS（debug + 紧急同步）
+ *   5. ↻ 从 OSS 重新拉取（force pull，覆盖本地）
  *
- * 也作为"换设备"应急路径：旧设备导出 → U 盘 → 新设备导入。
- *
- * 表覆盖（跟 cloudSync.PUSH_TABLES 完全一致 + questions/trophyImages 也带）。
+ * 多用户场景：每个用户的密码 → OSS path `users/{userId}/snapshot.json`，
+ * 云端状态显示具体 userId 让爸爸确认推到正确账号上。
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { db } from "../../db/dexie";
-import { schedulePushToCloud, flushPushNow } from "../../db/cloudSync";
+import {
+  schedulePushToCloud,
+  flushPushNow,
+  pullFromCloud,
+  getStoredPassword,
+  getSyncState,
+  subscribeSyncState,
+  type SyncState,
+} from "../../db/cloudSync";
 
 const BACKUP_TABLES = [
   "attempts",
@@ -39,10 +49,71 @@ interface BackupFile {
   data: Record<string, unknown[]>;
 }
 
+interface CloudCheck {
+  ok: boolean;
+  userId?: string;
+  snapshotKey?: string;
+  bucket?: string;
+  region?: string;
+  headResult?: {
+    status: number;
+    ok: boolean;
+    lastModifiedMs?: number;
+    etag?: string;
+    error?: string;
+  };
+  error?: string;
+}
+
+async function fetchCloudCheck(): Promise<CloudCheck | null> {
+  try {
+    const pwd = getStoredPassword();
+    if (!pwd) return null;
+    const r = await fetch("/api/sync/check", {
+      headers: { Authorization: `Bearer ${pwd}` },
+    });
+    if (!r.ok && r.status !== 503) return null;
+    return (await r.json()) as CloudCheck;
+  } catch {
+    return null;
+  }
+}
+
+function fmtTs(ms?: number | null): string {
+  if (!ms || ms <= 0) return "—";
+  const d = new Date(ms);
+  const now = Date.now();
+  const diff = now - ms;
+  let rel: string;
+  if (diff < 60_000) rel = "刚刚";
+  else if (diff < 3600_000) rel = `${Math.floor(diff / 60_000)}分钟前`;
+  else if (diff < 86400_000) rel = `${Math.floor(diff / 3600_000)}小时前`;
+  else rel = `${Math.floor(diff / 86400_000)}天前`;
+  return `${d.toLocaleString()} · ${rel}`;
+}
+
 export function BackupRestorePanel() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [importStats, setImportStats] = useState<Record<string, number> | null>(null);
+  const [cloudCheck, setCloudCheck] = useState<CloudCheck | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>(getSyncState());
+
+  useEffect(() => {
+    const off = subscribeSyncState((s) => setSyncState(s));
+    return () => off();
+  }, []);
+
+  useEffect(() => {
+    void refreshCloudCheck();
+    const t = window.setInterval(() => void refreshCloudCheck(), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  async function refreshCloudCheck() {
+    const c = await fetchCloudCheck();
+    setCloudCheck(c);
+  }
 
   async function handleExport() {
     setBusy(true);
@@ -56,7 +127,6 @@ export function BackupRestorePanel() {
           data[t] = rows;
           tableCounts[t] = rows.length;
         } catch (e) {
-          // 表不存在 / 没数据 → 留空
           data[t] = [];
           tableCounts[t] = 0;
           console.warn(`[backup] table ${t} dump failed:`, e);
@@ -65,7 +135,10 @@ export function BackupRestorePanel() {
       const backup: BackupFile = {
         version: 1,
         exportedAt: Date.now(),
-        appVersion: (typeof window !== "undefined" && (window as unknown as { __APP_VERSION__?: string }).__APP_VERSION__) || undefined,
+        appVersion:
+          (typeof window !== "undefined" &&
+            (window as unknown as { __APP_VERSION__?: string }).__APP_VERSION__) ||
+          undefined,
         tableCounts,
         data,
       };
@@ -81,7 +154,7 @@ export function BackupRestorePanel() {
       a.click();
       URL.revokeObjectURL(url);
       setStatus(
-        `✅ 导出完成 · ${totalRows} 条记录 · ${(totalBytes / 1024).toFixed(0)}KB · 已下载`,
+        `✅ 导出完成 · ${totalRows} 条 · ${(totalBytes / 1024).toFixed(0)}KB · 已下载`,
       );
     } catch (e) {
       setStatus(`❌ 导出失败：${(e as Error).message}`);
@@ -91,12 +164,14 @@ export function BackupRestorePanel() {
   }
 
   async function handleImport(file: File) {
-    if (!confirm(
-      `确认导入备份？\n\n` +
-      `文件：${file.name} (${(file.size / 1024).toFixed(0)}KB)\n\n` +
-      `导入会 union-merge（按 id 合并，新数据补充进本地，不会删现有数据）。\n` +
-      `导入后自动 push 到云端。`
-    )) {
+    if (
+      !confirm(
+        `确认导入备份？\n\n` +
+          `文件：${file.name} (${(file.size / 1024).toFixed(0)}KB)\n\n` +
+          `导入会 union-merge（按 id 合并，新数据补充进本地，不会删现有数据）。\n` +
+          `导入后自动 push 到云端 + 验证 OSS。`,
+      )
+    ) {
       return;
     }
     setBusy(true);
@@ -110,6 +185,7 @@ export function BackupRestorePanel() {
       }
       setStatus("📤 正在写回 IDB（union-merge）…");
       const imported: Record<string, number> = {};
+      let totalRows = 0;
       for (const t of BACKUP_TABLES) {
         const rows = (backup.data[t] as unknown[] | undefined) ?? [];
         if (rows.length === 0) {
@@ -117,23 +193,34 @@ export function BackupRestorePanel() {
           continue;
         }
         try {
-          const table = (db as unknown as Record<BackupTable, {
-            bulkPut(items: unknown[]): Promise<unknown>;
-          }>)[t];
-          // bulkPut = union-merge by primary key（已有的 update，新的 insert）
+          const table = (
+            db as unknown as Record<
+              BackupTable,
+              { bulkPut(items: unknown[]): Promise<unknown> }
+            >
+          )[t];
           await table.bulkPut(rows);
           imported[t] = rows.length;
+          totalRows += rows.length;
         } catch (e) {
           console.error(`[backup] import ${t} failed:`, e);
           imported[t] = -1;
         }
       }
       setImportStats(imported);
-      setStatus("📤 触发 cloud push…");
-      // 立刻推到云端
+      setStatus(`📤 IDB 写完 ${totalRows} 条，触发 OSS push…`);
       schedulePushToCloud(100);
       window.setTimeout(() => flushPushNow(), 500);
-      setStatus("✅ 导入完成 → 已触发云端同步");
+      // 等 push 完成 + 验证
+      await new Promise((r) => setTimeout(r, 3000));
+      await refreshCloudCheck();
+      const c = await fetchCloudCheck();
+      const verified = c?.headResult?.ok ?? false;
+      setStatus(
+        verified
+          ? `✅ 导入 + 上传 OSS 验证通过 · userId=${c?.userId ?? "?"} · etag=${c?.headResult?.etag?.slice(1, 9) ?? "?"}`
+          : `⚠️ 导入完成但 OSS 验证失败：${c?.headResult?.error ?? "未知"} · 请用 ↻ 重推`,
+      );
     } catch (e) {
       setStatus(`❌ 导入失败：${(e as Error).message}`);
     } finally {
@@ -141,16 +228,129 @@ export function BackupRestorePanel() {
     }
   }
 
+  async function handleForcePush() {
+    setBusy(true);
+    setStatus("☁️ 强制推 IDB 到 OSS…");
+    try {
+      flushPushNow();
+      await new Promise((r) => setTimeout(r, 2500));
+      await refreshCloudCheck();
+      const c = await fetchCloudCheck();
+      setStatus(
+        c?.headResult?.ok
+          ? `✅ 推送完成 · etag=${c.headResult.etag?.slice(1, 9) ?? "?"} · ${fmtTs(c.headResult.lastModifiedMs)}`
+          : `⚠️ 推送后 OSS HEAD 失败：${c?.headResult?.error ?? "未知"}`,
+      );
+    } catch (e) {
+      setStatus(`❌ 推送失败：${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleForcePull() {
+    if (
+      !confirm(
+        "确认从 OSS 强制拉取？\n\n会用云端版本覆盖本地未推的变更（union-merge）。",
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setStatus("☁️ 从 OSS 强制拉取…");
+    try {
+      const r = await pullFromCloud({ force: true });
+      setStatus(
+        r.changed
+          ? `✅ 拉取完成 · 有变更 · version=${r.version ?? "?"}`
+          : `✓ 拉取完成 · 跟本地一致 · 无变更`,
+      );
+      await refreshCloudCheck();
+    } catch (e) {
+      setStatus(`❌ 拉取失败：${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const head = cloudCheck?.headResult;
+  const cloudReady = cloudCheck?.ok === true;
+
   return (
     <div className="card-glow p-4 mb-4 border-amber-400/40 bg-amber-500/5">
       <div className="font-display font-bold text-amber-200 mb-1">
-        🛟 数据备份 / 恢复
+        🛟 数据备份 / 恢复 + 云端状态
       </div>
       <div className="text-xs text-slate-300 mb-3">
-        换设备 / 升级 / 故障应急用。备份包含所有本地数据（attempts /
-        mastery / mistakes / sessions / trophies / tutor / fluency / questions
-        / 勋章图等）。
+        换设备 / 升级 / 故障应急。备份包含 attempts / mastery / mistakes / sessions /
+        trophies / tutor / fluency / questions / 勋章图等所有本地表。
       </div>
+
+      {/* 云端状态 */}
+      <div className="rounded bg-slate-900/50 px-3 py-2 mb-3 text-xs font-mono space-y-0.5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className={cloudReady ? "text-emerald-300" : "text-rose-300"}>
+            {cloudReady ? "☁️ ✓" : "☁️ ✗"}
+          </span>
+          <span className="text-slate-200">OSS 云端状态</span>
+          <button
+            type="button"
+            onClick={() => void refreshCloudCheck()}
+            disabled={busy}
+            className="ml-auto text-[10px] px-2 py-0.5 rounded bg-slate-700/60 hover:bg-slate-600/60 disabled:opacity-40"
+          >
+            ↻ 刷新
+          </button>
+        </div>
+        {cloudCheck ? (
+          <>
+            <div>
+              <span className="text-slate-400">userId:</span>{" "}
+              <span className="text-amber-200">{cloudCheck.userId ?? "?"}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">snapshot:</span>{" "}
+              <span className="text-slate-300">{cloudCheck.snapshotKey ?? "?"}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">bucket:</span>{" "}
+              <span className="text-slate-300">
+                {cloudCheck.bucket ?? "?"} ({cloudCheck.region ?? "?"})
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400">上次修改:</span>{" "}
+              <span className="text-slate-300">{fmtTs(head?.lastModifiedMs)}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">etag:</span>{" "}
+              <span className="text-slate-300">
+                {head?.etag?.slice(1, 9) ?? "—"}
+              </span>
+              {head?.status === 404 && (
+                <span className="text-amber-400 ml-2">(还没推过数据)</span>
+              )}
+            </div>
+            <div className="pt-1 text-slate-400">
+              本地：上次推 {fmtTs(syncState.lastPushAt)} · 上次拉{" "}
+              {fmtTs(syncState.lastPullAt)}
+              {syncState.pushing && (
+                <span className="text-amber-300 ml-1">· 推送中…</span>
+              )}
+              {syncState.pulling && (
+                <span className="text-amber-300 ml-1">· 拉取中…</span>
+              )}
+              {syncState.lastError && (
+                <span className="text-rose-300 ml-1">· {syncState.lastError}</span>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="text-slate-400">检测中…（或未登录）</div>
+        )}
+      </div>
+
+      {/* 操作按钮 */}
       <div className="flex gap-2 flex-wrap">
         <button
           type="button"
@@ -160,7 +360,11 @@ export function BackupRestorePanel() {
         >
           📥 导出全部数据
         </button>
-        <label className="btn-primary text-sm px-3 py-2 cursor-pointer disabled:opacity-40">
+        <label
+          className={`btn-primary text-sm px-3 py-2 cursor-pointer ${
+            busy ? "opacity-40 pointer-events-none" : ""
+          }`}
+        >
           📤 导入备份
           <input
             type="file"
@@ -169,21 +373,43 @@ export function BackupRestorePanel() {
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) void handleImport(f);
-              e.target.value = ""; // 让相同文件能重选
+              e.target.value = "";
             }}
             className="hidden"
           />
         </label>
+        <button
+          type="button"
+          onClick={handleForcePush}
+          disabled={busy}
+          className="btn-secondary text-sm px-3 py-2 disabled:opacity-40"
+        >
+          ↻ 立即推 OSS
+        </button>
+        <button
+          type="button"
+          onClick={handleForcePull}
+          disabled={busy}
+          className="btn-secondary text-sm px-3 py-2 disabled:opacity-40"
+        >
+          ↻ 从 OSS 拉
+        </button>
       </div>
+
       {status && (
         <div
           className={`mt-3 text-xs ${
-            status.startsWith("❌") ? "text-rose-300" : "text-emerald-200"
+            status.startsWith("❌")
+              ? "text-rose-300"
+              : status.startsWith("⚠️")
+                ? "text-amber-300"
+                : "text-emerald-200"
           }`}
         >
           {status}
         </div>
       )}
+
       {importStats && (
         <div className="mt-2 text-xs text-slate-300 font-mono">
           <div className="font-bold mb-1">导入统计：</div>

@@ -31,7 +31,7 @@ const PWD =
     }
   })();
 
-const ROUTES = ["/", "/train", "/mistakes", "/settings"];
+const ROUTES = ["/", "/train", "/mistakes", "/settings", "/math/admin"];
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
