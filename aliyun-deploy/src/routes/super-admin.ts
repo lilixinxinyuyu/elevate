@@ -91,6 +91,7 @@ superAdmin.get("/users", async (c) => {
           present: snapHead.ok,
           lastModifiedMs: snapHead.lastModifiedMs ?? null,
           etag: snapHead.etag ?? null,
+          bytes: snapHead.contentLength ?? null,
         },
       };
     }),
@@ -201,6 +202,60 @@ superAdmin.post("/users/:userId/profile", async (c) => {
     targetUserId,
     profile: merged,
     updated: changed,
+  });
+});
+
+/**
+ * GET /api/super-admin/users/:userId/stats
+ *
+ * v0.34.18 (Ep148): 拉某个同学的真实学习数据。
+ * 读 OSS users/{uid}/snapshot.json，解 JSON，提取关键计数 + 分布。
+ *
+ * 不缓存（snapshot 频繁更新）。后续可考虑 cache 30s。
+ *
+ * 返回：
+ *   {
+ *     ok, userId, sizeKB,
+ *     counts: { attempts, mistakes, trophies, sessions, mastery, ... },
+ *     today: { attempts, sessions },     // 当天（本机时区简化为 UTC+8）
+ *     last7Days: { attempts },
+ *     bySubject: { math, chinese, english } counts
+ *     topMistakeSkills: [{skillId, count}] (top 5)
+ *     lastActivity: { date, sessionCount }
+ *     fetchedAt
+ *   }
+ */
+superAdmin.get("/users/:userId/stats", async (c) => {
+  const targetUserId = c.req.param("userId");
+  if (!isValidUserId(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_target_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  // 读 push 流预算好的 stats.json（小文件 < 2KB）
+  // 第一次访问可能没有：snapshot.json 在 ProfileGate 启用前已存，stats.json
+  // 是新加的，等下次 push 才有。
+  const got = await ossGet(cfg, `users/${targetUserId}/stats.json`);
+  if (got.ok && got.text) {
+    try {
+      const stats = JSON.parse(got.text);
+      return c.json({ ok: true, userId: targetUserId, ...stats });
+    } catch {
+      /* fallthrough */
+    }
+  }
+  // 没缓存 → 返 stub + 提示
+  return c.json({
+    ok: true,
+    userId: targetUserId,
+    counts: {},
+    today: { attempts: 0, sessions: 0 },
+    last7Days: { attempts: 0 },
+    bySubject: {},
+    topMistakeSkills: [],
+    empty: true,
+    note: "stats not cached yet, will appear after next cloud push",
   });
 });
 

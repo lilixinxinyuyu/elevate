@@ -68,6 +68,13 @@ async function uploadHandler(c: Ctx): Promise<Response> {
   const cfg = getOssConfig(c.env);
   if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
 
+  // v0.34.18: 数据保护 —— 防止小 payload 把已有的大 snapshot 覆写
+  // (Ep148 我用 197B 测试 payload 覆写了 Selena 2.5MB snapshot, 触发数据丢失.
+  //  幸好 bucket versioning 开了, 通过 _restore-selena.mjs 恢复了)
+  // 规则：如果 client 没显式带 X-Allow-Shrink: true 头，并且新 body < 5KB
+  //   且现有 snapshot > 100KB，拒绝（明显是 truncate 风险）
+  const allowShrink = c.req.header("X-Allow-Shrink") === "true";
+
   // 跟 CF Pages 对齐：支持 gzip body（client 用 X-Body-Encoding，老 spec），
   // 也支持 Content-Encoding（HTTP 标准）。读出来后解压成 plain JSON 文本再存 OSS。
   // 这样 OSS 里始终是纯 JSON，下次 download 直接 parse 不会踩 "Unexpected token ''".
@@ -99,6 +106,34 @@ async function uploadHandler(c: Ctx): Promise<Response> {
 
   const sizeKB = (bodyText.length / 1024).toFixed(1);
   const key = snapshotKey(userId);
+
+  // 防 truncate（Ep148 救火）—— 不用 ossHead（V8 fetch HEAD 拿不到 Content-Length），
+  // 而是读 stats.json sidecar（每次 push 都写 snapshotBytes）。
+  // 如果 existing snapshotBytes > 50KB 且 incoming < 50% existing → 409。
+  if (!allowShrink) {
+    const statsGot = await ossGet(cfg, `users/${userId}/stats.json`);
+    if (statsGot.ok && statsGot.text) {
+      try {
+        const stats = JSON.parse(statsGot.text) as { snapshotBytes?: number };
+        const existingBytes = stats.snapshotBytes ?? 0;
+        if (existingBytes > 50_000 && bodyText.length < existingBytes * 0.5) {
+          return c.json(
+            {
+              ok: false,
+              error: "shrink_blocked",
+              detail: `incoming ${bodyText.length}B is < 50% of existing ${existingBytes}B for ${userId}. Add header X-Allow-Shrink: true to confirm.`,
+              existingBytes,
+              incomingBytes: bodyText.length,
+            },
+            409,
+          );
+        }
+      } catch {
+        /* corrupt stats → allow */
+      }
+    }
+  }
+
   const result = await ossPut(cfg, key, bodyText, {
     contentType: "application/json; charset=utf-8",
   });
@@ -108,6 +143,22 @@ async function uploadHandler(c: Ctx): Promise<Response> {
       502,
     );
   }
+
+  // Ep148: 预计算 stats.json，避免 super-admin endpoint 每次 parse 8MB snapshot
+  // (实测 routine 里 JSON.parse 8MB 触发 ESA 599 resource constraint)
+  // 失败不阻塞主响应。
+  try {
+    const stats = computeSnapshotStats(bodyText);
+    await ossPut(
+      cfg,
+      `users/${userId}/stats.json`,
+      JSON.stringify({ ...stats, fetchedAt: Date.now(), snapshotBytes: bodyText.length }),
+      { contentType: "application/json; charset=utf-8" },
+    );
+  } catch (e) {
+    console.warn(`[sync/upload] stats compute failed for ${userId}:`, (e as Error).message);
+  }
+
   const version = Date.now();
   return c.json({
     ok: true,
@@ -118,6 +169,84 @@ async function uploadHandler(c: Ctx): Promise<Response> {
     etag: result.etag,
     versionId: result.versionId,
   });
+}
+
+/**
+ * 从完整 snapshot JSON text 算 stats。这个跑在 push 流里（已经 parse 过一次了）。
+ * 返回小对象（< 2KB），写到 OSS 让 super-admin 快查。
+ */
+function computeSnapshotStats(bodyText: string): Record<string, unknown> {
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(bodyText);
+  } catch {
+    return { computeError: "parse_failed" };
+  }
+  const rawTables = payload.data && typeof payload.data === "object"
+    ? (payload.data as Record<string, unknown>)
+    : payload;
+  const t = (name: string): unknown[] => {
+    const v = (rawTables as Record<string, unknown>)[name];
+    return Array.isArray(v) ? v : [];
+  };
+  const attempts = t("attempts") as Array<{ subject?: string; subjectId?: string; isCorrect?: boolean; createdAt?: number; skillId?: string }>;
+  const mistakes = t("mistakes") as Array<{ skillId?: string; resolved?: boolean }>;
+  const trophies = t("trophies");
+  const sessions = t("sessions") as Array<{ createdAt?: number }>;
+  const mastery = t("mastery");
+  const fluencyAttempts = t("fluencyAttempts");
+  const tutorSessions = t("tutorSessions");
+
+  const today = new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" });
+  const todayAttempts = attempts.filter((a) =>
+    a.createdAt && new Date(a.createdAt).toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }) === today,
+  ).length;
+  const todaySessions = sessions.filter((s) =>
+    s.createdAt && new Date(s.createdAt).toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }) === today,
+  ).length;
+  const SEVEN_AGO = Date.now() - 7 * 86400_000;
+  const last7Attempts = attempts.filter((a) => (a.createdAt ?? 0) >= SEVEN_AGO).length;
+
+  const bySubject: Record<string, number> = {};
+  for (const a of attempts) {
+    const subj = a.subject ?? a.subjectId ?? "math";
+    bySubject[subj] = (bySubject[subj] ?? 0) + 1;
+  }
+  const skillCounts: Record<string, number> = {};
+  for (const m of mistakes) {
+    if (m.resolved) continue;
+    const sk = m.skillId ?? "?";
+    skillCounts[sk] = (skillCounts[sk] ?? 0) + 1;
+  }
+  const topMistakeSkills = Object.entries(skillCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([skillId, count]) => ({ skillId, count }));
+
+  const lastTs = attempts.reduce((max, a) => Math.max(max, a.createdAt ?? 0), 0)
+    || sessions.reduce((max, s) => Math.max(max, s.createdAt ?? 0), 0);
+
+  const recent100 = attempts.slice(-100);
+  const correct = recent100.filter((a) => a.isCorrect).length;
+  const correctRate = recent100.length > 0 ? correct / recent100.length : 0;
+
+  return {
+    counts: {
+      attempts: attempts.length,
+      mistakes: mistakes.length,
+      trophies: trophies.length,
+      sessions: sessions.length,
+      mastery: mastery.length,
+      fluencyAttempts: fluencyAttempts.length,
+      tutorSessions: tutorSessions.length,
+    },
+    today: { attempts: todayAttempts, sessions: todaySessions },
+    last7Days: { attempts: last7Attempts },
+    bySubject,
+    topMistakeSkills,
+    correctRateRecent100: Math.round(correctRate * 100),
+    lastActivityMs: lastTs || null,
+  };
 }
 
 async function downloadHandler(c: Ctx): Promise<Response> {

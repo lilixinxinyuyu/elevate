@@ -143,6 +143,8 @@ export interface OssGetResult {
   versionId?: string;
   lastModifiedMs?: number;
   contentType?: string;
+  /** Content-Length from headers (HEAD/GET); useful for super-admin stats */
+  contentLength?: number;
   error?: string;
 }
 
@@ -219,6 +221,7 @@ export async function ossHead(cfg: OssConfig, key: string): Promise<OssGetResult
     if (resp.status === 404) return { ok: false, status: 404, error: "not_found" };
     if (!resp.ok) return { ok: false, status: resp.status, error: `oss_${resp.status}` };
     const lm = resp.headers.get("Last-Modified");
+    const cl = resp.headers.get("Content-Length");
     return {
       ok: true,
       status: resp.status,
@@ -226,6 +229,7 @@ export async function ossHead(cfg: OssConfig, key: string): Promise<OssGetResult
       versionId: resp.headers.get("x-oss-version-id") ?? undefined,
       lastModifiedMs: lm ? Date.parse(lm) : undefined,
       contentType: resp.headers.get("Content-Type") ?? undefined,
+      contentLength: cl ? Number(cl) : undefined,
     };
   } catch (e) {
     return { ok: false, status: 0, error: "fetch_failed: " + (e as Error).message };
