@@ -400,7 +400,152 @@ generate.get("/image/proxy", async (c) => {
   }
 });
 
-// 其他 /api/generate/* 暂未移植 → 代理到老 CF Pages（questions / variant）
+// 移植自 prompts/variant/system.md
+const VARIANT_SYSTEM_PROMPT = `你是变式题生成器。给你一道原题，你只需 **换数字 + 换情境**（人名/物品/地点等），保留 skill / 难度 / 题型 / 字段结构不变。
+
+## 任务
+
+返回 1 道**结构与原题完全相同**的新题，所有 enum 字段（subjectId/term/unit_id/skill_id/grade/difficulty/game_type/question_format/cognitive_level/ability_dimension/exam_priority/status）**原样保留**。
+
+只改：
+- \`stem\` 题面（换数字 + 换情境）
+- \`options[].text\` 或 \`subquestions[]\` 里的具体内容
+- \`answer.value\` / \`answer.steps[].expected\` 与新数字一致
+- \`solution_steps\` / \`hints\` / \`feedback_*\` / \`common_errors\` 适配
+
+## 4 条变式原则（违反就 fail）
+
+1. **题面纯净**：clue / option / hint / feedback 不要写"（无关）/（非已知）"等元注解。
+2. **数学闭合**：换的数字必须能算出**整数 / 合常识**的答案。
+3. **distractor 独立**：错误选项必须源自"学生具体误解"思路。
+4. **保题型保结构**：选项数量、字段名都不动。
+
+## 输出协议
+
+返回顶层 \`{ "question": {...} }\` JSON，**不要** markdown 代码块。`;
+
+interface VariantBody {
+  sourceQuestion?: Record<string, unknown>;
+  callerTag?: string;
+}
+
+interface ChatProvider2 {
+  label: "token-plan-cn" | "bailian";
+  baseUrl: string;
+  apiKey: string;
+}
+
+function getChatProviders(env: Env): ChatProvider2[] {
+  const ps: ChatProvider2[] = [];
+  if (env.TOKEN_PLAN_CN_API_KEY) {
+    ps.push({ label: "token-plan-cn", baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", apiKey: env.TOKEN_PLAN_CN_API_KEY });
+  }
+  if (env.BAILIAN_API_KEY) {
+    ps.push({ label: "bailian", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: env.BAILIAN_API_KEY });
+  }
+  return ps;
+}
+
+function buildVariantUserPrompt(source: Record<string, unknown>): string {
+  const trimmed = { ...source };
+  delete trimmed.question_id;
+  delete trimmed.tags;
+  delete trimmed.status;
+  return `# 原题
+\`\`\`json
+${JSON.stringify(trimmed, null, 2)}
+\`\`\`
+
+# 要求
+- skill_id 原样: \`${source.skill_id ?? ""}\`
+- difficulty 原样: ${source.difficulty ?? "?"}
+- game_type 原样: \`${source.game_type ?? ""}\`
+- question_format 原样: \`${source.question_format ?? ""}\`
+- 数字换一组、情境换，保 4 条变式原则。
+
+返回 \`{ "question": {...} }\` JSON。`;
+}
+
+/** POST /api/generate/variant */
+generate.post("/variant", async (c) => {
+  const providers = getChatProviders(c.env);
+  if (providers.length === 0) return c.json({ ok: false, error: "no_provider_configured" }, 503);
+
+  let body: VariantBody;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: "invalid_json" }, 400); }
+  const sq = body.sourceQuestion;
+  if (!sq || typeof sq !== "object") return c.json({ ok: false, error: "missing_sourceQuestion" }, 400);
+  if (typeof sq.skill_id !== "string") return c.json({ ok: false, error: "sourceQuestion missing skill_id" }, 400);
+
+  const userPrompt = buildVariantUserPrompt(sq);
+  const tried: Array<{ provider: string; model: string; code: string; message: string }> = [];
+
+  for (const p of providers) {
+    for (const m of ["qwen3.6-flash", "qwen3.6-plus"]) {
+      try {
+        const ctrl = new AbortController();
+        const to = setTimeout(() => ctrl.abort(), 9_500);
+        const r = await fetch(`${p.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${p.apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: m,
+            messages: [
+              { role: "system", content: VARIANT_SYSTEM_PROMPT },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.7,
+            max_tokens: 1800,
+            response_format: { type: "json_object" },
+            enable_thinking: false,
+          }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(to);
+        let j: { choices?: { message?: { content?: string } }[]; error?: { code?: string; message?: string } };
+        try { j = await r.json(); } catch { tried.push({ provider: p.label, model: m, code: "non_json", message: "non-JSON" }); continue; }
+        if (!r.ok || j.error) {
+          tried.push({ provider: p.label, model: m, code: j.error?.code ?? "http_error", message: j.error?.message ?? `upstream ${r.status}` });
+          if (j.error?.code === "InvalidApiKey" || j.error?.code === "AccessDenied") break;
+          continue;
+        }
+        const text = j.choices?.[0]?.message?.content?.trim();
+        if (!text) { tried.push({ provider: p.label, model: m, code: "empty", message: "no content" }); continue; }
+        let parsed: { question?: Record<string, unknown> };
+        try { parsed = JSON.parse(text); } catch {
+          tried.push({ provider: p.label, model: m, code: "parse_failed", message: text.slice(0, 100) });
+          continue;
+        }
+        const q = parsed.question;
+        if (!q || typeof q !== "object" || typeof q.stem !== "string") {
+          tried.push({ provider: p.label, model: m, code: "missing_question_field", message: "" });
+          continue;
+        }
+        const merged = {
+          ...q,
+          subjectId: sq.subjectId, skill_id: sq.skill_id, skill_name: sq.skill_name,
+          unit_id: sq.unit_id, unit_name: sq.unit_name, term: sq.term,
+          grade: sq.grade ?? 4, difficulty: sq.difficulty, game_type: sq.game_type,
+          play_as: sq.play_as, question_format: sq.question_format,
+          cognitive_level: sq.cognitive_level, ability_dimension: sq.ability_dimension,
+          exam_priority: sq.exam_priority, estimated_time_seconds: sq.estimated_time_seconds,
+          status: "approved", version: 1,
+          tags: ["ai_generated", "variant", body.callerTag ?? "variant"].filter(Boolean),
+          question_id: typeof q.question_id === "string" && q.question_id.length > 0
+            ? q.question_id : `AI_${sq.skill_id}_v_${Date.now().toString(36)}`,
+        };
+        return c.json({ ok: true, question: merged, model: m, provider: p.label });
+      } catch (e) {
+        tried.push({ provider: p.label, model: m, code: "fetch_failed", message: (e as Error).message?.slice(0, 100) ?? "" });
+      }
+    }
+  }
+
+  console.error("[generate/variant] all failed", tried);
+  return c.json({ ok: false, error: "llm_failed", detail: tried.slice(0, 6).map(t => `${t.provider}/${t.model}:${t.code}`).join(", "), tried }, 502);
+});
+
+// 其他 /api/generate/* (questions) 暂未移植 → 代理到老 CF Pages
 generate.all("*", async (c) => {
   return proxyFallback.fetch(c.req.raw, c.env);
 });
