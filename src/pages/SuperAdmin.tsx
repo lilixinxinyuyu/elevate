@@ -183,6 +183,20 @@ export function SuperAdminPage() {
   const [statsBusy, setStatsBusy] = useState(false);
 
   useEffect(() => {
+    // Ep158: super-admin 只能从 admin.xiaojin.app 访问
+    const host = window.location.host;
+    if (
+      host !== "admin.xiaojin.app" &&
+      !host.startsWith("localhost") &&
+      !host.startsWith("127.0.0.1")
+    ) {
+      setErr(
+        `super-admin 只能从 https://admin.xiaojin.app 访问 (当前: ${host})`,
+      );
+      setLoading(false);
+      // 不自动跳转，留时间看错误
+      return;
+    }
     (async () => {
       const pwd = getStoredPassword();
       if (!pwd) {

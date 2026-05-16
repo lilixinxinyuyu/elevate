@@ -9,34 +9,12 @@
  * 数据：DailySummaryCard 自己查 db。
  */
 
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { ORDERED_SUBJECT_IDS, SUBJECTS } from "../subjects";
 import type { SubjectId } from "../core/types";
 import { DailySummaryCard } from "../components/DailySummaryCard";
-import { getStoredPassword } from "../db/cloudSync";
-
-/** Ep151: super-admin 入口探活；返 true 时 picker 顶部显示 🛠 link */
-function useSuperAdminCheck() {
-  const [isSuper, setIsSuper] = useState(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const pwd = getStoredPassword();
-        if (!pwd) return;
-        const r = await fetch("/api/super-admin/me", {
-          headers: { Authorization: `Bearer ${pwd}` },
-        });
-        if (!r.ok) return;
-        const j = (await r.json()) as { isSuperAdmin?: boolean };
-        if (j.isSuperAdmin) setIsSuper(true);
-      } catch { /* */ }
-    })();
-  }, []);
-  return isSuper;
-}
 
 function formatDaysUntil(at: number): string {
   const days = Math.ceil((at - Date.now()) / (24 * 60 * 60 * 1000));
@@ -47,7 +25,6 @@ function formatDaysUntil(at: number): string {
 
 export function SubjectPickerPage() {
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
-  const isSuper = useSuperAdminCheck();
 
   return (
     <div className="min-h-screen app-bg text-slate-100 px-4 py-6">
@@ -57,17 +34,6 @@ export function SubjectPickerPage() {
             Selena's Elevate
           </div>
         </div>
-
-        {/* Ep151: super-admin 入口 */}
-        {isSuper && (
-          <Link
-            to="/super-admin"
-            className="block rounded-xl bg-gradient-to-r from-sky-500/20 to-violet-500/20 border border-sky-400/40 px-4 py-2.5 text-sm text-sky-100 hover:from-sky-500/30 hover:to-violet-500/30 transition-colors"
-          >
-            <span className="font-bold">🛠 项目管理后台</span>
-            <span className="text-xs text-sky-200/70 ml-2 hidden sm:inline">看所有同学 / 编辑档案 / AI 摘要</span>
-          </Link>
-        )}
 
         {/* v0.31.103: 三学科今日总结卡（顶部 hero） */}
         {student && (

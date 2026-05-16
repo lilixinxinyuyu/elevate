@@ -41,7 +41,6 @@ import { computeAbilityDiagnostic } from "../core/rating";
 import type { Term } from "../core/types";
 import { useEffect, useState } from "react";
 import { ackMigrationNotice, getMigrationNoticeUnacked } from "../db/seed";
-import { getStoredPassword } from "../db/cloudSync";
 import { currentExam, daysUntil, FINAL } from "../core/examDates";
 import { getTricksTodayCount } from "../lib/mathTricksProgress";
 
@@ -165,33 +164,7 @@ function buildTodayRingsInput(args: {
   };
 }
 
-/**
- * Ep15 (Ep151): super-admin 在 Home 顶部加 🛠 入口，避免靠记 URL。
- * 拉 /api/super-admin/me 一次决定；非管理员什么都不显示。
- */
-function useSuperAdminCheck() {
-  const [isSuper, setIsSuper] = useState(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const pwd = getStoredPassword();
-        if (!pwd) return;
-        const r = await fetch("/api/super-admin/me", {
-          headers: { Authorization: `Bearer ${pwd}` },
-        });
-        if (!r.ok) return;
-        const j = (await r.json()) as { isSuperAdmin?: boolean };
-        if (j.isSuperAdmin) setIsSuper(true);
-      } catch (e) {
-        console.warn("[useSuperAdminCheck]", (e as Error).message);
-      }
-    })();
-  }, []);
-  return isSuper;
-}
-
 export function HomePage() {
-  const isSuper = useSuperAdminCheck();
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
   const attempts = useLiveQuery(
     async () => (student ? db.attempts.where({ studentId: student.id }).toArray() : []),
@@ -434,17 +407,6 @@ export function HomePage() {
 
   return (
     <div className="space-y-6">
-      {/* Ep151 super-admin 入口 — 仅 super-admin 看得到 */}
-      {isSuper && (
-        <Link
-          to="/super-admin"
-          className="block rounded-xl bg-gradient-to-r from-sky-500/20 to-violet-500/20 border border-sky-400/40 px-4 py-2.5 text-sm text-sky-100 hover:from-sky-500/30 hover:to-violet-500/30 transition-colors"
-        >
-          <span className="font-bold">🛠 项目管理后台</span>
-          <span className="text-xs text-sky-200/70 ml-2">看所有同学 / 编辑档案 / 重置密码 / AI 摘要</span>
-        </Link>
-      )}
-
       {/* 迁移通知（只显示一次） */}
       {showMigrationNotice && (
         <div className="rounded-2xl bg-gradient-to-br from-amber-500/20 to-rose-500/15 border border-amber-400/40 p-4 relative">

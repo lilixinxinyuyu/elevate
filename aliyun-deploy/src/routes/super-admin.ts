@@ -19,6 +19,7 @@
  */
 
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { Env } from "../lib/env";
 import { requireAuth, getUserId } from "../lib/auth";
 import { getOssConfig, ossGet, ossHead, ossPut, snapshotKey } from "../lib/oss";
@@ -52,14 +53,46 @@ function isValidUserId(v: string): boolean {
 
 /** legacy sync — 现在不用了，全部走 async listKnownUserIdsAsync (OSS-aware) */
 
-// 所有 super-admin endpoints 都先校验权限
-superAdmin.use("*", requireAuth, async (c, next) => {
-  const userId = getUserId(c);
-  const admins = getSuperAdmins(c.env);
-  if (!admins.has(userId)) {
-    return c.json({ ok: false, error: "not_super_admin", userId }, 403);
+/**
+ * Ep158 (爸爸 2026-05-17 反馈)：super-admin 只能从 admin.xiaojin.app 访问。
+ * Selena / 其他同学子域不能拿到 super-admin endpoint，保持游戏域纯净。
+ *
+ * 允许的 host:
+ *   - admin.xiaojin.app (主)
+ *   - localhost (dev)
+ * 拒绝：selena.xiaojin.app, xiaojin.app (apex), 其他子域
+ */
+function isAdminHost(req: Request): boolean {
+  const host = (req.headers.get("Host") ?? "").split(":")[0]!.toLowerCase();
+  if (host === "admin.xiaojin.app") return true;
+  if (host === "localhost" || host === "127.0.0.1") return true; // dev
+  return false;
+}
+
+// 所有 super-admin endpoints 都先校验 host + auth + role
+superAdmin.use("*", async (c, next) => {
+  if (!isAdminHost(c.req.raw)) {
+    return c.json(
+      {
+        ok: false,
+        error: "wrong_host",
+        detail: "super-admin 接口只能从 https://admin.xiaojin.app 访问",
+      },
+      403,
+    );
   }
-  await next();
+  // 内联 requireAuth + role check
+  const authResp = await requireAuth(c, async () => {
+    const userId = getUserId(c);
+    const admins = getSuperAdmins(c.env);
+    if (!admins.has(userId)) {
+      throw new HTTPException(403, {
+        res: c.json({ ok: false, error: "not_super_admin", userId }, 403),
+      });
+    }
+    await next();
+  });
+  return authResp;
 });
 
 superAdmin.get("/users", async (c) => {
