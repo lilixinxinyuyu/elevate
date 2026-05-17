@@ -1098,6 +1098,31 @@ async function pushTrophyImages(): Promise<{ ok: boolean; pushed: number; error?
   return { ok: failed === 0, pushed, ...(failed > 0 ? { error: `${failed}_failed` } : {}) };
 }
 
+/**
+ * v0.34.89 iter 23: 强制重拉 trophy-images — 清 IDB + 一次拉全.
+ *
+ * 暴露 window.xiaojinAppForceTrophyResync() 给 admin 在控制台调.
+ * 也给 super-admin UI 加个 "🔄 Force resync trophies" 按钮 (下面 iter 24+).
+ *
+ * 用途: Selena / 老同学 IDB trophyImages cache 损坏 / 部分缺失 → 一键重建.
+ */
+export async function forceTrophyResync(): Promise<{ ok: boolean; pulled: number; error?: string }> {
+  try {
+    await db.trophyImages.clear();
+    console.log("[forceTrophyResync] cleared local trophyImages");
+  } catch (e) {
+    console.warn("[forceTrophyResync] clear failed:", (e as Error).message);
+  }
+  const r = await pullTrophyImages();
+  console.log(`[forceTrophyResync] pulled ${r.pulled}, ok=${r.ok}, error=${r.error ?? "—"}`);
+  return r;
+}
+
+// 暴露给浏览器控制台 (admin 调试)
+if (typeof window !== "undefined") {
+  (window as unknown as { xiaojinAppForceTrophyResync?: typeof forceTrophyResync }).xiaojinAppForceTrophyResync = forceTrophyResync;
+}
+
 async function pullTrophyImages(): Promise<{ ok: boolean; pulled: number; error?: string }> {
   const pwd = getStoredPassword();
   if (!pwd) return { ok: false, pulled: 0, error: "no_password" };
@@ -1140,8 +1165,10 @@ async function pullTrophyImages(): Promise<{ ok: boolean; pulled: number; error?
     try { localStorage.setItem(TROPHY_LAST_PULL_KEY, String(Date.now())); } catch { /* */ }
     return { ok: true, pulled: 0 };
   }
-  // 上限 50 张/次，防爆带宽 (每张 ~80KB, 50 = ~4MB total)
-  const PULL_LIMIT_PER_TICK = 50;
+  // v0.34.89 iter 23: 上限 50 → 250 — 实测 Selena 204 张全 OSS, 50 cap 让
+  // 多次 tick 拉 (4+ 次), 期间 React 组件可能渲染 stale 状态; 一次拉满更顺.
+  // 每张 ~60KB jpeg, 250 = ~15MB. 慢网 IDB write OK, ESA 服务端也分散 (concurrency 4).
+  const PULL_LIMIT_PER_TICK = 250;
   const PULL_CONCURRENCY = 4;
   const targets = toFetch.slice(0, PULL_LIMIT_PER_TICK);
   let pulled = 0;
