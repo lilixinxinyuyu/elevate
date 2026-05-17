@@ -1512,6 +1512,59 @@ export function SuperAdminPage() {
           </div>
         </details>
 
+        {/* v0.34.94 iter 28: 最近活动 feed — 跨 cadet 按最后 push 时间排,
+            live dashboard 演示 hook. 现成数据复用 statsKpi + snapshot.lastModifiedMs */}
+        {users.length > 0 && (() => {
+          const ranked = [...users]
+            .filter((u) => u.snapshot.lastModifiedMs)
+            .sort((a, b) => (b.snapshot.lastModifiedMs ?? 0) - (a.snapshot.lastModifiedMs ?? 0))
+            .slice(0, 8);
+          if (ranked.length === 0) return null;
+          return (
+            <div className="mb-4 rounded-lg bg-[#1a1c20] border border-[#212327] p-4">
+              <div className="flex items-baseline gap-2 mb-3">
+                <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187]">
+                  ⟁ recent activity feed
+                </div>
+                <div className="text-[10px] text-[#7d8187]">
+                  · top {ranked.length} cadets by last cloud push
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {ranked.map((u) => {
+                  const lm = u.snapshot.lastModifiedMs ?? 0;
+                  const displayName = u.profile?.displayName ?? u.userId;
+                  const today = u.statsKpi?.todayAttempts ?? 0;
+                  const week = u.statsKpi?.last7Attempts ?? 0;
+                  const acc = u.statsKpi?.correctRate ?? 0;
+                  const hot = Date.now() - lm < 30 * 60 * 1000; // 30 min
+                  return (
+                    <div
+                      key={u.userId}
+                      className={`flex items-center gap-3 px-2.5 py-1.5 rounded text-xs ${
+                        hot ? "bg-emerald-500/10 border-l-2 border-emerald-400" : "bg-[#0a0a0a]"
+                      }`}
+                    >
+                      <span className="font-mono uppercase text-white text-[11px] min-w-[5rem]">
+                        {u.userId}
+                      </span>
+                      <span className="text-[#dadbdf] text-[11px] flex-1 truncate">
+                        {displayName}
+                      </span>
+                      <span className="text-[10px] text-[#7d8187] tabular-nums shrink-0">
+                        今日 <span className="text-white">{today}</span> · 7d <span className="text-white">{week}</span> · <span className="text-[#ff7a17]">{acc}%</span>
+                      </span>
+                      <span className={`text-[10px] tabular-nums shrink-0 min-w-[5rem] text-right ${hot ? "text-emerald-300" : "text-[#7d8187]"}`}>
+                        {fmtRel(lm)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Ep41: fleet data integrity matrix (table count per cadet, 0-row 告警) */}
         <details
           className="mb-4 rounded-lg bg-[#1a1c20] border border-[#212327]"
