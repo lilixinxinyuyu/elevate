@@ -31,6 +31,7 @@ import { getFragileSkillsToReview } from "../db/service";
 import { termToSemester } from "./TermSwitcher";
 import type { Term } from "../core/types";
 import type { MasteryStat } from "../lib/masteryTier";
+import { expectedProgress } from "../core/semesterProgress";
 
 interface DailySummaryCardProps {
   studentId: string;
@@ -52,6 +53,19 @@ interface MathSummary {
   mistakesDueToday: number;
   /** 按 skill 分组的待复活 top 5（给老师看一眼"哪几块没掌握"） */
   mistakesDueBySkill: { skillId: string; name: string; count: number }[];
+
+  /**
+   * 爸爸 2026-05-17 报告闭环重构：数学一天要 3 个 mode 都碰才算完。
+   * 单一 mode 摸 1 次≠"今日数学闭环"。每一项 true = 今日至少 1 次。
+   */
+  modesToday: {
+    /** 训练 = 任意非 big_problems 的 session 今日发生 */
+    train: boolean;
+    /** 闯关 = mode='big_problems' 的 session 今日发生 */
+    boss: boolean;
+    /** 闪电口算 = 任意 fluencyAttempt 今日发生 */
+    fluency: boolean;
+  };
 }
 
 /** 持续薄弱字/词条目（level<3 + 最近碰过的优先） */
@@ -174,6 +188,30 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
     async () => getFragileSkillsToReview(studentId),
     [studentId, currentDateKey],
   );
+
+  // 爸爸 2026-05-17 报告重构：数学累计掌握 % = score ≥ 75 的 skill / 总 skill。
+  // 跟学期 expected 进度比，超前/落后可视化。
+  const mathCumulative = useLiveQuery(async () => {
+    const totalSkills = SKILLS.length;
+    if (totalSkills === 0) return { mastered: 0, total: 0, pct: 0 };
+    let mastered = 0;
+    try {
+      const rows = await db.mastery
+        .where("studentId")
+        .equals(studentId)
+        .filter((m) => (m.subjectId ?? "math") === "math")
+        .toArray();
+      const seen = new Set<string>();
+      for (const r of rows) {
+        if (seen.has(r.skillId)) continue;
+        seen.add(r.skillId);
+        if ((r.score ?? 0) >= 75) mastered++;
+      }
+    } catch {
+      /* */
+    }
+    return { mastered, total: totalSkills, pct: mastered / totalSkills };
+  }, [studentId, currentDateKey]);
 
   // 中文/英文：daily log（含 wrongItems）
   // v0.32.25: 显式传 currentDateKey，跨天后自动拉今天的 key（通常空 → 今日列表清空）
@@ -312,7 +350,16 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
         {/* Hero：mini 三环 + 标题 + streak */}
         <header className="flex items-center gap-4">
           <MiniSubjectRings
-            mathProgress={subjectProgress(mathTotal)}
+            // 爸爸 2026-05-17：数学 3 mode 闭环（train+boss+fluency 各占 1/3）
+            // 中文/英文继续走 daily count proxy，Phase 2 加 mode 拆分
+            mathProgress={
+              math
+                ? (Number(math.modesToday.train) +
+                    Number(math.modesToday.boss) +
+                    Number(math.modesToday.fluency)) /
+                  3
+                : 0
+            }
             chineseProgress={subjectProgress(chineseTotal)}
             englishProgress={subjectProgress(englishTotal)}
           />
@@ -328,6 +375,55 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             )}
           </div>
         </header>
+
+        {/* 爸爸 2026-05-17：数学今日 3 mode 闭环可视化（训练 / 闯关 / 闪电）+
+            每个 ✓/○ 直跳目标页 */}
+        {math && (
+          <div className="rounded-xl border border-violet-400/25 bg-violet-500/8 px-3 py-2">
+            <div className="flex items-baseline justify-between mb-1.5">
+              <div className="text-[11px] font-bold text-violet-100">
+                📐 数学今日 3 闭环
+              </div>
+              <div className="text-[10px] font-mono text-violet-200/75 tabular-nums">
+                {Number(math.modesToday.train) +
+                  Number(math.modesToday.boss) +
+                  Number(math.modesToday.fluency)}{" "}
+                / 3 完成
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { done: math.modesToday.train, label: "训练", emoji: "🎯", href: "/math/train" },
+                { done: math.modesToday.boss, label: "闯关", emoji: "⚔️", href: "/math/boss" },
+                { done: math.modesToday.fluency, label: "闪电口算", emoji: "⚡", href: "/math/fluency" },
+              ].map((m) => (
+                <a
+                  key={m.label}
+                  href={m.href}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                    m.done
+                      ? "bg-emerald-500/20 text-emerald-100 border border-emerald-400/40"
+                      : "bg-slate-800/40 text-slate-300 border border-slate-700/50 hover:border-violet-400/40"
+                  }`}
+                >
+                  <span className="text-sm leading-none">{m.done ? "✓" : "○"}</span>
+                  <span className="leading-none">{m.emoji}</span>
+                  <span className="leading-none">{m.label}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 爸爸 2026-05-17：数学累计掌握学期进度条 + expected-by-now 标线 */}
+        {mathCumulative && (
+          <ExpectedBar
+            actual={mathCumulative.pct}
+            expected={expectedProgress(currentTerm)}
+            label={`📐 数学学期进度 · 掌握 ${mathCumulative.mastered}/${mathCumulative.total} skill (≥75 分)`}
+            detail={`${currentTerm}`}
+          />
+        )}
 
         {/* 三学科 mini stats grid */}
         <div className="grid grid-cols-3 gap-2">
@@ -742,6 +838,77 @@ function ProgressBar({
  *   - 内环 英语 cyan
  * 中心：闭合环数 / 3；全闭显示 🎉
  */
+/**
+ * 爸爸 2026-05-17 报告重构：累计掌握 % 进度条 + expected-by-now 标线。
+ *
+ * actual 0..1 是实际掌握比例（mastered/total），expected 0..1 是按学期日期
+ * 线性算出的"今天应该走到这"。两条线对比给爸爸 / Selena 一眼判断超前/落后。
+ *
+ * 颜色：超前(>5%)=emerald；on-track(±5%)=violet；落后(<-5%)=amber。
+ */
+function ExpectedBar({
+  actual,
+  expected,
+  label,
+  detail,
+}: {
+  actual: number;
+  expected: number;
+  label: string;
+  detail?: string;
+}) {
+  const a = Math.max(0, Math.min(1, actual));
+  const e = Math.max(0, Math.min(1, expected));
+  const diff = a - e;
+  const status: "ahead" | "on_track" | "behind" =
+    diff > 0.05 ? "ahead" : diff < -0.05 ? "behind" : "on_track";
+  const barFill =
+    status === "ahead"
+      ? "from-emerald-400 to-emerald-300"
+      : status === "behind"
+        ? "from-amber-400 to-amber-300"
+        : "from-violet-400 to-violet-300";
+  const statusText =
+    status === "ahead" ? "超进度" : status === "behind" ? "落后于预期" : "符合进度";
+  const statusColor =
+    status === "ahead" ? "text-emerald-200" : status === "behind" ? "text-amber-200" : "text-violet-200";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between text-[11px]">
+        <span className="text-violet-100/85">{label}</span>
+        <span className="flex items-baseline gap-1.5 text-[10px] tabular-nums">
+          {detail && <span className="text-violet-200/70">{detail}</span>}
+          <span className={`font-bold ${statusColor}`}>{statusText}</span>
+        </span>
+      </div>
+      <div className="relative h-2 rounded-full bg-slate-900/60 border border-white/10 overflow-visible">
+        {/* actual fill */}
+        <div
+          className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${barFill}`}
+          style={{ width: `${Math.max(2, a * 100)}%` }}
+          aria-hidden
+        />
+        {/* expected marker — vertical pin */}
+        <div
+          className="absolute -top-1 bottom-[-4px] w-px bg-violet-100/90"
+          style={{ left: `${e * 100}%` }}
+          aria-hidden
+          title={`按学期 ${Math.round(e * 100)}%`}
+        />
+        <div
+          className="absolute -top-1.5 w-2.5 h-2.5 rounded-full bg-violet-100 border border-violet-900 shadow-sm"
+          style={{ left: `calc(${e * 100}% - 5px)` }}
+          aria-hidden
+        />
+      </div>
+      <div className="flex items-baseline justify-between text-[9px] font-mono text-violet-200/60 tabular-nums">
+        <span>实际 {Math.round(a * 100)}%</span>
+        <span>↑ 按学期应到 {Math.round(e * 100)}%</span>
+      </div>
+    </div>
+  );
+}
+
 function MiniSubjectRings({
   mathProgress,
   chineseProgress,
@@ -948,6 +1115,27 @@ async function buildMathSummary(studentId: string): Promise<MathSummary> {
     /* mistakes 表可能没初始化 */
   }
 
+  // 爸爸 2026-05-17：今日数学 3 mode 闭环
+  // train = 任意非 big_problems mode 的 session 今天发生
+  // boss = mode='big_problems' 的 session 今天发生
+  // fluency = 今日 fluencyAttempt count > 0
+  let trainModeToday = false;
+  let bossModeToday = false;
+  try {
+    const todaySessions = await db.sessions
+      .where("studentId")
+      .equals(studentId)
+      .filter((s) => s.dateKey === todayDateStr() && (s.subjectId ?? "math") === "math")
+      .toArray();
+    for (const s of todaySessions) {
+      if (s.mode === "big_problems") bossModeToday = true;
+      else trainModeToday = true;
+    }
+  } catch {
+    /* sessions 可能空 */
+  }
+  const fluencyModeToday = fluencySessions > 0;
+
   return {
     attempts: attempts.length,
     correct,
@@ -957,5 +1145,10 @@ async function buildMathSummary(studentId: string): Promise<MathSummary> {
     mistakeRevived,
     mistakesDueToday,
     mistakesDueBySkill,
+    modesToday: {
+      train: trainModeToday,
+      boss: bossModeToday,
+      fluency: fluencyModeToday,
+    },
   };
 }
