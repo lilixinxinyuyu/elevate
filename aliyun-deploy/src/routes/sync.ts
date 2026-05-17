@@ -338,31 +338,136 @@ async function downloadHandler(c: Ctx): Promise<Response> {
   });
 }
 
+/**
+ * v0.34.77 iter 11: per-key ai-questions merge.
+ *
+ * 历史: 老路径只读 users/{uid}/ai-questions.json blob (单文件).
+ * Ep46 加 per-key 模式 (users/{uid}/ai-questions/{qid}.json) 救 1288 missing,
+ * 但客户端 pull 不知道这个 prefix → 学生看不到新写的题.
+ *
+ * 现在 GET /api/sync/ai-questions 主动 list per-key prefix + fetch new ones
+ * (cap 30 per call 避免 ESA 11s 超时) + merge 进 rows.
+ */
+const PER_KEY_PULL_CAP = 30;
+
+async function listAiQuestionsPerKey(
+  cfg: { bucket: string; region: string; accessKeyId: string; accessKeySecret: string },
+  userId: string,
+  sinceMs: number,
+): Promise<Array<{ key: string; lastModifiedMs: number }>> {
+  const prefix = `users/${userId}/ai-questions/`;
+  const date = new Date().toUTCString();
+  const stringToSign = ["GET", "", "", date, `/${cfg.bucket}/`].join("\n");
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", enc.encode(cfg.accessKeySecret),
+    { name: "HMAC", hash: "SHA-1" }, false, ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(stringToSign));
+  let bin = "";
+  const bytes = new Uint8Array(sigBuf);
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  const sig = btoa(bin);
+  const host = `${cfg.bucket}.${cfg.region}.aliyuncs.com`;
+  const url = `https://${host}/?list-type=2&prefix=${encodeURIComponent(prefix)}&max-keys=1000`;
+  try {
+    const r = await fetch(url, {
+      method: "GET",
+      headers: { Host: host, Date: date, Authorization: `OSS ${cfg.accessKeyId}:${sig}` },
+    });
+    if (!r.ok) return [];
+    const xml = await r.text();
+    const items: Array<{ key: string; lastModifiedMs: number }> = [];
+    for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const block = m[1] ?? "";
+      const key = block.match(/<Key>([^<]+)<\/Key>/)?.[1] ?? "";
+      const lm = block.match(/<LastModified>([^<]+)<\/LastModified>/)?.[1] ?? "";
+      if (!key.endsWith(".json")) continue;
+      const lmMs = Date.parse(lm) || 0;
+      if (sinceMs > 0 && lmMs <= sinceMs) continue;
+      items.push({ key, lastModifiedMs: lmMs });
+    }
+    // 最新的优先 (lastModifiedMs desc)
+    items.sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
+    return items;
+  } catch {
+    return [];
+  }
+}
+
 async function aiQuestionsGetHandler(c: Ctx): Promise<Response> {
   const userId = getUserId(c);
   const cfg = getOssConfig(c.env);
   if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
   const since = Number(c.req.query("since") ?? "0");
+
+  // 1. 读老 v1 blob (兼容存量数据)
   const key = aiQuestionsKey(userId);
   const head = await ossHead(cfg, key);
-  if (!head.ok && head.status === 404) {
-    return c.json({ ok: true, questions: [], lastModifiedMs: 0 });
+  let blobRows: Array<{ question_id?: string; [k: string]: unknown }> = [];
+  let blobLastMs = 0;
+  if (head.ok) {
+    blobLastMs = head.lastModifiedMs ?? 0;
+    const got = await ossGet(cfg, key);
+    if (got.ok && got.text) {
+      try {
+        const parsed = JSON.parse(got.text) as { rows?: unknown[]; questions?: unknown[] };
+        if (Array.isArray(parsed.rows)) blobRows = parsed.rows as typeof blobRows;
+        else if (Array.isArray(parsed.questions)) blobRows = parsed.questions as typeof blobRows;
+      } catch { /* corrupt blob; skip */ }
+    }
+  } else if (head.status !== 404) {
+    return c.json({ ok: false, error: head.error }, 502);
   }
-  if (!head.ok) return c.json({ ok: false, error: head.error }, 502);
-  if (since > 0 && head.lastModifiedMs && head.lastModifiedMs <= since) {
+
+  // 2. 列 per-key prefix + fetch new ones (cap PER_KEY_PULL_CAP)
+  // v0.34.77 iter 11: 新增 — 让 iter 10 textbook synthesize 写的题流到学生.
+  const perKeyItems = await listAiQuestionsPerKey(cfg, userId, since);
+  const limited = perKeyItems.slice(0, PER_KEY_PULL_CAP);
+  const perKeyRows: Array<{ question_id?: string; [k: string]: unknown }> = [];
+  let maxPerKeyMs = 0;
+  if (limited.length > 0) {
+    // parallel get
+    const fetches = await Promise.allSettled(
+      limited.map(async (it) => {
+        const got = await ossGet(cfg, it.key);
+        if (!got.ok || !got.text) return null;
+        try {
+          return { item: it, row: JSON.parse(got.text) as Record<string, unknown> };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    for (const r of fetches) {
+      if (r.status === "fulfilled" && r.value) {
+        perKeyRows.push(r.value.row as { question_id?: string });
+        if (r.value.item.lastModifiedMs > maxPerKeyMs) maxPerKeyMs = r.value.item.lastModifiedMs;
+      }
+    }
+  }
+
+  // 3. union by question_id — blob 优先, per-key 补充 (per-key 是新的)
+  const seen = new Set<string>();
+  const merged: Array<{ question_id?: string; [k: string]: unknown }> = [];
+  for (const row of [...perKeyRows, ...blobRows]) {
+    const qid = row.question_id;
+    if (typeof qid !== "string" || !qid || seen.has(qid)) continue;
+    seen.add(qid);
+    merged.push(row);
+  }
+
+  // 4. 304 short-circuit: blob 没新 + per-key 没新 → 不返 body
+  const latestMs = Math.max(blobLastMs, maxPerKeyMs);
+  if (since > 0 && latestMs > 0 && latestMs <= since) {
     return c.body(null, 304);
   }
-  const got = await ossGet(cfg, key);
-  if (!got.ok || !got.text) {
-    return c.json({ ok: false, error: got.error ?? "get_failed" }, 502);
-  }
-  return new Response(got.text, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "X-LastModified": String(head.lastModifiedMs ?? 0),
-    },
-  });
+
+  return c.json(
+    { ok: true, rows: merged, latestVersion: latestMs, perKeyCount: perKeyRows.length, blobCount: blobRows.length },
+    200,
+    { "X-LastModified": String(latestMs) },
+  );
 }
 
 async function aiQuestionsPostHandler(c: Ctx): Promise<Response> {
