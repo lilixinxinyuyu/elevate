@@ -117,6 +117,23 @@ function genPassword(len = 20): string {
   return out;
 }
 
+/**
+ * v0.34.69 (iter 3): friendly password — 8 位数字, 给小学生 / 监护人 / 演示用.
+ * 老师演示加同学时不要一串 20 位 randomstring 让对方记不住; 8 位数字像 PIN
+ * 容易写在便签上 + 容易输入 (手机数字键盘). 同学拿到后可以在 Settings 改成
+ * 自己想要的字符串密码 (changePasswordForUser 自己挑长度).
+ *
+ * 8 位 = 10^8 ≈ 1 亿组合, 配合 ESA EdgeRoutine 自带的速率限制 (短时间内
+ * 100+ 错密码访问会被拦), 暴力破解不现实. 不接受 4-6 位以防 brute force.
+ */
+function genFriendlyPassword(): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < 8; i++) out += String(bytes[i]! % 10);
+  return out;
+}
+
 export async function resetPasswordForUser(
   env: Env,
   userId: string,
@@ -151,7 +168,8 @@ export async function resetPasswordForUser(
     }
   }
 
-  const newPwd = genPassword(20);
+  // v0.34.69: 默认 friendly (8 位数字). super-admin 可以传 secure=true 拿老 20 位.
+  const newPwd = genFriendlyPassword();
   store.passwords[newPwd] = userId;
   store.updatedAt = Date.now();
 
@@ -193,7 +211,8 @@ export async function addNewStudent(
     store.passwords = { ...readBaked(env) };
     store.migratedFromBakedAt = Date.now();
   }
-  const newPwd = genPassword(20);
+  // v0.34.69: 新同学默认拿 friendly 8 位数字密码 (老师演示 / 监护人记得住)
+  const newPwd = genFriendlyPassword();
   store.passwords[newPwd] = userId;
   store.updatedAt = Date.now();
   const put = await ossPut(cfg, AUTH_KEY, JSON.stringify(store, null, 2), {
@@ -201,4 +220,61 @@ export async function addNewStudent(
   });
   if (!put.ok) return { ok: false, error: put.error ?? "oss_put_failed" };
   return { ok: true, password: newPwd };
+}
+
+/**
+ * 同学自己改密码 (or super-admin 替同学指定特定密码).
+ * 校验:
+ *   - newPassword 至少 6 字符, 最多 64 字符 (genFriendlyPassword 8 位 + 用户自定义)
+ *   - 不能跟 baked APP_PASSWORD 冲突 (baked 是 Selena fallback, 给 selena 留)
+ *   - 不能跟其他 userId 的密码冲突 (避免一密码两身份)
+ *   - 同 userId 老密码全清, 替换为新密码
+ */
+export async function changePasswordForUser(
+  env: Env,
+  userId: string,
+  newPassword: string,
+): Promise<{ ok: true; rotated: number } | { ok: false; error: string }> {
+  const cfg = getOssConfig(env);
+  if (!cfg) return { ok: false, error: "oss_not_configured" };
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(userId)) {
+    return { ok: false, error: "invalid_userId" };
+  }
+  const pwd = (newPassword ?? "").trim();
+  if (pwd.length < 6 || pwd.length > 64) {
+    return { ok: false, error: "password_length_6_to_64" };
+  }
+  if (!/^[\x21-\x7e]+$/.test(pwd)) {
+    return { ok: false, error: "password_must_be_ascii_printable" };
+  }
+  // 不能跟 baked Selena 兜底密码冲突
+  if (env.APP_PASSWORD && pwd === env.APP_PASSWORD) {
+    return { ok: false, error: "password_conflict_with_legacy_fallback" };
+  }
+  let store = await readOssStore(cfg);
+  if (!store) {
+    store = emptyStore();
+    store.passwords = { ...readBaked(env) };
+    store.migratedFromBakedAt = Date.now();
+  }
+  // 跟别的同学密码冲突 → 拒
+  const existingOwner = store.passwords[pwd];
+  if (existingOwner && existingOwner !== userId) {
+    return { ok: false, error: "password_taken_by_other_user" };
+  }
+  // 清掉这个 userId 的所有老密码 → 添加新的
+  let rotated = 0;
+  for (const [oldPwd, uid] of Object.entries(store.passwords)) {
+    if (uid === userId && oldPwd !== pwd) {
+      delete store.passwords[oldPwd];
+      rotated++;
+    }
+  }
+  store.passwords[pwd] = userId;
+  store.updatedAt = Date.now();
+  const put = await ossPut(cfg, AUTH_KEY, JSON.stringify(store, null, 2), {
+    contentType: "application/json; charset=utf-8",
+  });
+  if (!put.ok) return { ok: false, error: put.error ?? "oss_put_failed" };
+  return { ok: true, rotated };
 }
