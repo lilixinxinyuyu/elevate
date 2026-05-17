@@ -831,27 +831,30 @@ export function SuperAdminPage() {
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4 overflow-y-auto"
-          style={{ backdropFilter: "blur(4px)" }}
+          className="fixed inset-0 z-[1000] bg-black/80 flex items-center justify-center p-4 overflow-y-auto"
+          style={{ backdropFilter: "blur(6px)" }}
         >
-          <div className="card-glow max-w-md w-full bg-slate-900/95 border-violet-400/40 p-5 my-8">
-            <div className="font-display font-bold text-violet-200 text-lg mb-1">
-              ✏️ 编辑 {editing} 的档案
+          <div className="max-w-md w-full bg-[#1a1c20] border border-[#212327] rounded-xl p-6 my-8">
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+              edit cadet record
             </div>
-            <div className="text-xs text-slate-400 mb-4">
-              空字段会被清空 (null)。改完会立刻同步到 OSS profile.json。
+            <div className="font-display text-xl font-medium tracking-tight text-white mb-1">
+              <span className="font-mono uppercase tracking-wider text-base">{editing}</span>
+            </div>
+            <div className="text-[11px] text-[#7d8187] mb-5 leading-relaxed">
+              Empty fields will be cleared (null). Saves sync to OSS profile.json immediately.
             </div>
             <div className="space-y-3">
               {EDITABLE_FIELDS.map(({ key, label, type, options }) => (
                 <div key={key as string}>
-                  <label className="text-xs text-slate-400 mb-1 block">{label}</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">{label}</label>
                   {options ? (
                     <select
                       value={(editForm[key] as string) ?? ""}
                       onChange={(e) =>
                         setEditForm((f) => ({ ...f, [key]: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-slate-100 text-sm"
+                      className="w-full px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] hover:border-[#363a3f] focus:border-[#ff7a17] focus:outline-none text-white text-sm transition-colors"
                     >
                       {options.map((opt) => (
                         <option key={opt} value={opt}>{opt === "" ? "—" : opt}</option>
@@ -864,7 +867,7 @@ export function SuperAdminPage() {
                       onChange={(e) =>
                         setEditForm((f) => ({ ...f, [key]: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-slate-100 text-sm"
+                      className="w-full px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] hover:border-[#363a3f] focus:border-[#ff7a17] focus:outline-none text-white text-sm transition-colors"
                       maxLength={100}
                     />
                   )}
@@ -872,24 +875,24 @@ export function SuperAdminPage() {
               ))}
             </div>
             {editErr && (
-              <div className="text-xs text-rose-300 mt-3">{editErr}</div>
+              <div className="text-[11px] font-mono uppercase tracking-wider text-rose-400 mt-3">⚠ {editErr}</div>
             )}
-            <div className="flex gap-2 justify-end mt-4">
+            <div className="flex gap-2 justify-end mt-5">
               <button
                 type="button"
                 onClick={() => setEditing(null)}
                 disabled={editBusy}
-                className="text-xs px-3 py-2 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-300 disabled:opacity-40"
+                className="text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium disabled:opacity-30"
               >
-                取消
+                Cancel
               </button>
               <button
                 type="button"
                 onClick={submitEdit}
                 disabled={editBusy}
-                className="text-sm px-4 py-2 rounded bg-violet-500 hover:bg-violet-400 text-white font-bold disabled:opacity-40"
+                className="text-xs rounded-full bg-[#ff7a17] hover:bg-[#ffc285] text-[#0a0a0a] px-4 py-2 font-medium disabled:opacity-30"
               >
-                {editBusy ? "保存中…" : "保存"}
+                {editBusy ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
@@ -902,70 +905,76 @@ export function SuperAdminPage() {
         </div>
       </div>  {/* /max-w container */}
 
-      {/* 新建同学 modal */}
+      {/* Enlist new cadet modal */}
       {newOpen && (
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4"
-          style={{ backdropFilter: "blur(4px)" }}
+          className="fixed inset-0 z-[1000] bg-black/80 flex items-center justify-center p-4"
+          style={{ backdropFilter: "blur(6px)" }}
         >
-          <div className="card-glow max-w-md w-full bg-slate-900/95 border-emerald-400/40 p-5">
-            <div className="font-display font-bold text-emerald-200 text-lg mb-3">
-              ➕ 加新同学
+          <div className="max-w-md w-full bg-[#1a1c20] border border-[#212327] rounded-xl p-6">
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+              new cadet enlistment
+            </div>
+            <div className="font-display text-xl font-medium tracking-tight text-white mb-4">
+              Enlist new cadet
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">
-                  userId * (登录子域用，比如 <code className="text-slate-300">alice</code> → alice.xiaojin.app)
+                <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">
+                  user id <span className="text-[#ff7a17]">*</span>
                 </label>
                 <input
                   type="text"
                   value={newUserId}
                   onChange={(e) => setNewUserId(e.target.value.toLowerCase())}
                   placeholder="alice"
-                  className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-slate-100 text-sm font-mono"
+                  className="w-full px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] hover:border-[#363a3f] focus:border-[#ff7a17] focus:outline-none text-white text-sm font-mono uppercase tracking-wider"
                   maxLength={64}
                 />
+                <div className="text-[10px] text-[#7d8187] mt-1">
+                  Becomes <code className="text-[#dadbdf]">{newUserId || "alice"}.xiaojin.app</code> subdomain
+                </div>
               </div>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">
-                  显示名 (可选；首登 ProfileGate 也可补)
+                <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">
+                  display name <span className="text-[#7d8187]">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={newDisplayName}
                   onChange={(e) => setNewDisplayName(e.target.value)}
                   placeholder="爱丽丝"
-                  className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-slate-100 text-sm"
+                  className="w-full px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] hover:border-[#363a3f] focus:border-[#ff7a17] focus:outline-none text-white text-sm"
                   maxLength={20}
                 />
               </div>
             </div>
             {newErr && (
-              <div className="text-xs text-rose-300 mt-3">⚠️ {newErr}</div>
+              <div className="text-[11px] font-mono uppercase tracking-wider text-rose-400 mt-3">⚠ {newErr}</div>
             )}
-            <div className="text-[10px] text-slate-500 mt-3">
-              系统自动生成 20 字符随机密码，下个 modal 会显示一次。其余档案
-              字段（学校/年级/监护人...）由家长首登 ProfileGate 自己补，或
-              在此 super-admin 页 ✏️ 编辑 代填。
+            <div className="text-[10px] text-[#7d8187] mt-3 leading-relaxed">
+              System generates a 20-char random password (shown next, once only).
+              Profile fields (school / grade / guardian) get filled by guardian on first login,
+              or by you via Edit.
             </div>
-            <div className="flex gap-2 justify-end mt-4">
+            <div className="flex gap-2 justify-end mt-5">
               <button
                 type="button"
                 onClick={() => setNewOpen(false)}
                 disabled={newBusy}
-                className="text-xs px-3 py-2 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-300"
+                className="text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium disabled:opacity-30"
               >
-                取消
+                Cancel
               </button>
               <button
                 type="button"
                 onClick={submitNewStudent}
                 disabled={newBusy}
-                className="text-sm px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-400 text-white font-bold disabled:opacity-40"
+                className="text-xs rounded-full bg-[#ff7a17] hover:bg-[#ffc285] text-[#0a0a0a] px-4 py-2 font-medium disabled:opacity-30"
               >
-                {newBusy ? "创建中…" : "创建账号"}
+                {newBusy ? "Enlisting…" : "Create account"}
               </button>
             </div>
           </div>
@@ -980,96 +989,109 @@ export function SuperAdminPage() {
           className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4 overflow-y-auto"
           style={{ backdropFilter: "blur(4px)" }}
         >
-          <div className="card-glow max-w-xl w-full bg-slate-900/95 border-sky-400/40 p-5 my-8">
-            <div className="flex items-baseline gap-2 mb-2 flex-wrap">
-              <div className="font-display font-bold text-sky-200 text-lg">
-                🤖 {agentOf} AI 学习摘要
+          <div className="max-w-xl w-full bg-[#1a1c20] border border-[#212327] rounded-xl p-6 my-8">
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+              ⟁ ai mission log
+            </div>
+            <div className="flex items-baseline gap-3 mb-4 flex-wrap">
+              <div className="font-display text-xl font-medium tracking-tight text-white">
+                <span className="font-mono uppercase tracking-wider text-base">{agentOf}</span>
+                <span className="text-[#7d8187] mx-2">·</span>
+                <span className="text-[#a0c3ec]">learning brief</span>
               </div>
               {agentData?.generatedAt && (
-                <span className="text-[10px] text-slate-500">
-                  ({fmtRel(agentData.generatedAt)} · {agentData.model})
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187]">
+                  {fmtRel(agentData.generatedAt)} · {agentData.model}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => regenAgent(agentOf)}
-                disabled={agentBusy}
-                className="ml-auto text-xs px-3 py-1.5 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-100 disabled:opacity-40"
-              >
-                {agentBusy ? "生成中…" : agentData?.hasLatest || agentData?.summary ? "↻ 重新生成" : "✨ 生成"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAgentOf(null)}
-                disabled={agentBusy}
-                className="text-xs px-3 py-1.5 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-300"
-              >
-                关闭
-              </button>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => regenAgent(agentOf)}
+                  disabled={agentBusy}
+                  className="text-xs rounded-full bg-[#ff7a17] hover:bg-[#ffc285] text-[#0a0a0a] px-4 py-2 font-medium disabled:opacity-30"
+                >
+                  {agentBusy ? "GENERATING…" : agentData?.hasLatest || agentData?.summary ? "↻ REGEN" : "✨ GENERATE"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAgentOf(null)}
+                  disabled={agentBusy}
+                  className="text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium disabled:opacity-30"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             {agentBusy && !agentData && (
-              <div className="text-xs text-slate-400 mt-3">⏳ 拉缓存 / 调 LLM…</div>
+              <div className="text-xs font-mono uppercase tracking-wider text-[#7d8187] mt-3">
+                ⏳ FETCH CACHE / CALL LLM…
+              </div>
             )}
 
             {agentData?.error && (
-              <div className="text-xs text-rose-300 bg-rose-900/20 rounded p-3 mt-3">
-                ⚠️ {agentData.error}
+              <div className="text-xs font-mono uppercase tracking-wider text-rose-400 bg-[#0a0a0a] border border-rose-400/30 rounded-md p-3 mt-3">
+                ⚠ {agentData.error}
               </div>
             )}
 
             {agentData?.parseError && agentData.raw && (
-              <div className="text-xs text-amber-300 bg-amber-900/20 rounded p-3 mt-3 whitespace-pre-wrap">
-                <div className="font-bold mb-1">⚠️ LLM 没返回 JSON，给原文：</div>
-                {agentData.raw}
+              <div className="text-xs text-amber-300 bg-[#0a0a0a] border border-amber-400/30 rounded-md p-3 mt-3 whitespace-pre-wrap">
+                <div className="font-mono uppercase tracking-wider mb-1.5">⚠ LLM RETURNED NON-JSON · RAW:</div>
+                <div className="text-[#dadbdf]">{agentData.raw}</div>
               </div>
             )}
 
             {agentData && !agentData.error && !agentData.parseError && (agentData.summary || agentData.messageToStudent || agentData.messageToGuardian) && (
               <div className="space-y-3 mt-3">
                 {agentData.summary && (
-                  <div className="rounded bg-slate-800/60 p-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="text-xs font-bold text-slate-300">📝 内部学习状态摘要</div>
+                  <div className="rounded-md bg-[#0a0a0a] border border-[#212327] p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187]">
+                        internal status briefing
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(agentData.summary ?? "");
                           setAgentCopied("summary");
                         }}
-                        className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-white/30 hover:border-white text-white px-3 py-1"
                       >
-                        {agentCopied === "summary" ? "✓ 已复制" : "复制"}
+                        {agentCopied === "summary" ? "✓ COPIED" : "COPY"}
                       </button>
                     </div>
-                    <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{agentData.summary}</div>
+                    <div className="text-sm text-[#dadbdf] whitespace-pre-wrap leading-relaxed">{agentData.summary}</div>
                   </div>
                 )}
 
                 {agentData.messageToStudent && (
-                  <div className="rounded bg-emerald-500/10 border border-emerald-400/30 p-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="text-xs font-bold text-emerald-300">💌 发给同学的鼓励</div>
+                  <div className="rounded-md bg-[#0a0a0a] border border-[#ff7a17]/25 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#ffc285]">
+                        ⟁ transmission · to cadet
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(agentData.messageToStudent ?? "");
                           setAgentCopied("student");
                         }}
-                        className="text-[10px] px-2 py-0.5 rounded bg-emerald-700/50 hover:bg-emerald-600/50 text-emerald-100"
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-[#ff7a17]/40 hover:border-[#ff7a17] text-[#ffc285] px-3 py-1"
                       >
-                        {agentCopied === "student" ? "✓ 已复制" : "复制"}
+                        {agentCopied === "student" ? "✓ COPIED" : "COPY"}
                       </button>
                     </div>
-                    <div className="text-sm text-emerald-100 whitespace-pre-wrap leading-relaxed">{agentData.messageToStudent}</div>
+                    <div className="text-sm text-white whitespace-pre-wrap leading-relaxed">{agentData.messageToStudent}</div>
                   </div>
                 )}
 
                 {agentData.messageToGuardian && (
-                  <div className="rounded bg-violet-500/10 border border-violet-400/30 p-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="text-xs font-bold text-violet-300">
-                        📨 发给 {agentData.guardianRole ?? "监护人"} 的反馈
+                  <div className="rounded-md bg-[#0a0a0a] border border-[#7c3aed]/30 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#c4b5fd]">
+                        ⟁ transmission · to {agentData.guardianRole ?? "guardian"}
                       </div>
                       <button
                         type="button"
@@ -1077,25 +1099,25 @@ export function SuperAdminPage() {
                           navigator.clipboard.writeText(agentData.messageToGuardian ?? "");
                           setAgentCopied("guardian");
                         }}
-                        className="text-[10px] px-2 py-0.5 rounded bg-violet-700/50 hover:bg-violet-600/50 text-violet-100"
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-[#7c3aed]/40 hover:border-[#c4b5fd] text-[#c4b5fd] px-3 py-1"
                       >
-                        {agentCopied === "guardian" ? "✓ 已复制" : "复制"}
+                        {agentCopied === "guardian" ? "✓ COPIED" : "COPY"}
                       </button>
                     </div>
-                    <div className="text-sm text-violet-100 whitespace-pre-wrap leading-relaxed">{agentData.messageToGuardian}</div>
+                    <div className="text-sm text-white whitespace-pre-wrap leading-relaxed">{agentData.messageToGuardian}</div>
                   </div>
                 )}
               </div>
             )}
 
             {agentData && !agentBusy && !agentData.error && !agentData.summary && !agentData.parseError && (
-              <div className="text-xs text-slate-400 mt-3">
-                没有缓存。点 ✨ 生成 拿首次摘要（约 5-10 秒）。
+              <div className="text-xs font-mono uppercase tracking-wider text-[#7d8187] mt-3">
+                NO CACHE · TAP ✨ GENERATE FOR FIRST BRIEF (~5-10s)
               </div>
             )}
 
-            <div className="text-[10px] text-slate-500 mt-3">
-              基于 profile + stats.json + qwen3.6-flash。后续 Phase 1 会改成 cron 自动跑。
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mt-4 pt-3 border-t border-[#212327]">
+              profile + stats.json · qwen3.6-flash · phase 1 → cron
             </div>
           </div>
         </div>
@@ -1109,66 +1131,75 @@ export function SuperAdminPage() {
           className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4 overflow-y-auto"
           style={{ backdropFilter: "blur(4px)" }}
         >
-          <div className="card-glow max-w-lg w-full bg-slate-900/95 border-emerald-400/40 p-5 my-8">
-            <div className="flex items-baseline gap-2 mb-2">
-              <div className="font-display font-bold text-emerald-200 text-lg">
-                📊 {statsOf} 学情
+          <div className="max-w-lg w-full bg-[#1a1c20] border border-[#212327] rounded-xl p-6 my-8">
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+              ⟁ cadet telemetry
+            </div>
+            <div className="flex items-baseline gap-3 mb-4 flex-wrap">
+              <div className="font-display text-xl font-medium tracking-tight text-white">
+                <span className="font-mono uppercase tracking-wider text-base">{statsOf}</span>
+                <span className="text-[#7d8187] mx-2">·</span>
+                <span className="text-[#a0c3ec]">flight log</span>
               </div>
               {statsData?.fetchedAt && (
-                <span className="text-[10px] text-slate-500">
-                  ({fmtRel(statsData.fetchedAt)} 缓存)
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187]">
+                  cache · {fmtRel(statsData.fetchedAt)}
                 </span>
               )}
               <button
                 type="button"
                 onClick={() => setStatsOf(null)}
-                className="ml-auto text-xs px-2 py-1 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-300"
+                className="ml-auto text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium"
               >
-                关闭
+                Close
               </button>
             </div>
 
             {statsBusy && (
-              <div className="text-xs text-slate-400">⏳ 加载中…</div>
+              <div className="text-xs font-mono uppercase tracking-wider text-[#7d8187]">
+                ⏳ LOADING…
+              </div>
             )}
 
             {!statsBusy && statsData?.empty && (
-              <div className="text-xs text-amber-300 bg-amber-900/20 rounded p-3 mt-2">
-                ⚠️ 暂无 stats。<br/>
-                {statsData.note ?? "等同学下次开 app 自动 push 后再看。"}
+              <div className="text-xs text-amber-300 bg-[#0a0a0a] border border-amber-400/30 rounded-md p-3 mt-2">
+                <div className="font-mono uppercase tracking-wider mb-1">⚠ NO TELEMETRY YET</div>
+                <div className="text-[#dadbdf]">{statsData.note ?? "等同学下次开 app 自动 push 后再看。"}</div>
               </div>
             )}
 
             {!statsBusy && statsData && !statsData.empty && (
               <div className="space-y-4 mt-3 text-sm">
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded bg-emerald-500/10 border border-emerald-400/30 p-3 text-center">
-                    <div className="text-xl font-bold text-emerald-200">
+                  <div className="rounded-md bg-[#0a0a0a] border border-[#ff7a17]/25 p-3 text-center">
+                    <div className="font-display text-2xl font-medium tracking-tight text-[#ffc285]">
                       {statsData.today?.attempts ?? 0}
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1">今天答题</div>
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mt-1">today</div>
                   </div>
-                  <div className="rounded bg-violet-500/10 border border-violet-400/30 p-3 text-center">
-                    <div className="text-xl font-bold text-violet-200">
+                  <div className="rounded-md bg-[#0a0a0a] border border-[#7c3aed]/30 p-3 text-center">
+                    <div className="font-display text-2xl font-medium tracking-tight text-[#c4b5fd]">
                       {statsData.last7Days?.attempts ?? 0}
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1">7 天答题</div>
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mt-1">7d total</div>
                   </div>
-                  <div className="rounded bg-amber-500/10 border border-amber-400/30 p-3 text-center">
-                    <div className="text-xl font-bold text-amber-200">
+                  <div className="rounded-md bg-[#0a0a0a] border border-[#a0c3ec]/30 p-3 text-center">
+                    <div className="font-display text-2xl font-medium tracking-tight text-[#a0c3ec]">
                       {statsData.correctRateRecent100 ?? 0}%
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1">近 100 正确率</div>
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mt-1">acc · last 100</div>
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-slate-400 mb-1.5">累计</div>
+                  <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-2">
+                    cumulative
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs">
                     {Object.entries(statsData.counts ?? {}).map(([k, v]) => (
-                      <div key={k} className="rounded bg-slate-800/60 p-2">
-                        <div className="text-slate-500 text-[10px]">{k}</div>
-                        <div className="font-bold text-slate-200">{v}</div>
+                      <div key={k} className="rounded-md bg-[#0a0a0a] border border-[#212327] p-2">
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187]">{k}</div>
+                        <div className="font-mono text-white">{v}</div>
                       </div>
                     ))}
                   </div>
@@ -1176,12 +1207,14 @@ export function SuperAdminPage() {
 
                 {statsData.bySubject && Object.keys(statsData.bySubject).length > 0 && (
                   <div>
-                    <div className="text-xs text-slate-400 mb-1.5">学科分布（attempts）</div>
+                    <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-2">
+                      attempts by subject
+                    </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {Object.entries(statsData.bySubject).map(([subj, n]) => (
-                        <div key={subj} className="rounded bg-slate-800/60 px-3 py-1.5">
-                          <span className="text-slate-500">{subj}: </span>
-                          <span className="font-bold text-slate-200">{n}</span>
+                        <div key={subj} className="rounded-full bg-[#0a0a0a] border border-[#212327] px-3 py-1">
+                          <span className="font-mono uppercase tracking-wider text-[#7d8187]">{subj}</span>
+                          <span className="font-mono text-white ml-2">{n}</span>
                         </div>
                       ))}
                     </div>
@@ -1190,25 +1223,27 @@ export function SuperAdminPage() {
 
                 {statsData.topMistakeSkills && statsData.topMistakeSkills.length > 0 && (
                   <div>
-                    <div className="text-xs text-slate-400 mb-1.5">Top 错题集中点</div>
+                    <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-2">
+                      top error hotspots
+                    </div>
                     <div className="space-y-1 text-xs">
                       {statsData.topMistakeSkills.map((m, idx) => (
-                        <div key={m.skillId} className="flex justify-between bg-slate-800/60 rounded px-2 py-1">
-                          <span className="text-slate-300">
-                            <span className="text-slate-500">#{idx + 1}</span>{" "}
-                            <code className="text-rose-300">{m.skillId}</code>
+                        <div key={m.skillId} className="flex justify-between items-center bg-[#0a0a0a] border border-[#212327] rounded-md px-3 py-1.5">
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono uppercase tracking-wider text-[#7d8187]">#{idx + 1}</span>
+                            <code className="font-mono text-rose-300">{m.skillId}</code>
                           </span>
-                          <span className="font-bold text-rose-200">{m.count} 题</span>
+                          <span className="font-mono text-rose-400">{m.count}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="text-[10px] text-slate-500 pt-1">
-                  上次活跃 {fmtRel(statsData.lastActivityMs)}
+                <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] pt-3 border-t border-[#212327]">
+                  last seen · {fmtRel(statsData.lastActivityMs)}
                   {statsData.snapshotBytes && (
-                    <> · snapshot {(statsData.snapshotBytes / 1024).toFixed(0)}KB</>
+                    <> · snapshot {(statsData.snapshotBytes / 1024).toFixed(0)}kb</>
                   )}
                 </div>
               </div>
@@ -1225,32 +1260,38 @@ export function SuperAdminPage() {
           className="fixed inset-0 z-[1001] bg-black/80 flex items-center justify-center p-4"
           style={{ backdropFilter: "blur(4px)" }}
         >
-          <div className="card-glow max-w-md w-full bg-slate-900/95 border-amber-400/60 p-5">
-            <div className="font-display font-bold text-amber-200 text-lg mb-2">
+          <div className="max-w-md w-full bg-[#1a1c20] border border-[#ff7a17]/40 rounded-xl p-6">
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#ffc285] mb-1">
+              ⟁ classified · single view
+            </div>
+            <div className="font-display text-xl font-medium tracking-tight text-white mb-3">
               {credResult.title}
             </div>
-            <div className="text-xs text-amber-300/80 mb-3">
-              ⚠️ 这串密码只显示这一次。立刻复制发给监护人，关掉 modal 后再也
-              拉不到。
+            <div className="text-xs font-mono uppercase tracking-wider text-[#ffc285] bg-[#0a0a0a] border border-[#ff7a17]/25 rounded-md p-3 mb-4">
+              ⚠ password shown ONCE · copy now or it's gone
             </div>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-3 text-sm">
               <div>
-                <div className="text-xs text-slate-400">登录 URL</div>
-                <div className="font-mono text-slate-200 break-all">
+                <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+                  login url
+                </div>
+                <div className="font-mono text-white text-xs break-all bg-[#0a0a0a] border border-[#212327] rounded-md p-2">
                   {credResult.loginUrl}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">
-                  备用：{credResult.fallbackUrl}（apex，密码也认）
+                <div className="text-[10px] font-mono tracking-wider text-[#7d8187] mt-1.5">
+                  fallback · {credResult.fallbackUrl}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-400">密码</div>
-                <div className="font-mono text-amber-200 break-all bg-slate-900/50 p-2 rounded">
+                <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+                  password
+                </div>
+                <div className="font-mono text-[#ffc285] text-sm break-all bg-[#0a0a0a] border border-[#ff7a17]/30 rounded-md p-3">
                   {credResult.password}
                 </div>
               </div>
             </div>
-            <div className="flex gap-2 justify-end mt-4">
+            <div className="flex gap-2 justify-end mt-5">
               <button
                 type="button"
                 onClick={() => {
@@ -1259,16 +1300,16 @@ export function SuperAdminPage() {
                   );
                   setCredCopied(true);
                 }}
-                className="text-sm px-3 py-2 rounded bg-violet-500/30 hover:bg-violet-500/50 text-violet-100 font-bold"
+                className="text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium"
               >
-                {credCopied ? "✓ 已复制" : "复制 登录+密码"}
+                {credCopied ? "✓ COPIED" : "COPY URL+PASS"}
               </button>
               <button
                 type="button"
                 onClick={() => setCredResult(null)}
-                className="text-sm px-4 py-2 rounded bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold"
+                className="text-xs rounded-full bg-[#ff7a17] hover:bg-[#ffc285] text-[#0a0a0a] px-4 py-2 font-medium"
               >
-                我已抄走，关掉
+                ACKNOWLEDGED · CLOSE
               </button>
             </div>
           </div>
