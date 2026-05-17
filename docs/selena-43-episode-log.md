@@ -346,6 +346,11 @@
 **测试**: 314/316 (2 pre-existing mastery fail)
 **Build**: 4.45s, 主 bundle 待 build prompts
 **Deploy**: 进行中
-**Post-review**: 待 deploy 后发起
+**Post-review** (双家 PASS):
+- Gemini "✅ 绿灯通过" — 顺手建议: chip 点击热区 ≥ 44px, AI prompt 加 JSON example
+- GPT "通过" — 建议 chip 改 toggle selected (再点取消), prompt 加正反例 JSON
+- 没 blocker, 都说可以 merge 进 main
+
+**最终**: 314/316 pass, v0.35.1 ship (commit 1312764, push main)
 
 
