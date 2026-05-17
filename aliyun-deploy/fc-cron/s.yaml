@@ -1,0 +1,55 @@
+# Serverless Devs (s.yaml) — Aliyun Function Compute 3.0 配置
+# https://docs.serverless-devs.com/serverless-devs/quick_start
+#
+# 使用：
+#   1) 一次性装 CLI：npm i -g @serverless-devs/s
+#   2) 一次性配身份：s config add --AccountID 524598... --AccessKeyID ...
+#      （走 RAM xiaojinapp-sync 子账号 + 给它加 AliyunFCFullAccess policy）
+#   3) 填下面 ${env:BACKUP_TOKEN} 等环境变量到本机 shell（或脚本 export）
+#   4) 部署：cd aliyun-deploy/fc-cron && s deploy -y
+#   5) 测试：s invoke
+#   6) 看日志：s logs -t
+#
+# 改 cron 或 timeout 后再跑 `s deploy -y` 即可。
+
+edition: 3.0.0
+name: xiaojinapp-cron
+access: default
+
+vars:
+  region: cn-hongkong
+
+resources:
+  xiaojinappBackupCron:
+    component: fc3
+    actions:
+      pre-deploy:
+        - run: npm install --omit=dev
+          path: ./
+    props:
+      region: ${vars.region}
+      function:
+        functionName: xiaojinapp-backup-cron
+        runtime: nodejs22
+        handler: index.handler
+        memorySize: 128
+        timeout: 60
+        cpu: 0.05
+        diskSize: 512
+        # FC 3.0 通过 codeUri 上传当前目录（含 node_modules）
+        codeUri: ./
+        environmentVariables:
+          BACKUP_TOKEN: ${env.BACKUP_TOKEN}
+          ALIYUN_OSS_REGION: ${env.ALIYUN_OSS_REGION}
+          ALIYUN_OSS_BUCKET: ${env.ALIYUN_OSS_BUCKET}
+          ALIYUN_OSS_ACCESS_KEY_ID: ${env.ALIYUN_OSS_ACCESS_KEY_ID}
+          ALIYUN_OSS_ACCESS_KEY_SECRET: ${env.ALIYUN_OSS_ACCESS_KEY_SECRET}
+      triggers:
+        - triggerName: daily-3am-utc
+          triggerType: timer
+          # 0 0 3 * * ? = 每天 UTC 03:00 = 北京 11:00
+          # 想调成"半夜"可改成 0 0 19 * * ?（UTC 19:00 = 北京次日 03:00）
+          triggerConfig:
+            cronExpression: "0 0 3 * * ?"
+            enable: true
+            payload: '{"source":"timer"}'

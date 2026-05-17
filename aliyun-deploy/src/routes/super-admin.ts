@@ -70,6 +70,36 @@ function isAdminHost(req: Request): boolean {
   return false;
 }
 
+/**
+ * Ep33: 如果是 backup-snapshot path + 带 BACKUP_TOKEN service token，
+ * 直接放行 — 让 Aliyun FC cron 函数无需 super-admin 密码也能定时调。
+ * Token compare 走常量时间比较（防 timing attack）。
+ *
+ * 仅对 /backup-snapshot* 路径生效，其它 super-admin endpoint 仍走 user/role auth。
+ */
+function constantTimeEq(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+function isBackupPath(path: string): boolean {
+  // /api/super-admin/backup-snapshot / .../backup-snapshot/:id / .../backup-snapshot/:id/restore / .../backup-snapshot/:id/file
+  return path.includes("/backup-snapshot");
+}
+
+function tryServiceToken(c: { env: Env; req: { raw: Request } }): boolean {
+  const tok = c.env.BACKUP_TOKEN;
+  if (!tok) return false;
+  const auth = c.req.raw.headers.get("Authorization") ?? "";
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m) return false;
+  return constantTimeEq(m[1]!, tok);
+}
+
 // 所有 super-admin endpoints 都先校验 host + auth + role
 superAdmin.use("*", async (c, next) => {
   if (!isAdminHost(c.req.raw)) {
@@ -81,6 +111,12 @@ superAdmin.use("*", async (c, next) => {
       },
       403,
     );
+  }
+  // Ep33: backup-snapshot* + service token 旁路
+  if (isBackupPath(new URL(c.req.raw.url).pathname) && tryServiceToken(c)) {
+    // 模拟 super-admin user 上下文给下游 endpoint（getUserId() 用）
+    c.set("userId", "cron:backup");
+    return await next();
   }
   // 内联 requireAuth + role check
   const authResp = await requireAuth(c, async () => {

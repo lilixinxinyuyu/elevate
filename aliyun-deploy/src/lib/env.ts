@@ -34,4 +34,12 @@ export interface Env {
    * 逗号分隔 `selena,admin`。默认 ["selena"]（爸爸 currently uses Selena's password）。
    */
   SUPER_ADMINS?: string;
+  /**
+   * Ep33 (2026-05-17) backup cron service token：
+   * 非空时，POST/GET /api/super-admin/backup-snapshot* 接受
+   *   Authorization: Bearer <BACKUP_TOKEN>
+   * 旁路 user/role 检查，让 Aliyun FC cron 函数能定时调（不需要 super-admin 密码）。
+   * 仅作用于 backup-snapshot* paths，其它 super-admin endpoint 仍走原 auth。
+   */
+  BACKUP_TOKEN?: string;
 }

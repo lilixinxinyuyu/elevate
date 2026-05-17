@@ -1,0 +1,14 @@
+{
+  "name": "xiaojinapp-fc-cron",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Aliyun FC 3.0 daily backup + prune cron for xiaojinapp",
+  "main": "index.mjs",
+  "dependencies": {
+    "ali-oss": "^6.23.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
