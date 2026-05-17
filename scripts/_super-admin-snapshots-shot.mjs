@@ -28,7 +28,7 @@ try {
 } catch {}
 await new Promise((r) => setTimeout(r, 3500));
 
-console.log("[2/2] open snapshots details + screenshot");
+console.log("[2/3] open snapshots details + screenshot");
 await page.evaluate(() => {
   const details = [...document.querySelectorAll("details")];
   const snap = details.find((d) => (d.textContent ?? "").toLowerCase().includes("recent snapshots"));
@@ -37,5 +37,14 @@ await page.evaluate(() => {
 await new Promise((r) => setTimeout(r, 1500));
 await page.screenshot({ path: `${OUT}/06-snapshots-panel.png`, fullPage: false });
 
+console.log("[3/3] expand a row preview + screenshot");
+await page.evaluate(() => {
+  // click first backup row toggle (the inner button with backupId text)
+  const buttons = [...document.querySelectorAll('button[title*="预览"], button[title*="点开"]')];
+  if (buttons[0]) buttons[0].click();
+});
+await new Promise((r) => setTimeout(r, 2500));
+await page.screenshot({ path: `${OUT}/08-backup-preview.png`, fullPage: false });
+
 await browser.close();
-console.log(`screenshot in ${OUT}/06-snapshots-panel.png`);
+console.log(`screenshots in ${OUT}/`);

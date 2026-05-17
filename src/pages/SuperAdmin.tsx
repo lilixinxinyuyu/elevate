@@ -167,6 +167,14 @@ export function SuperAdminPage() {
     at: number;
   } | null>(null);
 
+  // Ep31: backup file preview (per-row expand)
+  type PreviewState =
+    | { status: "loading" }
+    | { status: "ready"; auth: string | null; index: string | null; truncated: boolean }
+    | { status: "error"; message: string };
+  const [previewExpanded, setPreviewExpanded] = useState<string | null>(null);
+  const [previewCache, setPreviewCache] = useState<Record<string, PreviewState>>({});
+
   // Ep14: 🤖 agent summary modal
   interface AgentSummary {
     targetUserId?: string;
@@ -474,6 +482,61 @@ export function SuperAdminPage() {
       alert(`回滚网络错：${(e as Error).message}`);
     } finally {
       setRestoreBusy(null);
+    }
+  }
+
+  /**
+   * Ep31: toggle row expand → load backup 里 _auth + _index 内容
+   * 用于 restore 前肉眼审查。
+   */
+  async function togglePreview(backupId: string) {
+    if (previewExpanded === backupId) {
+      setPreviewExpanded(null);
+      return;
+    }
+    setPreviewExpanded(backupId);
+    if (previewCache[backupId]?.status === "ready") return; // 已缓存
+
+    setPreviewCache((c) => ({ ...c, [backupId]: { status: "loading" } }));
+    const pwd = getStoredPassword();
+    if (!pwd) {
+      setPreviewCache((c) => ({ ...c, [backupId]: { status: "error", message: "no auth" } }));
+      return;
+    }
+    try {
+      // 拉两个文件并行
+      const [authR, indexR] = await Promise.all([
+        fetch(
+          `/api/super-admin/backup-snapshot/${encodeURIComponent(backupId)}/file?path=${encodeURIComponent("_auth/users.json")}`,
+          { headers: { Authorization: `Bearer ${pwd}` } },
+        ).then((r) => r.json()).catch(() => null),
+        fetch(
+          `/api/super-admin/backup-snapshot/${encodeURIComponent(backupId)}/file?path=${encodeURIComponent("_index/users.json")}`,
+          { headers: { Authorization: `Bearer ${pwd}` } },
+        ).then((r) => r.json()).catch(() => null),
+      ]);
+      const authContent = authR?.ok ? authR.content : null;
+      const indexContent = indexR?.ok ? indexR.content : null;
+      const truncated = Boolean(authR?.truncated || indexR?.truncated);
+      setPreviewCache((c) => ({
+        ...c,
+        [backupId]: { status: "ready", auth: authContent, index: indexContent, truncated },
+      }));
+    } catch (e) {
+      setPreviewCache((c) => ({
+        ...c,
+        [backupId]: { status: "error", message: (e as Error).message },
+      }));
+    }
+  }
+
+  /** Pretty-format JSON without throwing on parse failures. */
+  function safePretty(text: string | null): string {
+    if (!text) return "(empty)";
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      return text;
     }
   }
 
@@ -833,32 +896,88 @@ export function SuperAdminPage() {
               </div>
             )}
             {backupList && backupList.length > 0 && (
-              <div className="space-y-1 max-h-[260px] overflow-y-auto">
+              <div className="space-y-1 max-h-[520px] overflow-y-auto">
                 {backupList.map((b) => {
                   const isPre = b.backupId.includes("pre-restore-of-");
+                  const expanded = previewExpanded === b.backupId;
+                  const preview = previewCache[b.backupId];
                   return (
                     <div
                       key={b.backupId}
-                      className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md bg-[#0a0a0a] border border-[#212327]"
+                      className="rounded-md bg-[#0a0a0a] border border-[#212327] overflow-hidden"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-white truncate">
-                          {b.backupId}
-                        </span>
-                        {isPre && (
-                          <span className="text-[9px] font-mono uppercase tracking-wider text-[#c4b5fd] flex-shrink-0">
-                            ⟁ pre-restore
+                      <div className="flex items-center justify-between gap-2 py-1.5 px-2">
+                        <button
+                          type="button"
+                          onClick={() => togglePreview(b.backupId)}
+                          className="flex items-center gap-2 min-w-0 text-left flex-1 hover:bg-[#1a1c20] rounded px-1 py-0.5 -my-0.5 transition-colors"
+                          title="点开预览 _auth + _index 文件内容"
+                        >
+                          <span className="text-[#7d8187] text-[10px] font-mono flex-shrink-0">
+                            {expanded ? "▾" : "▸"}
                           </span>
-                        )}
+                          <span className="font-mono text-[10px] uppercase tracking-wider text-white truncate">
+                            {b.backupId}
+                          </span>
+                          {isPre && (
+                            <span className="text-[9px] font-mono uppercase tracking-wider text-[#c4b5fd] flex-shrink-0">
+                              ⟁ pre-restore
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => runRestoreSnapshot(b.backupId)}
+                          disabled={restoreBusy !== null}
+                          className="flex-shrink-0 text-[10px] font-mono uppercase tracking-wider rounded-full border border-[#ff7a17]/40 hover:border-[#ff7a17] text-[#ffc285] px-3 py-1 disabled:opacity-30"
+                        >
+                          {restoreBusy === b.backupId ? "restoring…" : "restore"}
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => runRestoreSnapshot(b.backupId)}
-                        disabled={restoreBusy !== null}
-                        className="flex-shrink-0 text-[10px] font-mono uppercase tracking-wider rounded-full border border-[#ff7a17]/40 hover:border-[#ff7a17] text-[#ffc285] px-3 py-1 disabled:opacity-30"
-                      >
-                        {restoreBusy === b.backupId ? "restoring…" : "restore"}
-                      </button>
+                      {expanded && (
+                        <div className="border-t border-[#212327] px-3 py-2 bg-[#0a0a0a]">
+                          {!preview && (
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187]">
+                              · click row to load ·
+                            </div>
+                          )}
+                          {preview?.status === "loading" && (
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187]">
+                              ⏳ fetching files…
+                            </div>
+                          )}
+                          {preview?.status === "error" && (
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-rose-400">
+                              ⚠ {preview.message}
+                            </div>
+                          )}
+                          {preview?.status === "ready" && (
+                            <div className="space-y-2">
+                              {preview.truncated && (
+                                <div className="text-[9px] font-mono uppercase tracking-wider text-amber-400">
+                                  ⚠ content truncated · download raw to inspect rest
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-[9px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+                                  _auth/users.json
+                                </div>
+                                <pre className="text-[10px] font-mono text-[#dadbdf] bg-[#1a1c20] border border-[#212327] rounded p-2 max-h-[160px] overflow-auto whitespace-pre-wrap break-all">
+{safePretty(preview.auth)}
+                                </pre>
+                              </div>
+                              <div>
+                                <div className="text-[9px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+                                  _index/users.json
+                                </div>
+                                <pre className="text-[10px] font-mono text-[#dadbdf] bg-[#1a1c20] border border-[#212327] rounded p-2 max-h-[200px] overflow-auto whitespace-pre-wrap break-all">
+{safePretty(preview.index)}
+                                </pre>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

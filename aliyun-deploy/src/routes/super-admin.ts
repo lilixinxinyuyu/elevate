@@ -505,6 +505,46 @@ superAdmin.get("/backup-snapshot/:backupId", async (c) => {
 });
 
 /**
+ * GET /api/super-admin/backup-snapshot/:backupId/file?path=<BACKUP_TARGETS-entry>
+ *
+ * 读 backup 里某个具体文件的内容（restore 前的最后一道人工 review）。
+ * 路径必须在 BACKUP_TARGETS 白名单里，防止任意 OSS 读 (e.g. ?path=../users/selena/snapshot.json)。
+ * 内容截到前 64 KB，避免 EdgeRoutine 11s + 128MB 限。客户端拿到 truncated
+ * flag 时显示 "...内容已截断" 提示。
+ */
+const PREVIEW_MAX_BYTES = 64 * 1024;
+
+superAdmin.get("/backup-snapshot/:backupId/file", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const id = c.req.param("backupId");
+  if (!BACKUP_ID_RE.test(id)) {
+    return c.json({ ok: false, error: "invalid_backupId" }, 400);
+  }
+  const path = c.req.query("path") ?? "";
+  if (!(BACKUP_TARGETS as readonly string[]).includes(path)) {
+    return c.json({ ok: false, error: "path_not_in_whitelist", allowed: BACKUP_TARGETS }, 400);
+  }
+  const key = `_backups/${id}/${path}`;
+  const got = await ossGet(cfg, key);
+  if (!got.ok || !got.text) {
+    return c.json({ ok: false, error: "not_found", status: got.status }, 404);
+  }
+  const truncated = got.text.length > PREVIEW_MAX_BYTES;
+  const content = truncated ? got.text.slice(0, PREVIEW_MAX_BYTES) : got.text;
+  return c.json({
+    ok: true,
+    backupId: id,
+    path,
+    bytes: got.text.length,
+    truncated,
+    content,
+    etag: got.etag,
+    versionId: got.versionId,
+  });
+});
+
+/**
  * POST /api/super-admin/backup-snapshot/:backupId/restore
  *
  * 安全 rollback：
