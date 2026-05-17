@@ -14,7 +14,9 @@
  */
 import { Suspense, lazy, useEffect, useState } from "react";
 import type { MascotEmotion, MascotGesture, MascotOutfit, MascotSkin } from "../Mascot3D";
-import type { FeedbackKind } from "../../lib/worlds/useWorldFeedback";
+// v0.34.82 iter 16b: inline FeedbackKind type 替代 import from lib/worlds
+// 避免 atelier 把 worlds chunk 引入 main bundle's import graph (爸爸反馈 LCP 36-45s).
+type FeedbackKind = "pickup" | "drop" | "correct" | "wrong" | "complete";
 
 const Mascot3D = lazy(() => import("../Mascot3D"));
 

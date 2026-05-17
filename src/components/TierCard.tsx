@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { RatingResult, AbilityDiagnostic } from "../core/rating";
 import type { Tier } from "../core/tiers";
+import { schoolShortName } from "../core/tiers";
 import { TierBadgeImg } from "./TierBadgeImg";
+import { useStoredSchool } from "../lib/displayName";
 
 /**
  * v0.31.4：XP roll-up 动画 — 进首页时从"上次记录的 XP"滚到当前 XP。
@@ -82,6 +84,15 @@ export function TierCard({
   ability: AbilityDiagnostic | null;
 }) {
   const t = rating.tier;
+  // v0.34.82 iter 16: dynamicTierName — school 段位用同学自己学校 + "小学" 替代
+  // "和平街小学". 学校外段 (区/市/省/国) 保持原名 (地理通用).
+  const school = useStoredSchool();
+  const dynamicTierName = useMemo(() => {
+    if (t.id !== "school") return t.name;
+    if (!school) return t.name;
+    const short = schoolShortName(school);
+    return short ? `${short}小学` : t.name;
+  }, [t.id, t.name, school]);
   // v0.31.16：Hero 背景框 / 文字色跟着佩戴的勋章走（用户切徽章 → 框换色）。
   // rating.tier 仍然决定显示的段位文字（左下"再得 X 升 ★II" / 右下"锦江区 I"），
   // 这是真实段位进度，不被佩戴影响。
@@ -244,7 +255,8 @@ export function TierCard({
           </div>
           <div className="text-center">
             <div className={`text-sm sm:text-base font-display font-bold ${theme.textColor} leading-tight`}>
-              {t.name}
+              {/* v0.34.82 iter 16: school 段位用同学自己学校短名替代 "和平街小学" */}
+              {dynamicTierName}
               <span className="ml-1 text-xs">{rating.subRankRoman}</span>
             </div>
           </div>

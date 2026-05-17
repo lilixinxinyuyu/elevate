@@ -10,11 +10,27 @@ import {
 } from "../lib/displayName";
 
 /**
- * 登录成功后拉一次 /api/profile, 把 displayName + birthday 写进 cache。
- * 不阻塞 UI; 失败静默 (兜底会用 userId 首字母大写).
+ * 登录成功后拉一次 /api/profile, 把 displayName + birthday 写进 cache + 同步
+ * db.students[0].name (修 "你好 Selena" 在 bruce 页面也显示).
  *
  * v0.34.70 iter 4: 也 stamp registeredAt (新用户保护期门槛), 写本地一次性.
+ * v0.34.82 iter 16: 加 db.students.name 同步 — seed.ts 永远 hardcode "Selena",
+ * 不刷新的话 bruce 看到自己页面"你好 Selena" 很尴尬.
  */
+async function syncDbStudentName(displayName: string): Promise<void> {
+  try {
+    const { db } = await import("../db/dexie");
+    const students = await db.students.toArray();
+    if (students.length === 0) return;
+    const s = students[0]!;
+    if (s.name === displayName) return; // 没变
+    await db.students.put({ ...s, name: displayName, updatedAt: Date.now() });
+    console.log(`[AuthGate] db.students.name "${s.name}" → "${displayName}"`);
+  } catch (e) {
+    console.warn("[AuthGate] syncDbStudentName failed:", (e as Error).message);
+  }
+}
+
 async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
   // 第一次访问 → stamp registeredAt (用于 trophy 新用户保护期)
   getRegisteredAt();
@@ -29,6 +45,7 @@ async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
     };
     if (j?.ok && j.profile?.displayName) {
       cacheDisplayName(j.profile.displayName);
+      void syncDbStudentName(j.profile.displayName); // 修 "你好 Selena" 显示问题
     }
     if (j?.ok && j.profile?.birthday) {
       setStoredBirthday(j.profile.birthday);

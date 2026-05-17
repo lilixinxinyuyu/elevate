@@ -34,6 +34,7 @@ import {
   subRankRoman,
   subRankStars,
   subTierLabel,
+  subTierLabelDynamic,
   subTierBounds,
   SUB_TIER_NAMES,
   TIER_PREFIXES,
@@ -128,6 +129,9 @@ export function computeRating(
   mastery: MasteryScore[],
   _now: number = Date.now(),
   term: Term | null = null,
+  // v0.34.82 iter 16: 同学学校名 (来自 profile.school), 用于动态 tier prefix
+  // 替代 hardcoded "和平街". null/未填 → fallback 老前缀.
+  schoolName: string | null = null,
 ): RatingResult {
   const filteredAttempts = term ? filterByTerm(attempts, term) : attempts;
   const filteredMastery = term ? filterByTerm(mastery, term) : mastery;
@@ -160,17 +164,17 @@ export function computeRating(
   const sub = subRank(score, tier);
   const bounds = subTierBounds(score, tier, sub);
   const deltaToNextSubRank = Math.max(0, Math.ceil(bounds.hi - score));
-  const curSubTierLabel = subTierLabel(tier, sub);
+  const curSubTierLabel = subTierLabelDynamic(tier, sub, schoolName);
   // 下一个小段位称号：
   //   - sub 1-4：同段位下一档（"锦江数学小达人"）
   //   - sub 5（已 V，本段顶）：跨大段，下一段第 1 档（"成都数学爱好者"）
   //   - 全国 V：null（已封顶）
   const nextSubTierLabel: string | null = (() => {
     if (sub < SUB_TIER_NAMES.length) {
-      return subTierLabel(tier, sub + 1);
+      return subTierLabelDynamic(tier, sub + 1, schoolName);
     }
     if (next) {
-      return `${TIER_PREFIXES[next.id] ?? ""}${SUB_TIER_NAMES[0]}`;
+      return subTierLabelDynamic(next, 1, schoolName);
     }
     return null;
   })();

@@ -275,6 +275,47 @@ export function subTierLabel(tier: Tier, sub: number): string {
 }
 
 /**
+ * v0.34.82 iter 16: 动态版 subTierLabel — school 段位用同学自己学校的短前缀,
+ * 而不是写死的 "和平街" (Selena 母校). 解决"和平街数学爱好者" 对 bruce 同学
+ * 显示尴尬.
+ *
+ * 规则:
+ *   - tier.id === "school" 时, 用 schoolShortName(profile.school) 替 "和平街"
+ *   - 其他段位 (district/city/province/country) 保持地理通用前缀
+ *   - profile.school 没填 / 跟 Selena 一样 → fallback 老前缀 "和平街"
+ */
+export function subTierLabelDynamic(tier: Tier, sub: number, schoolName: string | null): string {
+  let prefix = TIER_PREFIXES[tier.id] ?? "";
+  if (tier.id === "school" && schoolName) {
+    prefix = schoolShortName(schoolName) ?? prefix;
+  }
+  const idx = Math.max(1, Math.min(SUB_TIER_NAMES.length, sub)) - 1;
+  return `${prefix}${SUB_TIER_NAMES[idx]}`;
+}
+
+/**
+ * 学校短名: 取 4 个字以内的 distinctive 部分.
+ * 例: "成都锦江和平街小学" → "和平街"
+ *     "成都市外国语实验小学" → "外国语" (剥 城/市/区/学校 通用前后缀)
+ *     "实验小学" → "实验"
+ */
+export function schoolShortName(full: string): string | null {
+  if (!full || typeof full !== "string") return null;
+  let s = full.trim();
+  // 剥常见前缀 (城市名等), 假设最多前 4 字符
+  s = s.replace(/^(成都市?|北京市?|上海市?|广州市?|深圳市?|武汉市?|杭州市?|西安市?|南京市?|重庆市?|天津市?|苏州市?|青岛市?)/, "");
+  // 剥常见后缀
+  s = s.replace(/(小学|实验小学|附小|附属小学|国际小学|外国语小学)$/, "");
+  // 剥区/县
+  s = s.replace(/(锦江区?|金牛区?|武侯区?|高新区?)/, "");
+  s = s.trim();
+  if (!s) return null;
+  // 截 4 个字内 (太长 prefix 会让段位名超长)
+  if (s.length > 4) s = s.slice(0, 4);
+  return s;
+}
+
+/**
  * v0.31.50: 当前小段位的 XP 边界 — 给"短进度条"用。
  * 返回当前小段位的 [lo, hi)、已进入 into，和单段宽度 size。
  *

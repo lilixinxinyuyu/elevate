@@ -1237,6 +1237,124 @@ superAdmin.post("/users", async (c) => {
     newPassword: r.password,
     loginUrl: `https://${body.userId}.xiaojin.app`,
     fallbackUrl: "https://xiaojin.app",
+    nextStep: `重要: 跑 \`cd aliyun-deploy && node scripts/_copy-trophy-images-to-cadet.mjs ${body.userId}\` 给新同学复制 204 张 trophy-images, 否则徽章柜空白 (爸爸 iter 16 反馈).`,
+  });
+});
+
+/**
+ * v0.34.82 iter 16: 批量 OSS-to-OSS 复制 trophy-images 给新同学.
+ * 每次最多 batch 个 (默认 8, 不超过 ESA 8 fetch/req 限制),
+ * 调用方需要 poll 重复直到 done=true.
+ *
+ * POST /api/super-admin/users/:userId/seed-trophy-images?cursor=N
+ * → { ok, copied, skipped, total, nextCursor, done }
+ *
+ * 完整 204 张需要 ceil(204/6)=34 次调用 (留 2 个 fetch quota 给 list).
+ * 客户端: 一个 admin 按钮调一次, 显示进度条 + 自动重复直到 done.
+ */
+superAdmin.post("/users/:userId/seed-trophy-images", async (c) => {
+  const targetUserId = c.req.param("userId");
+  if (!targetUserId || !/^[a-zA-Z0-9_-]{1,64}$/.test(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  const cursor = Math.max(0, Number(c.req.query("cursor") ?? "0"));
+  const batch = Math.max(1, Math.min(6, Number(c.req.query("batch") ?? "6")));
+
+  // List selena's trophy images (cached in mem might be ideal, but for ESA isolate just re-list).
+  // Use existing OSS REST list helper via inline minimal OSS list.
+  const srcPrefix = "users/selena/trophy-images/";
+  const dstPrefix = `users/${targetUserId}/trophy-images/`;
+
+  // Minimal OSS list helper (HMAC-SHA1, list-v2). max-keys=1000.
+  const date = new Date().toUTCString();
+  const stringToSign = ["GET", "", "", date, `/${cfg.bucket}/`].join("\n");
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", enc.encode(cfg.accessKeySecret),
+    { name: "HMAC", hash: "SHA-1" }, false, ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(stringToSign));
+  let bin = "";
+  const bytes = new Uint8Array(sigBuf);
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  const sig = btoa(bin);
+  const host = `${cfg.bucket}.${cfg.region}.aliyuncs.com`;
+  const listUrl = `https://${host}/?list-type=2&prefix=${encodeURIComponent(srcPrefix)}&max-keys=1000`;
+  let allKeys: string[] = [];
+  try {
+    const r = await fetch(listUrl, {
+      method: "GET",
+      headers: { Host: host, Date: date, Authorization: `OSS ${cfg.accessKeyId}:${sig}` },
+    });
+    if (!r.ok) return c.json({ ok: false, error: `list_failed_${r.status}` }, 502);
+    const xml = await r.text();
+    for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) {
+      const k = m[1] ?? "";
+      if (k.endsWith(".json")) allKeys.push(k);
+    }
+  } catch (e) {
+    return c.json({ ok: false, error: "list_threw: " + (e as Error).message }, 502);
+  }
+
+  const total = allKeys.length;
+  const slice = allKeys.slice(cursor, cursor + batch);
+  const nextCursor = cursor + slice.length;
+  const done = nextCursor >= total;
+
+  // OSS copy 单文件: PUT /{dst} with x-oss-copy-source: /bucket/{srcKey}
+  let copied = 0, skipped = 0, failed = 0;
+  const copyResults = await Promise.allSettled(
+    slice.map(async (srcKey) => {
+      const filename = srcKey.slice(srcPrefix.length);
+      const dstKey = dstPrefix + filename;
+      const copyDate = new Date().toUTCString();
+      const stringToSignCopy = [
+        "PUT", "", "application/json; charset=utf-8", copyDate,
+        `x-oss-copy-source:/${cfg.bucket}/${srcKey}`,
+        `/${cfg.bucket}/${dstKey}`,
+      ].join("\n");
+      const cryptoKey2 = await crypto.subtle.importKey(
+        "raw", enc.encode(cfg.accessKeySecret),
+        { name: "HMAC", hash: "SHA-1" }, false, ["sign"],
+      );
+      const sigBuf2 = await crypto.subtle.sign("HMAC", cryptoKey2, enc.encode(stringToSignCopy));
+      let bin2 = "";
+      const bytes2 = new Uint8Array(sigBuf2);
+      for (let i = 0; i < bytes2.length; i++) bin2 += String.fromCharCode(bytes2[i]!);
+      const sig2 = btoa(bin2);
+      const dstUrl = `https://${host}/${encodeURIComponent(dstKey)}`;
+      const r = await fetch(dstUrl, {
+        method: "PUT",
+        headers: {
+          Host: host,
+          Date: copyDate,
+          "Content-Type": "application/json; charset=utf-8",
+          "x-oss-copy-source": `/${cfg.bucket}/${srcKey}`,
+          Authorization: `OSS ${cfg.accessKeyId}:${sig2}`,
+        },
+      });
+      return { srcKey, status: r.status, ok: r.ok };
+    }),
+  );
+  for (const r of copyResults) {
+    if (r.status === "fulfilled" && r.value.ok) copied++;
+    else failed++;
+  }
+
+  return c.json({
+    ok: true,
+    targetUserId,
+    cursor,
+    batch: slice.length,
+    nextCursor,
+    total,
+    copied,
+    skipped,
+    failed,
+    done,
   });
 });
 

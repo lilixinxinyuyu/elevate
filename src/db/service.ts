@@ -584,7 +584,9 @@ export async function computeCurrentRating(
 ) {
   const attempts = await db.attempts.where({ studentId }).toArray();
   const mastery = await db.mastery.where({ studentId }).toArray();
-  return computeRating(attempts, mastery, Date.now(), term);
+  // v0.34.82 iter 16: 从 LS 读 profile.school, 给 subTierLabel 动态前缀
+  const schoolName = typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.school") : null;
+  return computeRating(attempts, mastery, Date.now(), term, schoolName);
 }
 
 /** 已解锁的段位列表（每学期独立） */
@@ -955,7 +957,8 @@ export async function finalizeSession(
     "下册";
 
   const prevRating = await getCachedRating(studentId, term);
-  const rating = computeRating(allAttempts, mastery, Date.now(), term);
+  const schoolName = typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.school") : null;
+  const rating = computeRating(allAttempts, mastery, Date.now(), term, schoolName);
   await db.meta.put({
     key: termKey("rating", studentId, term),
     value: {
