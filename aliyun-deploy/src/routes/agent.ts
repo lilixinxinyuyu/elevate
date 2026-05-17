@@ -341,7 +341,155 @@ agent.post("/judge-questions", async (c) => {
   );
 });
 
-// fall-through to proxy fallback (CF Pages) for everything else (/fix-question etc.)
+/**
+ * POST /api/agent/fix-question — Ep43 native impl
+ *
+ * 修一道题: client 传入 question + issues + reason, LLM 输出修后题 + summary.
+ * 跟 admin.ts /report/:id/fix 区别：那个是从 OSS report 记录上修；这里是
+ * client 直接传问题进来修。
+ *
+ * vs CF Pages 260 行原版差异：
+ * - prompt 简化 inline，不用 composer / PROMPTS.fixSystem subject-aware 模板
+ * - 单批单 LLM call，qwen3.6-flash 主 + qwen3.6-plus fallback
+ * - 9s timeout per call (ESA 11s 硬限留 2s)
+ * - carry-forward 不可变字段 (question_id 等) 防 LLM 改飘
+ * - 自动加 ai_fixed tag
+ */
+interface FixReq {
+  question?: Record<string, unknown>;
+  issues?: string[];
+  reason?: string;
+  subjectId?: "math" | "chinese";
+}
+
+const FIX_SYSTEM_TPL = (subj: string) => `你是 Selena 题库的资深修题员。给你一道**已经入库但有问题的**${subj}题，以及质检员或用户标注的问题（issues + reason）。请把题改好，**不是重出**。
+
+# 任务边界
+- question_id / subjectId / version / grade / term / unit_id / skill_id 等元数据**不能改**
+- 最小改动原则：能改一句解决就别重写整道
+- 数学闭合: 实物=整数, 钱=2 位小数, 答案算得通
+- distractor 区分度: 错误选项必须源自学生具体误解（不是随机数字）
+
+# 输出协议
+返回 JSON: { "fixed": <整道题 JSON>, "changesSummary": "改了什么的中文一句话（≤ 40 字）" }
+不要 markdown 代码块，不要解释文字。`;
+
+const AGENT_FIX_TIMEOUT_MS = 9_000;
+
+agent.post("/fix-question", async (c) => {
+  const providers = getChatProviders(c.env);
+  if (providers.length === 0) {
+    return c.json({ ok: false, error: "no_llm_api_key" }, 503);
+  }
+  let body: FixReq;
+  try {
+    body = await c.req.json<FixReq>();
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  if (!body.question || typeof body.question !== "object") {
+    return c.json({ ok: false, error: "missing_question" }, 400);
+  }
+  const subjectId = body.subjectId === "chinese" ? "chinese" : "math";
+  const subjLabel = subjectId === "chinese" ? "语文" : "数学";
+  const sys = FIX_SYSTEM_TPL(subjLabel);
+  const issues = Array.isArray(body.issues) ? body.issues : [];
+  const reason = body.reason ?? "";
+  const usr = `# 报告问题
+issues: ${issues.length ? issues.join(", ") : "(无标签)"}
+reason: ${reason || "(无补充)"}
+
+# 原题 JSON
+\`\`\`json
+${JSON.stringify(body.question, null, 2)}
+\`\`\`
+
+按 system 要求修。输出 JSON。`;
+
+  const errors: { provider: string; model: string; code: string; message: string }[] = [];
+  for (const p of providers) {
+    const models = getChatModels(p).filter((m) => /^qwen3/i.test(m)).slice(0, 2);
+    for (const model of models) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), AGENT_FIX_TIMEOUT_MS);
+      try {
+        const resp = await fetch(`${p.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${p.apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
+            temperature: 0.4,
+            max_tokens: 2500,
+            response_format: { type: "json_object" },
+            enable_thinking: false,
+          }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        const j = (await resp.json().catch(() => null)) as
+          | { choices?: { message?: { content?: string } }[]; error?: { code?: string; message?: string } }
+          | null;
+        if (!resp.ok || !j || j.error) {
+          errors.push({
+            provider: p.label, model,
+            code: j?.error?.code ?? `http_${resp.status}`,
+            message: j?.error?.message ?? "",
+          });
+          if (j?.error?.code === "InvalidApiKey" || j?.error?.code === "AccessDenied") break;
+          continue;
+        }
+        const text = j.choices?.[0]?.message?.content?.trim();
+        if (!text) {
+          errors.push({ provider: p.label, model, code: "empty_response", message: "" });
+          continue;
+        }
+        const parsed = extractJsonObject(text) as { fixed?: Record<string, unknown>; changesSummary?: string } | null;
+        if (!parsed?.fixed || typeof parsed.fixed !== "object") {
+          errors.push({ provider: p.label, model, code: "bad_format", message: text.slice(0, 120) });
+          continue;
+        }
+        // carry-forward immutable fields
+        const carryFields = ["question_id","subjectId","version","grade","term","unit_id","unit_name","skill_id","skill_name"];
+        const fixed = { ...parsed.fixed };
+        for (const f of carryFields) {
+          if ((body.question as Record<string, unknown>)[f] !== undefined) {
+            fixed[f] = (body.question as Record<string, unknown>)[f];
+          }
+        }
+        // ai_fixed tag merge
+        const origTags = ((body.question as { tags?: string[] }).tags ?? []) as string[];
+        const fixedTags = ((fixed as { tags?: string[] }).tags ?? []) as string[];
+        fixed.tags = Array.from(new Set([...origTags, ...fixedTags, "ai_fixed"]));
+        return c.json({
+          ok: true,
+          fixed,
+          changesSummary: parsed.changesSummary ?? "AI 修改",
+          model,
+          provider: p.label,
+          subjectId,
+        });
+      } catch (e) {
+        clearTimeout(timer);
+        const isAbort = (e as Error)?.name === "AbortError";
+        errors.push({
+          provider: p.label, model,
+          code: isAbort ? "timeout" : "fetch_error",
+          message: e instanceof Error ? e.message : String(e),
+        });
+        if (isAbort) break;
+      }
+    }
+  }
+  return c.json({
+    ok: false,
+    error: "all_providers_failed",
+    detail: errors.map((t) => `${t.provider}:${t.model}:${t.code}`).join(" | "),
+    tried: errors,
+  }, 502);
+});
+
+// fall-through to proxy fallback for any remaining /api/agent/* sub-paths (none known)
 agent.all("*", async (c) => {
   const { default: proxyFallback } = await import("./proxy-fallback");
   return proxyFallback.fetch(c.req.raw, c.env);

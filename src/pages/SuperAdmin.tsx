@@ -1153,10 +1153,11 @@ export function SuperAdminPage() {
               </div>
               <div className="space-y-1">
                 {[
-                  { path: "/api/agent/*", note: "judge-questions / fix-question — admin AI 流" },
-                  { path: "/api/generate/questions", note: "AI 出题 — train 流" },
-                  { path: "/api/tutor/voice", note: "tutor 语音判答" },
-                  { path: "/api/tutor/judge-handwriting", note: "tutor 手写判答" },
+                  // Ep34 judge-questions native, Ep43 fix-question native → /api/agent/* 全部 native
+                  // Ep36 generate/questions native
+                  // 剩 2 条都是 async-required vision (Ep37 diagnostic 确证 ESA 11s 不能跑单 LLM call)
+                  { path: "/api/tutor/voice", note: "tutor 语音判答 — 需 async vision pattern" },
+                  { path: "/api/tutor/judge-handwriting", note: "tutor 手写判答 — 需 async vision pattern" },
                 ].map((r) => (
                   <div
                     key={r.path}
