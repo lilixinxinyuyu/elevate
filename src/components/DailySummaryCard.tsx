@@ -25,6 +25,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { toPng } from "html-to-image";
 import { db } from "../db/dexie";
 import { SKILLS } from "../content/skills";
+import { UNITS } from "../content/units";
 import { G4A_CHARS, G4B_CHARS, G4_CHARS_ALL } from "../subjects/chinese/charLibrary";
 import { loadDailyLog } from "../lib/dailyActivityLog";
 import { getFragileSkillsToReview } from "../db/service";
@@ -191,27 +192,57 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
 
   // 爸爸 2026-05-17 报告重构：数学累计掌握 % = score ≥ 75 的 skill / 总 skill。
   // 跟学期 expected 进度比，超前/落后可视化。
+  // Phase 2：同步算出"未掌握的 unit 列表" — 每 unit 看里头 skill 多少已 ≥75 分。
   const mathCumulative = useLiveQuery(async () => {
     const totalSkills = SKILLS.length;
-    if (totalSkills === 0) return { mastered: 0, total: 0, pct: 0 };
-    let mastered = 0;
+    if (totalSkills === 0) {
+      return { mastered: 0, total: 0, pct: 0, unmasteredUnits: [] };
+    }
+    // 拉 mastery 表 → skillId → score map
+    const scoreBySkill = new Map<string, number>();
     try {
       const rows = await db.mastery
         .where("studentId")
         .equals(studentId)
         .filter((m) => (m.subjectId ?? "math") === "math")
         .toArray();
-      const seen = new Set<string>();
       for (const r of rows) {
-        if (seen.has(r.skillId)) continue;
-        seen.add(r.skillId);
-        if ((r.score ?? 0) >= 75) mastered++;
+        const cur = scoreBySkill.get(r.skillId) ?? 0;
+        if ((r.score ?? 0) > cur) scoreBySkill.set(r.skillId, r.score ?? 0);
       }
     } catch {
       /* */
     }
-    return { mastered, total: totalSkills, pct: mastered / totalSkills };
-  }, [studentId, currentDateKey]);
+    let mastered = 0;
+    for (const s of SKILLS) {
+      if ((scoreBySkill.get(s.id) ?? 0) >= 75) mastered++;
+    }
+    // 按 unit 分组 → 看本 unit 多少 skill ≥ 75
+    const byUnit = new Map<string, { total: number; mastered: number }>();
+    for (const s of SKILLS) {
+      const cur = byUnit.get(s.unitId) ?? { total: 0, mastered: 0 };
+      cur.total += 1;
+      if ((scoreBySkill.get(s.id) ?? 0) >= 75) cur.mastered += 1;
+      byUnit.set(s.unitId, cur);
+    }
+    // 当前学期的 unit only；未 100% 掌握的列出，按 mastered/total ratio 升序（最薄弱前置）
+    const semesterTerm = currentTerm; // 来自外面闭包：上册 / 下册 / 综合复习
+    const unmasteredUnits: Array<{ unitId: string; name: string; mastered: number; total: number; pct: number }> = [];
+    for (const u of UNITS) {
+      if (semesterTerm !== "综合复习" && u.term !== semesterTerm) continue;
+      const stat = byUnit.get(u.id) ?? { total: 0, mastered: 0 };
+      if (stat.total === 0 || stat.mastered >= stat.total) continue;
+      unmasteredUnits.push({
+        unitId: u.id,
+        name: u.name,
+        mastered: stat.mastered,
+        total: stat.total,
+        pct: stat.mastered / stat.total,
+      });
+    }
+    unmasteredUnits.sort((a, b) => a.pct - b.pct);
+    return { mastered, total: totalSkills, pct: mastered / totalSkills, unmasteredUnits };
+  }, [studentId, currentDateKey, currentTerm]);
 
   // 中文/英文：daily log（含 wrongItems）
   // v0.32.25: 显式传 currentDateKey，跨天后自动拉今天的 key（通常空 → 今日列表清空）
@@ -415,14 +446,72 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           </div>
         )}
 
-        {/* 爸爸 2026-05-17：数学累计掌握学期进度条 + expected-by-now 标线 */}
-        {mathCumulative && (
-          <ExpectedBar
-            actual={mathCumulative.pct}
-            expected={expectedProgress(currentTerm)}
-            label={`📐 数学学期进度 · 掌握 ${mathCumulative.mastered}/${mathCumulative.total} skill (≥75 分)`}
-            detail={`${currentTerm}`}
-          />
+        {/* 爸爸 2026-05-17 Phase 2：3 学科累计掌握学期进度条同列 + expected 标线 */}
+        {(mathCumulative || chineseStats || englishStats) && (
+          <section className="space-y-2">
+            <SectionTitle icon="🎯" title={`学期累计进度（${currentTerm}）`} />
+            <div className="rounded-xl border border-violet-400/20 bg-slate-900/30 px-3 py-2.5 space-y-3">
+              {mathCumulative && (
+                <ExpectedBar
+                  actual={mathCumulative.pct}
+                  expected={expectedProgress(currentTerm)}
+                  label={`📐 数学 · 掌握 ${mathCumulative.mastered}/${mathCumulative.total} skill (≥75 分)`}
+                />
+              )}
+              {chineseStats && chineseStats.total > 0 && (
+                <ExpectedBar
+                  actual={chineseStats.mastered / chineseStats.total}
+                  expected={expectedProgress(currentTerm)}
+                  label={`📚 语文 · 掌握 ${chineseStats.mastered}/${chineseStats.total} 字 (level≥3)`}
+                />
+              )}
+              {englishStats && englishStats.total > 0 && (
+                <ExpectedBar
+                  actual={englishStats.mastered / englishStats.total}
+                  expected={expectedProgress(currentTerm)}
+                  label={`🔤 英语 · 掌握 ${englishStats.mastered}/${englishStats.total} 词 (level≥3)`}
+                />
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* 爸爸 2026-05-17 Phase 2：未掌握 unit 列表（按本学期 + 薄弱度排序） */}
+        {mathCumulative && mathCumulative.unmasteredUnits.length > 0 && (
+          <section className="space-y-2">
+            <SectionTitle
+              icon="📐"
+              title={`数学未掌握单元（${mathCumulative.unmasteredUnits.length} 个）`}
+            />
+            <div className="rounded-xl border border-amber-400/25 bg-amber-500/8 px-3 py-2 space-y-1.5">
+              {mathCumulative.unmasteredUnits.slice(0, 8).map((u) => {
+                const pct = Math.round(u.pct * 100);
+                const tone =
+                  u.pct < 0.25
+                    ? "bg-rose-500/20 border-rose-400/30 text-rose-100"
+                    : u.pct < 0.5
+                      ? "bg-amber-500/20 border-amber-400/30 text-amber-100"
+                      : "bg-emerald-500/15 border-emerald-400/25 text-emerald-100";
+                return (
+                  <a
+                    key={u.unitId}
+                    href={`/math/train?unitId=${encodeURIComponent(u.unitId)}`}
+                    className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border text-[12px] ${tone} hover:brightness-125 transition-all`}
+                  >
+                    <span className="truncate">{u.name}</span>
+                    <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
+                      {u.mastered}/{u.total} · {pct}%
+                    </span>
+                  </a>
+                );
+              })}
+              {mathCumulative.unmasteredUnits.length > 8 && (
+                <div className="text-[10px] text-amber-200/60 text-center pt-0.5">
+                  …还有 {mathCumulative.unmasteredUnits.length - 8} 个单元
+                </div>
+              )}
+            </div>
+          </section>
         )}
 
         {/* 三学科 mini stats grid */}
