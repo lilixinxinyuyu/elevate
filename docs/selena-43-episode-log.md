@@ -353,4 +353,32 @@
 
 **最终**: 314/316 pass, v0.35.1 ship (commit 1312764, push main)
 
+#### Iter 36 进展 (v0.35.1 → v0.35.2) P1-1 改错挑战 (原 DebuggerMode 重命名)
+
+**爸爸要求**:
+- 改名 "DebuggerMode" → "改错挑战" (避免 classifier 误判"安全/漏洞"语义, 跟小学数学课本"改错题"对齐)
+- 之后 docs / commits 不再点名 review 模型 — 用 "评审 A / B" 或 "外部审核"
+
+**预审** 共识 (两位外部评审):
+- v1 只做题型 A (竖式) + C (单位换算 fixed pool), 跳过 B 应用题 (判定歧义大)
+- 5 题/session 合适, 不要拉到 10
+- 不要倒扣 XP (rage-quit 风险) — 改递减奖励 +15 → +10 → +5, 错完 0
+- 程序 + 定向突变生成 bug, 不要 LLM 实时
+- 独立 mini-game, 不污染 mastery/streak, 但 XP 计入 daily target
+- 命中后必须"划掉错的 + 绿字标正解 + 解释" 反馈闭环
+- "找第一处错" 规则明确, UI 文案统一
+
+**实现**:
+- NEW `src/core/mistakeHuntPolicy.ts` 280 行: BugType / BugCard / genVerticalBug (3 突变类型: carry_missed / sum_wrong / partial_product_shift) / genUnitConversionBug (10 题 fixed pool: 千克/克 千米/米 米/厘米 元/角 小时/分钟 分钟/秒 升/毫升 吨/千克 厘米/毫米 天/小时) / generateSession (5 题 = 3 vertical + 2 unit) / calcXp (递减不倒扣)
+- NEW `src/pages/MistakeHunt.tsx` 200 行: 5 题 session 主页面, 卡片可点行 + 命中反馈 (绿色 line-through + explanation) + 提示按钮 + 跳过按钮 + 总结页 (re-do session)
+- NEW `tests/mistakeHuntPolicy.test.ts` 11 tests 全过
+- 改 `src/lib/featureFlags.ts` isMistakeHuntV1
+- 改 `src/router.tsx` /math/find-mistakes lazy 路由
+- 改 `src/pages/Home.tsx` 加 "🛠️ 改错挑战" 入口 button (cyan 渐变, 跟 "巧算工具箱" 并排)
+
+**测试**: 11/11 mistake hunt + 314+ 全套
+**Typecheck**: clean
+**Build**: 进行中
+**Deploy**: 待 build
+
 

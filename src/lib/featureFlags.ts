@@ -178,6 +178,21 @@ export function isMultiStepAppV1(): boolean {
   }
 }
 
+/**
+ * v0.35.2 (iter 36 P1-1): 改错挑战 mini-game.
+ * 见 src/core/mistakeHuntPolicy.ts
+ */
+const MISTAKE_HUNT_LS_KEY = "mistake_hunt_v1";
+
+export function isMistakeHuntV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(MISTAKE_HUNT_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function isEstimationGateV1(): boolean {
   if (typeof window === "undefined") return true;
   if (!_estGateSynced) {

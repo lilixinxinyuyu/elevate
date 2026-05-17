@@ -664,6 +664,17 @@ export function HomePage() {
             凑整 / 借十 / 折半 · 8 个秘技
           </div>
         </Link>
+        {/* v0.35.2 iter 36: 改错挑战 mini-game */}
+        <Link
+          to="/math/find-mistakes"
+          className="card-glow hover:scale-[1.02] transition-transform border-cyan-400/30 bg-gradient-to-br from-cyan-500/20 via-teal-500/15 to-emerald-500/10"
+        >
+          <div className="text-2xl">🛠️</div>
+          <div className="font-display font-bold mt-1.5 text-sm text-cyan-100">改错挑战</div>
+          <div className="text-[11px] text-cyan-200/80 mt-0.5">
+            当小老师 · 5 道题找出错的那一步
+          </div>
+        </Link>
       </div>
 
       {/* ROI #2：每周一次的考试模拟 */}
