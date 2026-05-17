@@ -165,8 +165,8 @@ export function MistakesPage() {
                   <span>
                     {unit?.term} · {unit?.name} · {skill?.name}
                   </span>
-                  <span>
-                    阶段 {m.stage} · 下次 {new Date(m.nextReviewAt).toLocaleDateString("zh-CN")}
+                  <span className={srStageLabel(m.stage).tone}>
+                    {srStageLabel(m.stage).text} · 下次 {new Date(m.nextReviewAt).toLocaleDateString("zh-CN")}
                   </span>
                 </div>
                 <div className="text-sm leading-relaxed text-slate-100">
@@ -174,9 +174,13 @@ export function MistakesPage() {
                 </div>
                 {last && q && (
                   <div className="mt-2 text-xs">
-                    <span className="text-rose-300">我的答案：{displayUserAnswer(last.answer)}</span>
+                    <span className="text-rose-300">我的答案：{displayUserAnswer(last.answer, q)}</span>
                     <span className="mx-2 text-slate-500">·</span>
                     <span className="text-emerald-300">正确答案：{displayAnswer(q)}</span>
+                    {/* Ep 爸爸-2026-05-17 Q3: 如果显示值相同, 标个 ✓ 帮老师/家长一眼看到 */}
+                    {displayUserAnswer(last.answer, q) === displayAnswer(q) && (
+                      <span className="ml-2 text-emerald-400 font-bold" title="最近一次答对了，间隔重复中">✓ 最近答对</span>
+                    )}
                   </div>
                 )}
                 {q && (
@@ -187,7 +191,7 @@ export function MistakesPage() {
                         setTutorFor({
                           stem: q.stem,
                           correctAnswer: displayAnswer(q),
-                          studentAnswer: last ? displayUserAnswer(last.answer) : "",
+                          studentAnswer: last ? displayUserAnswer(last.answer, q) : "",
                           skillName: skill?.name ?? q.skill_id,
                           skillId: q.skill_id,
                           questionId: q.question_id,
@@ -223,16 +227,33 @@ export function MistakesPage() {
   );
 }
 
-function displayUserAnswer(a: unknown): string {
+/**
+ * 爸爸 2026-05-17 Q3 修：display 不对称导致 "我的:199.5 · 正确:199.5千克"
+ * 视觉像不同其实相同。修法：拿到 question 后, user_answer 也加同样的 unit
+ * (number 题), 让两边格式一致；choice 题 user_answer 已是 option id 自然对齐。
+ *
+ * 还做了一件: array answer (选 D 但被记成 ["D"]) 也优雅 unwrap.
+ */
+function displayUserAnswer(a: unknown, q?: Question): string {
   if (a == null) return "-";
-  if (typeof a === "string" || typeof a === "number") return String(a);
-  if (Array.isArray(a)) return a.map((x) => String(x)).join(", ");
+  // 数组 / 对象：unwrap 单元素数组（template 异常常出 ["D"]），其余照旧
+  if (Array.isArray(a)) {
+    if (a.length === 1) return displayUserAnswer(a[0], q);
+    return a.map((x) => String(x)).join(", ");
+  }
   if (typeof a === "object") {
     return Object.entries(a as Record<string, unknown>)
       .map(([k, v]) => `${k}=${v ?? ""}`)
       .join("；");
   }
-  return String(a);
+  const s = typeof a === "string" || typeof a === "number" ? String(a) : String(a);
+  // 数字题加单位让两侧对称（user 输入 "199.5" 显示 "199.5千克"）
+  if (q?.answer.type === "number" && q.answer.unit) {
+    // 已含 unit 不重复加（user 偶尔会带单位输入）
+    if (s.endsWith(q.answer.unit)) return s;
+    return `${s}${q.answer.unit}`;
+  }
+  return s;
 }
 
 function displayAnswer(q: Question): string {
@@ -240,4 +261,18 @@ function displayAnswer(q: Question): string {
   if (a.type === "number") return `${a.value}${a.unit ?? ""}`;
   if (a.type === "choice") return a.value;
   return a.steps.map((s) => `${s.step_id}=${s.expected}`).join("；");
+}
+
+/** Ep 爸爸-2026-05-17：spaced repetition 进度可见，避免"答对了还在错题列表"的疑惑 */
+function srStageLabel(stage: number): { text: string; tone: string } {
+  const TOTAL_STAGES = 5; // REVIEW_INTERVAL_DAYS.length
+  const done = Math.max(0, Math.min(stage, TOTAL_STAGES));
+  const left = TOTAL_STAGES - done;
+  if (left === 0) {
+    return { text: `✓ 已掌握`, tone: "text-emerald-300" };
+  }
+  if (done === 0) {
+    return { text: `🔴 还需答对 ${left} 次`, tone: "text-rose-300" };
+  }
+  return { text: `已对 ${done}/${TOTAL_STAGES} · 再答对 ${left} 次就毕业`, tone: "text-amber-300" };
 }
