@@ -155,6 +155,18 @@ export function SuperAdminPage() {
     };
   } | null>(null);
 
+  // Ep30: backup list + restore 状态
+  const [backupList, setBackupList] = useState<Array<{ backupId: string }> | null>(null);
+  const [backupListBusy, setBackupListBusy] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState<string | null>(null);
+  const [restoreToast, setRestoreToast] = useState<{
+    fromBackupId: string;
+    preBackupId: string;
+    restored: number;
+    errors: number;
+    at: number;
+  } | null>(null);
+
   // Ep14: 🤖 agent summary modal
   interface AgentSummary {
     targetUserId?: string;
@@ -385,9 +397,83 @@ export function SuperAdminPage() {
           at: Date.now(),
         },
       });
+      // Ep30: refresh list to include the new snapshot
+      void loadBackupList();
     } catch (e) {
       setBackupState({ running: false });
       alert(`备份网络错：${(e as Error).message}`);
+    }
+  }
+
+  /** Ep30: 拉最近 20 个 backup snapshot 列表 */
+  async function loadBackupList() {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    setBackupListBusy(true);
+    try {
+      const r = await fetch("/api/super-admin/backup-snapshot", {
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const j = (await r.json().catch(() => null)) as
+        | { ok: boolean; backups?: Array<{ backupId: string }> }
+        | null;
+      setBackupList(j?.backups ?? []);
+    } catch {
+      setBackupList([]);
+    } finally {
+      setBackupListBusy(false);
+    }
+  }
+
+  /**
+   * Ep30: rollback 某个 backup 到主路径。
+   * 服务端会先做一次「pre-restore-of-{id}」snapshot 保当前状态，
+   * 然后 ossCopy 把 backup 覆盖到 _auth/_index 主路径。
+   */
+  async function runRestoreSnapshot(backupId: string) {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    const ok = window.confirm(
+      `回滚到 backup ${backupId}？\n\n` +
+        `会先给当前 _auth + _index 状态再打一个 "pre-restore-of-${backupId}" 命名快照，\n` +
+        `然后把 backup 内容覆盖到主路径。\n\n` +
+        `操作后所有同学的密码 / 用户索引会变为 ${backupId} 那一刻的状态。`,
+    );
+    if (!ok) return;
+    setRestoreBusy(backupId);
+    try {
+      const r = await fetch(
+        `/api/super-admin/backup-snapshot/${encodeURIComponent(backupId)}/restore`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${pwd}`,
+          },
+          body: "{}",
+        },
+      );
+      const j = (await r.json().catch(() => null)) as
+        | { ok: boolean; preRestoreBackupId?: string; restored?: unknown[]; restoreErrors?: unknown[] }
+        | null;
+      if (!r.ok || !j?.ok) {
+        alert(`回滚失败：${j?.restoreErrors?.length ?? "?"} 错误`);
+        setRestoreBusy(null);
+        return;
+      }
+      setRestoreToast({
+        fromBackupId: backupId,
+        preBackupId: j.preRestoreBackupId ?? "?",
+        restored: j.restored?.length ?? 0,
+        errors: j.restoreErrors?.length ?? 0,
+        at: Date.now(),
+      });
+      // 刷新列表（pre-restore-of-* 会以新 id 出现）
+      await loadBackupList();
+    } catch (e) {
+      alert(`回滚网络错：${(e as Error).message}`);
+    } finally {
+      setRestoreBusy(null);
     }
   }
 
@@ -719,10 +805,81 @@ export function SuperAdminPage() {
           </button>
         </div>
 
-        <div className="text-[11px] text-[#7d8187] mb-6 leading-relaxed max-w-3xl">
+        <div className="text-[11px] text-[#7d8187] mb-3 leading-relaxed max-w-3xl">
           Fleet overview. Edit profiles · reset passwords · view stats · pull AI briefings.
           Bulk actions run sequentially to respect upstream rate limits.
         </div>
+
+        {/* Ep30: Recent backup snapshots panel (collapsible, hairline) */}
+        <details
+          className="mb-4 rounded-lg bg-[#1a1c20] border border-[#212327]"
+          onToggle={(e) => {
+            if ((e.target as HTMLDetailsElement).open && !backupList && !backupListBusy) {
+              void loadBackupList();
+            }
+          }}
+        >
+          <summary className="cursor-pointer px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] hover:text-white select-none flex items-center gap-2">
+            <span>⟁ recent snapshots</span>
+            <span className="text-[#363a3f]">·</span>
+            <span className="text-[#7d8187]">
+              {backupListBusy ? "loading…" : backupList ? `${backupList.length}` : "click to load"}
+            </span>
+          </summary>
+          <div className="px-4 pb-3 pt-1">
+            {backupList && backupList.length === 0 && (
+              <div className="text-[11px] text-[#7d8187] py-2">
+                no snapshots yet · click "⟁ Snapshot global mappings" above to create one
+              </div>
+            )}
+            {backupList && backupList.length > 0 && (
+              <div className="space-y-1 max-h-[260px] overflow-y-auto">
+                {backupList.map((b) => {
+                  const isPre = b.backupId.includes("pre-restore-of-");
+                  return (
+                    <div
+                      key={b.backupId}
+                      className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md bg-[#0a0a0a] border border-[#212327]"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono text-[10px] uppercase tracking-wider text-white truncate">
+                          {b.backupId}
+                        </span>
+                        {isPre && (
+                          <span className="text-[9px] font-mono uppercase tracking-wider text-[#c4b5fd] flex-shrink-0">
+                            ⟁ pre-restore
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => runRestoreSnapshot(b.backupId)}
+                        disabled={restoreBusy !== null}
+                        className="flex-shrink-0 text-[10px] font-mono uppercase tracking-wider rounded-full border border-[#ff7a17]/40 hover:border-[#ff7a17] text-[#ffc285] px-3 py-1 disabled:opacity-30"
+                      >
+                        {restoreBusy === b.backupId ? "restoring…" : "restore"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </details>
+
+        {/* Ep30: restore result toast */}
+        {restoreToast && (
+          <div className="rounded-lg bg-[#1a1c20] border border-[#ff7a17]/40 p-3 mb-3 text-xs text-[#dadbdf]">
+            <div className="font-mono uppercase tracking-wider text-[10px] mb-1 text-[#ffc285]">
+              ⟁ restored · {restoreToast.fromBackupId}
+            </div>
+            <div className="text-[11px] text-[#7d8187]">
+              {restoreToast.restored} files copied{restoreToast.errors > 0 && `, ${restoreToast.errors} errors`}
+              {" · pre-restore safety snapshot: "}
+              <span className="font-mono text-white">{restoreToast.preBackupId}</span>
+            </div>
+          </div>
+        )}
 
         {/* 批量修题结果 toast */}
         {bulkFixState && !bulkFixState.running && (

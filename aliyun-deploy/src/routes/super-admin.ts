@@ -466,6 +466,136 @@ superAdmin.get("/backup-snapshot", async (c) => {
   return c.json({ ok: true, count: backups.length, backups });
 });
 
+/**
+ * GET /api/super-admin/backup-snapshot/:backupId
+ * Get a single snapshot's manifest + file size headers (no body, keep response small).
+ * Used by super-admin UI to "preview" a backup before rollback.
+ */
+const BACKUP_ID_RE = /^\d{4}-\d{2}-\d{2}T\d{6}Z$/;
+
+superAdmin.get("/backup-snapshot/:backupId", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const id = c.req.param("backupId");
+  if (!BACKUP_ID_RE.test(id)) {
+    return c.json({ ok: false, error: "invalid_backupId" }, 400);
+  }
+  const prefix = `_backups/${id}`;
+  const manifest = await ossGet(cfg, `${prefix}/manifest.json`);
+  if (!manifest.ok || !manifest.text) {
+    return c.json({ ok: false, error: "manifest_missing", status: manifest.status }, 404);
+  }
+  let manifestJson: unknown = null;
+  try { manifestJson = JSON.parse(manifest.text); } catch { /* */ }
+
+  // HEAD each backed-up file so we can report size + lastModified without
+  // pulling the full bytes through EdgeRoutine
+  const files: Array<{ key: string; bytes?: number; etag?: string; lastModifiedMs?: number }> = [];
+  for (const src of BACKUP_TARGETS) {
+    const key = `${prefix}/${src}`;
+    const h = await ossHead(cfg, key);
+    files.push({
+      key,
+      bytes: h.contentLength,
+      etag: h.etag,
+      lastModifiedMs: h.lastModifiedMs,
+    });
+  }
+  return c.json({ ok: true, backupId: id, manifest: manifestJson, files });
+});
+
+/**
+ * POST /api/super-admin/backup-snapshot/:backupId/restore
+ *
+ * 安全 rollback：
+ *   1. 先把【当前】_auth + _index 文件再做一次命名 snapshot（前缀 `_backups/{newId}-pre-restore-of-{id}/`）
+ *      —— 万一回滚错版还能再翻回来
+ *   2. 然后 ossCopy 把目标 backupId 的文件覆盖到主路径 (_auth/users.json, _index/users.json)
+ *
+ * Body 可选 `{ files: string[] }` 限定恢复哪些（默认全部 BACKUP_TARGETS）。
+ */
+superAdmin.post("/backup-snapshot/:backupId/restore", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const id = c.req.param("backupId");
+  if (!BACKUP_ID_RE.test(id)) {
+    return c.json({ ok: false, error: "invalid_backupId" }, 400);
+  }
+
+  let body: { files?: string[] } = {};
+  try { body = await c.req.json(); } catch { /* */ }
+  const requested = Array.isArray(body.files) && body.files.length > 0
+    ? body.files.filter((f) => (BACKUP_TARGETS as readonly string[]).includes(f))
+    : [...BACKUP_TARGETS];
+  if (requested.length === 0) {
+    return c.json({ ok: false, error: "no_valid_files_requested" }, 400);
+  }
+
+  // Step 1: 先 backup 当前状态（safety net）
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const preId = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z-pre-restore-of-${id}`;
+  const prePrefix = `_backups/${preId}`;
+  const preBackup: Array<{ src: string; dest: string; versionId?: string }> = [];
+  const preBackupErrors: Array<{ src: string; error: string }> = [];
+  for (const f of requested) {
+    const r = await ossCopy(cfg, f, `${prePrefix}/${f}`);
+    if (!r.ok) preBackupErrors.push({ src: f, error: r.error ?? `oss_${r.status}` });
+    else preBackup.push({ src: f, dest: `${prePrefix}/${f}`, versionId: r.versionId });
+  }
+  if (preBackupErrors.length > 0) {
+    // 安全网失败就拒绝 restore（避免无法回滚）
+    return c.json({
+      ok: false,
+      error: "pre_restore_backup_failed",
+      detail: "current state pre-backup failed; restore aborted to avoid unrecoverable rollback",
+      preBackupErrors,
+    }, 502);
+  }
+
+  // Step 2: ossCopy backup → main
+  const restored: Array<{ file: string; from: string; versionId?: string; etag?: string }> = [];
+  const restoreErrors: Array<{ file: string; error: string }> = [];
+  for (const f of requested) {
+    const src = `_backups/${id}/${f}`;
+    const r = await ossCopy(cfg, src, f);
+    if (!r.ok) {
+      restoreErrors.push({ file: f, error: r.error ?? `oss_${r.status}` });
+      continue;
+    }
+    restored.push({ file: f, from: src, versionId: r.versionId, etag: r.etag });
+  }
+
+  // Step 3: 写 manifest 记录 restore 事件
+  const restoreManifest = {
+    schemaVersion: 1,
+    type: "pre-restore-snapshot",
+    preRestoreBackupId: preId,
+    restoredFromBackupId: id,
+    requestedAt: now.toISOString(),
+    requestedAtMs: now.getTime(),
+    requestedBy: getUserId(c),
+    files: requested,
+    preBackup,
+    restored,
+    restoreErrors,
+  };
+  await ossPut(
+    cfg,
+    `${prePrefix}/manifest.json`,
+    JSON.stringify(restoreManifest, null, 2),
+    { contentType: "application/json; charset=utf-8" },
+  );
+
+  return c.json({
+    ok: restoreErrors.length === 0,
+    restoredFromBackupId: id,
+    preRestoreBackupId: preId,
+    restored,
+    restoreErrors,
+  });
+});
+
 /** GET /api/super-admin/me — 当前用户是不是 super-admin（前端 nav 用） */
 superAdmin.get("/me", async (c) => {
   const userId = getUserId(c);
