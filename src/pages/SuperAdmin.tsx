@@ -882,11 +882,18 @@ export function SuperAdminPage() {
             }
           }}
         >
-          <summary className="cursor-pointer px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] hover:text-white select-none flex items-center gap-2">
+          <summary className="cursor-pointer px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] hover:text-white select-none flex items-center gap-2 flex-wrap">
             <span>⟁ recent snapshots</span>
             <span className="text-[#363a3f]">·</span>
             <span className="text-[#7d8187]">
               {backupListBusy ? "loading…" : backupList ? `${backupList.length}` : "click to load"}
+            </span>
+            <span className="text-[#363a3f] ml-2">·</span>
+            <span
+              className="text-[#7d8187] normal-case tracking-normal"
+              title="Retention 由 aliyun-deploy/scripts/_prune-backups.mjs 实施：keep last 14 days daily + 12 weeks weekly + 12 months monthly。run manually 或 cron 化"
+            >
+              retention 14d/12w/12m · prune via script
             </span>
           </summary>
           <div className="px-4 pb-3 pt-1">
