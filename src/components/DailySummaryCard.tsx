@@ -190,9 +190,9 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
     [studentId, currentDateKey],
   );
 
-  // 爸爸 2026-05-17 报告重构：数学累计掌握 % = score ≥ 75 的 skill / 总 skill。
-  // 跟学期 expected 进度比，超前/落后可视化。
-  // Phase 2：同步算出"未掌握的 unit 列表" — 每 unit 看里头 skill 多少已 ≥75 分。
+  // 爸爸 2026-05-17 报告重构 v2：数学累计掌握 % = score ≥ 75 的 skill / 总 skill。
+  // unmasteredUnits 现在 3 学科都列（语文按 char level<3 group 成 "拼音池"，
+  // 英语按 vocab level<3 group 成 "单词池"，没有正式 unit 概念时这样代替）。
   const mathCumulative = useLiveQuery(async () => {
     const totalSkills = SKILLS.length;
     if (totalSkills === 0) {
@@ -407,114 +407,58 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           </div>
         </header>
 
-        {/* 爸爸 2026-05-17：数学今日 3 mode 闭环可视化（训练 / 闯关 / 闪电）+
-            每个 ✓/○ 直跳目标页 */}
-        {math && (
-          <div className="rounded-xl border border-violet-400/25 bg-violet-500/8 px-3 py-2">
-            <div className="flex items-baseline justify-between mb-1.5">
-              <div className="text-[11px] font-bold text-violet-100">
-                📐 数学今日 3 闭环
-              </div>
-              <div className="text-[10px] font-mono text-violet-200/75 tabular-nums">
-                {Number(math.modesToday.train) +
-                  Number(math.modesToday.boss) +
-                  Number(math.modesToday.fluency)}{" "}
-                / 3 完成
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                { done: math.modesToday.train, label: "训练", emoji: "🎯", href: "/math/train" },
-                { done: math.modesToday.boss, label: "闯关", emoji: "⚔️", href: "/math/boss" },
-                { done: math.modesToday.fluency, label: "闪电口算", emoji: "⚡", href: "/math/fluency" },
-              ].map((m) => (
-                <a
-                  key={m.label}
-                  href={m.href}
-                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
-                    m.done
-                      ? "bg-emerald-500/20 text-emerald-100 border border-emerald-400/40"
-                      : "bg-slate-800/40 text-slate-300 border border-slate-700/50 hover:border-violet-400/40"
-                  }`}
-                >
-                  <span className="text-sm leading-none">{m.done ? "✓" : "○"}</span>
-                  <span className="leading-none">{m.emoji}</span>
-                  <span className="leading-none">{m.label}</span>
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 爸爸 2026-05-17 Phase 2：3 学科累计掌握学期进度条同列 + expected 标线 */}
-        {(mathCumulative || chineseStats || englishStats) && (
-          <section className="space-y-2">
-            <SectionTitle icon="🎯" title={`学期累计进度（${currentTerm}）`} />
-            <div className="rounded-xl border border-violet-400/20 bg-slate-900/30 px-3 py-2.5 space-y-3">
-              {mathCumulative && (
-                <ExpectedBar
-                  actual={mathCumulative.pct}
-                  expected={expectedProgress(currentTerm)}
-                  label={`📐 数学 · 掌握 ${mathCumulative.mastered}/${mathCumulative.total} skill (≥75 分)`}
-                />
-              )}
-              {chineseStats && chineseStats.total > 0 && (
-                <ExpectedBar
-                  actual={chineseStats.mastered / chineseStats.total}
-                  expected={expectedProgress(currentTerm)}
-                  label={`📚 语文 · 掌握 ${chineseStats.mastered}/${chineseStats.total} 字 (level≥3)`}
-                />
-              )}
-              {englishStats && englishStats.total > 0 && (
-                <ExpectedBar
-                  actual={englishStats.mastered / englishStats.total}
-                  expected={expectedProgress(currentTerm)}
-                  label={`🔤 英语 · 掌握 ${englishStats.mastered}/${englishStats.total} 词 (level≥3)`}
-                />
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* 爸爸 2026-05-17 Phase 2：未掌握 unit 列表（按本学期 + 薄弱度排序） */}
-        {mathCumulative && mathCumulative.unmasteredUnits.length > 0 && (
-          <section className="space-y-2">
-            <SectionTitle
-              icon="📐"
-              title={`数学未掌握单元（${mathCumulative.unmasteredUnits.length} 个）`}
-            />
-            <div className="rounded-xl border border-amber-400/25 bg-amber-500/8 px-3 py-2 space-y-1.5">
-              {mathCumulative.unmasteredUnits.slice(0, 8).map((u) => {
-                const pct = Math.round(u.pct * 100);
-                const tone =
-                  u.pct < 0.25
-                    ? "bg-rose-500/20 border-rose-400/30 text-rose-100"
-                    : u.pct < 0.5
-                      ? "bg-amber-500/20 border-amber-400/30 text-amber-100"
-                      : "bg-emerald-500/15 border-emerald-400/25 text-emerald-100";
-                return (
-                  <a
-                    key={u.unitId}
-                    href={`/math/train?unitId=${encodeURIComponent(u.unitId)}`}
-                    className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border text-[12px] ${tone} hover:brightness-125 transition-all`}
-                  >
-                    <span className="truncate">{u.name}</span>
-                    <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
-                      {u.mastered}/{u.total} · {pct}%
-                    </span>
-                  </a>
-                );
-              })}
-              {mathCumulative.unmasteredUnits.length > 8 && (
-                <div className="text-[10px] text-amber-200/60 text-center pt-0.5">
-                  …还有 {mathCumulative.unmasteredUnits.length - 8} 个单元
+        {/* 爸爸 2026-05-17 v2：unified "今日未闭环 mode" — 列所有学科的未闭环，
+            空了说明 3 学科 ×3 mode 全打卡了。每条 ✓/○ 一行直跳目标页。
+            数学走 modesToday 真信号；中英文目前只 1 mode（练过/未练），等 Phase 3
+            instrument 之后扩开。 */}
+        {(() => {
+          const items: Array<{ done: boolean; label: string; emoji: string; href: string; subject: string }> = [];
+          if (math) {
+            items.push({ done: math.modesToday.train, label: "数学训练", emoji: "🎯", href: "/math/train", subject: "math" });
+            items.push({ done: math.modesToday.boss, label: "数学闯关", emoji: "⚔️", href: "/math/boss", subject: "math" });
+            items.push({ done: math.modesToday.fluency, label: "数学闪电口算", emoji: "⚡", href: "/math/fluency", subject: "math" });
+          }
+          // 中文 / 英文：Phase 3 未做 mode 拆分前，simple 1-mode 闭环（有任意 daily 活动即闭环）
+          items.push({ done: chineseTotal > 0, label: "语文练习", emoji: "📚", href: "/chinese", subject: "chinese" });
+          items.push({ done: englishTotal > 0, label: "英语练习", emoji: "🔤", href: "/english", subject: "english" });
+          const undone = items.filter((i) => !i.done);
+          const total = items.length;
+          const done = total - undone.length;
+          if (undone.length === 0) {
+            return (
+              <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-center">
+                <div className="text-[12px] font-bold text-emerald-100">
+                  🎉 今日全部 {total}/{total} 闭环完成
                 </div>
-              )}
+              </div>
+            );
+          }
+          return (
+            <div className="rounded-xl border border-violet-400/25 bg-violet-500/8 px-3 py-2">
+              <div className="flex items-baseline justify-between mb-1.5">
+                <div className="text-[11px] font-bold text-violet-100">⭕ 今日未闭环</div>
+                <div className="text-[10px] font-mono text-violet-200/75 tabular-nums">
+                  {done} / {total} 完成
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {undone.map((m) => (
+                  <a
+                    key={m.label}
+                    href={m.href}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium bg-slate-800/40 text-slate-200 border border-slate-700/50 hover:border-violet-400/50 hover:bg-slate-800/60 transition-colors"
+                  >
+                    <span className="text-sm leading-none">○</span>
+                    <span className="leading-none">{m.emoji}</span>
+                    <span className="leading-none">{m.label}</span>
+                  </a>
+                ))}
+              </div>
             </div>
-          </section>
-        )}
+          );
+        })()}
 
-        {/* 三学科 mini stats grid */}
+        {/* 三学科 mini stats grid — 爸爸 v2: cumulative ExpectedBar 内联进卡片 */}
         <div className="grid grid-cols-3 gap-2">
           <SubjectMiniCard
             emoji="📐"
@@ -522,6 +466,16 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             primary={mathTotal > 0 ? `${mathTotal} 题` : "未练"}
             secondary={mathRate !== null ? `${mathRate}% 对` : null}
             color="violet"
+            cumulative={
+              mathCumulative
+                ? {
+                    mastered: mathCumulative.mastered,
+                    total: mathCumulative.total,
+                    actual: mathCumulative.pct,
+                    expected: expectedProgress(currentTerm),
+                  }
+                : null
+            }
           />
           <SubjectMiniCard
             emoji="📚"
@@ -530,11 +484,19 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             secondary={
               chineseTotal > 0 && chineseDaily
                 ? `${chineseDaily.right} 对 · ${chineseDaily.wrong} 错`
-                : chineseStats
-                  ? `累计 ${chineseStats.mastered}/${chineseStats.total}`
-                  : null
+                : null
             }
             color="emerald"
+            cumulative={
+              chineseStats && chineseStats.total > 0
+                ? {
+                    mastered: chineseStats.mastered,
+                    total: chineseStats.total,
+                    actual: chineseStats.mastered / chineseStats.total,
+                    expected: expectedProgress(currentTerm),
+                  }
+                : null
+            }
           />
           <SubjectMiniCard
             emoji="🔤"
@@ -543,11 +505,19 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             secondary={
               englishTotal > 0 && englishDaily
                 ? `${englishDaily.right} 对 · ${englishDaily.wrong} 错`
-                : englishStats
-                  ? `累计 ${englishStats.mastered}/${englishStats.total}`
-                  : null
+                : null
             }
             color="cyan"
+            cumulative={
+              englishStats && englishStats.total > 0
+                ? {
+                    mastered: englishStats.mastered,
+                    total: englishStats.total,
+                    actual: englishStats.mastered / englishStats.total,
+                    expected: expectedProgress(currentTerm),
+                  }
+                : null
+            }
           />
         </div>
 
@@ -744,30 +714,96 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           </div>
         )}
 
-        {/* 累计进度（中英文掌握度，按当前 term 范围） */}
-        {(chineseStats || englishStats) && (
-          <section className="space-y-2 pt-1">
-            <SectionTitle icon="📊" title={`累计掌握（${currentTerm}）`} />
-            <div className="grid grid-cols-2 gap-2">
-              {chineseStats && (
-                <ProgressBar
-                  label="📚 语文写字"
-                  done={chineseStats.mastered}
-                  total={chineseStats.total}
-                  color="emerald"
-                />
-              )}
-              {englishStats && (
-                <ProgressBar
-                  label="🔤 英语单词"
-                  done={englishStats.mastered}
-                  total={englishStats.total}
-                  color="cyan"
-                />
-              )}
-            </div>
-          </section>
-        )}
+        {/* 爸爸 2026-05-17 v2：未掌握 unit 列表 — 3 学科统一。
+            数学：unit 名 + skill 掌握进度
+            语文：所有未达 level≥3 的字 group 成"待掌握 X 字"（没正式 unit 概念）
+            英语：所有未达 level≥3 的词 group 成"待掌握 X 词" */}
+        {(() => {
+          const sections: Array<{ title: string; tone: string; rows: Array<{ key: string; name: string; mastered: number; total: number; pct: number; href: string }> }> = [];
+          if (mathCumulative && mathCumulative.unmasteredUnits.length > 0) {
+            sections.push({
+              title: `数学未掌握单元（${mathCumulative.unmasteredUnits.length} 个）`,
+              tone: "border-violet-400/25 bg-violet-500/8",
+              rows: mathCumulative.unmasteredUnits.slice(0, 8).map((u) => ({
+                key: u.unitId,
+                name: u.name,
+                mastered: u.mastered,
+                total: u.total,
+                pct: u.pct,
+                href: `/math/train?unitId=${encodeURIComponent(u.unitId)}`,
+              })),
+            });
+          }
+          if (chineseStats && chineseStats.total > chineseStats.mastered) {
+            const remaining = chineseStats.total - chineseStats.mastered;
+            sections.push({
+              title: `语文待掌握（${remaining} 字）`,
+              tone: "border-emerald-400/25 bg-emerald-500/8",
+              rows: [{
+                key: "chinese-pool",
+                name: `${currentTerm} 写字池 · 还有 ${remaining} 字未达 level≥3`,
+                mastered: chineseStats.mastered,
+                total: chineseStats.total,
+                pct: chineseStats.mastered / chineseStats.total,
+                href: "/chinese",
+              }],
+            });
+          }
+          if (englishStats && englishStats.total > englishStats.mastered) {
+            const remaining = englishStats.total - englishStats.mastered;
+            sections.push({
+              title: `英语待掌握（${remaining} 词）`,
+              tone: "border-cyan-400/25 bg-cyan-500/8",
+              rows: [{
+                key: "english-pool",
+                name: `${currentTerm} 单词池 · 还有 ${remaining} 词未达 level≥3`,
+                mastered: englishStats.mastered,
+                total: englishStats.total,
+                pct: englishStats.mastered / englishStats.total,
+                href: "/english/vocab",
+              }],
+            });
+          }
+          if (sections.length === 0) return null;
+          return (
+            <section className="space-y-2 pt-1">
+              <SectionTitle icon="🎯" title={`待掌握内容（3 学科）`} />
+              {sections.map((sec) => (
+                <div key={sec.title} className={`rounded-xl border ${sec.tone} px-3 py-2 space-y-1`}>
+                  <div className="text-[11px] font-bold text-violet-100 mb-1">{sec.title}</div>
+                  {sec.rows.map((r) => {
+                    const pct = Math.round(r.pct * 100);
+                    const rowTone =
+                      r.pct < 0.25
+                        ? "bg-rose-500/20 border-rose-400/30 text-rose-100"
+                        : r.pct < 0.5
+                          ? "bg-amber-500/20 border-amber-400/30 text-amber-100"
+                          : "bg-emerald-500/15 border-emerald-400/25 text-emerald-100";
+                    return (
+                      <a
+                        key={r.key}
+                        href={r.href}
+                        className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border text-[12px] ${rowTone} hover:brightness-125 transition-all`}
+                      >
+                        <span className="truncate">{r.name}</span>
+                        <span className="font-mono text-[11px] tabular-nums whitespace-nowrap">
+                          {r.mastered}/{r.total} · {pct}%
+                        </span>
+                      </a>
+                    );
+                  })}
+                  {sec.title.startsWith("数学") &&
+                    mathCumulative &&
+                    mathCumulative.unmasteredUnits.length > 8 && (
+                      <div className="text-[10px] text-violet-200/60 text-center pt-0.5">
+                        …还有 {mathCumulative.unmasteredUnits.length - 8} 个数学单元
+                      </div>
+                    )}
+                </div>
+              ))}
+            </section>
+          );
+        })()}
 
         {/* 空状态 */}
         {!anyActivityToday && (
@@ -811,18 +847,24 @@ function SubjectMiniCard({
   primary,
   secondary,
   color,
+  cumulative,
 }: {
   emoji: string;
   label: string;
   primary: string;
   secondary: string | null;
   color: "violet" | "emerald" | "cyan";
+  /** 爸爸 2026-05-17 v2：累计掌握 + expected 标线 inline 到 SubjectMiniCard，
+   * 不再独立"学期累计进度"section 占大面积 */
+  cumulative?: { mastered: number; total: number; actual: number; expected: number } | null;
 }) {
   const palette = {
     violet: "bg-violet-500/15 border-violet-400/30 text-violet-100",
     emerald: "bg-emerald-500/15 border-emerald-400/30 text-emerald-100",
     cyan: "bg-cyan-500/15 border-cyan-400/30 text-cyan-100",
   }[color];
+  const fillColor =
+    color === "violet" ? "#a78bfa" : color === "emerald" ? "#34d399" : "#22d3ee";
   return (
     <div className={`rounded-xl border p-2.5 ${palette}`}>
       <div className="flex items-center gap-1 text-[11px] opacity-80 whitespace-nowrap">
@@ -835,6 +877,29 @@ function SubjectMiniCard({
       {secondary && (
         <div className="text-[10px] opacity-70 mt-0.5 tabular-nums whitespace-nowrap truncate">
           {secondary}
+        </div>
+      )}
+      {cumulative && cumulative.total > 0 && (
+        <div className="mt-1.5">
+          <div className="relative h-1.5 rounded-full bg-black/30 overflow-visible">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full"
+              style={{
+                width: `${Math.max(2, cumulative.actual * 100)}%`,
+                backgroundColor: fillColor,
+              }}
+            />
+            {/* expected pos marker — small vertical pin */}
+            <div
+              className="absolute -top-0.5 bottom-[-2px] w-px bg-white/90"
+              style={{ left: `${cumulative.expected * 100}%` }}
+              title={`按学期 ${Math.round(cumulative.expected * 100)}%`}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] opacity-60 mt-0.5 tabular-nums">
+            <span>{cumulative.mastered}/{cumulative.total}</span>
+            <span>{Math.round(cumulative.actual * 100)}% / {Math.round(cumulative.expected * 100)}%</span>
+          </div>
         </div>
       )}
     </div>

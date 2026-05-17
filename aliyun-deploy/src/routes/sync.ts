@@ -96,9 +96,13 @@ async function uploadHandler(c: Ctx): Promise<Response> {
     );
   }
   // 校验 JSON 合法（防止存进去后下次 download crash 客户端）
+  // Ep35 P0 修：parse 一次复用给后续 stats 计算，避免对 3MB 串 parse 两次触发
+  // ESA EdgeRoutine "forcibly terminated due to resource constraints" (599).
+  // Selena 实测：bodyText 2.9MB，单 JSON.parse ~200-400ms × 2 = 出超时。
+  let parsedPayload: Record<string, unknown> | null = null;
   try {
-    const parsed = JSON.parse(bodyText);
-    if (!parsed || typeof parsed !== "object") {
+    parsedPayload = JSON.parse(bodyText) as Record<string, unknown>;
+    if (!parsedPayload || typeof parsedPayload !== "object") {
       return c.json({ ok: false, error: "invalid_payload" }, 400);
     }
   } catch (e) {
@@ -149,8 +153,14 @@ async function uploadHandler(c: Ctx): Promise<Response> {
   // Ep148: 预计算 stats.json，避免 super-admin endpoint 每次 parse 8MB snapshot
   // (实测 routine 里 JSON.parse 8MB 触发 ESA 599 resource constraint)
   // 失败不阻塞主响应。
+  // Ep35 P0: 复用上面 parsedPayload，不重复 parse；大于 3MB 时直接 skip 整段
+  // stats 计算（client 端可以从 download 后自己算），避免单 request CPU 爆。
   try {
-    const stats = computeSnapshotStats(bodyText);
+    if (bodyText.length > 3 * 1024 * 1024) {
+      console.warn(`[upload] skipping stats compute for ${userId}: payload ${sizeKB}KB > 3MB`);
+      throw new Error("payload_too_large_for_stats");
+    }
+    const stats = computeSnapshotStatsFromParsed(parsedPayload);
     await ossPut(
       cfg,
       `users/${userId}/stats.json`,
@@ -191,6 +201,8 @@ async function uploadHandler(c: Ctx): Promise<Response> {
  * 从完整 snapshot JSON text 算 stats。这个跑在 push 流里（已经 parse 过一次了）。
  * 返回小对象（< 2KB），写到 OSS 让 super-admin 快查。
  */
+/** Ep35 P0: 接受已 parsed 的 payload object，不再重 JSON.parse。
+ * 老入口 computeSnapshotStats(bodyText) 保留作 backcompat（其它路径还在用） */
 function computeSnapshotStats(bodyText: string): Record<string, unknown> {
   let payload: Record<string, unknown>;
   try {
@@ -198,6 +210,10 @@ function computeSnapshotStats(bodyText: string): Record<string, unknown> {
   } catch {
     return { computeError: "parse_failed" };
   }
+  return computeSnapshotStatsFromParsed(payload);
+}
+
+function computeSnapshotStatsFromParsed(payload: Record<string, unknown>): Record<string, unknown> {
   const rawTables = payload.data && typeof payload.data === "object"
     ? (payload.data as Record<string, unknown>)
     : payload;
@@ -213,13 +229,15 @@ function computeSnapshotStats(bodyText: string): Record<string, unknown> {
   const fluencyAttempts = t("fluencyAttempts");
   const tutorSessions = t("tutorSessions");
 
-  const today = new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" });
-  const todayAttempts = attempts.filter((a) =>
-    a.createdAt && new Date(a.createdAt).toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }) === today,
-  ).length;
-  const todaySessions = sessions.filter((s) =>
-    s.createdAt && new Date(s.createdAt).toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }) === today,
-  ).length;
+  // Ep35 P0: 不用 Intl.DateTimeFormat — 对 3635 attempts 调 2 次 / 项是 O(7k) toLocaleDateString
+  // 触发 ESA CPU budget 爆。改用纯算术：Asia/Shanghai = UTC+8 固定偏移，按
+  // (now / 86400e3) integer day 比较。
+  const SHANGHAI_OFFSET_MS = 8 * 3600_000;
+  const todayDayIdx = Math.floor((Date.now() + SHANGHAI_OFFSET_MS) / 86400_000);
+  const isToday = (ts: number | undefined): boolean =>
+    typeof ts === "number" && Math.floor((ts + SHANGHAI_OFFSET_MS) / 86400_000) === todayDayIdx;
+  const todayAttempts = attempts.filter((a) => isToday(a.createdAt)).length;
+  const todaySessions = sessions.filter((s) => isToday(s.createdAt)).length;
   const SEVEN_AGO = Date.now() - 7 * 86400_000;
   const last7Attempts = attempts.filter((a) => (a.createdAt ?? 0) >= SEVEN_AGO).length;
 
@@ -298,25 +316,25 @@ async function downloadHandler(c: Ctx): Promise<Response> {
       502,
     );
   }
-  // payload 应该是有效 JSON（upload 时已校验过）
-  let payload: unknown;
-  try {
-    payload = JSON.parse(got.text);
-  } catch (e) {
-    return c.json(
-      { ok: false, error: "corrupt_snapshot", detail: (e as Error).message },
-      500,
-    );
+  // Ep35 P0 修：3MB snapshot 不再 JSON.parse + Hono c.json 再 JSON.stringify
+  // (实测会触发 ESA 599 resource constraint)。
+  // payload 已是有效 JSON 字符串（upload 时 parse 校验过），直接拼到 wrapper。
+  // 廉价 sanity check：首字符是 `{` 即放行；不行返 corrupt。
+  const text = got.text;
+  if (text.length === 0 || text[0] !== "{") {
+    return c.json({ ok: false, error: "corrupt_snapshot", detail: "not_json_object" }, 500);
   }
-  return c.json({
-    ok: true,
-    userId,
-    latest: {
-      payload,
-      version: lastModifiedMs || Date.now(),
-      etag: got.etag,
-      versionId: got.versionId,
-    },
+  const version = lastModifiedMs || Date.now();
+  const wrapped =
+    `{"ok":true,"userId":${JSON.stringify(userId)},"latest":{"payload":` +
+    text +
+    `,"version":${version}` +
+    (got.etag ? `,"etag":${JSON.stringify(got.etag)}` : "") +
+    (got.versionId ? `,"versionId":${JSON.stringify(got.versionId)}` : "") +
+    `}}`;
+  return new Response(wrapped, {
+    status: 200,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
   });
 }
 
