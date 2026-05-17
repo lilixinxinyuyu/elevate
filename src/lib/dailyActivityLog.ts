@@ -31,6 +31,13 @@ export interface DailyLogEntry {
    * 老数据没此字段 — 读取时 fallback `[]`。
    */
   wrongItems?: string[];
+  /**
+   * Phase 3 (爸爸 2026-05-17)：模式拆分。
+   * - chinese: { write, choose } (CharPractice 手写 vs 辨字)
+   * - english: { vocab, sentence } (VocabPractice vs SentencePractice)
+   * 缺字段 fallback 0；landing page 今日任务"3 闭环"判定用这个细粒度。
+   */
+  modeCounts?: Record<string, { right: number; wrong: number }>;
 }
 
 function todayDateStr(now: number = Date.now()): string {
@@ -54,15 +61,27 @@ export async function loadDailyLog(
   return { wrongItems: [], ...raw };
 }
 
-/** 记一次答题（一个字/词，对错） */
+/** 记一次答题（一个字/词，对错）。Phase 3：第 5 个可选 mode 参数。 */
 export async function recordDailyActivity(
   subjectId: string,
   studentId: string,
   item: string,
   isCorrect: boolean,
+  mode?: string,
 ): Promise<void> {
   const cur = await loadDailyLog(subjectId, studentId);
   const curWrong = cur.wrongItems ?? [];
+  // Phase 3: per-mode 子 bucket（write/choose for chinese; vocab/sentence for english）
+  const curModes = cur.modeCounts ?? {};
+  const nextModes = mode
+    ? {
+        ...curModes,
+        [mode]: {
+          right: (curModes[mode]?.right ?? 0) + (isCorrect ? 1 : 0),
+          wrong: (curModes[mode]?.wrong ?? 0) + (isCorrect ? 0 : 1),
+        },
+      }
+    : curModes;
   const next: DailyLogEntry = {
     right: cur.right + (isCorrect ? 1 : 0),
     wrong: cur.wrong + (isCorrect ? 0 : 1),
@@ -75,6 +94,7 @@ export async function recordDailyActivity(
       : curWrong.includes(item)
         ? curWrong
         : [...curWrong.slice(-49), item],
+    modeCounts: nextModes,
   };
   await db.meta.put({ key: key(subjectId, studentId), value: next });
   // v0.32.15：daily_log 也走 schedulePushToCloud，跟 vocab/char 进度一致

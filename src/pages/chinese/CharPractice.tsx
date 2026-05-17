@@ -185,7 +185,8 @@ export function CharPracticePage() {
     const oldStat = progress[current.word] ?? freshStat();
     let nextStat: MasteryStat;
     if (studentId) {
-      nextStat = await recordCharAttempt(studentId, current.word, isCorrect);
+      // Phase 3: 传当前 mode (write|choose) 让 daily log 拆 bucket
+      nextStat = await recordCharAttempt(studentId, current.word, isCorrect, mode);
     } else {
       const tmp = { ...oldStat };
       tmp.right += isCorrect ? 1 : 0;

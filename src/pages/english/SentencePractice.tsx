@@ -62,7 +62,8 @@ export function SentencePracticePage() {
 
   async function recordAttempt(isCorrect: boolean) {
     if (!studentId || !current) return;
-    void recordDailyActivity("english", studentId, current.en, isCorrect);
+    // Phase 3: mode=sentence 拆 daily log bucket（跟 vocab 区分）
+    void recordDailyActivity("english", studentId, current.en, isCorrect, "sentence");
     if (daily) {
       const { next, justCompleted } = await tickDaily(
         "english_sentences",

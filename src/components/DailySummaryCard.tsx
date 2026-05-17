@@ -382,7 +382,7 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
         <header className="flex items-center gap-4">
           <MiniSubjectRings
             // 爸爸 2026-05-17：数学 3 mode 闭环（train+boss+fluency 各占 1/3）
-            // 中文/英文继续走 daily count proxy，Phase 2 加 mode 拆分
+            // Phase 3：中文 2 mode (write+choose)，英文 2 mode (vocab+sentence)
             mathProgress={
               math
                 ? (Number(math.modesToday.train) +
@@ -391,8 +391,18 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
                   3
                 : 0
             }
-            chineseProgress={subjectProgress(chineseTotal)}
-            englishProgress={subjectProgress(englishTotal)}
+            chineseProgress={(() => {
+              const mc = chineseDaily?.modeCounts ?? {};
+              const writeDone = ((mc.write?.right ?? 0) + (mc.write?.wrong ?? 0)) > 0;
+              const chooseDone = ((mc.choose?.right ?? 0) + (mc.choose?.wrong ?? 0)) > 0;
+              return (Number(writeDone) + Number(chooseDone)) / 2;
+            })()}
+            englishProgress={(() => {
+              const mc = englishDaily?.modeCounts ?? {};
+              const vocabDone = ((mc.vocab?.right ?? 0) + (mc.vocab?.wrong ?? 0)) > 0;
+              const sentenceDone = ((mc.sentence?.right ?? 0) + (mc.sentence?.wrong ?? 0)) > 0;
+              return (Number(vocabDone) + Number(sentenceDone)) / 2;
+            })()}
           />
           <div className="flex-1 min-w-0">
             <div className="text-xs text-violet-200/80">📅 {todayHuman()}</div>
@@ -418,9 +428,18 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             items.push({ done: math.modesToday.boss, label: "数学闯关", emoji: "⚔️", href: "/math/boss", subject: "math" });
             items.push({ done: math.modesToday.fluency, label: "数学闪电口算", emoji: "⚡", href: "/math/fluency", subject: "math" });
           }
-          // 中文 / 英文：Phase 3 未做 mode 拆分前，simple 1-mode 闭环（有任意 daily 活动即闭环）
-          items.push({ done: chineseTotal > 0, label: "语文练习", emoji: "📚", href: "/chinese", subject: "chinese" });
-          items.push({ done: englishTotal > 0, label: "英语练习", emoji: "🔤", href: "/english", subject: "english" });
+          // Phase 3: 中/英文 mode 拆分（dailyLog.modeCounts）
+          // chinese: write (手写) + choose (辨字)；english: vocab (单词) + sentence (短句)
+          const chineseModes = chineseDaily?.modeCounts ?? {};
+          const englishModes = englishDaily?.modeCounts ?? {};
+          const chineseWrite = (chineseModes.write?.right ?? 0) + (chineseModes.write?.wrong ?? 0);
+          const chineseChoose = (chineseModes.choose?.right ?? 0) + (chineseModes.choose?.wrong ?? 0);
+          const englishVocab = (englishModes.vocab?.right ?? 0) + (englishModes.vocab?.wrong ?? 0);
+          const englishSentence = (englishModes.sentence?.right ?? 0) + (englishModes.sentence?.wrong ?? 0);
+          items.push({ done: chineseWrite > 0, label: "语文手写", emoji: "✍️", href: "/chinese/char-quest?mode=write", subject: "chinese" });
+          items.push({ done: chineseChoose > 0, label: "语文辨字", emoji: "🔍", href: "/chinese/char-quest?mode=choose", subject: "chinese" });
+          items.push({ done: englishVocab > 0, label: "英语单词", emoji: "🔤", href: "/english/vocab", subject: "english" });
+          items.push({ done: englishSentence > 0, label: "英语短句", emoji: "💬", href: "/english/sentence", subject: "english" });
           const undone = items.filter((i) => !i.done);
           const total = items.length;
           const done = total - undone.length;

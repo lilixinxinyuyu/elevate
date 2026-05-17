@@ -53,6 +53,7 @@ export async function recordCharAttempt(
   studentId: string,
   word: string,
   isCorrect: boolean,
+  mode?: "write" | "choose",
 ): Promise<MasteryStat> {
   const all = await loadCharProgress(studentId);
   const cur = all[word] ?? freshStat();
@@ -60,7 +61,8 @@ export async function recordCharAttempt(
   all[word] = next;
   await saveCharProgress(studentId, all);
   // v0.31.103：daily log（主页 summary 用）
-  void recordDailyActivity("chinese", studentId, word, isCorrect);
+  // Phase 3: 把 mode 传下去，主页 today-3-closure 用
+  void recordDailyActivity("chinese", studentId, word, isCorrect, mode);
   return next;
 }
 
