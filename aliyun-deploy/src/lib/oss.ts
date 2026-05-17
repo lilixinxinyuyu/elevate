@@ -259,6 +259,59 @@ export async function ossDelete(cfg: OssConfig, key: string): Promise<OssPutResu
   }
 }
 
+/**
+ * 服务端 copy：PUT destKey with header `x-oss-copy-source: /bucket/sourceKey`.
+ * 不下载 source 到 EdgeRoutine —— OSS 内部直接复制，零数据出口。
+ * V1 sig 必须把 `x-oss-copy-source` 放进 CanonicalizedOSSHeaders。
+ */
+export async function ossCopy(
+  cfg: OssConfig,
+  sourceKey: string,
+  destKey: string,
+): Promise<OssPutResult> {
+  const encodedSource = "/" + cfg.bucket + "/" + sourceKey
+    .split("/").map((seg) => encodeURIComponent(seg)).join("/");
+  const date = new Date().toUTCString();
+  const contentType = ""; // copy 不需要 content-type
+  // V1 sig + canonicalizedOssHeaders
+  const ossHeaderLine = `x-oss-copy-source:${encodedSource}`;
+  const canonicalizedResource = `/${cfg.bucket}/${destKey}`;
+  const stringToSign = [
+    "PUT", "", contentType, date,
+    ossHeaderLine,
+    canonicalizedResource,
+  ].join("\n");
+  const sig = await hmacSha1Base64(cfg.accessKeySecret, stringToSign);
+  const auth = `OSS ${cfg.accessKeyId}:${sig}`;
+  try {
+    const resp = await fetch(ossUrl(cfg, destKey), {
+      method: "PUT",
+      headers: {
+        Host: ossHost(cfg),
+        Date: date,
+        "x-oss-copy-source": encodedSource,
+        Authorization: auth,
+      },
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return {
+        ok: false,
+        status: resp.status,
+        error: `oss_copy_${resp.status}: ${text.slice(0, 200)}`,
+      };
+    }
+    return {
+      ok: true,
+      status: resp.status,
+      etag: resp.headers.get("ETag") ?? undefined,
+      versionId: resp.headers.get("x-oss-version-id") ?? undefined,
+    };
+  } catch (e) {
+    return { ok: false, status: 0, error: "fetch_failed: " + (e as Error).message };
+  }
+}
+
 /** snapshot key 规则：users/{userId}/snapshot.json */
 export function snapshotKey(userId: string): string {
   return `users/${userId}/snapshot.json`;

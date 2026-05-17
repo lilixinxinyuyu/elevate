@@ -22,7 +22,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Env } from "../lib/env";
 import { requireAuth, getUserId } from "../lib/auth";
-import { getOssConfig, ossGet, ossHead, ossPut, snapshotKey } from "../lib/oss";
+import { getOssConfig, ossGet, ossHead, ossPut, ossCopy, snapshotKey } from "../lib/oss";
 import {
   listKnownUserIds as listKnownUserIdsAsync,
   resetPasswordForUser,
@@ -328,6 +328,142 @@ superAdmin.post("/rebuild-index", async (c) => {
     rebuilt: Object.keys(idx.users).length,
     indexUpdatedAt: idx.updatedAt,
   });
+});
+
+/**
+ * POST /api/super-admin/backup-snapshot
+ *
+ * 给 **全局映射文件**（_auth/users.json + _index/users.json）打点位时间命名快照，
+ * 写到 `_backups/{ISO-timestamp}/...` 同 bucket 前缀。
+ *
+ * 为啥不备份 per-user snapshot.json？OSS bucket 已开 versioning，user 数据
+ * 每次 PUT 自动新版本；点位恢复用 list-versions 即可。真正缺的是给「密码 map /
+ * 用户索引」这俩高敏文件起一个 **可读的命名快照**，万一 reset 错或 onboarding
+ * 误删 index，能一键挑出"昨天午饭前那版"。
+ *
+ * Body 可选 `{ note?: string }`（落到 manifest，方便人类后查找原因）。
+ *
+ * 返回 manifest: { backupId, copied: [{src, dest, versionId, etag, bytes}], skipped, errors }。
+ */
+const BACKUP_TARGETS = [
+  "_auth/users.json",
+  "_index/users.json",
+] as const;
+
+superAdmin.post("/backup-snapshot", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  let body: { note?: string } = {};
+  try { body = await c.req.json(); } catch { /* allow empty body */ }
+  const note = (body.note ?? "").slice(0, 200);
+
+  // ISO timestamp safe for OSS keys: 2026-05-17T091500Z
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const backupId = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const prefix = `_backups/${backupId}`;
+
+  const copied: Array<{ src: string; dest: string; versionId?: string; etag?: string }> = [];
+  const errors: Array<{ src: string; error: string }> = [];
+
+  for (const src of BACKUP_TARGETS) {
+    const dest = `${prefix}/${src}`;
+    // ossCopy 不下载源到 worker，OSS 内部直接复制（零数据出口、不算 fetch budget）
+    const r = await ossCopy(cfg, src, dest);
+    if (!r.ok) {
+      errors.push({ src, error: r.error ?? `oss_${r.status}` });
+      continue;
+    }
+    copied.push({ src, dest, versionId: r.versionId, etag: r.etag });
+  }
+
+  // 写 manifest 方便后查
+  const manifest = {
+    schemaVersion: 1,
+    backupId,
+    createdAt: now.toISOString(),
+    createdAtMs: now.getTime(),
+    createdBy: getUserId(c),
+    note,
+    targets: BACKUP_TARGETS as readonly string[],
+    copied,
+    errors,
+  };
+  const manifestPut = await ossPut(
+    cfg,
+    `${prefix}/manifest.json`,
+    JSON.stringify(manifest, null, 2),
+    { contentType: "application/json; charset=utf-8" },
+  );
+
+  return c.json({
+    ok: errors.length === 0,
+    backupId,
+    copied,
+    errors,
+    manifestOk: manifestPut.ok,
+    manifestKey: `${prefix}/manifest.json`,
+  });
+});
+
+/**
+ * GET /api/super-admin/backup-snapshot
+ * 列最近的 backup（按 prefix 列举 manifest.json）。
+ *
+ * 用 OSS ListObjectsV2 取 _backups/ 一级目录下的 CommonPrefixes，反向排序 limit 20。
+ * 让 super-admin 可以看 "最近 N 次 backup 都在哪个时间点"。
+ */
+superAdmin.get("/backup-snapshot", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  // OSS list v2: prefix=_backups/ + delimiter=/ → CommonPrefixes 给我们 backupId 目录
+  const encodedPrefix = encodeURIComponent("_backups/");
+  const date = new Date().toUTCString();
+  // V1 sig with query subresource — list 不带 subresource，签名只用资源
+  const stringToSign = ["GET", "", "", date, `/${cfg.bucket}/`].join("\n");
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(cfg.accessKeySecret),
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(stringToSign));
+  let bin = "";
+  const bytes = new Uint8Array(sigBuf);
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  const sig = btoa(bin);
+  const host = `${cfg.bucket}.${cfg.region}.aliyuncs.com`;
+  const url = `https://${host}/?list-type=2&prefix=${encodedPrefix}&delimiter=%2F&max-keys=50`;
+  let backups: Array<{ backupId: string; manifestUrl: string }> = [];
+  try {
+    const r = await fetch(url, {
+      method: "GET",
+      headers: { Host: host, Date: date, Authorization: `OSS ${cfg.accessKeyId}:${sig}` },
+    });
+    if (r.ok) {
+      const xml = await r.text();
+      // CommonPrefixes 形如 <Prefix>_backups/2026-05-17T091500Z/</Prefix>
+      const matches = xml.matchAll(/<Prefix>_backups\/([^<\/]+)\/<\/Prefix>/g);
+      backups = [...matches]
+        .map((m) => m[1]!)
+        .filter((id) => /^\d{4}-\d{2}-\d{2}T\d{6}Z$/.test(id))
+        .sort()
+        .reverse()
+        .slice(0, 20)
+        .map((id) => ({
+          backupId: id,
+          manifestUrl: `/api/super-admin/backup-snapshot/${encodeURIComponent(id)}/manifest`,
+        }));
+    }
+  } catch (e) {
+    return c.json({ ok: false, error: "list_failed: " + (e as Error).message }, 502);
+  }
+
+  return c.json({ ok: true, count: backups.length, backups });
 });
 
 /** GET /api/super-admin/me — 当前用户是不是 super-admin（前端 nav 用） */

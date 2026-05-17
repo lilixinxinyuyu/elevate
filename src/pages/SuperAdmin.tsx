@@ -144,6 +144,17 @@ export function SuperAdminPage() {
     log: string[];
   } | null>(null);
 
+  // Ep29: 全局 mapping backup snapshot 状态
+  const [backupState, setBackupState] = useState<{
+    running: boolean;
+    last?: {
+      backupId: string;
+      copied: number;
+      errors: number;
+      at: number;
+    };
+  } | null>(null);
+
   // Ep14: 🤖 agent summary modal
   interface AgentSummary {
     targetUserId?: string;
@@ -331,6 +342,53 @@ export function SuperAdminPage() {
 
     setBulkFixState((s) => s && { ...s, running: false, scanned, fixed, failed, skipped, log: [...log] });
     await refreshUsers();
+  }
+
+  /**
+   * Ep29: 给 _auth/users.json + _index/users.json 打一个点位命名快照。
+   * 落到 OSS `_backups/{ISO-ts}/` 前缀，server 端 ossCopy 内部完成（零数据出口）。
+   * 用途：密码 reset / onboarding 误删 index 时一键挑某次"昨天午饭前那版"恢复。
+   * Per-user snapshot 本身已有 OSS bucket versioning，不在这里重复备份。
+   */
+  async function runBackupSnapshot() {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    const note = window.prompt(
+      "备份说明（可选，记下为啥触发；不填留空）：",
+      "manual backup",
+    );
+    if (note === null) return; // 用户 cancel
+    setBackupState({ running: true });
+    try {
+      const r = await fetch("/api/super-admin/backup-snapshot", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${pwd}`,
+        },
+        body: JSON.stringify({ note }),
+      });
+      const j = (await r.json().catch(() => null)) as
+        | { ok: boolean; backupId?: string; copied?: unknown[]; errors?: unknown[]; manifestKey?: string }
+        | null;
+      if (!r.ok || !j?.ok) {
+        setBackupState({ running: false });
+        alert(`备份失败：${j?.errors?.length ?? "?"} 错误。check ESA logs。`);
+        return;
+      }
+      setBackupState({
+        running: false,
+        last: {
+          backupId: j.backupId ?? "?",
+          copied: j.copied?.length ?? 0,
+          errors: j.errors?.length ?? 0,
+          at: Date.now(),
+        },
+      });
+    } catch (e) {
+      setBackupState({ running: false });
+      alert(`备份网络错：${(e as Error).message}`);
+    }
   }
 
   async function bulkRefreshSummaries() {
@@ -645,6 +703,19 @@ export function SuperAdminPage() {
             {bulkFixState?.running
               ? `Repairing (scan ${bulkFixState.scanned} · fix ${bulkFixState.fixed})`
               : "Repair pending reports"}
+          </button>
+          <button
+            type="button"
+            onClick={runBackupSnapshot}
+            disabled={backupState?.running || bulkRefreshState?.running || bulkFixState?.running}
+            title="给 _auth/users.json + _index/users.json 打一个时间命名快照到 _backups/{ISO-ts}/"
+            className="text-xs rounded-full border border-[#ff7a17]/40 hover:border-[#ff7a17] text-[#ffc285] px-4 py-2 font-medium disabled:opacity-30 transition-colors"
+          >
+            {backupState?.running
+              ? "⟁ snapshotting…"
+              : backupState?.last
+                ? `⟁ snapshot · ${backupState.last.backupId.slice(0, 16)} (${backupState.last.copied} files${backupState.last.errors > 0 ? ", " + backupState.last.errors + " err" : ""})`
+                : "⟁ Snapshot global mappings"}
           </button>
         </div>
 
