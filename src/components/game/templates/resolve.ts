@@ -1,4 +1,5 @@
 import type { GameTemplate, Question, Skill } from "../../../core/types";
+import { isSpeedEligible, shouldForceNumericFill } from "../../../core/speedMatchPolicy";
 
 const GAME_TYPE_MAP: Record<string, GameTemplate> = {
   speed_calc: "speed_match",
@@ -64,9 +65,34 @@ function rerouteIfNumericMismatch(
   return replacement;
 }
 
+/**
+ * v0.34.98 (iter 32 P0-0b/c): SpeedMatch 白名单 + Choice→Fill 政策后处理.
+ *
+ *   1. resolved=speed_match 但 !isSpeedEligible(q) → fallback plain_numeric
+ *   2. resolved=plain_choice/speed_match 且 shouldForceNumericFill(q) → fallback plain_numeric
+ *      (注: rerouteIfNumericMismatch 会把 single_choice + 数字答 改 speed_match,
+ *       所以 Force-Fill 必须在两种 resolved 上都生效, 否则简单单选数字题永远进 speed_match)
+ *
+ * 详见 src/core/speedMatchPolicy.ts.
+ */
+function applyP0Policies(q: Question, resolved: GameTemplate): GameTemplate {
+  // Force-Fill 优先 (跨 speed_match / plain_choice 两种 resolved 都拦)
+  if (
+    (resolved === "speed_match" || resolved === "plain_choice") &&
+    shouldForceNumericFill(q)
+  ) {
+    return "plain_numeric";
+  }
+  if (resolved === "speed_match" && !isSpeedEligible(q)) {
+    return q.answer.type === "number" ? "plain_numeric" : "plain_choice";
+  }
+  return resolved;
+}
+
 export function resolveTemplate(q: Question): GameTemplate {
   const t = resolveTemplateRaw(q);
-  return rerouteIfNumericMismatch(q, t);
+  const rerouted = rerouteIfNumericMismatch(q, t);
+  return applyP0Policies(q, rerouted);
 }
 
 function resolveTemplateRaw(q: Question): GameTemplate {

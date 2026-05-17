@@ -54,11 +54,41 @@ describe("scoring", () => {
     expect(wrong.total).toBeGreaterThanOrEqual(1);
   });
 
-  it("超时不扣分：超时答对只是没有速度奖励", () => {
+  it("v0.34.98 iter 32 P0-0a: 答错保底 ≥ 1, 答得稳 (ratio 1.5-4.0, difficulty ≥ 2) → 深思 +5", () => {
+    const wrong = scoreAttempt({ question: baseQ, isCorrect: false, hintsOpened: 0, elapsedSeconds: 500, isReview: false, comboAfter: 0 });
+    expect(wrong.total).toBeGreaterThanOrEqual(1);
+    // est=60, elapsed=120 → ratio=2.0 ∈ [1.5, 4.0], difficulty=3 ≥ 2 → +5
     const inTime = scoreAttempt({ question: baseQ, isCorrect: true, hintsOpened: 0, elapsedSeconds: 30, isReview: false, comboAfter: 1 });
-    const outTime = scoreAttempt({ question: baseQ, isCorrect: true, hintsOpened: 0, elapsedSeconds: 500, isReview: false, comboAfter: 1 });
-    expect(outTime.total).toBeLessThanOrEqual(inTime.total);
-    expect(outTime.total).toBeGreaterThanOrEqual(1);
+    const deepThink = scoreAttempt({ question: baseQ, isCorrect: true, hintsOpened: 0, elapsedSeconds: 120, isReview: false, comboAfter: 1 });
+    expect(deepThink.timeBonus).toBe(5);
+    expect(deepThink.slowThink).toBe(true);
+    expect(deepThink.total).toBeGreaterThanOrEqual(inTime.total);
+  });
+
+  it("v0.34.98 iter 32 P0-0a: 答得太快 (ratio<0.4) tooFast=true, 不奖", () => {
+    // est=60, elapsed=10 → ratio=0.167 < 0.4
+    const fast = scoreAttempt({ question: baseQ, isCorrect: true, hintsOpened: 0, elapsedSeconds: 10, isReview: false, comboAfter: 1 });
+    expect(fast.timeBonus).toBe(0);
+    expect(fast.tooFast).toBe(true);
+    expect(fast.slowThink).toBe(false);
+  });
+
+  it("v0.34.98 post-review: ratio > 4.0 → AFK, 不奖发呆刷分", () => {
+    // est=60, elapsed=300 → ratio=5.0 > 4.0
+    const afk = scoreAttempt({ question: baseQ, isCorrect: true, hintsOpened: 0, elapsedSeconds: 300, isReview: false, comboAfter: 1 });
+    expect(afk.timeBonus).toBe(0);
+    expect(afk.slowThink).toBe(false);
+    expect(afk.tooFast).toBe(false);
+  });
+
+  it("v0.34.98 post-review: 简单 speed-eligible 题 (stem 'test', difficulty=1) 走老 speedBonus 路径", () => {
+    // 简单 speed-eligible 题保留老 +5/+3/+2 — 爸爸明示 "简单速算还是要奖".
+    // 这里验证: difficulty=1 + stem 简单 → isSpeedEligible=true → 用老 speedBonus → ratio=2.0 → -1 slow
+    const easyQ = { ...baseQ, difficulty: 1 as const };
+    const easySlow = scoreAttempt({ question: easyQ, isCorrect: true, hintsOpened: 0, elapsedSeconds: 120, isReview: false, comboAfter: 1 });
+    // 老 speedBonus: ratio=2.0 > 1.5 → -1 (slow)
+    expect(easySlow.timeBonus).toBe(-1);
+    expect(easySlow.slowThink).toBe(false);
   });
 
   it("等级计算", () => {

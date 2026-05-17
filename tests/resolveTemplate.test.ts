@@ -27,7 +27,11 @@ describe("resolveTemplate — Q3 fix #1 真 source 防护", () => {
   // Ep爸爸 2026-05-17 Q3 fix #1: AI 出 numeric 题误标 single_choice 时,
   // 老 resolve → plain_choice → correctId=null → 用户怎么选都判错。
   // 修：answer.type==="number" 不能落到纯 choice 模板。
-  it("numeric answer + single_choice format + numeric options → speed_match (重路由)", () => {
+  it("numeric answer + single_choice format + numeric options → plain_numeric (v0.34.98 Force-Fill 优先)", () => {
+    // 老语义 (v0.34.63): 这种 case 走 speed_match (4 选 1 数字)
+    // 新语义 (v0.34.98 iter 32 P0-0c): 简单数字答 single_choice 一律强制 plain_numeric,
+    //   防 Selena 用"看选项猜"绕过实际计算 (Selena 43% 期中事件根因之一).
+    //   只要 heuristic 判 simple (≤2 位数 / 单步 / 无单位 / 无故事 / 难度 ≤2), Force-Fill 生效.
     const q: Question = {
       ...baseQ,
       question_format: "single_choice",
@@ -39,7 +43,7 @@ describe("resolveTemplate — Q3 fix #1 真 source 防护", () => {
         { id: "D", text: "2.28" },
       ],
     };
-    expect(resolveTemplate(q)).toBe("speed_match");
+    expect(resolveTemplate(q)).toBe("plain_numeric");
   });
 
   it("numeric answer + single_choice format + 无 numeric options → plain_numeric", () => {
@@ -77,8 +81,9 @@ describe("resolveTemplate — Q3 fix #1 真 source 防护", () => {
     expect(resolveTemplate(q)).toBe("plain_choice");
   });
 
-  it("numeric answer + play_as: plain_choice (强制指定) 仍然被重路由", () => {
-    // play_as 是显式指定，但 numeric/choice 不匹配的本质 bug 不变 → 守卫一律重路由
+  it("numeric answer + play_as: plain_choice (强制指定) → plain_numeric (Force-Fill 优先于 Q3 重路由)", () => {
+    // 老 (v0.34.63): Q3 fix 把 plain_choice 改 speed_match
+    // 新 (v0.34.98 iter 32 P0-0c): Force-Fill 在 reroute 之后再生效, 简单 single_choice 数字答 → plain_numeric
     const q: Question = {
       ...baseQ,
       play_as: "plain_choice",
@@ -91,7 +96,7 @@ describe("resolveTemplate — Q3 fix #1 真 source 防护", () => {
         { id: "D", text: "8" },
       ],
     };
-    expect(resolveTemplate(q)).toBe("speed_match");
+    expect(resolveTemplate(q)).toBe("plain_numeric");
   });
 
   it("numeric answer + clue_finder 也会被重路由 (multi_choice 路径)", () => {

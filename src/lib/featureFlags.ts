@@ -48,3 +48,84 @@ export function isPhase2Live(): boolean {
     return true;
   }
 }
+
+/**
+ * v0.34.98 (iter 32, P0-0): Accuracy-First scoring.
+ *
+ * 取消"答得快 = bonus XP" 设计 (Selena 43% 期中事件根因之一 - 反复强化反射,
+ * 没培养 System-2 推理). 新公式:
+ *   - 答对 + 用时 ≥ 1.5× 估算 → +3 XP "🧠 深思 bonus"
+ *   - 答对 + 用时 < 0.4× 估算 → 0 + tooFast flag (UI 显示 "答太快, 请检查估算和单位")
+ *   - 其他 → 0 速度奖
+ *
+ * 默认 ON. opt-out: localStorage.setItem("accuracy_first_v1", "false")
+ * (回到老速度奖逻辑, 用于 A/B 对照或紧急回滚).
+ *
+ * URL 参数: ?accuracy_first=off
+ */
+const ACCURACY_FIRST_LS_KEY = "accuracy_first_v1";
+
+function syncAccuracyFirstFromUrl(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get("accuracy_first");
+    if (v === "on" || v === "true") {
+      localStorage.removeItem(ACCURACY_FIRST_LS_KEY);
+    } else if (v === "off" || v === "false") {
+      localStorage.setItem(ACCURACY_FIRST_LS_KEY, "false");
+    }
+  } catch { /* SSR */ }
+}
+
+let _accuracyFirstSynced = false;
+
+export function isAccuracyFirstV1(): boolean {
+  // 默认 ON. 仅显式 "false" 时关闭.
+  if (typeof window === "undefined") return true;
+  if (!_accuracyFirstSynced) {
+    syncAccuracyFirstFromUrl();
+    _accuracyFirstSynced = true;
+  }
+  try {
+    return localStorage.getItem(ACCURACY_FIRST_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * v0.34.98 (iter 32, P0-0): Force-Fill 简单选择题.
+ *
+ * 简单计算 (单步, 个/十位数) 的 single_choice 强制走 plain_numeric 填空模板,
+ * 防 Selena 用"看选项猜" 绕过实际计算. 详见 src/core/speedMatchPolicy.ts.
+ *
+ * 默认 ON. opt-out: localStorage.setItem("force_fill_simple_v1", "false")
+ */
+const FORCE_FILL_LS_KEY = "force_fill_simple_v1";
+
+export function isForceFillSimpleV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(FORCE_FILL_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * v0.34.98 (iter 32, P0-0): SpeedMatch 白名单 enforce.
+ *
+ * 复杂题 (多位 / 应用题 / 单位换算) 不进 SpeedMatch — fallback 到 plain_numeric.
+ * 默认 ON.
+ */
+const SPEEDMATCH_WHITELIST_LS_KEY = "speedmatch_whitelist_v1";
+
+export function isSpeedMatchWhitelistV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(SPEEDMATCH_WHITELIST_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}

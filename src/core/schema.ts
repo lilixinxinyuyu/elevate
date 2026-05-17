@@ -224,6 +224,12 @@ export const QuestionSchema = z.object({
   review_interval_days: z.array(z.number().int().positive()).optional(),
   tags: z.array(z.string()).optional(),
   safety_check: z.record(z.boolean()).optional(),
+  /**
+   * v0.34.98 (iter 32 P0-0b): SpeedMatch 白名单. 显式标 true/false
+   * → 强制覆盖 isSpeedEligible() heuristic. 未设置时走启发式判断.
+   * 详见 src/core/speedMatchPolicy.ts.
+   */
+  speedEligible: z.boolean().optional(),
   // Phase 2 Axis 2：点子图画图题载荷。
   dot_grid: z
     .object({

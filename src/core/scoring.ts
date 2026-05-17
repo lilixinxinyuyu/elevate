@@ -1,5 +1,7 @@
 import type { AbilityId, Question } from "./types";
 import { adjustedEstimatedTime } from "./timing";
+import { isAccuracyFirstV1 } from "../lib/featureFlags";
+import { isSpeedEligible } from "./speedMatchPolicy";
 
 export interface ScoreInput {
   question: Question;
@@ -48,6 +50,15 @@ export interface ScoreDelta {
   repeatDecay: number;
   /** 新知识点首次答对的奖励 XP（5 或 0） */
   newSkillBonus: number;
+  /**
+   * v0.34.98 (iter 32 P0-0a) Accuracy-First mode:
+   * - tooFast = true: 答对但用时 < 40% 估算 → UI 弹"答太快, 检查估算和单位" 温和提示
+   *   (不扣分, 不算错, 只是元认知 nudge)
+   * - slowThink = true: 答对且用时 ≥ 150% 估算 → +3 XP "🧠 深思 bonus"
+   * 仅当 isAccuracyFirstV1() 返回 true 时填充. 老逻辑下两者都 false.
+   */
+  tooFast?: boolean;
+  slowThink?: boolean;
 }
 
 export function comboMultiplier(combo: number): number {
@@ -133,6 +144,44 @@ export function speedBonus(elapsedSeconds: number, estimatedSeconds: number, isC
 }
 
 /**
+ * v0.34.98 (iter 32 P0-0a) Accuracy-First 速度评分 — 取代 speedBonus 的新逻辑.
+ *
+ * 起因: Selena 43% 期中事件三方分析共识 — 速度奖励训练 System-1 反射,
+ *   但真题需 System-2 推理. 必须取消 "答得快 +bonus", 改奖励 "答得稳".
+ *
+ * 新阶梯 (v0.34.98 iter 32 post-review Gemini 整合):
+ *   ratio < 0.4         → bonus 0, tier "too_fast"   (UI nudge "刚才很快, 估算一下")
+ *   ratio ∈ [0.4, 1.0)  → bonus 0, tier "normal"     (中性, 不奖不罚)
+ *   ratio ∈ [1.0, 1.5)  → bonus 0, tier "deliberate" (中性, 在思考)
+ *   ratio ∈ [1.5, 4.0]  → bonus +5, tier "deep_think" (🧠 深思 bonus, 鼓励慢)
+ *   ratio > 4.0         → bonus 0, tier "afk" (anti-挂机: 太久 = 发呆 / 走神, 不奖)
+ *
+ * 整合 review:
+ *  - Gemini #5: bonus +3 → +5 — 接受, 匹敌老 "闪电 +5" 给强信号
+ *  - Gemini #7: anti-AFK 上限 ratio ≤ 4.0 — 接受, 防止 Selena 发呆刷分
+ *  - GPT #5 "怕 game 阈值": 仅复杂题用此公式 (简单 speed-eligible 题保留老 bonus),
+ *      所以阈值 game 只在多步/多位题上发生 — 那场景下 "等 1.5×" 反而是正确行为 (深思)
+ *
+ * 仅 isCorrect=true 时计算.
+ */
+export function speedBonusAccuracyFirst(
+  elapsedSeconds: number,
+  estimatedSeconds: number,
+  isCorrect: boolean,
+): {
+  bonus: number;
+  tier: "too_fast" | "normal" | "deliberate" | "deep_think" | "afk";
+} {
+  if (!isCorrect) return { bonus: 0, tier: "normal" };
+  const ratio = elapsedSeconds / Math.max(1, estimatedSeconds);
+  if (ratio < 0.4) return { bonus: 0, tier: "too_fast" };
+  if (ratio < 1.0) return { bonus: 0, tier: "normal" };
+  if (ratio < 1.5) return { bonus: 0, tier: "deliberate" };
+  if (ratio <= 4.0) return { bonus: 5, tier: "deep_think" };
+  return { bonus: 0, tier: "afk" };
+}
+
+/**
  * v0.30.9 调整 0.7 → 0.5：用户反馈"宁可分数偏严，错题以后重做还能拿分，
  * 不希望分数虚高"。tutor-assisted 答对（讲题之后才对的）只给 base 50%。
  */
@@ -178,10 +227,27 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
     : (input.partialCorrect ? 0.5 : 0.2);
   // 速度奖励：仅 1st 答对独享
   // v0.31.51: 用 adjustedEstimatedTime 而不是裸 question.estimated_time_seconds，
-  // 长题（stem ≥60 字 / 多行选项）的时间在运行时加成，跟 GameShell 倒计时一致
-  const { bonus: timeBonus } = noBonusAttempt
-    ? { bonus: 0 }
-    : speedBonus(elapsedSeconds, adjustedEstimatedTime(question), isCorrect);
+  //           长题（stem ≥60 字 / 多行选项）的时间在运行时加成，跟 GameShell 倒计时一致
+  // v0.34.98 (iter 32 P0-0a) Accuracy-First scope:
+  //   - isAccuracyFirstV1() OFF (回滚) → 一律老 speedBonus
+  //   - isAccuracyFirstV1() ON + 简单 speed-eligible 题 → 老 speedBonus (爸爸: 简单速算还是要奖)
+  //   - isAccuracyFirstV1() ON + 复杂题 (多步/多位/应用题) → 新 speedBonusAccuracyFirst (取消快奖, +深思)
+  let timeBonus = 0;
+  let tooFast = false;
+  let slowThink = false;
+  if (!noBonusAttempt) {
+    const est = adjustedEstimatedTime(question);
+    const accuracyFirst = isAccuracyFirstV1();
+    const allowSpeedReward = !accuracyFirst || isSpeedEligible(question);
+    if (allowSpeedReward) {
+      timeBonus = speedBonus(elapsedSeconds, est, isCorrect).bonus;
+    } else {
+      const r = speedBonusAccuracyFirst(elapsedSeconds, est, isCorrect);
+      timeBonus = r.bonus;
+      tooFast = r.tier === "too_fast";
+      slowThink = r.tier === "deep_think";
+    }
+  }
   const hintPenalty = -hintsOpened;
   // multi-step + review + new-skill 奖励都属于"真功夫"加成，tutor-assisted 不给
   const stepBonus = (multiStepAllStepsCorrect && !tutorAssisted) ? 3 : 0;
@@ -218,7 +284,18 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
   for (const a of abilities) byAbility[a] = share;
   if (isReview && isCorrect && !tutorAssisted) byAbility.habit = (byAbility.habit ?? 0) + 1;
 
-  return { total, byAbility, base, hintPenalty, comboMul, timeBonus, repeatDecay, newSkillBonus };
+  return {
+    total,
+    byAbility,
+    base,
+    hintPenalty,
+    comboMul,
+    timeBonus,
+    repeatDecay,
+    newSkillBonus,
+    tooFast,
+    slowThink,
+  };
 }
 
 export function levelFromXp(xp: number): number {

@@ -287,6 +287,14 @@ export interface Question {
   game_data?: ChinesePairMatchData | ChineseSentenceShuffleData | ChinesePoemClozeData;
 
   /**
+   * v0.34.98 (iter 32 P0-0b): SpeedMatch 白名单. 见 src/core/speedMatchPolicy.ts.
+   *  - true: 题型适合 SpeedMatch (简单一步速算)
+   *  - false: 题型不适合 (多位 / 应用题 / 单位换算) — 强制 fallback plain_numeric
+   *  - undefined: 走 heuristic 自动判断
+   */
+  speedEligible?: boolean;
+
+  /**
    * Phase 2 Axis 2：点子图画图题载荷。
    *
    * 点子图就是网格点阵（W×H），用户点击格点添加顶点，自动连线，闭合后判图形类别。

@@ -325,6 +325,10 @@ export interface AttemptOutcome {
   repeatDecay: number;
   /** 5 = 这道题让她解锁了新 skill 的首次答对（应高亮） */
   newSkillBonus: number;
+  /** v0.34.98 iter 32 P0-0a: 答对但用时 < 40% 估算 → 元认知 nudge (UI 显示"答太快请检查") */
+  tooFast?: boolean;
+  /** v0.34.98 iter 32 P0-0a: 答对且用时 ≥ 150% 估算 → +3 XP "🧠 深思 bonus" */
+  slowThink?: boolean;
   /** 错题故事化：本次错答命中的 errorTag 在历史上踩过几次 + 几道老题 */
   errorPattern?: {
     matchedTag: string;
@@ -552,6 +556,8 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     comboAfter,
     repeatDecay: delta.repeatDecay,
     newSkillBonus: delta.newSkillBonus,
+    tooFast: delta.tooFast,
+    slowThink: delta.slowThink,
     errorPattern,
   };
 }

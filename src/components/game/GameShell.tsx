@@ -73,6 +73,9 @@ export interface GameShellProps {
     points: number;
     repeatDecay?: number;
     newSkillBonus?: number;
+    /** v0.34.98 iter 32 P0-0a: Accuracy-First UI nudge flags */
+    tooFast?: boolean;
+    slowThink?: boolean;
     /** 错题故事：本次错答命中的 errorTag 在历史上踩过几次 + 踩过的题 */
     errorPattern?: {
       matchedTag: string;
@@ -152,6 +155,10 @@ export function GameShell(props: GameShellProps) {
     newSkillBonus?: number;
     /** v0.28.1：本次提交的速度档位（lightning/quick/on_time/overdue/slow） */
     speedTier?: "lightning" | "quick" | "on_time" | "overdue" | "slow";
+    /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"答太快请检查" nudge */
+    tooFast?: boolean;
+    /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"🧠 深思 +3" bonus */
+    slowThink?: boolean;
     errorPattern?: GameShellProps["onSubmit"] extends (...args: any) => Promise<infer R>
       ? R extends { errorPattern?: infer EP } ? EP : never : never;
   } | null>(null);
@@ -308,6 +315,8 @@ export function GameShell(props: GameShellProps) {
           repeatDecay: res.repeatDecay,
           newSkillBonus: res.newSkillBonus,
           speedTier,
+          tooFast: res.tooFast,
+          slowThink: res.slowThink,
           errorPattern: res.errorPattern ?? null,
         });
         finishedResetKeyRef.current = resetKey;
@@ -615,6 +624,10 @@ function FeedbackPanel({
     userAnswerDisplay: string;
     points: number; repeatDecay?: number; newSkillBonus?: number;
     speedTier?: "lightning" | "quick" | "on_time" | "overdue" | "slow";
+    /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"答太快请检查" nudge */
+    tooFast?: boolean;
+    /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"🧠 深思 +3" bonus */
+    slowThink?: boolean;
     errorPattern?: {
       matchedTag: string; tagLabel: string; remediation: string | null;
       pastQuestions: { questionId: string; stem: string; happenedAt: number }[];
@@ -626,7 +639,7 @@ function FeedbackPanel({
   /** v0.31.85：boss 模式下不渲染"小进讲讲" + "再出一道类似" 这俩 CTA（boss 有自己的救场流） */
   noRetry?: boolean;
 }) {
-  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, errorPattern } = feedback;
+  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, tooFast, slowThink, errorPattern } = feedback;
   const [showTutor, setShowTutor] = useState(false);
   // v0.31.34：会话内自适应出题
   const [adaptiveLoading, setAdaptiveLoading] = useState<"retry" | "bump" | null>(null);
@@ -674,14 +687,24 @@ function FeedbackPanel({
   }
   // 标签：速度档位 / 重做递减 / 新知识点
   const labels: string[] = [];
-  // v0.28.1：阶梯速度奖励显示
-  // v0.31.98：⚡ 数量跟 SpeedMatch gameplay 实时显示完全对齐
-  //   lightning ↔ 3⚡（gameplay tier 3） / quick ↔ 2⚡ / on_time ↔ 1⚡
-  if (isCorrect && speedTier === "lightning") labels.push("⚡⚡⚡ 闪电 +5");
-  else if (isCorrect && speedTier === "quick") labels.push("⚡⚡ 迅速 +3");
-  else if (isCorrect && speedTier === "on_time") labels.push("⚡ 及时 +2");
-  else if (isCorrect && speedTier === "overdue") labels.push("⏰ 超时");
-  else if (isCorrect && speedTier === "slow") labels.push("🐢 拖拉 -1");
+  // v0.34.98 iter 32 P0-0a: Accuracy-First 优先 — 显示新版"🧠 深思" / "🐢 太快了" 标签;
+  //   slowThink/tooFast flag 由 scoreAttempt 在 isAccuracyFirstV1() 为 true 时填充.
+  //   老 speedTier 仅当 flag OFF 时 fallback 使用.
+  if (isCorrect && slowThink) {
+    labels.push("🧠 深思 +5");
+  } else if (isCorrect && tooFast) {
+    // 软化文案 (post-review Gemini + GPT 共识: 不指责, 给可操作建议)
+    labels.push("⏱️ 刚才很快, 下次试试先估一估");
+  } else {
+    // v0.28.1：阶梯速度奖励显示 (老逻辑, accuracy_first 关闭时显示)
+    // v0.31.98：⚡ 数量跟 SpeedMatch gameplay 实时显示完全对齐
+    //   lightning ↔ 3⚡（gameplay tier 3） / quick ↔ 2⚡ / on_time ↔ 1⚡
+    if (isCorrect && speedTier === "lightning") labels.push("⚡⚡⚡ 闪电 +5");
+    else if (isCorrect && speedTier === "quick") labels.push("⚡⚡ 迅速 +3");
+    else if (isCorrect && speedTier === "on_time") labels.push("⚡ 及时 +2");
+    else if (isCorrect && speedTier === "overdue") labels.push("⏰ 超时");
+    else if (isCorrect && speedTier === "slow") labels.push("🐢 拖拉 -1");
+  }
   if (isCorrect && repeatDecay !== undefined && repeatDecay < 1.0 && repeatDecay > 0) {
     labels.push(`重做 ×${Math.round(repeatDecay * 100)}%`);
   } else if (isCorrect && repeatDecay === 0) {
@@ -709,7 +732,11 @@ function FeedbackPanel({
             <span
               key={i}
               className={`text-[11px] px-1.5 py-0.5 rounded-full font-normal ${
-                l.startsWith("⚡⚡⚡")
+                l.startsWith("🧠")
+                  ? "bg-indigo-400/30 text-indigo-100 border border-indigo-300/50 animate-pulse"
+                  : l.startsWith("⏱️")
+                    ? "bg-amber-400/20 text-amber-100 border border-amber-300/40"
+                  : l.startsWith("⚡⚡⚡")
                   ? "bg-cyan-400/30 text-cyan-100 border border-cyan-300/50 animate-pulse"
                   : l.startsWith("⚡⚡")
                     ? "bg-violet-400/30 text-violet-100 border border-violet-300/50"
