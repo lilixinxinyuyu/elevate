@@ -18,6 +18,7 @@ import { useAppTitle } from "../lib/displayName";
 import type { SubjectId } from "../core/types";
 import { DailySummaryCard } from "../components/DailySummaryCard";
 import { ChangePasswordModal } from "../components/ChangePasswordModal";
+import { GradeMismatchBanner } from "../components/GradeMismatchBanner";
 
 function formatDaysUntil(at: number): string {
   const days = Math.ceil((at - Date.now()) / (24 * 60 * 60 * 1000));
@@ -50,6 +51,9 @@ export function SubjectPickerPage() {
         </div>
 
         <ChangePasswordModal open={pwdModalOpen} onClose={() => setPwdModalOpen(false)} />
+
+        {/* v0.34.72 iter 6: 非 4 年级同学友好提示 (题库当前只覆盖 4 年级) */}
+        <GradeMismatchBanner />
 
         {/* v0.31.103: 三学科今日总结卡（顶部 hero） */}
         {student && (

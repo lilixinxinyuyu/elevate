@@ -22,6 +22,7 @@ const KEY_DISPLAY = "xiaojinapp.displayName";
 const KEY_USER_ID = "xiaojinapp.userId";
 const KEY_BIRTHDAY = "xiaojinapp.birthday"; // ISO YYYY-MM-DD; 给 birthday trophy check 用
 const KEY_REGISTERED_AT = "xiaojinapp.registeredAt"; // epoch ms; 防新用户被一堆历史勋章弹
+const KEY_GRADE = "xiaojinapp.grade"; // "1".."6"; iter 6 内容年级 mismatch 提示用
 const EVENT_NAME = "xiaojinapp:displayname-change";
 
 function lsGet(k: string): string | null {
@@ -97,6 +98,33 @@ export function getRegisteredAt(): number {
 export function daysSinceRegistered(): number {
   const reg = getRegisteredAt();
   return Math.floor((Date.now() - reg) / 86_400_000);
+}
+
+/**
+ * 学生年级 ("1"..."6"). 来自 /api/profile.grade. iter 6 内容覆盖年级 mismatch
+ * 提示用 (当前题库 grade: literal 4, 非 4 年级 user 应看到"课本上传中"banner).
+ */
+export function getStoredGrade(): string | null {
+  return lsGet(KEY_GRADE);
+}
+export function setStoredGrade(g: string | null): void {
+  lsSet(KEY_GRADE, g);
+}
+export function useStoredGrade(): string | null {
+  const [g, setG] = useState(() => getStoredGrade());
+  useEffect(() => {
+    const refresh = () => setG(getStoredGrade());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === KEY_GRADE) refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(EVENT_NAME, refresh);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(EVENT_NAME, refresh);
+    };
+  }, []);
+  return g;
 }
 
 /**

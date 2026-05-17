@@ -18,7 +18,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getStoredPassword } from "../db/cloudSync";
-import { setDisplayName as cacheDisplayName, setStoredBirthday, useDisplayName } from "../lib/displayName";
+import { setDisplayName as cacheDisplayName, setStoredBirthday, setStoredGrade, useDisplayName } from "../lib/displayName";
 
 /**
  * v0.34.68 iter 2 — onboarding 7 必填字段拆 3 个阶段:
@@ -191,6 +191,7 @@ export function ProfileGate() {
     // 立即把新 displayName 写进 cache, 全 app 同步 "Selena's Elevate" → 用户名
     if (patch.displayName) cacheDisplayName(patch.displayName);
     if (patch.birthday) setStoredBirthday(patch.birthday);
+    if (patch.grade) setStoredGrade(patch.grade);
     setMissing(r.missing ?? []);
     // toast 保存了多少字段
     const savedCount = Object.keys(patch).length;
