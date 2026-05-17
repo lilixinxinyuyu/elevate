@@ -23,6 +23,7 @@ import { Hono } from "hono";
 import type { Env } from "../lib/env";
 import { requireAuth, getUserId } from "../lib/auth";
 import { getOssConfig, ossPut, ossGet } from "../lib/oss";
+import { getChatProviders as getChatProvidersLib, getChatModels as getChatModelsLib } from "../lib/providers";
 import proxyFallback from "./proxy-fallback";
 
 const generate = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
@@ -545,7 +546,239 @@ generate.post("/variant", async (c) => {
   return c.json({ ok: false, error: "llm_failed", detail: tried.slice(0, 6).map(t => `${t.provider}/${t.model}:${t.code}`).join(", "), tried }, 502);
 });
 
-// 其他 /api/generate/* (questions) 暂未移植 → 代理到老 CF Pages
+/**
+ * POST /api/generate/questions — Ep36 native impl
+ *
+ * CF Pages 原版 765 行，含跨 batch lazy timer、broken-model 共享、partial-success
+ * 收集等。本 simplified 版只覆盖客户端实际用法：sessionAdaptive count=1 + tutor 单批，
+ * 真没有 sub-batch 并发的必要（qwen3.6-flash 单次 5 题 ~6-8s under ESA 11s 硬限）。
+ *
+ * 输入 body (兼容 CF Pages shape)：
+ *   { subjectId, unitId, unitName, skillId, skillName, term, count, difficulty,
+ *     format, gameType, existingStems?, extraSkillIds?, recentMistakeStems?, callerTag? }
+ *
+ * 输出：{ ok, questions[], model, provider, generatedCount, requestedCount, partial }
+ */
+// Ep36 实测：ESA EdgeRoutine 单 fetch ~9s 上限 + qwen3.6-flash 每题 ~3-4s 输出。
+// count=1 稳 7-8s, count=2 9-10s（仍 ok），count=3 边缘 / 超时。
+// cap 3 给客户端 sessionAdaptive（实际 count=1）+ tutor（小批）足够头道，
+// 想要更大批客户端可拆并发。
+const QUESTIONS_MAX = 3;
+const QUESTIONS_TIMEOUT_MS = 10_000;
+
+interface GenReqBody {
+  subjectId?: "math" | "chinese";
+  unitId?: string;
+  unitName?: string;
+  skillId?: string;
+  skillName?: string;
+  term?: string;
+  count?: number;
+  difficulty?: string | number;
+  format?: string;
+  gameType?: string;
+  existingStems?: string[];
+  extraSkillIds?: string[];
+  recentMistakeStems?: string[];
+  callerTag?: string;
+}
+
+function buildQuestionsSystemPrompt(subjectId: string): string {
+  const label = subjectId === "chinese" ? "语文" : "数学";
+  return `你是 4 年级 ${label} AI 出题员。严格按下面 schema 返回 JSON：
+
+{
+  "questions": [
+    {
+      "question_id": "AI_<skill>_<idx>",
+      "stem": "题面（清晰、自然、不要 '（无关）' 之类元注解）",
+      "options": [{"id":"a","text":"..."},{"id":"b","text":"..."}],  // plain_choice 才需要
+      "answer": { "type": "choice"|"number"|"multi_step", "value": ... },
+      "hints": ["逐层提示，从轻到重"],
+      "common_errors": [],
+      "solution_steps": [],
+      "estimated_time_seconds": 15-90,
+      "difficulty": 1-5
+    }
+  ]
+}
+
+要求：
+- 数学闭合：实物=整数、钱=2 位小数、答案算得通
+- 不出 forbidden_verb 元注解；distractor 要源自学生具体误解（不是随机数字）
+- options 数量与 game_type 匹配；plain_choice 4 个，true_false 2 个
+- 不要 markdown 代码块、不要解释文字`;
+}
+
+function buildQuestionsUserPrompt(body: GenReqBody, batchStamp: string): string {
+  const count = Math.max(1, Math.min(QUESTIONS_MAX, body.count ?? 3));
+  const excl = (body.existingStems ?? []).slice(0, 10).map((s) => `- ${s.slice(0, 80)}`).join("\n");
+  const focus = (body.recentMistakeStems ?? []).slice(0, 3).map((s) => `- ${s.slice(0, 80)}`).join("\n");
+  return `# 出题任务
+
+- skill: ${body.skillName ?? body.skillId} (${body.skillId})
+- unit: ${body.unitName ?? body.unitId} (${body.unitId})
+- term: ${body.term ?? "未指定"}
+- difficulty: ${body.difficulty ?? 3} (1=易 5=难)
+- game_type: ${body.gameType ?? "plain_choice"}
+- format: ${body.format ?? "auto"}
+- count: ${count}
+- batch_stamp: ${batchStamp}
+
+${excl ? `# 避免与下列 stem 重复\n${excl}\n` : ""}${focus ? `# 学生最近错过这些 (可作为考点焦点)\n${focus}\n` : ""}
+
+输出 JSON: { "questions": [...${count} 道...] }。每题 question_id 用 "AI_${body.skillId ?? "x"}_<idx>__${batchStamp}_<idx>" 格式。`;
+}
+
+function extractJsonObj(text: string): unknown {
+  if (!text) return null;
+  const tryP = (s: string): unknown => { try { return JSON.parse(s); } catch { return null; } };
+  let cleaned = text.trim();
+  let r = tryP(cleaned);
+  if (r) return r;
+  cleaned = cleaned.replace(/^```(?:json|JSON)?\s*\n?/, "").replace(/\n?```\s*$/, "").trim();
+  r = tryP(cleaned);
+  if (r) return r;
+  const start = cleaned.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (esc) { esc = false; continue; }
+    if (ch === "\\") { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        const sub = cleaned.substring(start, i + 1);
+        r = tryP(sub) ?? tryP(sub.replace(/,(\s*[}\]])/g, "$1"));
+        if (r) return r;
+      }
+    }
+  }
+  return null;
+}
+
+generate.post("/questions", async (c) => {
+  const providers = getChatProvidersLib(c.env);
+  if (providers.length === 0) {
+    return c.json({ ok: false, error: "generator_not_configured" }, 503);
+  }
+  let body: GenReqBody;
+  try {
+    body = await c.req.json<GenReqBody>();
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  if (!body.skillId) {
+    return c.json({ ok: false, error: "missing_skillId" }, 400);
+  }
+  const subjectId = body.subjectId === "chinese" ? "chinese" : "math";
+  const requestedCount = Math.max(1, Math.min(QUESTIONS_MAX, body.count ?? 3));
+  const sys = buildQuestionsSystemPrompt(subjectId);
+  const stamp = Date.now().toString(36);
+  const usr = buildQuestionsUserPrompt({ ...body, count: requestedCount }, stamp);
+
+  const errors: { provider: string; model: string; code: string; message: string }[] = [];
+
+  for (const p of providers) {
+    const models = getChatModelsLib(p).filter((m: string) => /^qwen3/i.test(m)).slice(0, 2);
+    for (const model of models) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), QUESTIONS_TIMEOUT_MS);
+      try {
+        const resp = await fetch(`${p.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${p.apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
+            temperature: 0.7,
+            max_tokens: 3500,
+            response_format: { type: "json_object" },
+            enable_thinking: false,
+          }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        const j = (await resp.json().catch(() => null)) as
+          | { choices?: { message?: { content?: string } }[]; error?: { code?: string; message?: string } }
+          | null;
+        if (!resp.ok || !j || j.error) {
+          errors.push({
+            provider: p.label, model,
+            code: j?.error?.code ?? `http_${resp.status}`,
+            message: j?.error?.message ?? "",
+          });
+          if (j?.error?.code === "InvalidApiKey" || j?.error?.code === "AccessDenied") break;
+          continue;
+        }
+        const text = j.choices?.[0]?.message?.content?.trim();
+        if (!text) {
+          errors.push({ provider: p.label, model, code: "empty_response", message: "" });
+          continue;
+        }
+        const parsed = extractJsonObj(text) as { questions?: unknown[] } | null;
+        const rawQs = Array.isArray(parsed?.questions) ? parsed!.questions : null;
+        if (!rawQs || rawQs.length === 0) {
+          errors.push({ provider: p.label, model, code: "json_parse_failed", message: text.slice(0, 120) });
+          continue;
+        }
+        // Validate + stamp
+        const stamped = rawQs
+          .filter((q): q is Record<string, unknown> =>
+            typeof q === "object" && q !== null && typeof (q as Record<string, unknown>).stem === "string"
+          )
+          .map((q, i) => {
+            const baseId = typeof q.question_id === "string" ? q.question_id : `AI_${body.skillId}_${i}`;
+            return {
+              ...q,
+              question_id: baseId.includes("__") ? baseId : `${baseId}__${stamp}_${i}`,
+              subjectId,
+              skill_id: body.skillId,
+              unit_id: body.unitId,
+              tags: Array.isArray(q.tags)
+                ? Array.from(new Set([...(q.tags as string[]), "ai_generated"]))
+                : ["ai_generated"],
+            };
+          });
+        if (stamped.length === 0) {
+          errors.push({ provider: p.label, model, code: "no_valid_questions", message: "" });
+          continue;
+        }
+        return c.json({
+          ok: true,
+          questions: stamped,
+          model,
+          provider: p.label,
+          generatedCount: stamped.length,
+          requestedCount,
+          partial: stamped.length < requestedCount,
+        });
+      } catch (e) {
+        clearTimeout(timer);
+        const isAbort = (e as Error)?.name === "AbortError";
+        errors.push({
+          provider: p.label, model,
+          code: isAbort ? "timeout" : "fetch_error",
+          message: e instanceof Error ? e.message : String(e),
+        });
+        if (isAbort) break;
+      }
+    }
+  }
+  console.error("[generate/questions] all failed", errors);
+  return c.json({
+    ok: false,
+    error: "no_model_worked",
+    detail: errors.slice(0, 5).map((t) => `${t.provider}/${t.model}:${t.code}`).join(", "),
+    tried: errors,
+  }, 502);
+});
+
+// 其他 /api/generate/* (image/* 已上面注册，剩 image/proxy/...) → 代理到老 CF Pages
 generate.all("*", async (c) => {
   return proxyFallback.fetch(c.req.raw, c.env);
 });
