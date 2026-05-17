@@ -1240,4 +1240,132 @@ superAdmin.post("/users", async (c) => {
   });
 });
 
+/**
+ * v0.34.75 iter 9: 课本 PDF 上传 (5 年级 + 多年级支持基建).
+ *
+ * 流程:
+ *   1. super-admin 在 UI 选 PDF + 目标同学 + 学科
+ *   2. POST /api/super-admin/textbooks/upload (multipart)
+ *      → 写 OSS users/{targetUserId}/textbooks/{uploadId}.pdf
+ *      → 写 OSS users/{targetUserId}/textbooks/{uploadId}.meta.json
+ *        含 filename/subject/grade/uploadedAt/status="pending"
+ *      → 返 { uploadId, sizeBytes, status: "pending" }
+ *   3. (iter 10) cron / 触发 worker 跑 OCR + parse → 写 ai-questions/{qid}.json
+ *
+ * 限制:
+ *   - PDF max 20MB (ESA EdgeRoutine body 限制比较松, 但 OCR 处理大文件费时)
+ *   - Content-Type 强校验 application/pdf
+ *   - 只 super-admin 能调
+ *
+ * 这次 ep 只做基建 (upload + meta), iter 10 加 OCR + parse, iter 11 入库.
+ */
+const TEXTBOOK_MAX_BYTES = 20 * 1024 * 1024;
+
+superAdmin.post("/textbooks/upload", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  const ct = c.req.header("content-type") ?? "";
+  if (!ct.startsWith("multipart/form-data")) {
+    return c.json({ ok: false, error: "expected_multipart" }, 400);
+  }
+
+  let form: FormData;
+  try {
+    form = await c.req.formData();
+  } catch (e) {
+    return c.json({ ok: false, error: "invalid_multipart", detail: (e as Error).message }, 400);
+  }
+
+  const file = form.get("pdf") as File | null;
+  const targetUserId = form.get("targetUserId");
+  const subject = form.get("subject");
+  const grade = form.get("grade");
+  if (!file) return c.json({ ok: false, error: "missing_pdf" }, 400);
+  if (typeof targetUserId !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_targetUserId" }, 400);
+  }
+  if (typeof subject !== "string" || !["math", "chinese", "english"].includes(subject)) {
+    return c.json({ ok: false, error: "invalid_subject" }, 400);
+  }
+  if (typeof grade !== "string" || !/^[1-6]$/.test(grade)) {
+    return c.json({ ok: false, error: "invalid_grade" }, 400);
+  }
+  if (file.type && file.type !== "application/pdf") {
+    return c.json({ ok: false, error: "expected_pdf_mime", got: file.type }, 415);
+  }
+  if (file.size > TEXTBOOK_MAX_BYTES) {
+    return c.json({ ok: false, error: "file_too_large", maxBytes: TEXTBOOK_MAX_BYTES, gotBytes: file.size }, 413);
+  }
+
+  const uploadId = `tb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const pdfKey = `users/${targetUserId}/textbooks/${uploadId}.pdf`;
+  const metaKey = `users/${targetUserId}/textbooks/${uploadId}.meta.json`;
+
+  // 写 PDF (binary)
+  const arrayBuf = await file.arrayBuffer();
+  const pdfPut = await ossPut(cfg, pdfKey, arrayBuf, { contentType: "application/pdf" });
+  if (!pdfPut.ok) {
+    return c.json({ ok: false, error: "oss_pdf_put_failed", detail: pdfPut.error }, 502);
+  }
+
+  // 写 meta (JSON, 给 iter 10 parser 读)
+  const meta = {
+    uploadId,
+    targetUserId,
+    subject,
+    grade,
+    filename: file.name ?? "textbook.pdf",
+    sizeBytes: file.size,
+    contentType: file.type || "application/pdf",
+    uploadedAt: Date.now(),
+    uploadedBy: getUserId(c),
+    status: "pending" as const, // iter 10 改 "parsing" → "done" / "failed"
+    pdfKey,
+  };
+  const metaPut = await ossPut(cfg, metaKey, JSON.stringify(meta, null, 2), {
+    contentType: "application/json; charset=utf-8",
+  });
+  if (!metaPut.ok) {
+    return c.json({ ok: false, error: "oss_meta_put_failed", detail: metaPut.error }, 502);
+  }
+
+  console.log(
+    `[super-admin] textbook uploaded: ${uploadId} (${meta.filename}, ${(file.size / 1024).toFixed(1)} KB) for ${targetUserId}/${subject}/G${grade}`,
+  );
+
+  return c.json({
+    ok: true,
+    uploadId,
+    pdfKey,
+    metaKey,
+    sizeBytes: file.size,
+    status: "pending",
+    estimatedParseMinutes: Math.max(3, Math.ceil(file.size / (1024 * 1024) * 2)), // 粗略 2 min/MB
+    nextStep: "iter 10 will add OCR + parse; iter 11 will import questions to user's ai-questions/",
+  }, 202);
+});
+
+/**
+ * GET /api/super-admin/textbooks?userId=xxx
+ * 列出某同学已上传的课本 (从 OSS users/{userId}/textbooks/*.meta.json 列出)
+ */
+superAdmin.get("/textbooks", async (c) => {
+  const userId = c.req.query("userId");
+  if (!userId || !/^[a-zA-Z0-9_-]{1,64}$/.test(userId)) {
+    return c.json({ ok: false, error: "missing_or_invalid_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  // 简化版: 直接 list prefix (调 OSS API), 这里 stub 因为我们 oss.ts lib 没暴露 list.
+  // 客户端 admin UI 上传后会本地 keep uploadId list, 不依赖此 list endpoint;
+  // 提供给将来 dashboard 用. iter 10 实现 list.
+  return c.json({
+    ok: true,
+    userId,
+    note: "list endpoint stub — iter 10 will implement OSS list",
+    textbooks: [],
+  });
+});
+
 export default superAdmin;

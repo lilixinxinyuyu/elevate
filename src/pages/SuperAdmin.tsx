@@ -125,6 +125,20 @@ export function SuperAdminPage() {
   const [newBusy, setNewBusy] = useState(false);
   const [newErr, setNewErr] = useState<string | null>(null);
 
+  // v0.34.75 iter 9: 课本 PDF 上传 modal
+  const [textbookOpen, setTextbookOpen] = useState(false);
+  const [textbookTargetUserId, setTextbookTargetUserId] = useState("");
+  const [textbookSubject, setTextbookSubject] = useState<"math" | "chinese" | "english">("math");
+  const [textbookGrade, setTextbookGrade] = useState<"1" | "2" | "3" | "4" | "5" | "6">("5");
+  const [textbookFile, setTextbookFile] = useState<File | null>(null);
+  const [textbookBusy, setTextbookBusy] = useState(false);
+  const [textbookErr, setTextbookErr] = useState<string | null>(null);
+  const [textbookResult, setTextbookResult] = useState<{
+    uploadId: string;
+    sizeBytes: number;
+    estimatedParseMinutes: number;
+  } | null>(null);
+
   // Ep16: 批量刷新摘要
   const [bulkRefreshState, setBulkRefreshState] = useState<{
     running: boolean;
@@ -856,6 +870,53 @@ export function SuperAdminPage() {
     }
   }
 
+  /** v0.34.75 iter 9: 上传课本 PDF 到 OSS */
+  async function submitTextbookUpload() {
+    if (!textbookFile) { setTextbookErr("请先选 PDF 文件"); return; }
+    if (!textbookTargetUserId.trim()) { setTextbookErr("请填目标同学 userId"); return; }
+    if (textbookFile.size > 20 * 1024 * 1024) {
+      setTextbookErr(`文件太大 (${(textbookFile.size / 1024 / 1024).toFixed(1)} MB), 上限 20 MB`);
+      return;
+    }
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    setTextbookBusy(true);
+    setTextbookErr(null);
+    try {
+      const form = new FormData();
+      form.append("pdf", textbookFile);
+      form.append("targetUserId", textbookTargetUserId.trim());
+      form.append("subject", textbookSubject);
+      form.append("grade", textbookGrade);
+      const r = await fetch("/api/super-admin/textbooks/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${pwd}` },
+        body: form,
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        detail?: string;
+        uploadId?: string;
+        sizeBytes?: number;
+        estimatedParseMinutes?: number;
+      };
+      if (!j.ok || !j.uploadId) {
+        setTextbookErr(`上传失败: ${j.error ?? "unknown"} ${j.detail ?? ""}`);
+        return;
+      }
+      setTextbookResult({
+        uploadId: j.uploadId,
+        sizeBytes: j.sizeBytes ?? 0,
+        estimatedParseMinutes: j.estimatedParseMinutes ?? 5,
+      });
+    } catch (e) {
+      setTextbookErr((e as Error).message);
+    } finally {
+      setTextbookBusy(false);
+    }
+  }
+
   async function submitEdit() {
     if (!editing) return;
     const pwd = getStoredPassword();
@@ -955,6 +1016,14 @@ export function SuperAdminPage() {
             className="text-xs rounded-full bg-[#ff7a17] hover:bg-[#ffc285] text-[#0a0a0a] px-4 py-2 font-medium transition-colors"
           >
             + Enlist new cadet
+          </button>
+          {/* v0.34.75 iter 9: 上传课本 PDF (5 年级 + 多年级支持基建) */}
+          <button
+            type="button"
+            onClick={() => { setTextbookOpen(true); setTextbookErr(null); setTextbookResult(null); }}
+            className="text-xs rounded-full border border-violet-400/40 hover:border-violet-300 text-violet-200 hover:bg-violet-500/10 px-4 py-2 font-medium transition-colors"
+          >
+            📚 Upload textbook PDF
           </button>
           <button
             type="button"
@@ -1659,6 +1728,136 @@ export function SuperAdminPage() {
                 {newBusy ? "Enlisting…" : "Create account"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* v0.34.75 iter 9: 上传课本 PDF modal */}
+      {textbookOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[1000] bg-black/80 flex items-center justify-center p-4"
+          style={{ backdropFilter: "blur(6px)" }}
+        >
+          <div className="max-w-md w-full bg-[#1a1c20] border border-[#212327] rounded-xl p-6">
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1">
+              textbook ingest
+            </div>
+            <div className="font-display text-xl font-medium tracking-tight text-white mb-4">
+              📚 Upload textbook PDF
+            </div>
+            {!textbookResult ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">
+                    target user id <span className="text-[#ff7a17]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={textbookTargetUserId}
+                    onChange={(e) => setTextbookTargetUserId(e.target.value.toLowerCase())}
+                    placeholder="democlass5"
+                    className="w-full px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] focus:border-violet-400 focus:outline-none text-white text-sm font-mono"
+                    maxLength={64}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">
+                      subject
+                    </label>
+                    <select
+                      value={textbookSubject}
+                      onChange={(e) => setTextbookSubject(e.target.value as typeof textbookSubject)}
+                      className="w-full px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] text-white text-sm"
+                    >
+                      <option value="math">数学 math</option>
+                      <option value="chinese">语文 chinese</option>
+                      <option value="english">英语 english</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">
+                      grade
+                    </label>
+                    <select
+                      value={textbookGrade}
+                      onChange={(e) => setTextbookGrade(e.target.value as typeof textbookGrade)}
+                      className="w-full px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] text-white text-sm"
+                    >
+                      {(["1", "2", "3", "4", "5", "6"] as const).map((g) => (
+                        <option key={g} value={g}>{g} 年级</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">
+                    PDF file <span className="text-[#ff7a17]">*</span> <span className="text-[#7d8187] normal-case">(≤20MB)</span>
+                  </label>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={(e) => setTextbookFile(e.target.files?.[0] ?? null)}
+                    className="w-full text-xs text-slate-300 file:mr-2 file:px-3 file:py-1.5 file:rounded file:border-0 file:bg-violet-500 file:text-white hover:file:bg-violet-400"
+                  />
+                  {textbookFile && (
+                    <div className="text-[10px] text-slate-400 mt-1">
+                      {textbookFile.name} · {(textbookFile.size / 1024).toFixed(1)} KB
+                    </div>
+                  )}
+                </div>
+                {textbookErr && (
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-rose-400">⚠ {textbookErr}</div>
+                )}
+                <div className="text-[10px] text-[#7d8187] leading-relaxed">
+                  上传后 OSS 存 <code className="text-[#dadbdf]">users/&lt;userId&gt;/textbooks/&lt;uploadId&gt;.pdf</code>。
+                  Iter 10 加 OCR + parse, iter 11 把题入到学生的 ai-questions/。
+                  当前先存下来给 iter 10 用。
+                </div>
+                <div className="flex gap-2 justify-end mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setTextbookOpen(false)}
+                    disabled={textbookBusy}
+                    className="text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium disabled:opacity-30"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submitTextbookUpload}
+                    disabled={textbookBusy || !textbookFile || !textbookTargetUserId.trim()}
+                    className="text-xs rounded-full bg-violet-500 hover:bg-violet-400 text-white px-4 py-2 font-medium disabled:opacity-30"
+                  >
+                    {textbookBusy ? `Uploading… (${textbookFile ? (textbookFile.size / 1024 / 1024).toFixed(1) : "?"} MB)` : "Upload"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-emerald-300 text-3xl text-center mb-2">✓ 上传成功</div>
+                <div className="text-xs text-slate-300 space-y-1.5 bg-emerald-500/10 border border-emerald-400/30 rounded p-3">
+                  <div>📁 <span className="font-mono">{textbookResult.uploadId}</span></div>
+                  <div>📊 {(textbookResult.sizeBytes / 1024).toFixed(1)} KB</div>
+                  <div>⏰ 预计 AI 解析时间: {textbookResult.estimatedParseMinutes} 分钟</div>
+                </div>
+                <div className="text-[11px] text-slate-400 leading-relaxed">
+                  PDF 已存到 OSS, iter 10 加 OCR + 题目抽取流程后会自动跑。当前演示阶段:
+                  跟学生 + 老师说 <strong>"AI 正在阅读你的课本, 几分钟后会推送 grade-{textbookGrade} 题给你"</strong>。
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => { setTextbookOpen(false); setTextbookFile(null); }}
+                    className="text-xs rounded-full bg-emerald-500 hover:bg-emerald-400 text-[#0a0a0a] px-4 py-2 font-medium"
+                  >
+                    完成
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
