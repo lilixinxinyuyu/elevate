@@ -142,6 +142,19 @@ export function SuperAdminPage() {
   const [synthBusy, setSynthBusy] = useState(false);
   const [synthResult, setSynthResult] = useState<{ count: number; model: string } | null>(null);
   const [synthErr, setSynthErr] = useState<string | null>(null);
+  // v0.34.85 iter 19: textbook list 历史上传
+  const [textbookHistory, setTextbookHistory] = useState<Array<{
+    uploadId: string;
+    filename?: string;
+    subject?: string;
+    grade?: string;
+    sizeBytes?: number;
+    uploadedAt?: number;
+    status?: string;
+    synthesizedCount?: number;
+    synthesizedModel?: string;
+  }> | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
 
   // Ep16: 批量刷新摘要
   const [bulkRefreshState, setBulkRefreshState] = useState<{
@@ -871,6 +884,29 @@ export function SuperAdminPage() {
       setNewErr((e as Error).message);
     } finally {
       setNewBusy(false);
+    }
+  }
+
+  /** v0.34.85 iter 19: 拉某同学已上传课本历史 */
+  async function loadTextbookHistory(userId: string) {
+    if (!userId.trim()) { setTextbookHistory([]); return; }
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    setHistoryBusy(true);
+    try {
+      const r = await fetch(`/api/super-admin/textbooks?userId=${encodeURIComponent(userId.trim())}`, {
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; textbooks?: Array<Record<string, unknown>> };
+      if (j.ok && Array.isArray(j.textbooks)) {
+        setTextbookHistory(j.textbooks as typeof textbookHistory);
+      } else {
+        setTextbookHistory([]);
+      }
+    } catch {
+      setTextbookHistory([]);
+    } finally {
+      setHistoryBusy(false);
     }
   }
 
@@ -1788,15 +1824,60 @@ export function SuperAdminPage() {
                   <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">
                     target user id <span className="text-[#ff7a17]">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={textbookTargetUserId}
-                    onChange={(e) => setTextbookTargetUserId(e.target.value.toLowerCase())}
-                    placeholder="democlass5"
-                    className="w-full px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] focus:border-violet-400 focus:outline-none text-white text-sm font-mono"
-                    maxLength={64}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={textbookTargetUserId}
+                      onChange={(e) => setTextbookTargetUserId(e.target.value.toLowerCase())}
+                      placeholder="democlass5"
+                      className="flex-1 px-3 py-2 rounded-md bg-[#0a0a0a] border border-[#212327] focus:border-violet-400 focus:outline-none text-white text-sm font-mono"
+                      maxLength={64}
+                    />
+                    {/* v0.34.85 iter 19: 看该同学历史上传 */}
+                    <button
+                      type="button"
+                      onClick={() => void loadTextbookHistory(textbookTargetUserId)}
+                      disabled={historyBusy || !textbookTargetUserId.trim()}
+                      className="text-xs px-3 py-2 rounded-md border border-violet-400/40 text-violet-200 hover:bg-violet-500/10 disabled:opacity-30 whitespace-nowrap"
+                      title="查这位同学已上传过的课本"
+                    >
+                      {historyBusy ? "..." : "📜 History"}
+                    </button>
+                  </div>
                 </div>
+                {textbookHistory && (
+                  <div className="bg-[#0a0a0a] border border-[#212327] rounded-md p-2 max-h-48 overflow-y-auto">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1.5">
+                      {textbookHistory.length === 0
+                        ? "no previous uploads"
+                        : `${textbookHistory.length} previous upload${textbookHistory.length === 1 ? "" : "s"}`}
+                    </div>
+                    {textbookHistory.map((tb) => (
+                      <div key={tb.uploadId} className="text-[11px] py-1 border-b border-[#212327] last:border-b-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-slate-300 truncate">
+                            {tb.filename ?? tb.uploadId.slice(0, 14)}
+                          </span>
+                          <span className={
+                            tb.status === "synthesized"
+                              ? "text-emerald-300 text-[10px]"
+                              : "text-amber-300 text-[10px]"
+                          }>
+                            {tb.status === "synthesized"
+                              ? `✓ ${tb.synthesizedCount ?? "?"} 题`
+                              : "⏳ pending"}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          {tb.subject === "math" ? "数学" : tb.subject === "chinese" ? "语文" : "英语"} · G{tb.grade ?? "?"} ·
+                          {tb.sizeBytes ? ` ${(tb.sizeBytes / 1024).toFixed(0)} KB · ` : " "}
+                          {tb.uploadedAt ? new Date(tb.uploadedAt).toLocaleString("zh-CN", { hour12: false, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                          {tb.synthesizedModel ? ` · ${tb.synthesizedModel}` : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mb-1 block">

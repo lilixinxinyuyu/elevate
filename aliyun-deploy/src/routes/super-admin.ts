@@ -1465,10 +1465,75 @@ superAdmin.post("/textbooks/upload", async (c) => {
 });
 
 /**
- * GET /api/super-admin/textbooks?userId=xxx — list stub iter 10+
+ * GET /api/super-admin/textbooks?userId=xxx
+ *
+ * v0.34.85 iter 19: 列某同学已上传的课本 + 状态 + 合成题数. 用 OSS list-v2
+ * 拉 users/{uid}/textbooks/*.meta.json, parallel get 每个 meta JSON.
+ *
+ * 返回:
+ *   { ok, userId, count, textbooks: [{uploadId, filename, subject, grade,
+ *     sizeBytes, uploadedAt, status, synthesizedCount?, synthesizedModel?}] }
  */
 superAdmin.get("/textbooks", async (c) => {
-  return c.json({ ok: true, textbooks: [], note: "list stub" });
+  const userId = c.req.query("userId");
+  if (!userId || !/^[a-zA-Z0-9_-]{1,64}$/.test(userId)) {
+    return c.json({ ok: false, error: "missing_or_invalid_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+
+  // 复用 list helper 模式 (跟 ai-questions iter 11 同套)
+  const prefix = `users/${userId}/textbooks/`;
+  const date = new Date().toUTCString();
+  const stringToSign = ["GET", "", "", date, `/${cfg.bucket}/`].join("\n");
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", enc.encode(cfg.accessKeySecret),
+    { name: "HMAC", hash: "SHA-1" }, false, ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(stringToSign));
+  let bin = "";
+  const bytes = new Uint8Array(sigBuf);
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  const sig = btoa(bin);
+  const host = `${cfg.bucket}.${cfg.region}.aliyuncs.com`;
+  const url = `https://${host}/?list-type=2&prefix=${encodeURIComponent(prefix)}&max-keys=1000`;
+  const metaKeys: string[] = [];
+  try {
+    const r = await fetch(url, {
+      method: "GET",
+      headers: { Host: host, Date: date, Authorization: `OSS ${cfg.accessKeyId}:${sig}` },
+    });
+    if (!r.ok) return c.json({ ok: false, error: `list_failed_${r.status}` }, 502);
+    const xml = await r.text();
+    for (const m of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) {
+      const k = m[1] ?? "";
+      if (k.endsWith(".meta.json")) metaKeys.push(k);
+    }
+  } catch (e) {
+    return c.json({ ok: false, error: "list_threw: " + (e as Error).message }, 502);
+  }
+
+  // parallel get meta files (cap 20 来防 ESA 8 fetch 限 — 实际多少都试着 race)
+  const limited = metaKeys.slice(0, 20);
+  const fetches = await Promise.allSettled(
+    limited.map(async (key) => {
+      const got = await ossGet(cfg, key);
+      if (!got.ok || !got.text) return null;
+      try {
+        return JSON.parse(got.text) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const textbooks: Array<Record<string, unknown>> = [];
+  for (const r of fetches) {
+    if (r.status === "fulfilled" && r.value) textbooks.push(r.value);
+  }
+  // 按 uploadedAt desc
+  textbooks.sort((a, b) => ((b.uploadedAt as number) ?? 0) - ((a.uploadedAt as number) ?? 0));
+  return c.json({ ok: true, userId, count: textbooks.length, textbooks });
 });
 
 /**
