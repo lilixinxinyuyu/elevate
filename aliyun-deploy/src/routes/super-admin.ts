@@ -1171,6 +1171,49 @@ superAdmin.get("/users/:userId/agent-summary", async (c) => {
 });
 
 /**
+ * v0.34.92 iter 26: POST /api/super-admin/users/:userId/force-trophy-resync
+ * 在 profile.json 写 forceTrophyResyncRequestedAt=now. 学生下次登录 AuthGate
+ * bootstrap 时读到, 跟本地 lastForceTrophyResyncSeen 比, 新的就 forceTrophyResync()
+ * 重建本地 trophyImages cache. 无需学生操作.
+ */
+superAdmin.post("/users/:userId/force-trophy-resync", async (c) => {
+  const targetUserId = c.req.param("userId");
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const profileKey = `users/${targetUserId}/profile.json`;
+  // 读现有 profile (merge 不替换)
+  let current: Record<string, unknown> = {
+    schemaVersion: 1,
+    userId: targetUserId,
+    createdAt: Date.now(),
+    createdBy: "force-trophy-resync-init",
+  };
+  const got = await ossGet(cfg, profileKey);
+  if (got.ok && got.text) {
+    try { current = JSON.parse(got.text); } catch { /* corrupt → 重建 */ }
+  }
+  const now = Date.now();
+  current.forceTrophyResyncRequestedAt = now;
+  current.updatedAt = now;
+  const put = await ossPut(cfg, profileKey, JSON.stringify(current, null, 2), {
+    contentType: "application/json; charset=utf-8",
+  });
+  if (!put.ok) {
+    return c.json({ ok: false, error: put.error }, 502);
+  }
+  console.log(`[super-admin] ${getUserId(c)} requested force-trophy-resync for ${targetUserId} @ ${now}`);
+  return c.json({
+    ok: true,
+    targetUserId,
+    forceTrophyResyncRequestedAt: now,
+    note: "Student client on next login will auto-run forceTrophyResync() and rebuild local trophyImages cache.",
+  });
+});
+
+/**
  * v0.34.90 iter 24: GET /api/super-admin/users/:userId/password
  * 看同学**当前**密码 (不重置). super-admin "test-as-student" 一键 demo 用 —
  * admin 不知道密码也能快速登录看学生 view.

@@ -361,6 +361,31 @@ export function SuperAdminPage() {
   }
 
   /**
+   * v0.34.92 iter 26: admin 远程触发学生 trophy-images 重拉.
+   * 在 profile.json 写 forceTrophyResyncRequestedAt=now, 学生下次登录 client
+   * AuthGate 自动 forceTrophyResync(). 修远程 broken IDB cache.
+   */
+  async function forceTrophyResync(userId: string) {
+    if (!confirm(`触发 ${userId} 重拉所有 trophy-images?\n下次登录时学生设备会自动 clear+repull (不影响 session)。`)) return;
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    try {
+      const r = await fetch(
+        `/api/super-admin/users/${encodeURIComponent(userId)}/force-trophy-resync`,
+        { method: "POST", headers: { Authorization: `Bearer ${pwd}` } },
+      );
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; forceTrophyResyncRequestedAt?: number };
+      if (!j.ok) {
+        alert(`Force resync ${userId} failed: ${j.error ?? "unknown"}`);
+        return;
+      }
+      alert(`✓ Marked ${userId} for trophy resync at ${new Date(j.forceTrophyResyncRequestedAt ?? 0).toLocaleString("zh-CN")}.\n学生下次登录会自动重拉.`);
+    } catch (e) {
+      alert(`Force resync ${userId} threw: ${(e as Error).message}`);
+    }
+  }
+
+  /**
    * v0.34.90 iter 24: admin "test-as-student" — 拉同学密码 + copy 到剪贴板 +
    * 开新 tab 到学生子域. 演示前快速 QA 不用手动切账号 + 不记一堆密码.
    * 不重置密码 — 学生现有 session 不受影响.
@@ -1736,6 +1761,15 @@ export function SuperAdminPage() {
                         title={`复制 ${u.userId} 密码 + 开新 tab 进她子域 (不重置, 学生 session 不变)`}
                       >
                         🎭 Test as
+                      </button>
+                      {/* v0.34.92 iter 26: admin 远程触发学生 trophy-images 重拉 */}
+                      <button
+                        type="button"
+                        onClick={() => forceTrophyResync(u.userId)}
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-amber-400/40 hover:border-amber-300 text-amber-200 hover:text-white px-3 py-1 transition-colors"
+                        title={`远程标记 ${u.userId} 重拉所有 trophy-images (学生下次登录自动跑, 修 broken IDB cache)`}
+                      >
+                        🔄 Resync trophies
                       </button>
                       <button
                         type="button"

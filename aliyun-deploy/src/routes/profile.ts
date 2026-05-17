@@ -45,6 +45,14 @@ interface Profile {
   createdAt?: number;
   updatedAt?: number;
   createdBy?: string;
+  /**
+   * v0.34.92 iter 26: admin 远程触发 trophy-images 重拉.
+   * admin 点 SuperAdmin "🔄 Force resync trophies" → POST 写这个时间戳.
+   * 学生客户端 AuthGate bootstrap 读 profile, 如果 forceTrophyResyncRequestedAt
+   * > localStorage xiaojinapp.lastForceTrophyResyncSeen → 自动 forceTrophyResync()
+   * + 更新 LS. 不影响 student session, 完全 background.
+   */
+  forceTrophyResyncRequestedAt?: number;
 }
 
 const REQUIRED_FIELDS = [

@@ -41,7 +41,13 @@ async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
     if (!r.ok) return;
     const j = (await r.json()) as {
       ok?: boolean;
-      profile?: { displayName?: string | null; birthday?: string | null; grade?: string | null; school?: string | null } | null;
+      profile?: {
+        displayName?: string | null;
+        birthday?: string | null;
+        grade?: string | null;
+        school?: string | null;
+        forceTrophyResyncRequestedAt?: number | null;
+      } | null;
     };
     if (j?.ok && j.profile?.displayName) {
       cacheDisplayName(j.profile.displayName);
@@ -55,6 +61,22 @@ async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
     }
     if (j?.ok && j.profile?.school) {
       setStoredSchool(j.profile.school);
+    }
+    // v0.34.92 iter 26: admin 远程触发 trophy-images 重拉 (修学生 broken IDB
+    // cache 无需学生操作). 比 lastSeen 新就 forceTrophyResync(), 后台 silent.
+    if (j?.ok && typeof j.profile?.forceTrophyResyncRequestedAt === "number") {
+      const remoteTs = j.profile.forceTrophyResyncRequestedAt;
+      const localSeen = Number(localStorage.getItem("xiaojinapp.lastForceTrophyResyncSeen") ?? "0");
+      if (remoteTs > localSeen) {
+        console.log(`[AuthGate] admin requested force trophy resync (remote=${remoteTs} > local=${localSeen}), triggering...`);
+        void import("../db/cloudSync").then(async ({ forceTrophyResync }) => {
+          const r = await forceTrophyResync();
+          if (r.ok) {
+            localStorage.setItem("xiaojinapp.lastForceTrophyResyncSeen", String(remoteTs));
+            console.log(`[AuthGate] force trophy resync done: pulled ${r.pulled}`);
+          }
+        }).catch(() => { /* */ });
+      }
     }
   } catch { /* 静默 */ }
 }
