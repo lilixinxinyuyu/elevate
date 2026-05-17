@@ -315,6 +315,19 @@ export interface SubmitAttemptInput {
    * mistake stage 只在 ordinal=1 时变化（避免 1st-wrong 后 2nd-correct 立即把 mistake 推进）。
    */
   attemptOrdinal?: 1 | 2;
+  /**
+   * v0.34.99 (iter 33 P0-1): Estimation Gate 完成 payload, 落库到 attempt.metadata.estimationGate.
+   * 不影响 scoring (XP 已经在 GameShell 加到 points), 只为 Brainpower Radar (P1-4) + audit.
+   */
+  estimationGate?: {
+    earnedXp: number;
+    userRounds: number[];
+    userEstimate: number;
+    userMagnitude: string;
+    actualMagnitude: string;
+    magnitudeMismatch: boolean;
+    elapsedMsByPhase: { round: number; computeAndMagnitude: number };
+  };
 }
 
 export interface AttemptOutcome {
@@ -440,6 +453,9 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     comboAtEnd: comboAfter,
     usedTutor: usedTutor || undefined,
     attemptOrdinal,
+    metadata: input.estimationGate
+      ? { estimationGate: { version: "v1", ...input.estimationGate } }
+      : undefined,
     createdAt: Date.now(),
   };
 

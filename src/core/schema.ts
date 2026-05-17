@@ -230,6 +230,17 @@ export const QuestionSchema = z.object({
    * 详见 src/core/speedMatchPolicy.ts.
    */
   speedEligible: z.boolean().optional(),
+  /**
+   * v0.34.99 (iter 33 P0-1): Estimation Gate. 显式 true/false 覆盖 heuristic.
+   * 详见 src/core/estimationPolicy.ts.
+   */
+  requiresEstimation: z.boolean().optional(),
+  /**
+   * v0.34.99 (iter 33 P0-1): 应用题的"关键数字" (题面提取困难时由出题人/AI 明确标注).
+   * Estimation Gate Phase 1 显示 "把 X 看作 ▢" 时用. 若未提供且 heuristic 触发,
+   * 则用 extractNumbers(stem) 兜底.
+   */
+  keyNumbers: z.array(z.number()).max(4).optional(),
   // Phase 2 Axis 2：点子图画图题载荷。
   dot_grid: z
     .object({

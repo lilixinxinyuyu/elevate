@@ -295,6 +295,17 @@ export interface Question {
   speedEligible?: boolean;
 
   /**
+   * v0.34.99 (iter 33 P0-1): Estimation Gate 显式覆盖. 见 src/core/estimationPolicy.ts.
+   */
+  requiresEstimation?: boolean;
+
+  /**
+   * v0.34.99 (iter 33 P0-1): 应用题"关键数字". Estimation Gate Phase 1 显示
+   * "把 X 看作 ▢" 时优先用此, 否则 extractNumbers(stem) 兜底.
+   */
+  keyNumbers?: number[];
+
+  /**
    * Phase 2 Axis 2：点子图画图题载荷。
    *
    * 点子图就是网格点阵（W×H），用户点击格点添加顶点，自动连线，闭合后判图形类别。
@@ -539,6 +550,13 @@ export interface Attempt {
    * - 2 = 1st 错答之后的重做提交（无论对错都不增 combo、不奖速度；usedTutor 进一步降权）
    */
   attemptOrdinal?: 1 | 2;
+  /**
+   * v0.34.99 (iter 33 P0-1): 通用 metadata 字段 — 附带 Estimation Gate 完成
+   * payload (userRounds/userEstimate/userMagnitude/actualMagnitude/elapsedPerPhase
+   * 等), 让 Brainpower Radar (P1-4) + 后续 audit 能算"估算命中率" / "数量级
+   * 错误下降" 等指标. 字段是 optional JSON, 不破坏现有 attempt schema.
+   */
+  metadata?: Record<string, unknown>;
   createdAt: number;
 }
 

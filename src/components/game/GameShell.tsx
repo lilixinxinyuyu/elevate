@@ -11,6 +11,9 @@ import { sfx } from "../../lib/sfx";
 import { TutorPanel } from "../tutor/TutorPanel";
 import { ReportQuestionButton } from "./ReportQuestionButton";
 import type { Question } from "../../core/types";
+// v0.34.99 iter 33 P0-1: EstimationGate 元认知前置
+import { EstimationGate, type EstimationCompleteSignal } from "./EstimationGate";
+import { requiresEstimation } from "../../core/estimationPolicy";
 import { SpeedMatchPanel } from "./templates/SpeedMatch";
 import { ShopCounterPanel } from "./templates/ShopCounter";
 import { EquationBuilderPanel } from "./templates/EquationBuilder";
@@ -54,6 +57,19 @@ export interface AttemptResult {
    * 决定 combo / 速度奖励 / mistake stage / mastery Elo 倍率。
    */
   attemptOrdinal?: 1 | 2;
+  /**
+   * v0.34.99 (iter 33 P0-1): EstimationGate 完成 payload. Train.tsx 转给
+   * submitAttempt → 落库到 attempt.metadata.estimationGate.
+   */
+  estimationGate?: {
+    earnedXp: number;
+    userRounds: number[];
+    userEstimate: number;
+    userMagnitude: string;
+    actualMagnitude: string;
+    magnitudeMismatch: boolean;
+    elapsedMsByPhase: { round: number; computeAndMagnitude: number };
+  };
 }
 
 export interface GameShellProps {
@@ -141,6 +157,14 @@ export function GameShell(props: GameShellProps) {
   const [displayedQuestion, setDisplayedQuestion] = useState<Question>(question);
   const variantRef = useRef<Question | null>(null);
   const [starterDone, setStarterDone] = useState(!showStarter);
+  // v0.34.99 iter 33 P0-1: EstimationGate state
+  const [estDone, setEstDone] = useState(false);
+  const [estSignal, setEstSignal] = useState<EstimationCompleteSignal | null>(null);
+  // 每换题重置 estimation 状态
+  useEffect(() => {
+    setEstDone(false);
+    setEstSignal(null);
+  }, [resetKey]);
   const [hintsOpened, setHintsOpened] = useState(0);
   const [startedAt, setStartedAt] = useState(() => Date.now());
   const [submitting, setSubmitting] = useState(false);
@@ -157,8 +181,12 @@ export function GameShell(props: GameShellProps) {
     speedTier?: "lightning" | "quick" | "on_time" | "overdue" | "slow";
     /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"答太快请检查" nudge */
     tooFast?: boolean;
-    /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"🧠 深思 +3" bonus */
+    /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"🧠 深思 +5" bonus */
     slowThink?: boolean;
+    /** v0.34.99 iter 33 P0-1: 估算 phase 拿到的 XP (附加到 points) */
+    estimationXp?: number;
+    /** v0.34.99 iter 33 P0-1: 真答案数量级 vs 估算数量级 不一致 → soft nudge */
+    estimationMagnitudeMismatch?: boolean;
     errorPattern?: GameShellProps["onSubmit"] extends (...args: any) => Promise<infer R>
       ? R extends { errorPattern?: infer EP } ? EP : never : never;
   } | null>(null);
@@ -300,23 +328,44 @@ export function GameShell(props: GameShellProps) {
             correctAnswerDisplay: describeAnswer(displayedQuestion),
             usedTutor: showedTutorInRetry,
             attemptOrdinal: ordinal,
+            // v0.34.99 iter 33 P0-1: 把 estimation 数据传给 Train → service.submitAttempt → attempt.metadata
+            estimationGate: estSignal
+              ? {
+                  earnedXp: estSignal.estimationXp,
+                  userRounds: estSignal.userRounds,
+                  userEstimate: estSignal.userEstimate,
+                  userMagnitude: estSignal.userMagnitude,
+                  actualMagnitude: estSignal.actualMagnitude,
+                  magnitudeMismatch:
+                    estSignal.userMagnitude !== estSignal.actualMagnitude,
+                  elapsedMsByPhase: estSignal.elapsedPerPhase,
+                }
+              : undefined,
           },
           displayedQuestion,
         );
         const speedTier = (wasRetriedRef.current && !examMode)
           ? ("on_time" as const) // 2nd 不奖速度（无论变式还是原题）
           : speedBonus(elapsed, adjustedEstimatedTime(displayedQuestion), r.isCorrect).tier;
+        // v0.34.99 iter 33 P0-1: 把 estimation XP 加到本次主 attempt 分数上.
+        // estimation 不存独立 attempt — 通过 points 累计 + UI 标签暴露给 Selena.
+        const estXp = estSignal?.estimationXp ?? 0;
+        const finalPoints = res.points + estXp;
         setFeedback({
           isCorrect: r.isCorrect,
           partialCorrect: r.partialCorrect,
           correctAnswerDisplay: describeAnswer(displayedQuestion),
           userAnswerDisplay: describeUserAnswer(displayedQuestion, r.answer),
-          points: res.points,
+          points: finalPoints,
           repeatDecay: res.repeatDecay,
           newSkillBonus: res.newSkillBonus,
           speedTier,
           tooFast: res.tooFast,
           slowThink: res.slowThink,
+          estimationXp: estXp || undefined,
+          estimationMagnitudeMismatch: estSignal
+            ? estSignal.userMagnitude !== estSignal.actualMagnitude
+            : undefined,
           errorPattern: res.errorPattern ?? null,
         });
         finishedResetKeyRef.current = resetKey;
@@ -451,7 +500,22 @@ export function GameShell(props: GameShellProps) {
           </div>
         </div>
 
-        <TemplatePanel key={`${resetKey}::${panelKey}`} {...common} />
+        {/* v0.34.99 iter 33 P0-1: EstimationGate 前置 — 满足 heuristic 的多位数 ×/+ 题先估算 */}
+        {(() => {
+          const needsGate = !examMode && !noRetry && starterDone && !estDone && requiresEstimation(displayedQuestion);
+          if (needsGate) {
+            return (
+              <EstimationGate
+                question={displayedQuestion}
+                onComplete={(signal) => {
+                  setEstSignal(signal);
+                  setEstDone(true);
+                }}
+              />
+            );
+          }
+          return <TemplatePanel key={`${resetKey}::${panelKey}`} {...common} />;
+        })()}
 
         {/* 行内重做提示（错 1 次后显示）。考试模式不会进这里。 */}
         {retryStage === "showing_hint" && !feedback && (
@@ -626,8 +690,12 @@ function FeedbackPanel({
     speedTier?: "lightning" | "quick" | "on_time" | "overdue" | "slow";
     /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"答太快请检查" nudge */
     tooFast?: boolean;
-    /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"🧠 深思 +3" bonus */
+    /** v0.34.98 iter 32 P0-0a: Accuracy-First flag — 显示"🧠 深思 +5" bonus */
     slowThink?: boolean;
+    /** v0.34.99 iter 33 P0-1: 估算 phase 拿到的 XP (附加到 points) */
+    estimationXp?: number;
+    /** v0.34.99 iter 33 P0-1: 真答案数量级 vs 估算数量级 不一致 → soft nudge */
+    estimationMagnitudeMismatch?: boolean;
     errorPattern?: {
       matchedTag: string; tagLabel: string; remediation: string | null;
       pastQuestions: { questionId: string; stem: string; happenedAt: number }[];
@@ -639,7 +707,7 @@ function FeedbackPanel({
   /** v0.31.85：boss 模式下不渲染"小进讲讲" + "再出一道类似" 这俩 CTA（boss 有自己的救场流） */
   noRetry?: boolean;
 }) {
-  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, tooFast, slowThink, errorPattern } = feedback;
+  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, tooFast, slowThink, estimationXp, estimationMagnitudeMismatch, errorPattern } = feedback;
   const [showTutor, setShowTutor] = useState(false);
   // v0.31.34：会话内自适应出题
   const [adaptiveLoading, setAdaptiveLoading] = useState<"retry" | "bump" | null>(null);
@@ -713,6 +781,13 @@ function FeedbackPanel({
   if (newSkillBonus && newSkillBonus > 0) {
     labels.push(`🎓 新知识点 +${newSkillBonus}`);
   }
+  // v0.34.99 iter 33 P0-1: 估算 XP 标签
+  if (estimationXp && estimationXp > 0) {
+    labels.push(`🧠 估算 +${estimationXp}`);
+  }
+  if (estimationMagnitudeMismatch && isCorrect) {
+    labels.push("⚖️ 数量级跟估算差距大, 下次更准");
+  }
   return (
     <div className="mt-4 space-y-3 animate-slide-up">
       <div
@@ -736,6 +811,8 @@ function FeedbackPanel({
                   ? "bg-indigo-400/30 text-indigo-100 border border-indigo-300/50 animate-pulse"
                   : l.startsWith("⏱️")
                     ? "bg-amber-400/20 text-amber-100 border border-amber-300/40"
+                  : l.startsWith("⚖️")
+                    ? "bg-amber-500/20 text-amber-100 border border-amber-400/40"
                   : l.startsWith("⚡⚡⚡")
                   ? "bg-cyan-400/30 text-cyan-100 border border-cyan-300/50 animate-pulse"
                   : l.startsWith("⚡⚡")

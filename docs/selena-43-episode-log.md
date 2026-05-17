@@ -237,6 +237,45 @@
     - **Q3 reroute 漏洞**: 实际上已被 `applyP0Policies` 中 `!isSpeedEligible` 兜底覆盖, 加 test 证明 (`tests/speedMatchPolicy.test.ts:121` "post-review: 复杂 single_choice 数字答" case)
     - **telemetry**: defer 到 P1-4 Brainpower Radar (那里本来就要收集这些数据)
 - **Final test**: 238 通过, 2 pre-existing fail (mastery, 跟 P0-0 无关)
-- **Final commit**: 待 rebuild+redeploy 确认后 commit + push
+- **Final commit**: v0.34.98 已 ship (commit 139a2a5, push main)
+
+#### Iter 33 进展 (v0.34.98 → v0.34.99) P0-1 EstimationGate
+
+**预审** (Gemini + GPT 并发) 共识收窄 v1 MVP:
+- 仅 × / + 触发 (排除 - 抵消 / ÷ 相容数, 留 v2)
+- Round 验证用 friendly-number 白名单 (不用 ±25%)
+- Phase 2+3 UI 合并 (减少跳转)
+- Magnitude 动态卡片
+- XP 从 +20 降到 +12
+- Daily cap 8
+- Soft nudge (不 hard block)
+
+**实现** (5 files NEW/MODIFIED):
+- NEW `src/core/estimationPolicy.ts` — heuristic / 白名单 / cap / detectOperator / magnitude
+- NEW `src/components/game/EstimationGate.tsx` — 2-phase React 组件
+- NEW `tests/estimationPolicy.test.ts` — 30 tests 全过
+- MOD `src/lib/featureFlags.ts` — isEstimationGateV1 + URL ?est_gate=off
+- MOD `src/core/schema.ts` + `types.ts` — requiresEstimation / keyNumbers fields
+- MOD `src/components/game/GameShell.tsx` — gate 前置 + estimationXp 累加 + UI 标签
+
+**测试**: 268 通过, 2 pre-existing fail (mastery)
+**Build**: 4.29s, 主 bundle 936KB
+**Deploy**: aliyun OSS 230/230 文件 107.5MB
+
+**Post-review** (双家):
+- Gemini "Conditional Pass" — 3 blockers: telemetry 落库 / absoluteMax / Math.log10 防御 (不适用)
+- GPT "改后再交" — 4 blockers: telemetry / explicit true 也受 hard cap / generation 加 keyNumbers / magnitude 含 actual
+
+**整合 + 应用**:
+1. ✅ Telemetry → `Attempt.metadata.estimationGate` (新 optional 字段), GameShell → Train → service.submitAttempt → IndexedDB. 含 userRounds/userEstimate/userMagnitude/actualMagnitude/magnitudeMismatch/elapsedMsByPhase
+2. ✅ Absolute cap = 12 — `absoluteCapReached()` 在 explicit true 路径检. heuristicCap=8 + absoluteCap=12
+3. ✅ Unsupported operator (÷ / - / mixed) 即使 explicit true 也拒
+4. ✅ `magnitudeChoicesAround(estimate, actualMagnitude)` 强制 inject 正解, 防 scoring broken
+5. ⏭️ generation prompt 加 keyNumbers — 推迟到 P0-3 MultiStepApplication (Gemini 建议, 避免多变量)
+
+**最终 test**: 33/33 estimation, 268+ 通过 (mastery 2 pre-existing)
+**Rebuild**: 4.29s, 主 bundle 936KB
+**Redeploy**: 进行中
+**Commit**: v0.34.99 待 deploy 确认
 
 

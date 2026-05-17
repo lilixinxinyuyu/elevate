@@ -129,3 +129,34 @@ export function isSpeedMatchWhitelistV1(): boolean {
     return true;
   }
 }
+
+/**
+ * v0.34.99 (iter 33 P0-1): Estimation Gate.
+ * 多位数 / 应用题强制 round + estimate + magnitude 三阶段. 详见 src/core/estimationPolicy.ts.
+ * 默认 ON. opt-out: localStorage.setItem("estimation_gate_v1", "false") 或 ?est_gate=off
+ */
+const ESTIMATION_GATE_LS_KEY = "estimation_gate_v1";
+
+function syncEstimationGateFromUrl(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const v = new URLSearchParams(window.location.search).get("est_gate");
+    if (v === "on" || v === "true") localStorage.removeItem(ESTIMATION_GATE_LS_KEY);
+    else if (v === "off" || v === "false") localStorage.setItem(ESTIMATION_GATE_LS_KEY, "false");
+  } catch { /* SSR */ }
+}
+
+let _estGateSynced = false;
+
+export function isEstimationGateV1(): boolean {
+  if (typeof window === "undefined") return true;
+  if (!_estGateSynced) {
+    syncEstimationGateFromUrl();
+    _estGateSynced = true;
+  }
+  try {
+    return localStorage.getItem(ESTIMATION_GATE_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}

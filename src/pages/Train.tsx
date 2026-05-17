@@ -164,6 +164,8 @@ export function TrainPage() {
         // v0.30.7: tutor-assisted + ordinal 透传给 service.submitAttempt
         usedTutor: result.usedTutor,
         attemptOrdinal: result.attemptOrdinal,
+        // v0.34.99 iter 33 P0-1: EstimationGate 完成数据落 attempt.metadata
+        estimationGate: result.estimationGate,
       });
       setState((s) =>
         s.status === "running"
