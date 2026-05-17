@@ -1,10 +1,14 @@
 import { Link } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
+import { lazy, Suspense } from "react";
 import { db } from "../db/dexie";
 import { todayKey } from "../lib/date";
 import { TodayRings, type TodayRingsInput } from "../components/TodayRings";
-import { TutorPanel } from "../components/tutor/TutorPanel";
-import { MascotProfile } from "../components/MascotProfile";
+// v0.34.91 iter 25 perf: TutorPanel + MascotProfile 拆 lazy. TutorPanel 仅在
+// tutorForSkill 设置后渲染 (用户点 "找小进讲讲"), MascotProfile 在 student
+// loaded 后展示 (秒级延迟可接受). Home 首屏不需要这俩重组件.
+const TutorPanel = lazy(() => import("../components/tutor/TutorPanel").then((m) => ({ default: m.TutorPanel })));
+const MascotProfile = lazy(() => import("../components/MascotProfile").then((m) => ({ default: m.MascotProfile })));
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { isPhase2Live } from "../lib/featureFlags";
@@ -592,17 +596,19 @@ export function HomePage() {
         </section>
       )}
 
-      {/* struggle-skill tutor panel（语音对话） */}
+      {/* struggle-skill tutor panel（语音对话） — v0.34.91 lazy chunk */}
       {tutorForSkill && student && (
-        <TutorPanel
-          subjectId="math"
-          context="skill_help"
-          studentId={student.id}
-          skillId={tutorForSkill.skillId}
-          skillName={tutorForSkill.skillName}
-          consecutiveWrong={tutorForSkill.consecutiveWrong}
-          onClose={() => setTutorForSkill(null)}
-        />
+        <Suspense fallback={null}>
+          <TutorPanel
+            subjectId="math"
+            context="skill_help"
+            studentId={student.id}
+            skillId={tutorForSkill.skillId}
+            skillName={tutorForSkill.skillName}
+            consecutiveWrong={tutorForSkill.consecutiveWrong}
+            onClose={() => setTutorForSkill(null)}
+          />
+        </Suspense>
       )}
 
       {/* v0.31.92：3 卡同行 — 考试冲刺 / 技能图 / 巧算工具箱。
@@ -729,8 +735,15 @@ export function HomePage() {
       {/* v0.30.9: 学期进度（单元解锁面板） */}
       <UnitProgress studentId={student.id} term={term} />
 
-      {/* 小进姐姐资料卡：等级 + XP 进度 + 切音色 + 一键找小进聊 */}
-      <MascotProfile studentId={student.id} />
+      {/* 小进姐姐资料卡：等级 + XP 进度 + 切音色 + 一键找小进聊 — v0.34.91 lazy */}
+      <Suspense fallback={
+        <div className="card-glow text-center text-slate-400 text-sm py-8">
+          <span className="inline-block w-4 h-4 border-2 border-slate-500 border-t-violet-400 rounded-full animate-spin mr-2 align-middle" />
+          小进姐姐准备中…
+        </div>
+      }>
+        <MascotProfile studentId={student.id} />
+      </Suspense>
 
       {/* 段位勋章柜 */}
       <BadgeInventory
