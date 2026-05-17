@@ -11,13 +11,20 @@ export interface GradeResult {
 
 export function gradeAttempt(question: Question, userAnswer: unknown): GradeResult {
   const spec = question.answer;
+  // 爸爸 2026-05-17 Q3 fix #1：ShopCounter 把单步答案包成 [answer] 数组,
+  // 老 grader 对 number/choice 题不 unwrap → coerce 失败 → 强迫记错题。
+  // 一律 unwrap 单元素数组 (multi_step 自己内部仍能处理 array+object 两种形态).
+  let raw = userAnswer;
+  if (spec.type !== "multi_step" && Array.isArray(raw) && raw.length === 1) {
+    raw = raw[0];
+  }
   switch (spec.type) {
     case "number":
-      return gradeNumeric(question, spec, userAnswer);
+      return gradeNumeric(question, spec, raw);
     case "choice":
-      return gradeChoice(question, spec, userAnswer);
+      return gradeChoice(question, spec, raw);
     case "multi_step":
-      return gradeMultiStep(question, spec, userAnswer);
+      return gradeMultiStep(question, spec, raw);
   }
 }
 
@@ -59,9 +66,14 @@ function gradeMultiStep(
   spec: Extract<AnswerSpec, { type: "multi_step" }>,
   raw: unknown,
 ): GradeResult {
-  const obj = (raw ?? {}) as Record<string, unknown>;
-  const stepResults = spec.steps.map((step) => {
-    const given = obj[step.step_id];
+  // 爸爸 2026-05-17 Q3 fix #1：ShopCounter 发回的是 [step1_ans, step2_ans, ...]
+  // 数组（按 step 顺序），而 spec.steps 用 step_id 字符串 keyed。老 grader 拿
+  // obj[step_id] 永远 undefined → 全标错。修：array shape 按位置 i 取，object
+  // shape 还按 step_id 取，两边兼容。
+  const isArr = Array.isArray(raw);
+  const obj = isArr ? null : ((raw ?? {}) as Record<string, unknown>);
+  const stepResults = spec.steps.map((step, i) => {
+    const given = isArr ? (raw as unknown[])[i] : obj![step.step_id];
     const ok = compareStep(step.expected, given);
     return { step_id: step.step_id, ok };
   });

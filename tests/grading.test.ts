@@ -51,6 +51,45 @@ describe("grading", () => {
     expect(r.matchedErrorTags).toContain("decimal_point_error");
   });
 
+  // Ep 爸爸-2026-05-17 Q3 fix #1: ShopCounter 把单步答案包成 [answer] 数组,
+  // 老 grader 对 number/choice 题不 unwrap → 强迫记错题。修后 unwrap 单元素数组.
+  it("unwrap 单元素数组 (ShopCounter wrap fix) — numeric", () => {
+    expect(gradeAttempt(numericQ, ["22.8"]).isCorrect).toBe(true);
+    expect(gradeAttempt(numericQ, ["22.80"]).isCorrect).toBe(true);
+    expect(gradeAttempt(numericQ, [22.8]).isCorrect).toBe(true);
+  });
+
+  it("unwrap 单元素数组 — choice", () => {
+    const q: Question = {
+      ...numericQ, question_id: "C1",
+      question_format: "single_choice",
+      answer: { type: "choice", value: "b" },
+      options: [{ id: "a", text: "A" }, { id: "b", text: "B" }],
+    };
+    expect(gradeAttempt(q, ["b"]).isCorrect).toBe(true);
+    expect(gradeAttempt(q, ["a"]).isCorrect).toBe(false);
+  });
+
+  it("multi_step 接受 array shape (ShopCounter [step1, step2, step3])", () => {
+    const q: Question = {
+      ...numericQ, question_id: "MA1",
+      question_format: "multi_step",
+      answer: {
+        type: "multi_step",
+        steps: [
+          { step_id: "relationship", expected: "总价=单价×数量" },
+          { step_id: "expression", expected: "3.8*6" },
+          { step_id: "answer", expected: 22.8 },
+        ],
+      },
+    };
+    // array form positional
+    expect(gradeAttempt(q, ["总价=单价×数量", "3.8*6", 22.8]).isCorrect).toBe(true);
+    expect(gradeAttempt(q, ["总价=单价×数量", "3.8*6", "22.8"]).isCorrect).toBe(true);
+    // object form still works
+    expect(gradeAttempt(q, { relationship: "总价=单价×数量", expression: "3.8*6", answer: "22.8" }).isCorrect).toBe(true);
+  });
+
   it("multi_step：关系错但答案对仍算通过", () => {
     const q: Question = {
       ...numericQ,
