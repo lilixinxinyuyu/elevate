@@ -125,6 +125,14 @@ export function Layout() {
       try {
         const students = await db.students.toArray();
         if (!students[0]) return;
+        // v0.34.83 iter 17: 新同学保护 — attempts < 5 跳过 unlock celebration
+        // (老 Selena 4 年级日程的"认识方程 自动解锁" 对 bruce 5 年级新同学很奇怪.
+        //  跟 iter 4 trophy gating 同源问题, 新同学没参加过这个日程).
+        const attemptsCount = await db.attempts.where({ studentId: students[0].id }).count();
+        if (attemptsCount < 5) {
+          console.log(`[Layout] new student (attempts=${attemptsCount}) — skip scheduled unlocks + passive trophy check`);
+          return;
+        }
         const newlyUnlocked = await runScheduledUnlocks(students[0].id);
         if (newlyUnlocked.length > 0) {
           setPendingUnlockCelebration(newlyUnlocked);

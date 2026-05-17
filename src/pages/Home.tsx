@@ -401,9 +401,14 @@ export function HomePage() {
 
   const equippedBadge = tierById(equippedTierId) ?? tierById("school")!;
 
+  // v0.34.83 iter 17: 动态年级 — 之前 hardcoded "📚 四年级下册（当前）" 让
+  // bruce (5 年级) 看到也显示"四年级", 现在用 displayName.ts getStoredGrade 读 profile.
+  const gradeStr = (typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.grade") : null) ?? "4";
+  const gradeCN: Record<string, string> = { "1": "一", "2": "二", "3": "三", "4": "四", "5": "五", "6": "六" };
+  const cnGrade = gradeCN[gradeStr] ?? "四";
   const TERMS: { id: Term; label: string }[] = [
-    { id: "下册", label: "📚 四年级下册（当前）" },
-    { id: "上册", label: "📕 四年级上册" },
+    { id: "下册", label: `📚 ${cnGrade}年级下册（当前）` },
+    { id: "上册", label: `📕 ${cnGrade}年级上册` },
     { id: "综合复习", label: "🎯 综合复习" },
   ];
 

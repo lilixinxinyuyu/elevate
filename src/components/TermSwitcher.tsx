@@ -16,12 +16,21 @@
 import { useState } from "react";
 import { db } from "../db/dexie";
 import type { Term } from "../core/types";
+import { useStoredGrade } from "../lib/displayName";
 
-const TERMS: { id: Term; emoji: string; label: string }[] = [
-  { id: "下册", emoji: "📚", label: "四年级下册" },
-  { id: "上册", emoji: "📕", label: "四年级上册" },
-  { id: "综合复习", emoji: "🎯", label: "综合复习" },
-];
+// v0.34.83 iter 17: 年级数字映射 (1-6 → 中文), 替代 hardcoded "四年级"
+const GRADE_CN: Record<string, string> = {
+  "1": "一", "2": "二", "3": "三", "4": "四", "5": "五", "6": "六",
+};
+
+function buildTerms(grade: string | null): { id: Term; emoji: string; label: string }[] {
+  const cn = GRADE_CN[grade ?? "4"] ?? "四"; // 没填 grade → 4 年级兜底
+  return [
+    { id: "下册", emoji: "📚", label: `${cn}年级下册` },
+    { id: "上册", emoji: "📕", label: `${cn}年级上册` },
+    { id: "综合复习", emoji: "🎯", label: "综合复习" },
+  ];
+}
 
 interface TermSwitcherProps {
   currentTerm: Term;
@@ -36,6 +45,8 @@ export function TermSwitcher({
   persist = true,
 }: TermSwitcherProps) {
   const [pending, setPending] = useState<Term | null>(null);
+  const grade = useStoredGrade(); // null 时 buildTerms 兜底 "四"
+  const TERMS = buildTerms(grade);
   async function pick(t: Term) {
     if (t === currentTerm || pending) return;
     setPending(t);

@@ -53,14 +53,27 @@ await new Promise((r) => setTimeout(r, 3500));
 console.log(`title: "${await page.title()}"`);
 await page.screenshot({ path: `${OUT}/01-home.png` });
 
-// 关掉 modal
-for (let i = 0; i < 4; i++) {
+// 关掉 modal (含 onboarding tour, profileGate, unit-unlock celebration)
+for (let i = 0; i < 8; i++) {
   const closed = await page.evaluate(() => {
     const dialogs = document.querySelectorAll('[role="dialog"]');
     for (const d of dialogs) {
       for (const b of d.querySelectorAll("button")) {
         const t = b.textContent ?? "";
-        if (t.includes("稍后") || t.includes("跳过") || t.includes("✕") || t.includes("知道了")) {
+        if (t.includes("稍后") || t.includes("跳过") || t.includes("✕") ||
+            t.includes("知道了") || t.includes("知道啦") || t.includes("先练") ||
+            t.includes("开始练习") || t.includes("去练")) {
+          b.click();
+          return true;
+        }
+      }
+    }
+    // 也可能是非 dialog 的 fullscreen overlay
+    const overlays = document.querySelectorAll('.fixed.inset-0');
+    for (const ov of overlays) {
+      for (const b of ov.querySelectorAll("button")) {
+        const t = b.textContent ?? "";
+        if (t.includes("知道啦") || t.includes("知道了") || t.includes("✕")) {
           b.click();
           return true;
         }
@@ -69,7 +82,7 @@ for (let i = 0; i < 4; i++) {
     return false;
   });
   if (!closed) break;
-  await new Promise((r) => setTimeout(r, 400));
+  await new Promise((r) => setTimeout(r, 500));
 }
 await new Promise((r) => setTimeout(r, 800));
 await page.screenshot({ path: `${OUT}/02-home-clean.png` });
