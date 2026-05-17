@@ -175,6 +175,23 @@ export function SuperAdminPage() {
   const [previewExpanded, setPreviewExpanded] = useState<string | null>(null);
   const [previewCache, setPreviewCache] = useState<Record<string, PreviewState>>({});
 
+  // Ep32: fallback proxy monitor 状态
+  interface ProxyHit {
+    path: string;
+    count: number;
+    lastTs: number;
+    lastStatus: number;
+    methods: Record<string, number>;
+  }
+  const [proxyStats, setProxyStats] = useState<{
+    isolateStartedAt: number;
+    totalHits: number;
+    totalEndpoints: number;
+    byPath: ProxyHit[];
+    fetchedAt: number;
+  } | null>(null);
+  const [proxyBusy, setProxyBusy] = useState(false);
+
   // Ep14: 🤖 agent summary modal
   interface AgentSummary {
     targetUserId?: string;
@@ -537,6 +554,38 @@ export function SuperAdminPage() {
       return JSON.stringify(JSON.parse(text), null, 2);
     } catch {
       return text;
+    }
+  }
+
+  /** Ep32: 拉 EdgeRoutine 本 isolate 启动以来的 proxy-fallback 命中表 */
+  async function loadProxyStats() {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    setProxyBusy(true);
+    try {
+      const r = await fetch("/api/super-admin/proxy-fallback-stats", {
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const j = (await r.json().catch(() => null)) as
+        | {
+            ok: boolean;
+            isolateStartedAt?: number;
+            totalHits?: number;
+            totalEndpoints?: number;
+            byPath?: ProxyHit[];
+          }
+        | null;
+      if (j?.ok) {
+        setProxyStats({
+          isolateStartedAt: j.isolateStartedAt ?? 0,
+          totalHits: j.totalHits ?? 0,
+          totalEndpoints: j.totalEndpoints ?? 0,
+          byPath: j.byPath ?? [],
+          fetchedAt: Date.now(),
+        });
+      }
+    } finally {
+      setProxyBusy(false);
     }
   }
 
@@ -989,6 +1038,121 @@ export function SuperAdminPage() {
                   );
                 })}
               </div>
+            )}
+          </div>
+        </details>
+
+        {/* Ep32: fallback proxy monitor panel (lazy-load on expand) */}
+        <details
+          className="mb-4 rounded-lg bg-[#1a1c20] border border-[#212327]"
+          onToggle={(e) => {
+            if ((e.target as HTMLDetailsElement).open && !proxyStats && !proxyBusy) {
+              void loadProxyStats();
+            }
+          }}
+        >
+          <summary className="cursor-pointer px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] hover:text-white select-none flex items-center gap-2 flex-wrap">
+            <span>⟁ proxy fallback monitor</span>
+            <span className="text-[#363a3f]">·</span>
+            <span className="text-[#7d8187]">
+              {proxyBusy
+                ? "loading…"
+                : proxyStats
+                  ? `${proxyStats.totalHits} hits · ${proxyStats.totalEndpoints} paths`
+                  : "click to load"}
+            </span>
+            <span className="text-[#363a3f] ml-2">·</span>
+            <span className="text-[#7d8187] normal-case tracking-normal" title="本 EdgeRoutine isolate 启动以来命中老 CF Pages backend 的 path">
+              cf-pages still serving these
+            </span>
+          </summary>
+          <div className="px-4 pb-3 pt-1">
+            <div className="text-[10px] text-amber-300/70 mb-2 leading-relaxed">
+              ⚠ ESA isolates 1-2 min 寿命 + 多 isolate 池，counter 跨 request 大概率清零。
+              这是 sampling 信号 —— refresh 几次抓到真有命中的 isolate 就代表那条 path 仍在被 client 用。
+              空表 ≠ 没流量；多次 refresh 都空 → 可能真没人用了。
+            </div>
+            {/* Static list of paths configured to fall through to CF Pages */}
+            <div className="mb-3">
+              <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-1.5">
+                routes wired to fallback (from worker config)
+              </div>
+              <div className="space-y-1">
+                {[
+                  { path: "/api/agent/*", note: "judge-questions / fix-question — admin AI 流" },
+                  { path: "/api/generate/questions", note: "AI 出题 — train 流" },
+                  { path: "/api/tutor/voice", note: "tutor 语音判答" },
+                  { path: "/api/tutor/judge-handwriting", note: "tutor 手写判答" },
+                ].map((r) => (
+                  <div
+                    key={r.path}
+                    className="flex items-center justify-between py-1 px-2 rounded-md bg-[#0a0a0a] border border-[#212327] text-[10px]"
+                  >
+                    <code className="font-mono text-[#a0c3ec]">{r.path}</code>
+                    <span className="text-[#7d8187] truncate ml-2">{r.note}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {proxyStats && proxyStats.byPath.length === 0 && (
+              <div className="text-[11px] text-[#7d8187] py-2">
+                ● 当前 isolate 0 fallback hits · isolate up {Math.round((Date.now() - proxyStats.isolateStartedAt) / 60000)} min · refresh 重抓
+                <button
+                  type="button"
+                  onClick={loadProxyStats}
+                  className="ml-2 underline hover:text-white"
+                >
+                  refresh
+                </button>
+              </div>
+            )}
+            {proxyStats && proxyStats.byPath.length > 0 && (
+              <>
+                <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] mb-2">
+                  isolate up {Math.round((Date.now() - proxyStats.isolateStartedAt) / 60000)} min · fetched {Math.round((Date.now() - proxyStats.fetchedAt) / 1000)}s ago
+                  <button
+                    type="button"
+                    onClick={loadProxyStats}
+                    className="ml-2 underline hover:text-white"
+                  >
+                    refresh
+                  </button>
+                </div>
+                <div className="space-y-1 max-h-[320px] overflow-y-auto">
+                  {proxyStats.byPath.map((p) => {
+                    const methodLabel = Object.entries(p.methods)
+                      .map(([m, n]) => `${m}×${n}`)
+                      .join(" ");
+                    const isError = p.lastStatus >= 400;
+                    const ageMin = Math.round((Date.now() - p.lastTs) / 60000);
+                    return (
+                      <div
+                        key={p.path}
+                        className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md bg-[#0a0a0a] border border-[#212327]"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <code className="font-mono text-[10px] text-white truncate">{p.path}</code>
+                          <span className="font-mono text-[9px] uppercase tracking-wider text-[#7d8187] flex-shrink-0">
+                            {methodLabel}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span
+                            className={`font-mono text-[9px] uppercase tracking-wider ${
+                              isError ? "text-rose-400" : "text-[#a0c3ec]"
+                            }`}
+                          >
+                            last {p.lastStatus} · {ageMin}m ago
+                          </span>
+                          <span className="font-mono text-[10px] tabular-nums text-[#ffc285] font-bold">
+                            {p.count}×
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </details>

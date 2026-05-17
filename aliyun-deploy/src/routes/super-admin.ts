@@ -28,6 +28,7 @@ import {
   resetPasswordForUser,
   addNewStudent,
 } from "../lib/auth-store";
+import { getProxyFallbackStats } from "./proxy-fallback";
 import { readUsersIndex, patchUserInIndex, rebuildIndexFromUserIds, type UserIndexEntry } from "../lib/users-index";
 
 const superAdmin = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
@@ -317,6 +318,21 @@ ${JSON.stringify(report.originalPayload, null, 2)}
     return c.json({ ok: false, error: "fix_failed", llmError }, 502);
   }
   return c.json({ ok: true, targetUserId, reportId, fixStatus: "fixed", changesSummary, fixedPayload });
+});
+
+/**
+ * GET /api/super-admin/proxy-fallback-stats
+ *
+ * Ep32：本 EdgeRoutine isolate 启动以来，每个 path 被 proxy-fallback 命中
+ * 多少次 + 上次时间 + 上次响应状态。
+ *
+ * 用途：让爸爸数据驱动决定先移植哪个 endpoint（高频被 proxy 的优先 native）。
+ *
+ * 限制：EdgeRoutine 跨 isolate 不聚合，worker 重启就清零；不是审计精度。
+ * 但作 "本 isolate 在跑的几小时内哪个 endpoint 还在被打" 的 sampling 信号足够。
+ */
+superAdmin.get("/proxy-fallback-stats", (c) => {
+  return c.json({ ok: true, ...getProxyFallbackStats() });
 });
 
 /** POST /api/super-admin/rebuild-index — 重建 users-index.json from per-user files */
