@@ -119,7 +119,7 @@ export function isReservedUserId(userId: string): boolean {
  *
  * OSS 优先就支持了 super-admin 在线重置密码（不用 redeploy）。
  */
-async function passwordToUserId(pwd: string, env: Env): Promise<string | null> {
+export async function passwordToUserId(pwd: string, env: Env): Promise<string | null> {
   // 1. OSS 动态 store + baked merge
   try {
     const map = await readEffectivePasswords(env);

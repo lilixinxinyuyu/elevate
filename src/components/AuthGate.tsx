@@ -1,5 +1,23 @@
 import { useEffect, useState } from "react";
-import { checkPassword, clearPassword, getStoredPassword, pullFromCloud, storePassword } from "../db/cloudSync";
+import { checkPassword, checkPasswordAndUserId, clearPassword, getStoredPassword, pullFromCloud, storePassword } from "../db/cloudSync";
+
+/**
+ * Ep 爸爸-2026-05-17: 检测当前子域名跟认证 userId 是否匹配.
+ * 比如 Selena 的密码走到 alice.xiaojin.app → 用户不是 alice, 不该看 alice 的系统.
+ * Return null = OK (匹配 / apex / reserved / dev); 返字符串 = 警告内容
+ */
+function detectSubdomainMismatch(authUserId: string): { sub: string; intendedFor: string } | null {
+  const host = (typeof location !== "undefined" ? location.host : "").toLowerCase().split(":")[0]!;
+  if (host === "localhost" || host === "127.0.0.1") return null;
+  if (host === "xiaojin.app") return null; // apex
+  const m = host.match(/^([a-z0-9_-]+)\.xiaojin\.app$/);
+  if (!m) return null;
+  const sub = m[1]!;
+  // 保留子域 (admin/www) 不算 mismatch
+  if (sub === "admin" || sub === "www") return null;
+  if (sub === authUserId) return null; // 匹配
+  return { sub, intendedFor: sub };
+}
 
 /**
  * 密码门：第一次打开 / 没存密码 / 服务端 401 时显示输入框。
@@ -15,6 +33,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  // Ep 爸爸-2026-05-17: 跨子域名访问检测
+  const [subMismatch, setSubMismatch] = useState<{ sub: string; authedAs: string } | null>(null);
 
   // v0.31.3：toast 化 hint —— 4 秒后自动消失，不再常驻右上角占视觉位置
   useEffect(() => {
@@ -49,13 +69,22 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         return;
       }
       // 有存的密码 → 验证
-      const valid = await checkPassword(stored);
-      if (valid) {
+      const result = await checkPasswordAndUserId(stored);
+      if (result.ok) {
         setState("ok");
+        // 双保险: server 已 enforce wrong-sub denial, 这里再 client 检测一遍
+        if (result.userId) {
+          const mm = detectSubdomainMismatch(result.userId);
+          if (mm) setSubMismatch({ sub: mm.sub, authedAs: result.userId });
+        }
         // 后台尝试拉一次最新（不阻塞 UI）
         pullFromCloud().then((r) => {
           if (r.changed) setHint("已从云端同步最新进度。");
         });
+      } else if (result.wrongSubdomain) {
+        // server 告诉我们密码对但子域错 - 不该提示"密码不对"
+        setState("needpwd");
+        setSubMismatch({ sub: result.wrongSubdomain.currentSubdomain, authedAs: result.wrongSubdomain.intendedFor });
       } else {
         clearPassword();
         setState("needpwd");
@@ -68,19 +97,66 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     e.preventDefault();
     setBusy(true);
     setErrMsg(null);
-    const ok = await checkPassword(pwd);
-    if (ok) {
+    const result = await checkPasswordAndUserId(pwd);
+    if (result.ok) {
       storePassword(pwd);
       setState("ok");
+      if (result.userId) {
+        const mm = detectSubdomainMismatch(result.userId);
+        if (mm) setSubMismatch({ sub: mm.sub, authedAs: result.userId });
+      }
       // 新设备：拉云端进度
       pullFromCloud({ force: true }).then((r) => {
         if (r.changed) setHint("已从云端同步进度，可以接着上次的继续练。");
       });
+    } else if (result.wrongSubdomain) {
+      // 密码对但子域错 — 显示 mismatch modal 而非 "密码不对"
+      setSubMismatch({ sub: result.wrongSubdomain.currentSubdomain, authedAs: result.wrongSubdomain.intendedFor });
     } else {
       setErrMsg("密码不对，再试一次");
     }
     setBusy(false);
   };
+
+  // Ep 爸爸-2026-05-17: cross-subdomain mismatch 优先于 needpwd / checking 渲染
+  if (subMismatch) {
+    const correctUrl = `https://${subMismatch.authedAs}.xiaojin.app/`;
+    return (
+      <div className="min-h-screen app-bg flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-slate-900/95 border border-amber-400/40 rounded-2xl p-6 text-center">
+          <div className="text-5xl mb-3">🚧</div>
+          <div className="font-display font-bold text-xl text-amber-200 mb-2">
+            这不是你的子域名
+          </div>
+          <div className="text-sm text-slate-300 leading-relaxed mb-4">
+            你登录的账号是 <span className="font-mono text-emerald-300">{subMismatch.authedAs}</span>，
+            但当前打开的是 <span className="font-mono text-rose-300">{subMismatch.sub}.xiaojin.app</span>。
+            <br/>每个同学只能在自己的子域名上练习。
+          </div>
+          <div className="flex flex-col gap-2">
+            <a
+              href={correctUrl}
+              className="block w-full py-2.5 rounded-xl bg-violet-500 hover:bg-violet-400 text-white font-bold text-sm transition-colors"
+            >
+              → 去 {subMismatch.authedAs}.xiaojin.app
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                clearPassword();
+                setSubMismatch(null);
+                setState("needpwd");
+                setErrMsg(null);
+              }}
+              className="text-xs text-slate-400 hover:text-slate-200 py-1.5"
+            >
+              换个密码登录这个子域
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (state === "checking") {
     return (

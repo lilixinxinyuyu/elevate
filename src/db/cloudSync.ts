@@ -985,6 +985,44 @@ export async function checkPassword(pwd: string): Promise<boolean> {
 }
 
 /**
+ * Ep 爸爸-2026-05-17: 返认证后的 userId, 给 cross-subdomain check 用.
+ *
+ * 三种回包:
+ *   { ok: true, userId }                              - 密码 + 子域 都对
+ *   { ok: false, wrongSubdomain: { intendedFor } }   - 密码对但子域错（提示去对的子域）
+ *   { ok: false }                                     - 密码不对
+ */
+export async function checkPasswordAndUserId(pwd: string): Promise<{
+  ok: boolean;
+  userId?: string;
+  wrongSubdomain?: { intendedFor: string; currentSubdomain: string };
+}> {
+  try {
+    const resp = await fetch("/api/auth/check", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${pwd}` },
+    });
+    const j = (await resp.json().catch(() => null)) as {
+      ok: boolean;
+      userId?: string;
+      error?: string;
+      intendedFor?: string;
+      currentSubdomain?: string;
+    } | null;
+    if (j?.ok) return { ok: true, userId: j.userId };
+    if (j?.error === "wrong_subdomain" && j.intendedFor && j.currentSubdomain) {
+      return {
+        ok: false,
+        wrongSubdomain: { intendedFor: j.intendedFor, currentSubdomain: j.currentSubdomain },
+      };
+    }
+    return { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
  * v0.30.0: trophyImages 独立同步（每张 ~30 KB，按行存 D1）。
  *
  * 主 sync payload 走 /api/sync/upload，但 trophyImages 走这里，因为：
