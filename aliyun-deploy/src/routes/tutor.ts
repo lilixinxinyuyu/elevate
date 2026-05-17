@@ -217,29 +217,225 @@ tutor.post("/explain", async (c) => {
 });
 
 /**
- * Ep37 (2026-05-17) /api/tutor/judge-handwriting native 尝试 — 失败回退
+ * v0.34.66 (Ep47) /api/tutor/judge-handwriting fast-path native + 兜底 proxy.
  *
- * 实测：ESA EdgeRoutine **per-request gateway 11s 硬限**，无论 worker 内部
- * 设多长 timeout，gateway 在 ~11s 就会返 504 Gateway Time-out 给 client。
- * 视觉模型 qwen3.6-plus 处理小手写图也要 12-18s（即使是 100×100 白图），
- * 单 LLM call 路径根本走不通。
+ * 历史:
+ *   Ep37 (2026-05-17): 试 qwen3.6-plus 视觉模型走 native, 单 call 12-18s 远超
+ *     ESA 11s gateway 硬限, 100% 504 → 完全 revert 走 proxy fallback.
  *
- * 跟 /api/generate/image 一样需要 **async pattern** (start task → OSS 写
- * pending 状态 → 返 task_id → client 轮询 GET status)，但 vision chat
- * /completions endpoint 不提供 task API，要自己写 background fan-out (走
- * waitUntil 或 OSS-based job queue)。下个 ep 专门做这个。
+ * 本 ep 思路:
+ *   不要"全部 native"也不要"全部 fallback"。试 **fast path** — 只调 qwen-vl-plus
+ *   (轻量视觉, ~5-9s 对小 canvas 图), abort timer 9000ms (ESA 留 2s buffer 返响应).
+ *   - fast 成功 → 直接 native 返, 省一跳 (CF Pages → token-plan → CF Pages → ESA → client)
+ *   - fast 失败 (abort / 503 / json 解析失败) → 自动 fall through 到 proxy fallback,
+ *     CF Pages 仍可用 (25s budget). 客户端不感知, 体验不退步.
  *
- * 当前先 keep proxy-fallback 让 judge-handwriting 继续可用 (CF Pages 上
- * 30s wall budget 跑得通)。下面 native handler 完全删除（也试过 9.5s
- * timeout 同样 504, gateway 比 worker 抢先 timeout）。
- *
- * keep 静态 import 给以后 async impl 复用 SYSTEM_PROMPT / extractHwJson.
+ *   每条请求 console.log 走的是 fast 还是 fallback, admin 跟 routine logs 观察
+ *   命中率。如果 fast 占大头 (e.g. ≥80%) 后续可以全 native 关 CF Pages.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _HW_FUTURE_REFERENCE = "see commit log Ep37 for context";
-// voice + judge-handwriting 暂走 proxy-fallback
-// (qwen3.5-omni 实时语音 + qwen-vl 视觉判答 单 LLM call 都超 ESA 11s gateway 硬限,
-//  需要 async start+poll pattern, 见上面 Ep37 diagnostic 注释)
+const HW_SYSTEM_PROMPT = `你是一个温柔耐心的小学语文老师助手"小进"。
+学生在画板上手写一个汉字，你需要看图判断她写的是不是要求的目标字。
+
+判断标准（4 年级小学生标准，宽松友好）：
+- 字形结构正确 → 算对（即使笔画不工整、字歪斜、缺一两笔但结构清晰）
+- 完全不同的字 → 错
+- 写到一半空白 → 看起来像就给"medium 信心"算对，鼓励完成
+
+返回严格 JSON：
+{
+  "isCorrect": true|false,
+  "confidence": "high"|"medium"|"low",
+  "observed": "你看到的字（最像的一个字）",
+  "comment": "30-60 字鼓励或纠正话，比如'写得很棒！横画再平一点会更好' 或 '看起来像写成了 X 字哦，再看看拼音和含义'"
+}
+
+不要输出 JSON 以外的任何东西。不要包 markdown code block。`;
+
+interface JudgeHwBody {
+  targetChar?: string;
+  pinyin?: string;
+  imageBase64?: string;
+  imageMime?: string;
+}
+
+interface JudgeHwResult {
+  isCorrect: boolean;
+  confidence: "high" | "medium" | "low";
+  observed?: string;
+  comment?: string;
+}
+
+function extractHwJson(content: string): JudgeHwResult | null {
+  let cleaned = content.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+  const a = cleaned.indexOf("{");
+  const b = cleaned.lastIndexOf("}");
+  if (a >= 0 && b > a) cleaned = cleaned.slice(a, b + 1);
+  try {
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    if (typeof parsed.isCorrect !== "boolean") return null;
+    const conf = parsed.confidence;
+    return {
+      isCorrect: parsed.isCorrect,
+      confidence:
+        conf === "high" || conf === "medium" || conf === "low" ? conf : "medium",
+      observed: typeof parsed.observed === "string" ? parsed.observed : undefined,
+      comment: typeof parsed.comment === "string" ? parsed.comment : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const HW_FAST_TIMEOUT_MS = 9_000;
+
+/**
+ * 重建一个带原 body 的 Request 给 proxyFallback。
+ * 原 c.req.raw 的 body 已经在解析 JSON 时被消费了 (ReadableStream 一次性),
+ * 直接传给 proxyFallback 会 forward empty body → CF Pages 500.
+ */
+function rebuildRequest(originalReq: Request, bodyBytes: ArrayBuffer): Request {
+  const headers = new Headers();
+  originalReq.headers.forEach((v, k) => {
+    headers.set(k, v);
+  });
+  return new Request(originalReq.url, {
+    method: originalReq.method,
+    headers,
+    body: bodyBytes,
+  });
+}
+
+/** 给 fallback 响应包一层 X-Native-Reason 头, 方便 curl -i 看 native 为啥放弃 */
+async function fallbackWithReason(
+  reason: string,
+  originalReq: Request,
+  bodyBytes: ArrayBuffer,
+  env: Env,
+): Promise<Response> {
+  const resp = await proxyFallback.fetch(rebuildRequest(originalReq, bodyBytes), env);
+  const headers = new Headers(resp.headers);
+  headers.set("X-Native-Reason", reason.slice(0, 200));
+  return new Response(resp.body, { status: resp.status, headers });
+}
+
+tutor.post("/judge-handwriting", async (c) => {
+  // 关键：先读原始 bytes 一次, 再 parse JSON。
+  // 之后 fallback 时 rebuildRequest(原 url + headers + 这个 bytes) 给 proxyFallback。
+  let bodyBytes: ArrayBuffer;
+  try {
+    bodyBytes = await c.req.raw.arrayBuffer();
+  } catch {
+    return c.json({ ok: false, error: "body_read_failed" }, 400);
+  }
+  let body: JudgeHwBody;
+  try {
+    const text = new TextDecoder().decode(bodyBytes);
+    body = JSON.parse(text) as JudgeHwBody;
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  const fallback = (reason: string) => fallbackWithReason(reason, c.req.raw, bodyBytes, c.env);
+  const targetChar = (body.targetChar ?? "").trim();
+  const imageBase64 = (body.imageBase64 ?? "").trim();
+  if (!targetChar) return c.json({ ok: false, error: "missing_target_char" }, 400);
+  if (!imageBase64) return c.json({ ok: false, error: "missing_image" }, 400);
+  if (imageBase64.length > 700_000) return c.json({ ok: false, error: "image_too_large" }, 413);
+  const mime = body.imageMime ?? "image/png";
+  const dataUrl = imageBase64.startsWith("data:") ? imageBase64 : `data:${mime};base64,${imageBase64}`;
+
+  // 视觉调用必须走 DashScope **native** multimodal endpoint (compatible-mode
+  // /chat/completions 在 dashscope.cn 上无 qwen-vl-* 暴露; ep47 v0.1 验证).
+  // native: POST /api/v1/services/aigc/multimodal-generation/generation
+  const fastProvider = c.env.BAILIAN_API_KEY
+    ? {
+        baseUrl: "https://dashscope.aliyuncs.com",
+        apiKey: c.env.BAILIAN_API_KEY,
+        label: "bailian" as const,
+      }
+    : null;
+  if (!fastProvider) {
+    console.warn("[judge-handwriting] no BAILIAN_API_KEY → fall back to proxy");
+    return fallback("no_bailian_key");
+  }
+
+  const t0 = Date.now();
+  const userText = `目标字：${targetChar}${body.pinyin ? `（拼音：${body.pinyin}）` : ""}\n\n请看图判断学生写的是不是这个字。返回 JSON。`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), HW_FAST_TIMEOUT_MS);
+  try {
+    const resp = await fetch(
+      `${fastProvider.baseUrl}/api/v1/services/aigc/multimodal-generation/generation`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${fastProvider.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "qwen-vl-max-latest",
+          input: {
+            messages: [
+              { role: "system", content: [{ text: HW_SYSTEM_PROMPT }] },
+              {
+                role: "user",
+                content: [
+                  { image: dataUrl },
+                  { text: userText },
+                ],
+              },
+            ],
+          },
+          parameters: { temperature: 0.2, max_tokens: 200 },
+        }),
+        signal: ctrl.signal,
+      },
+    );
+    clearTimeout(timer);
+    const elapsed = Date.now() - t0;
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      console.warn(`[judge-handwriting] fast non-ok status=${resp.status} in ${elapsed}ms detail=${errText.slice(0, 120)} → fallback`);
+      return fallback(`native_status_${resp.status}_${elapsed}ms`);
+    }
+    const json = (await resp.json().catch(() => null)) as
+      | { output?: { choices?: { message?: { content?: Array<{ text?: string }> | string } }[] }; code?: string; message?: string }
+      | null;
+    // DashScope native response: output.choices[0].message.content 可能是 string 或 [{text:"..."}]
+    const msg = json?.output?.choices?.[0]?.message?.content;
+    const content = typeof msg === "string"
+      ? msg
+      : Array.isArray(msg)
+        ? msg.map((m) => m.text ?? "").join("")
+        : "";
+    if (!content) {
+      console.warn(`[judge-handwriting] fast empty content in ${elapsed}ms → fallback`);
+      return fallback(`native_empty_content_${elapsed}ms`);
+    }
+    const parsed = extractHwJson(content);
+    if (!parsed) {
+      console.warn(`[judge-handwriting] fast parse failed in ${elapsed}ms → fallback. content=${content.slice(0, 80)}`);
+      return fallback(`native_parse_failed_${elapsed}ms`);
+    }
+    console.log(`[judge-handwriting] fast ok in ${elapsed}ms target='${targetChar}' observed='${parsed.observed ?? ""}'`);
+    return c.json({
+      ok: true,
+      ...parsed,
+      model: "qwen-vl-max-latest",
+      provider: fastProvider.label,
+      path: "fast", // 客户端可以读这个字段做命中率统计
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    const elapsed = Date.now() - t0;
+    const isAbort = (e as Error)?.name === "AbortError";
+    console.warn(
+      `[judge-handwriting] fast ${isAbort ? "timeout" : "error"} in ${elapsed}ms → fallback. msg=${(e as Error).message?.slice(0, 80) ?? ""}`,
+    );
+    return fallback(`native_${isAbort ? "timeout" : "error"}_${elapsed}ms`);
+  }
+});
+
+// voice 还是 proxy-fallback (qwen3.5-omni 单 call 12-15s, 跟视觉同样问题, 下个 ep)
 tutor.all("*", async (c) => {
   return proxyFallback.fetch(c.req.raw, c.env);
 });
