@@ -360,6 +360,44 @@ export function SuperAdminPage() {
     if (uJ.ok) setUsers(uJ.users ?? []);
   }
 
+  /**
+   * v0.34.90 iter 24: admin "test-as-student" — 拉同学密码 + copy 到剪贴板 +
+   * 开新 tab 到学生子域. 演示前快速 QA 不用手动切账号 + 不记一堆密码.
+   * 不重置密码 — 学生现有 session 不受影响.
+   */
+  async function testAsStudent(userId: string) {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    try {
+      const r = await fetch(`/api/super-admin/users/${encodeURIComponent(userId)}/password`, {
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; password?: string; error?: string };
+      if (!j.ok || !j.password) {
+        alert(`Test as ${userId} failed: ${j.error ?? "no_password"}`);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(j.password);
+      } catch { /* clipboard write fail OK */ }
+      // 开新 tab; admin paste 密码即可
+      window.open(`https://${userId}.xiaojin.app/`, "_blank", "noopener");
+      // toast 提示 (复用 hint 状态没有, 用 alert/title)
+      console.log(`[test-as-student] password for ${userId} copied to clipboard, opening tab`);
+      // 借用 cred result toast 暂时显示
+      setCredResult({
+        title: `🎭 Test as ${userId} — 密码已复制`,
+        userId,
+        password: j.password,
+        loginUrl: `https://${userId}.xiaojin.app`,
+        fallbackUrl: "https://xiaojin.app",
+      });
+      setCredCopied(true);
+    } catch (e) {
+      alert(`Test as ${userId} threw: ${(e as Error).message}`);
+    }
+  }
+
   function openEdit(u: UserRow) {
     setEditing(u.userId);
     setEditForm({
@@ -1689,6 +1727,15 @@ export function SuperAdminPage() {
                         className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-white/20 hover:border-white text-[#dadbdf] hover:text-white px-3 py-1 transition-colors"
                       >
                         Edit
+                      </button>
+                      {/* v0.34.90 iter 24: admin test-as-student 一键 */}
+                      <button
+                        type="button"
+                        onClick={() => testAsStudent(u.userId)}
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-violet-400/40 hover:border-violet-300 text-violet-200 hover:text-white px-3 py-1 transition-colors"
+                        title={`复制 ${u.userId} 密码 + 开新 tab 进她子域 (不重置, 学生 session 不变)`}
+                      >
+                        🎭 Test as
                       </button>
                       <button
                         type="button"

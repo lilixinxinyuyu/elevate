@@ -27,6 +27,7 @@ import {
   listKnownUserIds as listKnownUserIdsAsync,
   resetPasswordForUser,
   addNewStudent,
+  getPasswordForUser,
 } from "../lib/auth-store";
 import { getProxyFallbackStats } from "./proxy-fallback";
 import { readUsersIndex, patchUserInIndex, rebuildIndexFromUserIds, type UserIndexEntry } from "../lib/users-index";
@@ -1167,6 +1168,30 @@ superAdmin.get("/users/:userId/agent-summary", async (c) => {
   } catch {
     return c.json({ ok: false, error: "corrupt_summary" }, 500);
   }
+});
+
+/**
+ * v0.34.90 iter 24: GET /api/super-admin/users/:userId/password
+ * 看同学**当前**密码 (不重置). super-admin "test-as-student" 一键 demo 用 —
+ * admin 不知道密码也能快速登录看学生 view.
+ *
+ * 安全: superAdmin 路由级 host gate (admin.xiaojin.app 才允许) + role check.
+ * 不重置, 学生现有 session 不影响.
+ */
+superAdmin.get("/users/:userId/password", async (c) => {
+  const targetUserId = c.req.param("userId");
+  const r = await getPasswordForUser(c.env, targetUserId);
+  if (!r.ok) {
+    const status = r.error === "userId_not_found" ? 404 : 400;
+    return c.json({ ok: false, error: r.error, targetUserId }, status);
+  }
+  console.log(`[super-admin] ${getUserId(c)} viewed password for ${targetUserId} (test-as-student)`);
+  return c.json({
+    ok: true,
+    targetUserId,
+    password: r.password,
+    loginUrl: `https://${targetUserId}.xiaojin.app`,
+  });
 });
 
 /**

@@ -223,6 +223,31 @@ export async function addNewStudent(
 }
 
 /**
+ * v0.34.90 iter 24: super-admin 看某同学当前密码 (test-as-student demo 用).
+ * 返回 *第一个* match 的 password — 同 userId 多密码时拿任意一个 (一般只 1).
+ *
+ * 安全说明: 只有 admin.xiaojin.app 子域 + super-admin role 能调 (调用方
+ * superAdmin 路由已 host gate + role check), 不暴露给普通同学.
+ */
+export async function getPasswordForUser(
+  env: Env,
+  userId: string,
+): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(userId)) {
+    return { ok: false, error: "invalid_userId" };
+  }
+  try {
+    const map = await readEffectivePasswords(env);
+    for (const [pwd, uid] of Object.entries(map)) {
+      if (uid === userId) return { ok: true, password: pwd };
+    }
+    return { ok: false, error: "userId_not_found" };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
  * 同学自己改密码 (or super-admin 替同学指定特定密码).
  * 校验:
  *   - newPassword 至少 6 字符, 最多 64 字符 (genFriendlyPassword 8 位 + 用户自定义)
