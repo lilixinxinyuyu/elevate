@@ -118,8 +118,33 @@ export function isMeaningfulScratch(textContent: string): boolean {
 /**
  * Peer review 共识简化: 2 button v1 (写草稿 vs 心算挑战), 不要 3 个.
  * 草稿模式内 v2 可加竖式底纹切换 (现在 textarea + grid bg 就够).
+ *
+ * post-review GPT: 区分 "直接答" (用户主动选了"继续直接答"绕过拦截)
+ *  vs "心算挑战" (主动消耗配额) 在 telemetry 里 — 别混淆.
  */
-export type ScratchTool = "scratch" | "mental_calc" | "none";
+export type ScratchTool = "scratch" | "mental_calc" | "direct_bypass" | "none";
+
+/**
+ * v0.35.0 post-review: 拦截 dialog 每 session 最多弹 1 次 (双家共识).
+ * 用 sessionStorage 防天天弹反感.
+ */
+const INTERCEPT_SHOWN_KEY = "scratch_intercept_shown_session";
+
+export function hasShownInterceptThisSession(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(INTERCEPT_SHOWN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markInterceptShown(): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(INTERCEPT_SHOWN_KEY, "1");
+  } catch { /* noop */ }
+}
 
 export interface ScratchPayload {
   tool: ScratchTool;

@@ -304,6 +304,16 @@
 **Typecheck**: clean
 **Build**: 4.44s
 **Deploy**: 进行中
-**Post-review**: 待 deploy 后发起
+**Post-review** (双家):
+- Gemini "✅ 通过 (Pass)" — 顺手建议存 textContent + 拦截 dialog "今日不再提醒"
+- GPT "通过" — intercept session-once + insured wrong 加低权重诊断 + 不存 textContent (隐私)
+
+**整合**:
+- ✅ intercept dialog 每 session 最多 1 次 (sessionStorage flag, 双家共识)
+- ✅ "继续直接答" 在 telemetry 区分为 tool="direct_bypass" (GPT 防数据混淆)
+- ⏭️ textContent 持久化 — Gemini 推存, GPT 推不存 (隐私). 采纳 GPT (默认不存, 留 P1-4 加 opt-in)
+- ⏭️ insured wrong 低权重诊断信号 — 留 P1-2 SkillRepair (错题强化机制) 一起做
+
+**最终**: 287/289 pass (2 pre-existing mastery), v0.35.0 ship (commit a0016d5, push main)
 
 

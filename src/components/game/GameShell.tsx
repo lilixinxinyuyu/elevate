@@ -20,6 +20,8 @@ import {
   requiresScratch,
   useMentalCalcQuota,
   getMentalCalcRemaining,
+  hasShownInterceptThisSession,
+  markInterceptShown,
 } from "../../core/scratchPolicy";
 import { SpeedMatchPanel } from "./templates/SpeedMatch";
 import { ShopCounterPanel } from "./templates/ShopCounter";
@@ -79,7 +81,7 @@ export interface AttemptResult {
   };
   /** v0.35.0 iter 34 P0-2: ScratchInsurance payload (Train → service → attempt.metadata) */
   scratch?: {
-    tool: "scratch" | "mental_calc";
+    tool: "scratch" | "mental_calc" | "direct_bypass";
     charCount: number;
     insured: boolean;
     mentalOverrideUsed: boolean;
@@ -301,12 +303,15 @@ export function GameShell(props: GameShellProps) {
 
       // v0.35.0 iter 34 P0-2: ScratchInsurance 拦截 — requiresScratch 题 + 未选工具 → 弹 dialog
       // 仅 1st attempt 拦截 (2nd retry 不再打扰), 仅非考试模式
+      // post-review: 每 session 最多弹 1 次 (双家共识)
       if (
         !examMode && !noRetry && !wasRetriedRef.current &&
         requiresScratch(displayedQuestion) &&
         scratchState.tool === "none" &&
-        !scratchState.insured
+        !scratchState.insured &&
+        !hasShownInterceptThisSession()
       ) {
+        markInterceptShown();
         setPendingSubmit(r as AttemptResult);
         return;
       }
@@ -602,8 +607,8 @@ export function GameShell(props: GameShellProps) {
               setTimeout(() => { void handleFinish(r); }, 0);
             }}
             onProceed={() => {
-              // 直接答, 不消耗配额, 没保险 — mark tool='none' 保持, 强制 bypass intercept by setting a sentinel
-              setScratchState((s) => ({ ...s, tool: "mental_calc", mentalOverrideUsed: false }));
+              // post-review GPT: 区分 direct_bypass vs mental_calc 在 telemetry 里别混淆
+              setScratchState((s) => ({ ...s, tool: "direct_bypass", mentalOverrideUsed: false }));
               const r = pendingSubmit;
               setPendingSubmit(null);
               setTimeout(() => { void handleFinish(r); }, 0);

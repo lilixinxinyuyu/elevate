@@ -334,7 +334,7 @@ export interface SubmitAttemptInput {
    * 不更新 mastery / streak / combo (insured wrong 完全无 progress收益, peer review 共识)
    */
   scratch?: {
-    tool: "scratch" | "mental_calc";
+    tool: "scratch" | "mental_calc" | "direct_bypass";
     charCount: number;
     insured: boolean;
     mentalOverrideUsed: boolean;
