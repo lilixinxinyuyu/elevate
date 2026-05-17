@@ -68,6 +68,9 @@ export async function runPassiveTrophyCheck(studentId: string): Promise<string[]
     trophies,
     tutorSessions,
     todayDateKey: todayKey(),
+    // v0.34.70 iter 4: 同学生日 (来自 /api/profile, AuthGate bootstrap 时 cache 到 LS)
+    // null → birthday_2026 trophy 不弹 (老逻辑写死 Selena 生日导致所有新同学被弹)
+    studentBirthday: typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.birthday") : null,
   });
   // 只补 commemorative 类（时间型 + 跨段型），其他类别按设计应在 session 结束时颁发
   const commemorativeAwards = awards.filter((aw) => {
@@ -860,6 +863,7 @@ export async function finalizeSession(
     trophies,
     tutorSessions,
     todayDateKey: todayKey(),
+    studentBirthday: typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.birthday") : null,
   });
   for (const award of newTrophyAwards) {
     for (let i = 0; i < award.count; i++) {

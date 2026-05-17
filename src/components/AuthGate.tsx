@@ -1,20 +1,35 @@
 import { useEffect, useState } from "react";
 import { checkPassword, checkPasswordAndUserId, clearPassword, getStoredPassword, pullFromCloud, storePassword } from "../db/cloudSync";
-import { setUserId as cacheUserId, setDisplayName as cacheDisplayName } from "../lib/displayName";
+import {
+  setUserId as cacheUserId,
+  setDisplayName as cacheDisplayName,
+  setStoredBirthday,
+  getRegisteredAt,
+} from "../lib/displayName";
 
 /**
- * 登录成功后拉一次 /api/profile, 把 displayName 写进 displayName cache。
+ * 登录成功后拉一次 /api/profile, 把 displayName + birthday 写进 cache。
  * 不阻塞 UI; 失败静默 (兜底会用 userId 首字母大写).
+ *
+ * v0.34.70 iter 4: 也 stamp registeredAt (新用户保护期门槛), 写本地一次性.
  */
 async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
+  // 第一次访问 → stamp registeredAt (用于 trophy 新用户保护期)
+  getRegisteredAt();
   try {
     const r = await fetch("/api/profile", {
       headers: { Authorization: `Bearer ${pwd}` },
     });
     if (!r.ok) return;
-    const j = (await r.json()) as { ok?: boolean; profile?: { displayName?: string | null } | null };
+    const j = (await r.json()) as {
+      ok?: boolean;
+      profile?: { displayName?: string | null; birthday?: string | null } | null;
+    };
     if (j?.ok && j.profile?.displayName) {
       cacheDisplayName(j.profile.displayName);
+    }
+    if (j?.ok && j.profile?.birthday) {
+      setStoredBirthday(j.profile.birthday);
     }
   } catch { /* 静默 */ }
 }

@@ -677,6 +677,12 @@ export interface TrophyCheckContext {
   /** v0.31.8: tutor 学习深度勋章用 — 算"问 + 学会"闭环 */
   tutorSessions?: TutorSession[];
   todayDateKey: string;
+  /**
+   * v0.34.70 iter 4: 同学生日 ISO "YYYY-MM-DD". 来自 /api/profile birthday 字段,
+   * AuthGate bootstrap 时落 localStorage, service.ts buildTrophyCtx 读. birthday_2026
+   * trophy 比较 month-day 决定是否解锁; null → 永不弹生日勋章 (新同学还没填档案).
+   */
+  studentBirthday?: string | null;
 }
 
 /**

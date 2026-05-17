@@ -20,6 +20,8 @@ import { useEffect, useState } from "react";
 
 const KEY_DISPLAY = "xiaojinapp.displayName";
 const KEY_USER_ID = "xiaojinapp.userId";
+const KEY_BIRTHDAY = "xiaojinapp.birthday"; // ISO YYYY-MM-DD; 给 birthday trophy check 用
+const KEY_REGISTERED_AT = "xiaojinapp.registeredAt"; // epoch ms; 防新用户被一堆历史勋章弹
 const EVENT_NAME = "xiaojinapp:displayname-change";
 
 function lsGet(k: string): string | null {
@@ -64,6 +66,37 @@ export function getStoredDisplayName(): string | null {
 
 export function setDisplayName(name: string | null): void {
   lsSet(KEY_DISPLAY, name);
+}
+
+/**
+ * 同学生日 (ISO YYYY-MM-DD). 来自 /api/profile birthday 字段, AuthGate
+ * bootstrap 时落本地; ProfileGate 改后立即同步. 给 birthday_2026 trophy
+ * check 用 (替代 hardcoded "2026-03-13" Selena 生日).
+ */
+export function getStoredBirthday(): string | null {
+  return lsGet(KEY_BIRTHDAY);
+}
+export function setStoredBirthday(d: string | null): void {
+  lsSet(KEY_BIRTHDAY, d);
+}
+
+/**
+ * 同学第一次登录这个设备的时间 (epoch ms). 给"新用户保护期"用 —
+ * 注册 < 7 天不跑某些 commemorative trophy check 避免一堆历史勋章一起弹.
+ * 第一次 getRegisteredAt 没值 → 自动 stamp 当前时间.
+ */
+export function getRegisteredAt(): number {
+  const v = lsGet(KEY_REGISTERED_AT);
+  const n = v ? Number(v) : NaN;
+  if (Number.isFinite(n) && n > 0) return n;
+  const now = Date.now();
+  lsSet(KEY_REGISTERED_AT, String(now));
+  return now;
+}
+/** 距注册天数 (整数). 新设备/新用户 0 天. */
+export function daysSinceRegistered(): number {
+  const reg = getRegisteredAt();
+  return Math.floor((Date.now() - reg) / 86_400_000);
 }
 
 /**

@@ -301,8 +301,10 @@ export const TROPHIES: TrophyDef[] = [
     icon: "📜",
     category: "commemorative",
     // v0.30.10: 期中考试当天或之后第一次进 app 即解锁。
-    // todayDateKey 是字符串 "YYYY-MM-DD"，跟 MIDTERM_DATE 比较 lexicographically。
-    check: (ctx) => ctx.todayDateKey >= MIDTERM_DATE,
+    // v0.34.70 (iter 4 gate): 加 attempts ≥ 30 阈值 - 新同学注册后只要日期到就
+    // 弹"期中加冕"很奇怪 (他根本没参加过 Selena 学校的期中考). 30 题约 = 真打
+    // 算练过一个月的人. 老用户 Selena 早已 7000+ 不影响.
+    check: (ctx) => ctx.todayDateKey >= MIDTERM_DATE && ctx.attempts.length >= 30,
   },
   {
     id: "final_done",
@@ -311,7 +313,8 @@ export const TROPHIES: TrophyDef[] = [
     icon: "👑",
     category: "commemorative",
     // v0.30.10: 期末考试当天或之后第一次进 app 即解锁
-    check: (ctx) => ctx.todayDateKey >= FINAL_DATE,
+    // v0.34.70: 同 midterm gate
+    check: (ctx) => ctx.todayDateKey >= FINAL_DATE && ctx.attempts.length >= 30,
   },
   {
     id: "new_semester",
@@ -320,7 +323,9 @@ export const TROPHIES: TrophyDef[] = [
     icon: "⛵",
     category: "commemorative",
     // v0.31.12: 任意一道下册（G4B）skill 的 attempt 即触发。Selena 期中前后必然有。
-    check: (ctx) => ctx.attempts.some((a) => termOfSkill(a.skillId) === "下册"),
+    // v0.34.70 (iter 4 gate): 1 题 → 10 题. 新同学第一次进数学练 1 题就弹"新学期
+    // 起航"动画很突兀, 他还没体验完玩法. 10 题 ≈ 第一轮 daily session, 这时再弹.
+    check: (ctx) => ctx.attempts.filter((a) => termOfSkill(a.skillId) === "下册").length >= 10,
   },
   // === 段位跨段纪念勋章（v0.31.11）===
   // 跨段进阶时颁发：和段位徽章是两枚不同的勋章。
@@ -716,11 +721,20 @@ export const TROPHIES: TrophyDef[] = [
   {
     id: "birthday_2026",
     name: "生日快乐 2026",
-    description: "Selena 生日当天解锁。",
+    description: "生日当天解锁。专属盲盒勋章。",
     icon: "🎂",
     category: "commemorative",
-    // Selena 生日 2016-03-13 → 2026 年生日 = 2026-03-13。当天或之后第一次进 app 解锁。
-    check: (ctx) => ctx.todayDateKey >= "2026-03-13",
+    // v0.34.70 (iter 4 fix): 之前 hardcoded "2026-03-13" Selena 生日 →
+    // 所有新同学 3-13 后进 app 都弹"生日快乐 Selena". 现在读 ctx.studentBirthday
+    // (ISO YYYY-MM-DD, 来自 /api/profile), 比较 month-day. 没生日字段 → 不弹.
+    // 一年内只弹一次靠 UserTrophy 表去重 (已有机制).
+    check: (ctx) => {
+      const bday = ctx.studentBirthday;
+      if (!bday || typeof bday !== "string" || bday.length < 10) return false;
+      const bMonthDay = bday.slice(5, 10); // "MM-DD"
+      const tMonthDay = ctx.todayDateKey.slice(5, 10);
+      return bMonthDay === tMonthDay;
+    },
   },
 
   // ============================================
