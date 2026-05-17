@@ -32,9 +32,14 @@ export function ShopCounterPanel(props: TemplateRenderProps) {
       setAnswers(nextAnswers);
       setTags(nextTags);
       setCursor(cursor + 1);
+      // 爸爸 2026-05-17 Q3 fix #1 源头修：
+      // 单步题 (steps.length === 1) 直接传 bare value 不要 wrap 数组,
+      // 否则 grader 对 number/choice 的 answer.type 看到 [val] → 老 grader 失败.
+      // 多步题继续 wrap 成数组 (gradeMultiStep 已兼容 array shape).
+      const finalAnswer = steps.length === 1 ? nextAnswers[0] : nextAnswers;
       window.setTimeout(() => {
         onFinish({
-          answer: nextAnswers,
+          answer: finalAnswer,
           isCorrect: ok,
           partialCorrect: false,
           matchedErrorTags: nextTags,
