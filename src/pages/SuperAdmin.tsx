@@ -138,6 +138,10 @@ export function SuperAdminPage() {
     sizeBytes: number;
     estimatedParseMinutes: number;
   } | null>(null);
+  // v0.34.76 iter 10: synthesize state
+  const [synthBusy, setSynthBusy] = useState(false);
+  const [synthResult, setSynthResult] = useState<{ count: number; model: string } | null>(null);
+  const [synthErr, setSynthErr] = useState<string | null>(null);
 
   // Ep16: 批量刷新摘要
   const [bulkRefreshState, setBulkRefreshState] = useState<{
@@ -867,6 +871,37 @@ export function SuperAdminPage() {
       setNewErr((e as Error).message);
     } finally {
       setNewBusy(false);
+    }
+  }
+
+  /** v0.34.76 iter 10: 让 LLM 凭 subject+grade 出 5 道题入库 (演示权宜, 真 OCR iter 11+) */
+  async function synthesizeQuestions() {
+    if (!textbookResult) return;
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    setSynthBusy(true);
+    setSynthErr(null);
+    try {
+      const r = await fetch(
+        `/api/super-admin/textbooks/${textbookResult.uploadId}/synthesize?targetUserId=${encodeURIComponent(textbookTargetUserId.trim())}`,
+        { method: "POST", headers: { Authorization: `Bearer ${pwd}` } },
+      );
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        detail?: string;
+        synthesizedCount?: number;
+        model?: string;
+      };
+      if (!j.ok) {
+        setSynthErr(`生成失败: ${j.error ?? "unknown"} ${j.detail ?? ""}`);
+        return;
+      }
+      setSynthResult({ count: j.synthesizedCount ?? 0, model: j.model ?? "?" });
+    } catch (e) {
+      setSynthErr((e as Error).message);
+    } finally {
+      setSynthBusy(false);
     }
   }
 
@@ -1841,21 +1876,55 @@ export function SuperAdminPage() {
                 <div className="text-xs text-slate-300 space-y-1.5 bg-emerald-500/10 border border-emerald-400/30 rounded p-3">
                   <div>📁 <span className="font-mono">{textbookResult.uploadId}</span></div>
                   <div>📊 {(textbookResult.sizeBytes / 1024).toFixed(1)} KB</div>
-                  <div>⏰ 预计 AI 解析时间: {textbookResult.estimatedParseMinutes} 分钟</div>
                 </div>
-                <div className="text-[11px] text-slate-400 leading-relaxed">
-                  PDF 已存到 OSS, iter 10 加 OCR + 题目抽取流程后会自动跑。当前演示阶段:
-                  跟学生 + 老师说 <strong>"AI 正在阅读你的课本, 几分钟后会推送 grade-{textbookGrade} 题给你"</strong>。
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => { setTextbookOpen(false); setTextbookFile(null); }}
-                    className="text-xs rounded-full bg-emerald-500 hover:bg-emerald-400 text-[#0a0a0a] px-4 py-2 font-medium"
-                  >
-                    完成
-                  </button>
-                </div>
+                {!synthResult ? (
+                  <>
+                    <div className="text-[11px] text-slate-300 leading-relaxed bg-violet-500/10 border border-violet-400/30 rounded p-3">
+                      <strong className="text-violet-200">🪄 立即生成 5 道 grade-{textbookGrade} 题 (演示用):</strong>
+                      <br />
+                      AI 按 {textbookSubject === "math" ? "数学" : textbookSubject === "chinese" ? "语文" : "英语"} + {textbookGrade} 年级标准凭空出 5 道题, 写到 <code>{textbookTargetUserId}</code> 的 ai-questions OSS.
+                      学生下次 sync (~30s) 就看到。<strong className="text-amber-200">⚠ 不读 PDF 内容</strong>,
+                      真 OCR 是后续 FC 函数路径 (iter 11+).
+                    </div>
+                    {synthErr && (
+                      <div className="text-[11px] font-mono uppercase tracking-wider text-rose-400">⚠ {synthErr}</div>
+                    )}
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => { setTextbookOpen(false); setTextbookFile(null); setTextbookResult(null); setSynthResult(null); }}
+                        className="text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium"
+                      >
+                        Close (skip synthesis)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={synthesizeQuestions}
+                        disabled={synthBusy}
+                        className="text-xs rounded-full bg-violet-500 hover:bg-violet-400 text-white px-4 py-2 font-medium disabled:opacity-30"
+                      >
+                        {synthBusy ? "AI 生成中… ~8s" : "🪄 Generate 5 sample questions"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-violet-300 text-2xl text-center">🪄 已生成 {synthResult.count} 道题</div>
+                    <div className="text-[11px] text-slate-400 text-center">
+                      via {synthResult.model} · 写到 <code className="text-slate-200">{textbookTargetUserId}</code> 的 ai-questions/<br />
+                      学生 30 秒内 cloudSync pull 就能在 train 里看到 grade-{textbookGrade} 题
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => { setTextbookOpen(false); setTextbookFile(null); setTextbookResult(null); setSynthResult(null); }}
+                        className="text-xs rounded-full bg-emerald-500 hover:bg-emerald-400 text-[#0a0a0a] px-4 py-2 font-medium"
+                      >
+                        完成
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

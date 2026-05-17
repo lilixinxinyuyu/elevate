@@ -1347,24 +1347,192 @@ superAdmin.post("/textbooks/upload", async (c) => {
 });
 
 /**
- * GET /api/super-admin/textbooks?userId=xxx
- * 列出某同学已上传的课本 (从 OSS users/{userId}/textbooks/*.meta.json 列出)
+ * GET /api/super-admin/textbooks?userId=xxx — list stub iter 10+
  */
 superAdmin.get("/textbooks", async (c) => {
-  const userId = c.req.query("userId");
-  if (!userId || !/^[a-zA-Z0-9_-]{1,64}$/.test(userId)) {
-    return c.json({ ok: false, error: "missing_or_invalid_userId" }, 400);
+  return c.json({ ok: true, textbooks: [], note: "list stub" });
+});
+
+/**
+ * v0.34.76 iter 10: POST /api/super-admin/textbooks/{uploadId}/synthesize
+ *
+ * **演示阶段权宜**: 真 PDF OCR 需要 FC 函数 (ESA 11s 装不下 PDF.js + Qwen-VL
+ * per-page 12-18s 链). 这次 ep 给上传后一个"立即生成 5 道题"按钮:
+ *   1. 读 meta (subject + grade)
+ *   2. 调 chat LLM (qwen3.6-flash) 出 5 道符合该 subject + grade 的题
+ *   3. 用 normalizeAiQuestion (iter 5) 拍齐字段
+ *   4. 用 persistAiQuestions (iter 6) 写 users/{targetUserId}/ai-questions/{qid}.json
+ *   5. 更新 meta status: "synthesized" + 题数
+ *
+ * 学生 cloudSync 下次 pull 自动看到这 5 道题. **是 LLM 凭空生成的题** (不
+ * 读 PDF 内容), 真的 OCR 是 iter 11+ FC 函数路径. UI 文案明确告诉 admin.
+ *
+ * 跟 generate.ts /questions 逻辑共用: 复用同 chat provider 链 + 同 prompt 风格.
+ */
+superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
+  const uploadId = c.req.param("uploadId");
+  if (!/^tb_\d+_[a-zA-Z0-9]+$/.test(uploadId)) {
+    return c.json({ ok: false, error: "invalid_uploadId" }, 400);
+  }
+  const targetUserId = c.req.query("targetUserId");
+  if (!targetUserId || !/^[a-zA-Z0-9_-]{1,64}$/.test(targetUserId)) {
+    return c.json({ ok: false, error: "missing_or_invalid_targetUserId" }, 400);
   }
   const cfg = getOssConfig(c.env);
   if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
-  // 简化版: 直接 list prefix (调 OSS API), 这里 stub 因为我们 oss.ts lib 没暴露 list.
-  // 客户端 admin UI 上传后会本地 keep uploadId list, 不依赖此 list endpoint;
-  // 提供给将来 dashboard 用. iter 10 实现 list.
+
+  // 1. 读 meta
+  const metaKey = `users/${targetUserId}/textbooks/${uploadId}.meta.json`;
+  const metaGot = await ossGet(cfg, metaKey);
+  if (!metaGot.ok || !metaGot.text) {
+    return c.json({ ok: false, error: "meta_not_found", detail: metaGot.error }, 404);
+  }
+  const meta = JSON.parse(metaGot.text) as {
+    subject: "math" | "chinese" | "english";
+    grade: string;
+    filename?: string;
+  };
+
+  // 2. 调 LLM 出题 (跟 generate.ts 同套路, 但简化 inline)
+  const { getChatProviders, getChatModels } = await import("../lib/providers");
+  const providers = getChatProviders(c.env);
+  if (providers.length === 0) {
+    return c.json({ ok: false, error: "no_chat_provider" }, 503);
+  }
+  const subjectLabel = meta.subject === "chinese" ? "语文" : meta.subject === "english" ? "英语" : "数学";
+  const sys = `你是 ${meta.grade} 年级 ${subjectLabel} AI 出题员。出 5 道符合 ${meta.grade} 年级该学科标准的题, 严格 JSON 输出:
+{
+  "questions": [
+    {
+      "question_id": "AI_<skill>_<idx>",
+      "stem": "题面",
+      "answer": { "type": "number", "value": 42 },  // 数字题; choice/multi_step 时变
+      "options": [{"id":"a","text":"..."}, ...],  // 选择题才需要
+      "hints": ["从轻到重 1-2 条"],
+      "common_errors": [],
+      "solution_steps": [],
+      "estimated_time_seconds": 30,
+      "difficulty": 2
+    }
+  ]
+}
+- 数字闭合: 实物=整数, 钱=2 位小数
+- options 数量 4 个 (single_choice 时)
+- answer.type=number → question_format="numeric", 不要 options
+- answer.type=choice → question_format="single_choice" + 至少 2 个 options + value 是 options 里某个 id
+- 单步题不要塞 subquestions
+不要 markdown 不要解释文字.`;
+  const usr = `请出 5 道 ${meta.grade} 年级 ${subjectLabel} 题, 难度 difficulty 1-3 混合, 主题随机 (这是为新同学预热, 不知具体单元).
+返回 JSON: { "questions": [... 5 道 ...] }`;
+
+  let rawQs: unknown[] = [];
+  let modelUsed = "";
+  let providerUsed = "";
+  const errors: string[] = [];
+  for (const p of providers) {
+    const models = getChatModels(p).filter((m: string) => /^qwen3/i.test(m)).slice(0, 2);
+    for (const model of models) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10_000);
+      try {
+        const resp = await fetch(`${p.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${p.apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
+            temperature: 0.7,
+            max_tokens: 3500,
+            response_format: { type: "json_object" },
+            enable_thinking: false,
+          }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        const j = (await resp.json().catch(() => null)) as
+          | { choices?: { message?: { content?: string } }[]; error?: { code?: string } }
+          | null;
+        if (!resp.ok || !j || j.error) {
+          errors.push(`${p.label}/${model}:${j?.error?.code ?? resp.status}`);
+          continue;
+        }
+        const text = j.choices?.[0]?.message?.content?.trim();
+        if (!text) continue;
+        const parsed = JSON.parse(text) as { questions?: unknown[] };
+        if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          rawQs = parsed.questions;
+          modelUsed = model;
+          providerUsed = p.label;
+          break;
+        }
+      } catch (e) {
+        clearTimeout(timer);
+        errors.push(`${p.label}/${model}:fetch_failed`);
+      }
+    }
+    if (rawQs.length > 0) break;
+  }
+  if (rawQs.length === 0) {
+    return c.json({ ok: false, error: "llm_failed", detail: errors.join(",") }, 502);
+  }
+
+  // 3. normalize + stamp
+  const { normalizeAiQuestion } = await import("../lib/normalizeAiQuestion");
+  const stamp = Date.now().toString(36);
+  const stamped = rawQs
+    .filter((q): q is Record<string, unknown> =>
+      typeof q === "object" && q !== null && typeof (q as Record<string, unknown>).stem === "string"
+    )
+    .map((q, i) => {
+      const baseId = typeof q.question_id === "string" ? q.question_id : `AI_textbook_${meta.subject}_${meta.grade}_${i}`;
+      const qid = baseId.includes("__") ? baseId : `${baseId}__${stamp}_${i}`;
+      const tagged = {
+        ...q,
+        question_id: qid,
+        subjectId: meta.subject,
+        unit_id: `G${meta.grade}_TEXTBOOK_${uploadId.slice(0, 8)}`,
+        skill_id: `textbook_g${meta.grade}_${meta.subject}_synth`,
+        tags: Array.isArray(q.tags)
+          ? Array.from(new Set([...(q.tags as string[]), "ai_generated", "textbook_synthesized", `grade_${meta.grade}`, `subject_${meta.subject}`]))
+          : ["ai_generated", "textbook_synthesized", `grade_${meta.grade}`, `subject_${meta.subject}`],
+      };
+      return normalizeAiQuestion(tagged).q;
+    });
+
+  // 4. persist per-key
+  const { persistAiQuestions } = await import("../lib/persistAiQuestions");
+  const persist = await persistAiQuestions(cfg, targetUserId, stamped);
+
+  // 5. update meta status
+  const newMeta = {
+    ...meta,
+    status: "synthesized" as const,
+    synthesizedAt: Date.now(),
+    synthesizedCount: persist.succeeded,
+    synthesizedModel: modelUsed,
+    synthesizedProvider: providerUsed,
+    synthesisDisclaimer: "LLM 凭空生成的题 — 未读 PDF 内容. 真的 OCR 见 iter 11+",
+  };
+  await ossPut(cfg, metaKey, JSON.stringify(newMeta, null, 2), {
+    contentType: "application/json; charset=utf-8",
+  });
+
+  console.log(
+    `[super-admin] textbook ${uploadId} synthesized ${persist.succeeded}/${stamped.length} questions for ${targetUserId} (g${meta.grade}/${meta.subject}) via ${providerUsed}/${modelUsed}`,
+  );
+
   return c.json({
     ok: true,
-    userId,
-    note: "list endpoint stub — iter 10 will implement OSS list",
-    textbooks: [],
+    uploadId,
+    targetUserId,
+    subject: meta.subject,
+    grade: meta.grade,
+    synthesizedCount: persist.succeeded,
+    failedCount: persist.failed,
+    model: modelUsed,
+    provider: providerUsed,
+    disclaimer: "演示阶段权宜: LLM 凭空生成, 未读 PDF 内容. 真 OCR 是 iter 11+ FC 函数路径.",
+    nextStep: `学生 ${targetUserId} 下次 pullFromCloud (Layout interval ~30s) 会自动看到这 ${persist.succeeded} 道题`,
   });
 });
 
