@@ -290,6 +290,18 @@ export const TROPHIES: TrophyDef[] = [
     category: "commemorative",
     check: (ctx) => ctx.attempts.length >= 1,
   },
+  {
+    id: "profile_pioneer",
+    name: "档案先锋",
+    description: "完成 7 项必填档案信息。专属起点纪念。",
+    icon: "🎓",
+    category: "commemorative",
+    // v0.34.79 iter 13: ProfileGate 全 7 项填齐时, src/components/ProfileGate.tsx
+    // dispatch 'xiaojinapp:onboarding-completed' 事件 → src/lib/onboardingTrophy.ts
+    // 监听 → 直接 db.trophies.put + show lottery. 不依赖 check 函数 (不需要
+    // attempts 等 ctx, 是事件驱动). 但留 def 在 TROPHIES 表里让勋章柜能显示.
+    check: () => false, // 永远 false (事件驱动颁发, 不靠 check)
+  },
   // === Phase 2 占位：触发条件待实施（见 docs/phase2-special-trophies.md）===
   // 这些 def 现在永远 check=false → 在勋章柜里显示为灰色未解锁，
   // 让纪念区不那么孤单 + 提示 Selena 还有更多专属勋章在等她。

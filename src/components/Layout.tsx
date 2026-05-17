@@ -156,6 +156,29 @@ export function Layout() {
     })();
   }, []);
 
+  // v0.34.79 iter 13: 监听 onboardingTrophy 派的 'trophy-awarded' 事件,
+  // 实时塞进 lottery queue 弹庆祝 (不用等下次 Layout mount 跑 runPassiveTrophyCheck).
+  useEffect(() => {
+    const onTrophyAwarded = (e: Event) => {
+      const detail = (e as CustomEvent<{ trophyId?: string; studentId?: string }>).detail;
+      if (!detail?.trophyId) return;
+      const def = TROPHIES.find((t) => t.id === detail.trophyId);
+      if (!def) return;
+      const meta: TrophyMeta = {
+        id: trophyImageKey("math", def.id),
+        subjectId: "math",
+        name: def.name,
+        icon: def.icon ?? "🌟",
+        description: def.description,
+        rare: true,
+        category: def.category,
+      };
+      setPassiveLotteryQueue((q) => [...q, meta]);
+    };
+    window.addEventListener("xiaojinapp:trophy-awarded", onTrophyAwarded);
+    return () => window.removeEventListener("xiaojinapp:trophy-awarded", onTrophyAwarded);
+  }, []);
+
   return (
     <div className="min-h-full flex flex-col">
       <BgGenIndicator />
