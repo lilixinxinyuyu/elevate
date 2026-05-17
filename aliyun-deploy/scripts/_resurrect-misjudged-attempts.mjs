@@ -130,13 +130,14 @@ function newGrade(question, userAnswer) {
 // ─── Main ─
 
 (async () => {
-  // Snapshot 不带 questions (cloudSync PUSH_TABLES 故意排除). 从 3 个源加载:
+  // Snapshot 不带 questions (cloudSync PUSH_TABLES 故意排除). 从 4 个源加载:
   //   1. backup/heping-backup-FULL-2026-05-16.json (1877, 含历史 AI 出过的)
-  //   2. OSS users/selena/ai-questions.json (Selena 设备最近 push 的 AI 题)
-  //   3. public/agent/questions.json (静态 seed 池 961)
-  console.log("loading question pool from 3 sources...");
+  //   2. OSS users/selena/ai-questions.json (老 v1 blob, Selena 设备早期 push)
+  //   3. OSS users/selena/ai-questions/*.json (v0.34.65 server-side per-key, 救新出的题)
+  //   4. public/agent/questions.json (静态 seed 池 961)
+  console.log("loading question pool from 4 sources...");
   const qPool = new Map();
-  let countSeed = 0, countBackup = 0, countOssAi = 0;
+  let countSeed = 0, countBackup = 0, countOssAi = 0, countOssPerKey = 0;
   try {
     const seed = JSON.parse(readFileSync("/Users/yong/Desktop/xy/heping-math-trainer/public/agent/questions.json", "utf-8"));
     for (const q of (Array.isArray(seed) ? seed : Object.values(seed))) {
@@ -152,11 +153,35 @@ function newGrade(question, userAnswer) {
   try {
     const aiR = await oss.get(`users/${USER_ID}/ai-questions.json`);
     const aiArr = JSON.parse(aiR.content.toString("utf-8"));
-    for (const q of (Array.isArray(aiArr) ? aiArr : (aiArr.questions ?? []))) {
+    for (const q of (Array.isArray(aiArr) ? aiArr : (aiArr.questions ?? aiArr.rows ?? []))) {
       if (q?.question_id && !qPool.has(q.question_id)) { qPool.set(q.question_id, q); countOssAi++; }
     }
-  } catch (e) { console.warn("  OSS ai-questions fail:", e.code ?? e.message); }
-  console.log(`  pool: ${qPool.size} (seed=+${countSeed} backup=+${countBackup} ai-questions=+${countOssAi})`);
+  } catch (e) { console.warn("  OSS ai-questions (blob) fail:", e.code ?? e.message); }
+  // v0.34.65: per-key prefix load (server-side persist 后写的)
+  try {
+    let marker = null;
+    while (true) {
+      const list = await oss.list({
+        prefix: `users/${USER_ID}/ai-questions/`,
+        marker,
+        "max-keys": 1000,
+      });
+      for (const obj of (list.objects ?? [])) {
+        if (!obj.name.endsWith(".json")) continue;
+        try {
+          const g = await oss.get(obj.name);
+          const q = JSON.parse(g.content.toString("utf-8"));
+          if (q?.question_id && !qPool.has(q.question_id)) {
+            qPool.set(q.question_id, q);
+            countOssPerKey++;
+          }
+        } catch (e) { /* skip bad object */ }
+      }
+      if (!list.nextMarker) break;
+      marker = list.nextMarker;
+    }
+  } catch (e) { console.warn("  OSS ai-questions per-key fail:", e.code ?? e.message); }
+  console.log(`  pool: ${qPool.size} (seed=+${countSeed} backup=+${countBackup} ai-questions-blob=+${countOssAi} ai-questions-per-key=+${countOssPerKey})`);
 
   console.log(`pulling ${SNAPSHOT_KEY}...`);
   const r = await oss.get(SNAPSHOT_KEY);

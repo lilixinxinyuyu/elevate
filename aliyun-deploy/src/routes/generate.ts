@@ -25,6 +25,7 @@ import { requireAuth, getUserId } from "../lib/auth";
 import { getOssConfig, ossPut, ossGet } from "../lib/oss";
 import { getChatProviders as getChatProvidersLib, getChatModels as getChatModelsLib } from "../lib/providers";
 import { normalizeAiQuestion } from "../lib/normalizeAiQuestion";
+import { persistAiQuestions } from "../lib/persistAiQuestions";
 import proxyFallback from "./proxy-fallback";
 
 const generate = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
@@ -769,6 +770,30 @@ generate.post("/questions", async (c) => {
               normalizeReports.map((r) => `${r.qid}[${r.rules.join(",")}]`).join("; "),
           );
         }
+        // v0.34.65: 持久化每道题到 OSS per-key (users/{uid}/ai-questions/{qid}.json).
+        // 救未来 resurrection — Ep45 dry-run 报 1288 attempts blocked by missing question
+        // defs，根因就是 AI 出过的题没存。从这次起每道题落盘，下次再扫 attempts 能匹上.
+        const cfg = getOssConfig(c.env);
+        let persistReport: { attempted: number; succeeded: number; failed: number; elapsedMs: number } | null = null;
+        if (cfg && stamped.length > 0) {
+          const userId = getUserId(c);
+          const pr = await persistAiQuestions(cfg, userId, stamped);
+          persistReport = {
+            attempted: pr.attempted,
+            succeeded: pr.succeeded,
+            failed: pr.failed,
+            elapsedMs: pr.elapsedMs,
+          };
+          if (pr.failed > 0) {
+            console.warn(
+              `[generate/questions] persist ${pr.succeeded}/${pr.attempted} ok, ${pr.failed} failed in ${pr.elapsedMs}ms. errors:${pr.errors.join(" | ")}`,
+            );
+          } else {
+            console.log(
+              `[generate/questions] persisted ${pr.succeeded}/${pr.attempted} to users/${userId}/ai-questions/ in ${pr.elapsedMs}ms`,
+            );
+          }
+        }
         return c.json({
           ok: true,
           questions: stamped,
@@ -778,6 +803,7 @@ generate.post("/questions", async (c) => {
           requestedCount,
           partial: stamped.length < requestedCount,
           normalized: normalizeReports.length, // 给客户端看（可选透传 admin）
+          persisted: persistReport,
         });
       } catch (e) {
         clearTimeout(timer);
