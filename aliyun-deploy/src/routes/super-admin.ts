@@ -1583,7 +1583,7 @@ superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
     return c.json({ ok: false, error: "no_chat_provider" }, 503);
   }
   const subjectLabel = meta.subject === "chinese" ? "语文" : meta.subject === "english" ? "英语" : "数学";
-  const sys = `你是 ${meta.grade} 年级 ${subjectLabel} AI 出题员。出 5 道符合 ${meta.grade} 年级该学科标准的题, 严格 JSON 输出:
+  const sys = `你是 ${meta.grade} 年级 ${subjectLabel} AI 出题员。出 3 道符合 ${meta.grade} 年级该学科标准的题, 严格 JSON 输出:
 {
   "questions": [
     {
@@ -1605,8 +1605,8 @@ superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
 - answer.type=choice → question_format="single_choice" + 至少 2 个 options + value 是 options 里某个 id
 - 单步题不要塞 subquestions
 不要 markdown 不要解释文字.`;
-  const usr = `请出 5 道 ${meta.grade} 年级 ${subjectLabel} 题, 难度 difficulty 1-3 混合, 主题随机 (这是为新同学预热, 不知具体单元).
-返回 JSON: { "questions": [... 5 道 ...] }`;
+  const usr = `请出 3 道 ${meta.grade} 年级 ${subjectLabel} 题, 难度 difficulty 1-3 混合, 主题随机 (这是为新同学预热, 不知具体单元).
+返回 JSON: { "questions": [... 3 道 ...] }`;
 
   let rawQs: unknown[] = [];
   let modelUsed = "";
@@ -1616,7 +1616,9 @@ superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
     const models = getChatModels(p).filter((m: string) => /^qwen3/i.test(m)).slice(0, 2);
     for (const model of models) {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 10_000);
+      // v0.34.86 iter 20: 8s abort (从 10s) — 实测 10s ESA gateway 504. 留 3s 给
+      // judge + persist + meta update + response 序列化.
+      const timer = setTimeout(() => ctrl.abort(), 8_000);
       try {
         const resp = await fetch(`${p.baseUrl}/chat/completions`, {
           method: "POST",
@@ -1625,7 +1627,7 @@ superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
             model,
             messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
             temperature: 0.7,
-            max_tokens: 3500,
+            max_tokens: 2400,
             response_format: { type: "json_object" },
             enable_thinking: false,
           }),
@@ -1682,9 +1684,25 @@ superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
       return normalizeAiQuestion(tagged).q;
     });
 
-  // 4. persist per-key
+  // 3.5 v0.34.86 iter 20: heuristic judge — 拒 severity 5 烂题, 学生 train
+  // 不被污染. 启发式 0ms 无 LLM call, 不动 ESA 11s 预算.
+  const { judgeAiQuestionBatch } = await import("../lib/heuristicQuestionJudge");
+  const judged = judgeAiQuestionBatch(stamped);
+  if (judged.rejected.length > 0) {
+    console.log(
+      `[textbook/synthesize] heuristic rejected ${judged.rejected.length}/${stamped.length}: ` +
+        judged.rejected.map((r) => `${r.question_id}(${r.outcome.reasons.join(",")})`).join("; "),
+    );
+  }
+  if (judged.borderline.length > 0) {
+    console.log(
+      `[textbook/synthesize] heuristic borderline ${judged.borderline.length} (kept w/ _judge meta)`,
+    );
+  }
+
+  // 4. persist per-key (只 kept)
   const { persistAiQuestions } = await import("../lib/persistAiQuestions");
-  const persist = await persistAiQuestions(cfg, targetUserId, stamped);
+  const persist = await persistAiQuestions(cfg, targetUserId, judged.kept);
 
   // 5. update meta status
   const newMeta = {
@@ -1694,7 +1712,9 @@ superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
     synthesizedCount: persist.succeeded,
     synthesizedModel: modelUsed,
     synthesizedProvider: providerUsed,
-    synthesisDisclaimer: "LLM 凭空生成的题 — 未读 PDF 内容. 真的 OCR 见 iter 11+",
+    synthesizedRejectedCount: judged.rejected.length,
+    synthesizedBorderlineCount: judged.borderline.length,
+    synthesisDisclaimer: "LLM 凭空生成的题 — 未读 PDF 内容. 真的 OCR 见 iter 11+. 已 heuristic 拒烂题.",
   };
   await ossPut(cfg, metaKey, JSON.stringify(newMeta, null, 2), {
     contentType: "application/json; charset=utf-8",
@@ -1712,6 +1732,8 @@ superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
     grade: meta.grade,
     synthesizedCount: persist.succeeded,
     failedCount: persist.failed,
+    judgedRejected: judged.rejected.length,
+    judgedBorderline: judged.borderline.length,
     model: modelUsed,
     provider: providerUsed,
     disclaimer: "演示阶段权宜: LLM 凭空生成, 未读 PDF 内容. 真 OCR 是 iter 11+ FC 函数路径.",
