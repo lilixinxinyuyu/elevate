@@ -19,6 +19,7 @@ import type { SubjectId } from "../core/types";
 import { DailySummaryCard } from "../components/DailySummaryCard";
 import { ChangePasswordModal } from "../components/ChangePasswordModal";
 import { GradeMismatchBanner } from "../components/GradeMismatchBanner";
+import { NewUserOnboardingTour } from "../components/NewUserOnboardingTour";
 
 function formatDaysUntil(at: number): string {
   const days = Math.ceil((at - Date.now()) / (24 * 60 * 60 * 1000));
@@ -54,6 +55,9 @@ export function SubjectPickerPage() {
 
         {/* v0.34.72 iter 6: 非 4 年级同学友好提示 (题库当前只覆盖 4 年级) */}
         <GradeMismatchBanner />
+
+        {/* v0.34.73 iter 7: 新同学 (0 attempts) 第一次进 → 3 步玩法引导 */}
+        <NewUserOnboardingTour />
 
         {/* v0.31.103: 三学科今日总结卡（顶部 hero） */}
         {student && (
