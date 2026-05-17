@@ -216,7 +216,30 @@ tutor.post("/explain", async (c) => {
   );
 });
 
-// voice + judge-handwriting 暂走 proxy-fallback (复杂度高，下个 ep)
+/**
+ * Ep37 (2026-05-17) /api/tutor/judge-handwriting native 尝试 — 失败回退
+ *
+ * 实测：ESA EdgeRoutine **per-request gateway 11s 硬限**，无论 worker 内部
+ * 设多长 timeout，gateway 在 ~11s 就会返 504 Gateway Time-out 给 client。
+ * 视觉模型 qwen3.6-plus 处理小手写图也要 12-18s（即使是 100×100 白图），
+ * 单 LLM call 路径根本走不通。
+ *
+ * 跟 /api/generate/image 一样需要 **async pattern** (start task → OSS 写
+ * pending 状态 → 返 task_id → client 轮询 GET status)，但 vision chat
+ * /completions endpoint 不提供 task API，要自己写 background fan-out (走
+ * waitUntil 或 OSS-based job queue)。下个 ep 专门做这个。
+ *
+ * 当前先 keep proxy-fallback 让 judge-handwriting 继续可用 (CF Pages 上
+ * 30s wall budget 跑得通)。下面 native handler 完全删除（也试过 9.5s
+ * timeout 同样 504, gateway 比 worker 抢先 timeout）。
+ *
+ * keep 静态 import 给以后 async impl 复用 SYSTEM_PROMPT / extractHwJson.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _HW_FUTURE_REFERENCE = "see commit log Ep37 for context";
+// voice + judge-handwriting 暂走 proxy-fallback
+// (qwen3.5-omni 实时语音 + qwen-vl 视觉判答 单 LLM call 都超 ESA 11s gateway 硬限,
+//  需要 async start+poll pattern, 见上面 Ep37 diagnostic 注释)
 tutor.all("*", async (c) => {
   return proxyFallback.fetch(c.req.raw, c.env);
 });
