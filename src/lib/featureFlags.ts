@@ -148,6 +148,21 @@ function syncEstimationGateFromUrl(): void {
 
 let _estGateSynced = false;
 
+/**
+ * v0.35.0 (iter 34 P0-2): ScratchInsurance — 软锁 + 草稿险.
+ * 多位数 / 应用题旁边弹工具栏 (写草稿 / 列竖式 / 心算确认). 详 src/core/scratchPolicy.ts
+ */
+const SCRATCH_LS_KEY = "scratch_insurance_v1";
+
+export function isScratchInsuranceV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(SCRATCH_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function isEstimationGateV1(): boolean {
   if (typeof window === "undefined") return true;
   if (!_estGateSynced) {

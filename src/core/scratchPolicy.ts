@@ -1,0 +1,133 @@
+/**
+ * v0.35.0 (iter 34 P0-2): ScratchInsurance — 软锁草稿险.
+ *
+ * 起源: Selena 43% 期中事件 master plan P0-2.
+ * Peer review 共识: 不强制 N 字符 (易反抗), 改"软锁/草稿险":
+ *   - 用了草稿且答错 → XP 不扣 (insurance)
+ *   - 选"心算确认" → 每日 3 次配额, 用完只能写草稿
+ *   - 默认不选工具 = 默认放任 (跟现状一样)
+ *
+ * Feature flag: isScratchInsuranceV1() (default ON).
+ */
+import type { Question } from "./types";
+import { isScratchInsuranceV1 } from "../lib/featureFlags";
+import { classifyStem, isSpeedEligible } from "./speedMatchPolicy";
+import { requiresEstimation } from "./estimationPolicy";
+
+/* ──────────────────── Trigger heuristic ──────────────────── */
+
+/**
+ * Heuristic — 题是否提供 ScratchPanel.
+ *
+ * Peer review 修改: 提高门槛, 跟 EstimationGate 互斥避免双弹窗.
+ *
+ * 触发: (任一)
+ *   - 数字最大 ≥ 3 位 (从 2 位提到 3 位, 防 "12+15" 也触发)
+ *   - 多 operator (≥ 2 个)
+ *   - 应用题 (story / multistep)
+ *   - difficulty ≥ 3
+ *
+ * 互斥: 已经触发 EstimationGate 的题不再触发 Scratch (estimation 本身就是 working memory 卸载)
+ */
+export function requiresScratchByHeuristic(q: Question): boolean {
+  if (q.answer.type !== "number") return false;
+  if (isSpeedEligible(q)) return false;
+  // 跟 EstimationGate 互斥 — 防止双弹窗 (Gemini + GPT 共识)
+  if (requiresEstimation(q, { skipDailyCapCheck: true })) return false;
+  if (q.difficulty >= 3) return true;
+  const f = classifyStem(q.stem);
+  if (f.digitsMax >= 3) return true;
+  if (f.opCount >= 2) return true;
+  if (f.hasStory || f.hasMultiStep) return true;
+  return false;
+}
+
+/**
+ * Public — 题是否触发 ScratchPanel.
+ * 显式 q.requiresScratch 优先 (true/false 双向).
+ * Flag off → 永远 false.
+ */
+export function requiresScratch(q: Question): boolean {
+  if (!isScratchInsuranceV1()) return false;
+  if (typeof q.requiresScratch === "boolean") return q.requiresScratch;
+  return requiresScratchByHeuristic(q);
+}
+
+/* ──────────────────── 心算配额 (3/天) ──────────────────── */
+
+const MENTAL_QUOTA_PER_DAY = 3;
+const QUOTA_LS_PREFIX = "scratch_mental_quota_";
+
+function todayKey(): string {
+  return QUOTA_LS_PREFIX + new Date().toISOString().slice(0, 10);
+}
+
+export function getMentalCalcRemaining(): number {
+  if (typeof window === "undefined") return MENTAL_QUOTA_PER_DAY;
+  try {
+    const used = Number(localStorage.getItem(todayKey()) ?? "0") || 0;
+    return Math.max(0, MENTAL_QUOTA_PER_DAY - used);
+  } catch {
+    return MENTAL_QUOTA_PER_DAY;
+  }
+}
+
+export function canUseMentalCalc(): boolean {
+  return getMentalCalcRemaining() > 0;
+}
+
+/**
+ * 消耗一次心算配额. 返回剩余次数 (消耗后).
+ */
+export function useMentalCalcQuota(): number {
+  if (typeof window === "undefined") return MENTAL_QUOTA_PER_DAY - 1;
+  try {
+    const k = todayKey();
+    const used = Number(localStorage.getItem(k) ?? "0") || 0;
+    const next = used + 1;
+    localStorage.setItem(k, String(next));
+    return Math.max(0, MENTAL_QUOTA_PER_DAY - next);
+  } catch {
+    return 0;
+  }
+}
+
+export { MENTAL_QUOTA_PER_DAY };
+
+/* ──────────────────── Scratch payload validation ──────────────────── */
+
+/**
+ * 判断用户的 scratch 输入是否"算数"  — 决定 insurance 是否激活.
+ *
+ * Pre-review 整合 (Gemini + GPT):
+ *   - charCount ≥ 3 非空白 (Gemini "不要太严" + GPT "非空就行" 折中)
+ *   - 必须含至少 1 个数字 或 1 个运算符 (Gemini 防"按一下空格刷")
+ *   - 防 Selena 学会"写一个字母刷保险" — 草稿必须有"数学意图"
+ *
+ * 注: 不验"草稿对错" (10 岁孩子草稿有自己逻辑, 强行 LLM judge 易冤枉)
+ */
+export function isMeaningfulScratch(textContent: string): boolean {
+  const cleaned = (textContent ?? "").replace(/\s/g, "");
+  if (cleaned.length < 3) return false;
+  const hasDigitOrOp = /[\d+\-*/×÷=()]/.test(cleaned);
+  return hasDigitOrOp;
+}
+
+/* ──────────────────── Scratch tool 类型 ──────────────────── */
+
+/**
+ * Peer review 共识简化: 2 button v1 (写草稿 vs 心算挑战), 不要 3 个.
+ * 草稿模式内 v2 可加竖式底纹切换 (现在 textarea + grid bg 就够).
+ */
+export type ScratchTool = "scratch" | "mental_calc" | "none";
+
+export interface ScratchPayload {
+  tool: ScratchTool;
+  textContent: string;
+  /** 是否激活了 insurance (用了 free_text/vertical 且 isMeaningfulScratch) */
+  insured: boolean;
+  /** 是否消耗了心算配额 */
+  mentalOverrideUsed: boolean;
+  /** 文本字符数 (telemetry) */
+  charCount: number;
+}

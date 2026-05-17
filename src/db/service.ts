@@ -328,6 +328,17 @@ export interface SubmitAttemptInput {
     magnitudeMismatch: boolean;
     elapsedMsByPhase: { round: number; computeAndMagnitude: number };
   };
+  /**
+   * v0.35.0 (iter 34 P0-2): ScratchInsurance payload, 落库到 attempt.metadata.scratch.
+   * Side effect: 当 insured=true AND !isCorrect → bypass XP penalty (set points=0),
+   * 不更新 mastery / streak / combo (insured wrong 完全无 progress收益, peer review 共识)
+   */
+  scratch?: {
+    tool: "scratch" | "mental_calc";
+    charCount: number;
+    insured: boolean;
+    mentalOverrideUsed: boolean;
+  };
 }
 
 export interface AttemptOutcome {
@@ -342,6 +353,8 @@ export interface AttemptOutcome {
   tooFast?: boolean;
   /** v0.34.98 iter 32 P0-0a: 答对且用时 ≥ 150% 估算 → +3 XP "🧠 深思 bonus" */
   slowThink?: boolean;
+  /** v0.35.0 iter 34 P0-2: 用了草稿且答错 → XP/mastery/combo 都 bypass (UI 显示"🛡️ 草稿险") */
+  insuredWrong?: boolean;
   /** 错题故事化：本次错答命中的 errorTag 在历史上踩过几次 + 几道老题 */
   errorPattern?: {
     matchedTag: string;
@@ -369,13 +382,15 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
   // - 第一次答错 → combo reset（current behavior）
   // - 第二次提交（不管对错、不管 tutor）→ combo 不增也不会再 reset
   // - tutor-assisted 答对 → 不增 combo
+  // v0.35.0 (iter 34 P0-2): insured wrong (用了草稿险答错) → combo 不 reset 也不增 (保护情绪)
+  const wouldInsuredWrong = !isCorrect && !!input.scratch?.insured;
   let comboAfter: number;
   if (isCorrect && isFirstAttempt && !usedTutor) {
     comboAfter = comboBeforeAttempt + 1;
-  } else if (!isCorrect && isFirstAttempt) {
+  } else if (!isCorrect && isFirstAttempt && !wouldInsuredWrong) {
     comboAfter = 0;
   } else {
-    // 2nd 提交 — combo 沿用（已经在 1st-wrong 时 reset 到 0 了）
+    // 2nd 提交 / insured wrong — combo 沿用
     comboAfter = comboBeforeAttempt;
   }
 
@@ -415,23 +430,36 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     skillCorrectCount, // v0.30.12: 防"姊妹题刷分"
   });
 
+  // v0.35.0 (iter 34 P0-2): ScratchInsurance — insured wrong 完全无 XP/mastery/streak.
+  //   peer review 严格派 (GPT) 共识: 答错就不该得任何进度收益, 只是不扣 XP.
+  //   bypassed: 把 delta.total 改为 0, mastery 不更新.
+  const insuredWrongBypass = !isCorrect && !!input.scratch?.insured;
+  if (insuredWrongBypass) {
+    delta.total = 0;
+    // delta.byAbility 也清空 (不奖能力)
+    delta.byAbility = {};
+  }
+
   const priorMastery = await db.mastery.get(masteryId(studentId, question.skill_id));
 
   // v0.28 新算法：用 applyAttempt() 增量更新（内部跑 Elo + 滚动窗口 + Fragility）
   // v0.30.7: usedTutor 透传，tutor-assisted 答对 Elo actual=0.5
   const masteryNow = Date.now();
-  const masteryUpdate = applyAttempt(
-    priorMastery,
-    {
-      questionId: question.question_id,
-      difficulty: question.difficulty,
-      isCorrect,
-      usedTutor,
-      ts: masteryNow,
-    },
-    masteryNow,
-  );
-  const newMasteryScore = masteryUpdate.next.score;
+  // v0.35.0 iter 34 P0-2: insured wrong 不调用 applyAttempt (不更新 mastery/Elo/fragility)
+  const masteryUpdate = insuredWrongBypass
+    ? { next: priorMastery ?? null, delta: 0 } as any
+    : applyAttempt(
+        priorMastery,
+        {
+          questionId: question.question_id,
+          difficulty: question.difficulty,
+          isCorrect,
+          usedTutor,
+          ts: masteryNow,
+        },
+        masteryNow,
+      );
+  const newMasteryScore = masteryUpdate.next?.score ?? priorMastery?.score ?? 0;
   const masteryDelta = masteryUpdate.delta;
 
   const attempt: Attempt = {
@@ -453,9 +481,12 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     comboAtEnd: comboAfter,
     usedTutor: usedTutor || undefined,
     attemptOrdinal,
-    metadata: input.estimationGate
-      ? { estimationGate: { version: "v1", ...input.estimationGate } }
-      : undefined,
+    metadata: (() => {
+      const meta: Record<string, unknown> = {};
+      if (input.estimationGate) meta.estimationGate = { version: "v1", ...input.estimationGate };
+      if (input.scratch) meta.scratch = { version: "v1", ...input.scratch, insuredWrongBypass };
+      return Object.keys(meta).length > 0 ? meta : undefined;
+    })(),
     createdAt: Date.now(),
   };
 
@@ -574,6 +605,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
     newSkillBonus: delta.newSkillBonus,
     tooFast: delta.tooFast,
     slowThink: delta.slowThink,
+    insuredWrong: insuredWrongBypass || undefined,
     errorPattern,
   };
 }

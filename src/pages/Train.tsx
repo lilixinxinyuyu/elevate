@@ -166,6 +166,8 @@ export function TrainPage() {
         attemptOrdinal: result.attemptOrdinal,
         // v0.34.99 iter 33 P0-1: EstimationGate 完成数据落 attempt.metadata
         estimationGate: result.estimationGate,
+        // v0.35.0 iter 34 P0-2: ScratchInsurance 数据落 attempt.metadata + 触发 insured-wrong XP bypass
+        scratch: result.scratch,
       });
       setState((s) =>
         s.status === "running"

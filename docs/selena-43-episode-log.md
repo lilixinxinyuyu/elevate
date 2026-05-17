@@ -276,6 +276,34 @@
 **最终 test**: 33/33 estimation, 268+ 通过 (mastery 2 pre-existing)
 **Rebuild**: 4.29s, 主 bundle 936KB
 **Redeploy**: 进行中
-**Commit**: v0.34.99 待 deploy 确认
+**Commit**: v0.34.99 已 ship (37e5c3d, push main)
+
+#### Iter 34 进展 (v0.34.99 → v0.35.0) P0-2 ScratchInsurance
+
+**预审** (Gemini + GPT) 共识:
+- 简化为 2 button (写草稿 / 心算挑战), 不要 3 个
+- 触发门槛提到 3+ 位数 / multi-op / story / difficulty≥3
+- 跟 EstimationGate **互斥** (防双弹窗)
+- "未选工具直接答" → 弹拦截 dialog (3 选 1: 草稿险 / 心算 / 直接)
+- insured wrong: 0 XP + 不更新 mastery/streak (GPT 严格派, 防"故意答错刷草稿险")
+- 草稿"算数" 阈值: charCount ≥ 3 且含数字或运算符 (Gemini + GPT 折中)
+- 心算配额: 3/天 (合适)
+- 默认 ON, 全 explicit override 支持
+
+**实现**:
+- NEW `src/core/scratchPolicy.ts` (130 行): heuristic / 心算配额 / isMeaningfulScratch / ScratchTool 类型
+- NEW `src/components/game/ScratchPanel.tsx` (180 行): 2-button + textarea (grid bg 模拟竖式) + 心算确认 dialog + InterceptDialog
+- NEW `tests/scratchPolicy.test.ts` (16 tests 全过)
+- 改 `src/lib/featureFlags.ts`: isScratchInsuranceV1
+- 改 `src/core/schema.ts` + `types.ts`: requiresScratch field
+- 改 `src/components/game/GameShell.tsx`: ScratchPanel 集成 + 拦截 dialog + scratch payload
+- 改 `src/db/service.ts`: insured wrong → delta.total=0, byAbility 清空, mastery 不更新, combo 不 reset
+- 改 `src/pages/Train.tsx`: 转发 scratch state
+
+**测试**: 76/76 (scratch 16 + estimation 33 + scoring 27)
+**Typecheck**: clean
+**Build**: 4.44s
+**Deploy**: 进行中
+**Post-review**: 待 deploy 后发起
 
 

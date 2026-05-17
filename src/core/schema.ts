@@ -241,6 +241,10 @@ export const QuestionSchema = z.object({
    * 则用 extractNumbers(stem) 兜底.
    */
   keyNumbers: z.array(z.number()).max(4).optional(),
+  /**
+   * v0.35.0 (iter 34 P0-2): ScratchInsurance 显式覆盖. 见 src/core/scratchPolicy.ts.
+   */
+  requiresScratch: z.boolean().optional(),
   // Phase 2 Axis 2：点子图画图题载荷。
   dot_grid: z
     .object({

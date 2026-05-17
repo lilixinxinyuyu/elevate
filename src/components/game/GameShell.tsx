@@ -14,6 +14,13 @@ import type { Question } from "../../core/types";
 // v0.34.99 iter 33 P0-1: EstimationGate 元认知前置
 import { EstimationGate, type EstimationCompleteSignal } from "./EstimationGate";
 import { requiresEstimation } from "../../core/estimationPolicy";
+// v0.35.0 iter 34 P0-2: ScratchInsurance
+import { ScratchPanel, ScratchInterceptDialog, type ScratchState } from "./ScratchPanel";
+import {
+  requiresScratch,
+  useMentalCalcQuota,
+  getMentalCalcRemaining,
+} from "../../core/scratchPolicy";
 import { SpeedMatchPanel } from "./templates/SpeedMatch";
 import { ShopCounterPanel } from "./templates/ShopCounter";
 import { EquationBuilderPanel } from "./templates/EquationBuilder";
@@ -70,6 +77,13 @@ export interface AttemptResult {
     magnitudeMismatch: boolean;
     elapsedMsByPhase: { round: number; computeAndMagnitude: number };
   };
+  /** v0.35.0 iter 34 P0-2: ScratchInsurance payload (Train → service → attempt.metadata) */
+  scratch?: {
+    tool: "scratch" | "mental_calc";
+    charCount: number;
+    insured: boolean;
+    mentalOverrideUsed: boolean;
+  };
 }
 
 export interface GameShellProps {
@@ -92,6 +106,8 @@ export interface GameShellProps {
     /** v0.34.98 iter 32 P0-0a: Accuracy-First UI nudge flags */
     tooFast?: boolean;
     slowThink?: boolean;
+    /** v0.35.0 iter 34 P0-2: ScratchInsurance bypass UI flag */
+    insuredWrong?: boolean;
     /** 错题故事：本次错答命中的 errorTag 在历史上踩过几次 + 踩过的题 */
     errorPattern?: {
       matchedTag: string;
@@ -160,10 +176,27 @@ export function GameShell(props: GameShellProps) {
   // v0.34.99 iter 33 P0-1: EstimationGate state
   const [estDone, setEstDone] = useState(false);
   const [estSignal, setEstSignal] = useState<EstimationCompleteSignal | null>(null);
-  // 每换题重置 estimation 状态
+  // v0.35.0 iter 34 P0-2: Scratch state
+  const [scratchState, setScratchState] = useState<ScratchState>({
+    tool: "none",
+    textContent: "",
+    insured: false,
+    mentalOverrideUsed: false,
+    charCount: 0,
+  });
+  const [pendingSubmit, setPendingSubmit] = useState<AttemptResult | null>(null);
+  // 每换题重置
   useEffect(() => {
     setEstDone(false);
     setEstSignal(null);
+    setScratchState({
+      tool: "none",
+      textContent: "",
+      insured: false,
+      mentalOverrideUsed: false,
+      charCount: 0,
+    });
+    setPendingSubmit(null);
   }, [resetKey]);
   const [hintsOpened, setHintsOpened] = useState(0);
   const [startedAt, setStartedAt] = useState(() => Date.now());
@@ -187,6 +220,8 @@ export function GameShell(props: GameShellProps) {
     estimationXp?: number;
     /** v0.34.99 iter 33 P0-1: 真答案数量级 vs 估算数量级 不一致 → soft nudge */
     estimationMagnitudeMismatch?: boolean;
+    /** v0.35.0 iter 34 P0-2: ScratchInsurance bypass — 显示"🛡️ 草稿险" */
+    insuredWrong?: boolean;
     errorPattern?: GameShellProps["onSubmit"] extends (...args: any) => Promise<infer R>
       ? R extends { errorPattern?: infer EP } ? EP : never : never;
   } | null>(null);
@@ -263,6 +298,18 @@ export function GameShell(props: GameShellProps) {
     async (r: Omit<AttemptResult, "hintsOpened" | "elapsedSeconds" | "correctAnswerDisplay" | "usedTutor" | "attemptOrdinal">) => {
       if (activeResetKeyRef.current !== resetKey) return;
       if (submitInFlightRef.current || finishedResetKeyRef.current === resetKey || submitting || feedback) return;
+
+      // v0.35.0 iter 34 P0-2: ScratchInsurance 拦截 — requiresScratch 题 + 未选工具 → 弹 dialog
+      // 仅 1st attempt 拦截 (2nd retry 不再打扰), 仅非考试模式
+      if (
+        !examMode && !noRetry && !wasRetriedRef.current &&
+        requiresScratch(displayedQuestion) &&
+        scratchState.tool === "none" &&
+        !scratchState.insured
+      ) {
+        setPendingSubmit(r as AttemptResult);
+        return;
+      }
 
       // v0.30.7：1st 错答 — **静默入库为 ordinal=1 错答**（保留错题、扣 mastery、reset combo），
       // 然后进入 retry 阶段让用户讲题/重做。考试模式跳过这个分支，错就是错。
@@ -341,6 +388,16 @@ export function GameShell(props: GameShellProps) {
                   elapsedMsByPhase: estSignal.elapsedPerPhase,
                 }
               : undefined,
+            // v0.35.0 iter 34 P0-2: scratch payload
+            scratch: scratchState.tool !== "none"
+              ? {
+                  tool: scratchState.tool,
+                  charCount: scratchState.charCount,
+                  insured: scratchState.insured,
+                  mentalOverrideUsed: scratchState.mentalOverrideUsed,
+                  // 不持久化 textContent (隐私 + 体积) — 只存元数据
+                }
+              : undefined,
           },
           displayedQuestion,
         );
@@ -362,6 +419,7 @@ export function GameShell(props: GameShellProps) {
           speedTier,
           tooFast: res.tooFast,
           slowThink: res.slowThink,
+          insuredWrong: res.insuredWrong,
           estimationXp: estXp || undefined,
           estimationMagnitudeMismatch: estSignal
             ? estSignal.userMagnitude !== estSignal.actualMagnitude
@@ -516,6 +574,43 @@ export function GameShell(props: GameShellProps) {
           }
           return <TemplatePanel key={`${resetKey}::${panelKey}`} {...common} />;
         })()}
+
+        {/* v0.35.0 iter 34 P0-2: ScratchInsurance — answer panel 下方工具栏.
+            条件: 非考试 / 非 boss / starter 已完成 / 没在 feedback / EstimationGate 跟它互斥 (heuristic 已保证 requiresScratch 不会触发 estimation 题) */}
+        {!examMode && !noRetry && starterDone && !feedback && requiresScratch(displayedQuestion) && (
+          <ScratchPanel
+            state={scratchState}
+            onChange={setScratchState}
+            onMentalCalcRequest={() => useMentalCalcQuota()}
+          />
+        )}
+
+        {/* v0.35.0 iter 34 P0-2: 未选工具直接答 拦截 dialog */}
+        {pendingSubmit && (
+          <ScratchInterceptDialog
+            remaining={getMentalCalcRemaining()}
+            onPickScratch={() => {
+              setScratchState((s) => ({ ...s, tool: "scratch" }));
+              setPendingSubmit(null);
+            }}
+            onPickMental={() => {
+              useMentalCalcQuota();
+              setScratchState((s) => ({ ...s, tool: "mental_calc", mentalOverrideUsed: true }));
+              const r = pendingSubmit;
+              setPendingSubmit(null);
+              // 用 setTimeout 让 state 先 flush 再 re-submit
+              setTimeout(() => { void handleFinish(r); }, 0);
+            }}
+            onProceed={() => {
+              // 直接答, 不消耗配额, 没保险 — mark tool='none' 保持, 强制 bypass intercept by setting a sentinel
+              setScratchState((s) => ({ ...s, tool: "mental_calc", mentalOverrideUsed: false }));
+              const r = pendingSubmit;
+              setPendingSubmit(null);
+              setTimeout(() => { void handleFinish(r); }, 0);
+            }}
+            onCancel={() => setPendingSubmit(null)}
+          />
+        )}
 
         {/* 行内重做提示（错 1 次后显示）。考试模式不会进这里。 */}
         {retryStage === "showing_hint" && !feedback && (
@@ -696,6 +791,8 @@ function FeedbackPanel({
     estimationXp?: number;
     /** v0.34.99 iter 33 P0-1: 真答案数量级 vs 估算数量级 不一致 → soft nudge */
     estimationMagnitudeMismatch?: boolean;
+    /** v0.35.0 iter 34 P0-2: ScratchInsurance bypass — 显示"🛡️ 草稿险" */
+    insuredWrong?: boolean;
     errorPattern?: {
       matchedTag: string; tagLabel: string; remediation: string | null;
       pastQuestions: { questionId: string; stem: string; happenedAt: number }[];
@@ -707,7 +804,7 @@ function FeedbackPanel({
   /** v0.31.85：boss 模式下不渲染"小进讲讲" + "再出一道类似" 这俩 CTA（boss 有自己的救场流） */
   noRetry?: boolean;
 }) {
-  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, tooFast, slowThink, estimationXp, estimationMagnitudeMismatch, errorPattern } = feedback;
+  const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, tooFast, slowThink, estimationXp, estimationMagnitudeMismatch, insuredWrong, errorPattern } = feedback;
   const [showTutor, setShowTutor] = useState(false);
   // v0.31.34：会话内自适应出题
   const [adaptiveLoading, setAdaptiveLoading] = useState<"retry" | "bump" | null>(null);
@@ -788,6 +885,10 @@ function FeedbackPanel({
   if (estimationMagnitudeMismatch && isCorrect) {
     labels.push("⚖️ 数量级跟估算差距大, 下次更准");
   }
+  // v0.35.0 iter 34 P0-2: 草稿险触发标签
+  if (insuredWrong) {
+    labels.push("🛡️ 草稿险生效 — XP 不扣");
+  }
   return (
     <div className="mt-4 space-y-3 animate-slide-up">
       <div
@@ -813,6 +914,8 @@ function FeedbackPanel({
                     ? "bg-amber-400/20 text-amber-100 border border-amber-300/40"
                   : l.startsWith("⚖️")
                     ? "bg-amber-500/20 text-amber-100 border border-amber-400/40"
+                  : l.startsWith("🛡️")
+                    ? "bg-emerald-500/25 text-emerald-100 border border-emerald-400/50"
                   : l.startsWith("⚡⚡⚡")
                   ? "bg-cyan-400/30 text-cyan-100 border border-cyan-300/50 animate-pulse"
                   : l.startsWith("⚡⚡")

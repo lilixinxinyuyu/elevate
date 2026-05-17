@@ -300,6 +300,11 @@ export interface Question {
   requiresEstimation?: boolean;
 
   /**
+   * v0.35.0 (iter 34 P0-2): ScratchInsurance 显式覆盖. 见 src/core/scratchPolicy.ts.
+   */
+  requiresScratch?: boolean;
+
+  /**
    * v0.34.99 (iter 33 P0-1): 应用题"关键数字". Estimation Gate Phase 1 显示
    * "把 X 看作 ▢" 时优先用此, 否则 extractNumbers(stem) 兜底.
    */
