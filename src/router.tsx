@@ -3,37 +3,37 @@ import { SubjectShell } from "./components/SubjectShell";
 import { SubjectPickerPage } from "./pages/SubjectPicker";
 import { ComingSoonPage } from "./pages/ComingSoon";
 import { HomePage } from "./pages/Home";
-import { TrainPage } from "./pages/Train";
-import { SkillsPage } from "./pages/Skills";
-import { SkillPickerPage } from "./pages/SkillPicker";
-import { MistakesPage } from "./pages/Mistakes";
-import { ReportPage } from "./pages/Report";
-import { AdminPage } from "./pages/Admin";
-// Ep159: super-admin 走 lazy import 拆 chunk，学生 bundle 不带管理员代码
-import { lazy, Suspense, type ReactNode } from "react";
-const SuperAdminPage = lazy(() =>
-  import("./pages/SuperAdmin").then((m) => ({ default: m.SuperAdminPage })),
-);
 import { ChineseHomePage } from "./pages/chinese/ChineseHome";
-import { ChineseTrainPage } from "./pages/chinese/ChineseTrain";
-import { ChinesePickerPage } from "./pages/chinese/ChinesePicker";
-import { ChineseAdminPage } from "./pages/chinese/ChineseAdmin";
-import { CharPracticePage } from "./pages/chinese/CharPractice";
 import { EnglishHomePage } from "./pages/english/EnglishHome";
-import { VocabPracticePage } from "./pages/english/VocabPractice";
-import { SentencePracticePage } from "./pages/english/SentencePractice";
-import { FluencyPage } from "./pages/Fluency";
-import { FluencySessionPage } from "./pages/FluencySession";
-import { BossWorldPage } from "./pages/BossWorld";
-import { BossBattlePage } from "./pages/BossBattle";
-import { VoiceTestPage } from "./pages/VoiceTest";
-import { Mascot3DTestPage } from "./pages/Mascot3DTest";
-import { ParadisePage } from "./pages/paradise/ParadisePage";
-import { AtelierHomePage } from "./pages/atelier/AtelierHomePage";
-import { AtelierRealmPage } from "./pages/atelier/AtelierRealmPage";
-import { TownHomePage } from "./pages/town/TownHomePage";
-import { BankPage } from "./pages/town/BankPage";
-import { BuildingStubPage } from "./pages/town/BuildingStubPage";
+// v0.34.84 iter 18 (爸爸反馈 LCP 36-45s): 把所有非 home 页 lazy 化, 主路径
+// 落地 /math 时只下 HomePage. Train/Paradise/Atelier/Town/Boss 等 3D / canvas
+// 重页全部按需加载, 主 bundle 从 1.7MB 大幅瘦身.
+import { lazy, Suspense, type ReactNode } from "react";
+const SuperAdminPage = lazy(() => import("./pages/SuperAdmin").then((m) => ({ default: m.SuperAdminPage })));
+const TrainPage = lazy(() => import("./pages/Train").then((m) => ({ default: m.TrainPage })));
+const SkillsPage = lazy(() => import("./pages/Skills").then((m) => ({ default: m.SkillsPage })));
+const SkillPickerPage = lazy(() => import("./pages/SkillPicker").then((m) => ({ default: m.SkillPickerPage })));
+const MistakesPage = lazy(() => import("./pages/Mistakes").then((m) => ({ default: m.MistakesPage })));
+const ReportPage = lazy(() => import("./pages/Report").then((m) => ({ default: m.ReportPage })));
+const AdminPage = lazy(() => import("./pages/Admin").then((m) => ({ default: m.AdminPage })));
+const ChineseTrainPage = lazy(() => import("./pages/chinese/ChineseTrain").then((m) => ({ default: m.ChineseTrainPage })));
+const ChinesePickerPage = lazy(() => import("./pages/chinese/ChinesePicker").then((m) => ({ default: m.ChinesePickerPage })));
+const ChineseAdminPage = lazy(() => import("./pages/chinese/ChineseAdmin").then((m) => ({ default: m.ChineseAdminPage })));
+const CharPracticePage = lazy(() => import("./pages/chinese/CharPractice").then((m) => ({ default: m.CharPracticePage })));
+const VocabPracticePage = lazy(() => import("./pages/english/VocabPractice").then((m) => ({ default: m.VocabPracticePage })));
+const SentencePracticePage = lazy(() => import("./pages/english/SentencePractice").then((m) => ({ default: m.SentencePracticePage })));
+const FluencyPage = lazy(() => import("./pages/Fluency").then((m) => ({ default: m.FluencyPage })));
+const FluencySessionPage = lazy(() => import("./pages/FluencySession").then((m) => ({ default: m.FluencySessionPage })));
+const BossWorldPage = lazy(() => import("./pages/BossWorld").then((m) => ({ default: m.BossWorldPage })));
+const BossBattlePage = lazy(() => import("./pages/BossBattle").then((m) => ({ default: m.BossBattlePage })));
+const VoiceTestPage = lazy(() => import("./pages/VoiceTest").then((m) => ({ default: m.VoiceTestPage })));
+const Mascot3DTestPage = lazy(() => import("./pages/Mascot3DTest").then((m) => ({ default: m.Mascot3DTestPage })));
+const ParadisePage = lazy(() => import("./pages/paradise/ParadisePage").then((m) => ({ default: m.ParadisePage })));
+const AtelierHomePage = lazy(() => import("./pages/atelier/AtelierHomePage").then((m) => ({ default: m.AtelierHomePage })));
+const AtelierRealmPage = lazy(() => import("./pages/atelier/AtelierRealmPage").then((m) => ({ default: m.AtelierRealmPage })));
+const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
+const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
+const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
 // v0.32.0: P3 Worlds — 3 学科地图独立沙箱（GDD docs/p3-worlds-gdd-v3.md）
 // Ep爸爸-2026-05-17：worlds 还在 WIP，全部 lazy() 拆独立 chunk，
 // 主 bundle 不带 Three.js 场景文件。配合 vite.config 里 manualChunks
@@ -65,13 +65,33 @@ function WorldsLazyFallback() {
   );
 }
 
+/**
+ * v0.34.84 iter 18: 普通页面 lazy fallback. 简洁 spinner.
+ */
+function PageLazyFallback() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center">
+      <div className="text-slate-400 text-sm flex items-center gap-2">
+        <span className="inline-block w-4 h-4 border-2 border-slate-500 border-t-violet-400 rounded-full animate-spin" />
+        载入中…
+      </div>
+    </div>
+  );
+}
+
 /** wrap each Worlds element in Suspense once */
 function W(element: ReactNode) {
   return <Suspense fallback={<WorldsLazyFallback />}>{element}</Suspense>;
 }
-import { MascotComparePage } from "./pages/MascotCompare";
-import { MathTricksPage } from "./pages/MathTricks";
-import { PlaygroundPage } from "./pages/Playground";
+
+/** v0.34.84: wrap generic lazy pages in Suspense */
+function L(element: ReactNode) {
+  return <Suspense fallback={<PageLazyFallback />}>{element}</Suspense>;
+}
+
+const MascotComparePage = lazy(() => import("./pages/MascotCompare").then((m) => ({ default: m.MascotComparePage })));
+const MathTricksPage = lazy(() => import("./pages/MathTricks").then((m) => ({ default: m.MathTricksPage })));
+const PlaygroundPage = lazy(() => import("./pages/Playground").then((m) => ({ default: m.PlaygroundPage })));
 import { useSubject } from "./subjects/context";
 import { isPhase2Live } from "./lib/featureFlags";
 
@@ -175,42 +195,32 @@ export const router = createBrowserRouter([
     errorElement: <RouteError />,
     children: [
       { index: true, element: <HomeRoute /> },
-      { path: "train", element: <TrainRoute /> },
-      { path: "free-practice", element: <FreePracticeRoute /> },
-      { path: "skills", element: <MathOnlyRoute><SkillsPage /></MathOnlyRoute> },
-      { path: "mistakes", element: <MathOnlyRoute><MistakesPage /></MathOnlyRoute> },
-      { path: "report", element: <MathOnlyRoute><ReportPage /></MathOnlyRoute> },
-      // Phase 2 Axis 3：Fluency 口算训练营。feature flag off 期间走 ComingSoon。
-      { path: "fluency", element: <Phase2Route><FluencyPage /></Phase2Route> },
-      { path: "fluency/:moduleId", element: <Phase2Route><FluencySessionPage /></Phase2Route> },
-      // v0.31.49: 闯关 v3 — Boss 战 + 闯关世界
-      { path: "big-problems", element: <Phase2Route><BossWorldPage /></Phase2Route> },
-      { path: "boss-battle/:unitId", element: <Phase2Route><BossBattlePage /></Phase2Route> },
-      // v0.31.71: 巧算工具箱（math-only）
-      { path: "tricks", element: <MathOnlyRoute><MathTricksPage /></MathOnlyRoute> },
-      // v0.31.87: 玩法试玩台（math-only，admin 用）
-      { path: "playground", element: <MathOnlyRoute><PlaygroundPage /></MathOnlyRoute> },
-      { path: "voice-test", element: <MathOnlyRoute><VoiceTestPage /></MathOnlyRoute> },
-      { path: "mascot3d", element: <MathOnlyRoute><Mascot3DTestPage /></MathOnlyRoute> },
-      // v0.31.113: 知识乐园 3D 探索世界（paradise-1 + Selena VRM + 红熊猫 follower）
-      { path: "paradise", element: <MathOnlyRoute><ParadisePage /></MathOnlyRoute> },
-      { path: "mascot-compare", element: <MathOnlyRoute><MascotComparePage /></MathOnlyRoute> },
-      // v0.32.9: 小进的星海工坊（沙箱实验，独立路径，跟主路径完全隔离）
-      { path: "atelier", element: <MathOnlyRoute><AtelierHomePage /></MathOnlyRoute> },
-      { path: "atelier/realm/:id", element: <MathOnlyRoute><AtelierRealmPage /></MathOnlyRoute> },
-      // v0.32.10: 小镇（沙箱实验，超越 atelier 的 3D 城市方向）
-      { path: "town", element: <MathOnlyRoute><TownHomePage /></MathOnlyRoute> },
-      { path: "town/bank", element: <MathOnlyRoute><BankPage /></MathOnlyRoute> },
-      { path: "town/bus-stop", element: <MathOnlyRoute><BuildingStubPage /></MathOnlyRoute> },
-      { path: "town/shop", element: <MathOnlyRoute><BuildingStubPage /></MathOnlyRoute> },
-      { path: "town/school", element: <MathOnlyRoute><BuildingStubPage /></MathOnlyRoute> },
-      { path: "admin", element: <AdminRoute /> },
-      // v0.31.39：语文写字表 250 字练习
-      { path: "char-practice", element: <CharPracticeRoute /> },
-      // v0.31.39：英语单词记忆
-      { path: "vocab", element: <VocabPracticeRoute /> },
-      // v0.31.103：英语短句（朗读 AI 判 + 造句拼图）
-      { path: "sentence", element: <SentencePracticeRoute /> },
+      { path: "train", element: L(<TrainRoute />) },
+      { path: "free-practice", element: L(<FreePracticeRoute />) },
+      { path: "skills", element: L(<MathOnlyRoute><SkillsPage /></MathOnlyRoute>) },
+      { path: "mistakes", element: L(<MathOnlyRoute><MistakesPage /></MathOnlyRoute>) },
+      { path: "report", element: L(<MathOnlyRoute><ReportPage /></MathOnlyRoute>) },
+      { path: "fluency", element: L(<Phase2Route><FluencyPage /></Phase2Route>) },
+      { path: "fluency/:moduleId", element: L(<Phase2Route><FluencySessionPage /></Phase2Route>) },
+      { path: "big-problems", element: L(<Phase2Route><BossWorldPage /></Phase2Route>) },
+      { path: "boss-battle/:unitId", element: L(<Phase2Route><BossBattlePage /></Phase2Route>) },
+      { path: "tricks", element: L(<MathOnlyRoute><MathTricksPage /></MathOnlyRoute>) },
+      { path: "playground", element: L(<MathOnlyRoute><PlaygroundPage /></MathOnlyRoute>) },
+      { path: "voice-test", element: L(<MathOnlyRoute><VoiceTestPage /></MathOnlyRoute>) },
+      { path: "mascot3d", element: L(<MathOnlyRoute><Mascot3DTestPage /></MathOnlyRoute>) },
+      { path: "paradise", element: L(<MathOnlyRoute><ParadisePage /></MathOnlyRoute>) },
+      { path: "mascot-compare", element: L(<MathOnlyRoute><MascotComparePage /></MathOnlyRoute>) },
+      { path: "atelier", element: L(<MathOnlyRoute><AtelierHomePage /></MathOnlyRoute>) },
+      { path: "atelier/realm/:id", element: L(<MathOnlyRoute><AtelierRealmPage /></MathOnlyRoute>) },
+      { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
+      { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
+      { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
+      { path: "town/shop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
+      { path: "town/school", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
+      { path: "admin", element: L(<AdminRoute />) },
+      { path: "char-practice", element: L(<CharPracticeRoute />) },
+      { path: "vocab", element: L(<VocabPracticeRoute />) },
+      { path: "sentence", element: L(<SentencePracticeRoute />) },
       { path: "*", element: <ComingSoonPage /> },
     ],
   },
