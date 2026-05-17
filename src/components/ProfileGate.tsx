@@ -16,9 +16,29 @@
  * - 全字段补齐自动关闭
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getStoredPassword } from "../db/cloudSync";
-import { setDisplayName as cacheDisplayName } from "../lib/displayName";
+import { setDisplayName as cacheDisplayName, useDisplayName } from "../lib/displayName";
+
+/**
+ * v0.34.68 iter 2 — onboarding 7 必填字段拆 3 个阶段:
+ *   step 1: 同学基础 (displayName, birthday)
+ *   step 2: 学校信息 (school, city, grade, class)
+ *   step 3: 监护人 (guardianRole, guardianPhone)
+ *
+ * 每个 step 自带 chip 显示 N/M 进度, 顶部总进度条显示已填 / 7。
+ * 7 项全填齐时弹"档案完成 🎉"动画 + 1.5s 后自动关闭 + 暴露 onboarding_completed 事件
+ * 给后续 trophy 系统接入。
+ */
+const STEP_GROUPS: { id: string; label: string; emoji: string; fields: (keyof Profile)[] }[] = [
+  { id: "basics", label: "同学基础", emoji: "🧒", fields: ["displayName", "birthday"] },
+  { id: "school", label: "学校信息", emoji: "🏫", fields: ["school", "city", "grade", "class"] },
+  { id: "guardian", label: "监护人", emoji: "👨‍👩‍👧", fields: ["guardianRole", "guardianPhone"] },
+];
+// 必填集 (跟 server REQUIRED_FIELDS 一致, profile.ts:50)
+const REQUIRED_KEYS: (keyof Profile)[] = [
+  "displayName", "school", "grade", "class", "birthday", "guardianRole", "guardianPhone",
+];
 
 interface Profile {
   schemaVersion?: number;
@@ -95,6 +115,20 @@ export function ProfileGate() {
   const [form, setForm] = useState<Profile>({});
   const [missing, setMissing] = useState<string[]>([]);
   const [customRole, setCustomRole] = useState("");
+  const [savedFlash, setSavedFlash] = useState<string | null>(null); // 保存成功 toast
+  const [celebrate, setCelebrate] = useState(false); // 完成 🎉 overlay
+  const displayName = useDisplayName();
+
+  // 实时算"已填多少必填项" — form state 为准, 即使没 submit 也能反映进度
+  const filledKeys = useMemo(() => {
+    return REQUIRED_KEYS.filter((k) => {
+      const v = form[k];
+      return typeof v === "string" && v.trim().length > 0;
+    });
+  }, [form]);
+  const filledCount = filledKeys.length;
+  const totalCount = REQUIRED_KEYS.length;
+  const filledPct = Math.round((filledCount / totalCount) * 100);
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -157,9 +191,22 @@ export function ProfileGate() {
     // 立即把新 displayName 写进 cache, 全 app 同步 "Selena's Elevate" → 用户名
     if (patch.displayName) cacheDisplayName(patch.displayName);
     setMissing(r.missing ?? []);
+    // toast 保存了多少字段
+    const savedCount = Object.keys(patch).length;
+    setSavedFlash(`已保存 ${savedCount} 项 ✓`);
+    window.setTimeout(() => setSavedFlash(null), 2200);
     if (!r.needsOnboarding) {
-      // 全齐 → 关
-      setOpen(false);
+      // 全齐 → 弹庆祝 → 1.6s 后关闭, 派发 onboarding_completed 事件给后续 trophy 接入
+      setCelebrate(true);
+      window.setTimeout(() => {
+        setOpen(false);
+        setCelebrate(false);
+        try {
+          window.dispatchEvent(new CustomEvent("xiaojinapp:onboarding-completed", {
+            detail: { userId: form.userId, displayName: form.displayName },
+          }));
+        } catch { /* */ }
+      }, 1600);
     }
     setBusy(false);
   };
@@ -180,13 +227,72 @@ export function ProfileGate() {
       className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4 overflow-y-auto"
       style={{ backdropFilter: "blur(4px)" }}
     >
-      <div className="card-glow max-w-md w-full bg-slate-900/95 border-violet-400/40 p-5 my-8">
+      <div className="card-glow max-w-md w-full bg-slate-900/95 border-violet-400/40 p-5 my-8 relative">
+        {/* 完成庆祝 overlay — 全 7 项填齐后短暂显示再自动关闭 */}
+        {celebrate && (
+          <div
+            className="absolute inset-0 z-10 rounded-2xl bg-gradient-to-br from-emerald-500/30 via-violet-500/30 to-amber-500/30 backdrop-blur-sm flex flex-col items-center justify-center animate-slide-up"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="text-6xl mb-2 animate-bounce">🎉</div>
+            <div className="font-display font-bold text-2xl text-amber-100 mb-1">
+              档案完成！
+            </div>
+            <div className="text-sm text-amber-200/90">
+              欢迎你，{form.displayName || displayName}！
+            </div>
+          </div>
+        )}
+
         <div className="font-display font-bold text-violet-200 text-lg mb-1">
-          🎓 完善同学档案
+          🎓 完善 {displayName !== "同学" ? displayName : ""} 同学档案
         </div>
-        <div className="text-xs text-slate-300 mb-4">
+        <div className="text-xs text-slate-300 mb-3">
           标 * 是必填。这些信息只会保存在 OSS 你自己的账号下，用来生成
           专属勋章、给监护人发学习汇报等。
+        </div>
+
+        {/* 进度条 — 顶部, 始终可见 (跟形如 "已填 3 / 7") */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <div className="text-slate-300">
+              进度：<span className="font-bold text-emerald-300">{filledCount}</span> / {totalCount} 项必填
+            </div>
+            <div className="text-slate-400">{filledPct}%</div>
+          </div>
+          <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-400 via-violet-400 to-amber-400 transition-all duration-500"
+              style={{ width: `${filledPct}%` }}
+            />
+          </div>
+          {/* 3 个 step chip — 每个显示该 step 完成进度 */}
+          <div className="flex gap-1.5 mt-2">
+            {STEP_GROUPS.map((step) => {
+              const stepFields = step.fields.filter((f) => REQUIRED_KEYS.includes(f));
+              const stepFilled = stepFields.filter((k) => {
+                const v = form[k];
+                return typeof v === "string" && v.trim().length > 0;
+              }).length;
+              const done = stepFilled === stepFields.length;
+              return (
+                <div
+                  key={step.id}
+                  className={`flex-1 text-[10px] px-2 py-1 rounded text-center border transition-colors ${
+                    done
+                      ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
+                      : stepFilled > 0
+                        ? "bg-violet-500/15 border-violet-400/40 text-violet-200"
+                        : "bg-slate-800/60 border-slate-700 text-slate-400"
+                  }`}
+                  title={`${step.label}: ${stepFilled}/${stepFields.length}`}
+                >
+                  {step.emoji} {step.label} {done ? "✓" : `${stepFilled}/${stepFields.length}`}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-3">
@@ -319,6 +425,11 @@ export function ProfileGate() {
           {err && (
             <div className="text-xs text-rose-300">{err}</div>
           )}
+          {savedFlash && !err && (
+            <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-400/30 rounded px-2 py-1.5 animate-slide-up">
+              {savedFlash}
+            </div>
+          )}
 
           <div className="flex gap-2 justify-end pt-2">
             <button
@@ -332,9 +443,16 @@ export function ProfileGate() {
             <button
               type="submit"
               disabled={busy}
-              className="text-sm px-4 py-2 rounded bg-violet-500 hover:bg-violet-400 text-white font-bold disabled:opacity-40"
+              className="text-sm px-4 py-2 rounded bg-violet-500 hover:bg-violet-400 text-white font-bold disabled:opacity-40 inline-flex items-center gap-2"
             >
-              {busy ? "保存中…" : "保存"}
+              {busy ? (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <span>保存中…</span>
+                </>
+              ) : (
+                <span>{filledCount === totalCount ? "完成档案 →" : "保存这些信息"}</span>
+              )}
             </button>
           </div>
         </form>
