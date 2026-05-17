@@ -991,7 +991,7 @@ export async function checkPassword(pwd: string): Promise<boolean> {
  *  - D1 单 bound 参数大小有限制，含 trophyImages 后 payload 2.77 MB → Worker 抛异常
  *  - 拆出来按行存（每行 30 KB）就稳了
  */
-const TROPHY_IMAGES_BATCH = 20;
+// Ep40: per-image API ship 之后 batch 概念废弃；老 const 删了
 const TROPHY_LAST_PUSH_KEY = "selena.cloud.trophyImagesLastPush";
 const TROPHY_LAST_PULL_KEY = "selena.cloud.trophyImagesLastPull";
 
@@ -1013,26 +1013,43 @@ async function pushTrophyImages(): Promise<{ ok: boolean; pushed: number; error?
   const all = (await db.trophyImages.toArray()) as TrophyImageRow[];
   if (all.length === 0) return { ok: true, pushed: 0 };
 
+  // Ep40 (爸爸 2026-05-17): server 改 per-image POST, body =
+  //   {trophyId, subjectId, imageDataUrl, generatedAt}
+  // 单图 < 200KB 限制, 我们这里 push concurrency 3 (太多会爆 ESA fetch budget,
+  // 太少慢). 失败 row 不抛, 计 fail 数返回.
   let pushed = 0;
-  for (let i = 0; i < all.length; i += TROPHY_IMAGES_BATCH) {
-    const batch = all.slice(i, i + TROPHY_IMAGES_BATCH);
-    try {
-      const r = await fetch("/api/sync/trophy-images", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${pwd}`,
-        },
-        body: JSON.stringify({ rows: batch }),
-      });
-      if (!r.ok) {
-        return { ok: false, pushed, error: `http_${r.status}` };
-      }
-      const j = (await r.json()) as { ok: boolean; accepted?: number; rejected?: unknown[] };
-      if (!j.ok) return { ok: false, pushed, error: "server_error" };
-      pushed += j.accepted ?? 0;
-    } catch (e) {
-      return { ok: false, pushed, error: "network: " + (e as Error).message };
+  let failed = 0;
+  const CONCURRENCY = 3;
+  for (let i = 0; i < all.length; i += CONCURRENCY) {
+    const slice = all.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      slice.map(async (row) => {
+        const body = {
+          trophyId: row.trophyId,
+          subjectId: (row as { subjectId?: string }).subjectId,
+          imageDataUrl: row.imageDataUrl,
+          generatedAt: row.generatedAt,
+        };
+        try {
+          const r = await fetch("/api/sync/trophy-images", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${pwd}`,
+            },
+            body: JSON.stringify(body),
+          });
+          if (!r.ok) return false;
+          const j = (await r.json()) as { ok?: boolean };
+          return j.ok === true;
+        } catch {
+          return false;
+        }
+      }),
+    );
+    for (const ok of results) {
+      if (ok) pushed++;
+      else failed++;
     }
   }
   try {
@@ -1040,48 +1057,94 @@ async function pushTrophyImages(): Promise<{ ok: boolean; pushed: number; error?
   } catch {
     /* */
   }
-  return { ok: true, pushed };
+  return { ok: failed === 0, pushed, ...(failed > 0 ? { error: `${failed}_failed` } : {}) };
 }
 
 async function pullTrophyImages(): Promise<{ ok: boolean; pulled: number; error?: string }> {
   const pwd = getStoredPassword();
   if (!pwd) return { ok: false, pulled: 0, error: "no_password" };
-  // 增量：拉自上次拉取后的更新。第一次为 0 全量拉。
-  const since = Number(localStorage.getItem(TROPHY_LAST_PULL_KEY) ?? 0);
+
+  // Ep40 (爸爸 2026-05-17): 走新 manifest + per-image API.
+  // 第一步: GET ?list=1 拿 [{trophyId, lastModifiedMs, bytes}] (小, ~5KB / 200 entry).
+  // 第二步: 跟本地 IDB diff, 找出 remote 比 local 新 (或 local 没有) 的 trophyId 列表.
+  // 第三步: 并发 (concurrency 4) GET 单图填充 IDB.
+  // 上限 50 张/次防一次拉太多, 后续 tick 再补.
+  let manifest: Array<{ trophyId: string; lastModifiedMs: number; bytes: number }>;
   try {
-    const r = await fetch(`/api/sync/trophy-images?since=${since}`, {
+    const r = await fetch(`/api/sync/trophy-images?list=1`, {
       headers: { Authorization: `Bearer ${pwd}` },
     });
-    if (!r.ok) return { ok: false, pulled: 0, error: `http_${r.status}` };
-    const j = (await r.json()) as { ok: boolean; rows?: TrophyImageRow[]; version?: number };
-    if (!j.ok || !Array.isArray(j.rows)) return { ok: false, pulled: 0, error: "bad_payload" };
-
-    if (j.rows.length > 0) {
-      // merge by trophyId, prefer newer generatedAt (相同 trophyId 本地新的不被覆盖)
-      const localList = (await db.trophyImages.toArray()) as TrophyImageRow[];
-      const localById = new Map(localList.map((r) => [r.trophyId, r]));
-      const toPut: TrophyImageRow[] = [];
-      for (const remote of j.rows) {
-        const local = localById.get(remote.trophyId);
-        if (!local || (remote.generatedAt ?? 0) > (local.generatedAt ?? 0)) {
-          toPut.push(remote);
-        }
-      }
-      if (toPut.length > 0) {
-        await db.trophyImages.bulkPut(toPut as never);
-      }
+    if (!r.ok) return { ok: false, pulled: 0, error: `manifest_http_${r.status}` };
+    const j = (await r.json()) as { ok: boolean; items?: typeof manifest };
+    if (!j.ok || !Array.isArray(j.items)) {
+      return { ok: false, pulled: 0, error: "bad_manifest" };
     }
-    if (j.version) {
-      try {
-        localStorage.setItem(TROPHY_LAST_PULL_KEY, String(j.version));
-      } catch {
-        /* */
-      }
-    }
-    return { ok: true, pulled: j.rows.length };
+    manifest = j.items;
   } catch (e) {
-    return { ok: false, pulled: 0, error: "network: " + (e as Error).message };
+    return { ok: false, pulled: 0, error: "manifest_network: " + (e as Error).message };
   }
+
+  // Diff: 找出 local 没有 / remote 更新的
+  const localList = (await db.trophyImages.toArray()) as Array<TrophyImageRow & { generatedAt?: number }>;
+  const localByT = new Map(localList.map((r) => [r.trophyId, r]));
+  const toFetch: string[] = [];
+  for (const m of manifest) {
+    const local = localByT.get(m.trophyId);
+    if (!local) {
+      toFetch.push(m.trophyId);
+    } else {
+      // lastModifiedMs on OSS roughly tracks generatedAt; pull if newer
+      const localGen = local.generatedAt ?? 0;
+      if (m.lastModifiedMs > localGen + 1000) toFetch.push(m.trophyId);
+    }
+  }
+  if (toFetch.length === 0) {
+    try { localStorage.setItem(TROPHY_LAST_PULL_KEY, String(Date.now())); } catch { /* */ }
+    return { ok: true, pulled: 0 };
+  }
+  // 上限 50 张/次，防爆带宽 (每张 ~80KB, 50 = ~4MB total)
+  const PULL_LIMIT_PER_TICK = 50;
+  const PULL_CONCURRENCY = 4;
+  const targets = toFetch.slice(0, PULL_LIMIT_PER_TICK);
+  let pulled = 0;
+  let failed = 0;
+  for (let i = 0; i < targets.length; i += PULL_CONCURRENCY) {
+    const slice = targets.slice(i, i + PULL_CONCURRENCY);
+    const results = await Promise.all(
+      slice.map(async (trophyId) => {
+        try {
+          const r = await fetch(`/api/sync/trophy-images/${encodeURIComponent(trophyId)}`, {
+            headers: { Authorization: `Bearer ${pwd}` },
+          });
+          if (!r.ok) return null;
+          const row = (await r.json()) as TrophyImageRow;
+          if (!row || !row.trophyId || !row.imageDataUrl) return null;
+          return row;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const toPut: TrophyImageRow[] = [];
+    for (const row of results) {
+      if (row) {
+        toPut.push(row);
+        pulled++;
+      } else {
+        failed++;
+      }
+    }
+    if (toPut.length > 0) {
+      try { await db.trophyImages.bulkPut(toPut as never); } catch { /* */ }
+    }
+  }
+  try { localStorage.setItem(TROPHY_LAST_PULL_KEY, String(Date.now())); } catch { /* */ }
+  return {
+    ok: failed === 0,
+    pulled,
+    ...(failed > 0 ? { error: `${failed}_failed` } : {}),
+    ...(toFetch.length > PULL_LIMIT_PER_TICK ? { error: `partial_${pulled}_of_${toFetch.length}` } : {}),
+  };
 }
 
 // v0.31.65: 独立 aiQuestions 同步（避免主 sync payload 过 2MB → D1 拒收）
