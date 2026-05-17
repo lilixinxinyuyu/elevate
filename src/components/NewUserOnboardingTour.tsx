@@ -80,8 +80,10 @@ export function NewUserOnboardingTour() {
     if (attemptsCount == null) return;
     if (attemptsCount > 0) return;
     if (!shouldShowTour()) return;
-    // 延迟 600ms 弹 — 让 SubjectPicker 先渲染, 避免抢 ProfileGate 焦点
-    const t = window.setTimeout(() => setOpen(true), 600);
+    // v0.34.74: 延迟 1800ms 弹 — 让 ProfileGate 先弹 (它 800ms+网络拉 ~500ms);
+    // 之前 600ms 抢了 ProfileGate 焦点, e2e 验证发现两个 modal 重叠. 现在
+    // ProfileGate 先弹, 用户填完 / 跳过后 Tour 再出现.
+    const t = window.setTimeout(() => setOpen(true), 1800);
     return () => window.clearTimeout(t);
   }, [attemptsCount]);
 
@@ -97,6 +99,12 @@ export function NewUserOnboardingTour() {
   const next = () => {
     if (isLast) finish();
     else setStepIdx((i) => i + 1);
+  };
+  // v0.34.74: 用户从任何路径关 Tour (跳过 / 开始练习 / 后面所有 dismiss) 都标 shown.
+  // 之前只有点 "开始练习 →" 才 markTourShown, 用户跳过后再回来又弹一次很烦.
+  const skipAndMark = () => {
+    markTourShown();
+    setOpen(false);
   };
 
   return (
@@ -134,7 +142,7 @@ export function NewUserOnboardingTour() {
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
-            onClick={finish}
+            onClick={skipAndMark}
             className="text-xs text-slate-400 hover:text-slate-200 px-2 py-1.5"
           >
             跳过
