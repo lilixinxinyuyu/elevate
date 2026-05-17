@@ -23,6 +23,7 @@ const KEY_USER_ID = "xiaojinapp.userId";
 const KEY_BIRTHDAY = "xiaojinapp.birthday"; // ISO YYYY-MM-DD; 给 birthday trophy check 用
 const KEY_REGISTERED_AT = "xiaojinapp.registeredAt"; // epoch ms; 防新用户被一堆历史勋章弹
 const KEY_GRADE = "xiaojinapp.grade"; // "1".."6"; iter 6 内容年级 mismatch 提示用
+const KEY_SCHOOL = "xiaojinapp.school"; // 学校名; v0.34.81 iter 15 — DailySummaryCard footer 替代 hardcoded "和平街"
 const EVENT_NAME = "xiaojinapp:displayname-change";
 
 function lsGet(k: string): string | null {
@@ -110,6 +111,28 @@ export function getStoredGrade(): string | null {
 export function setStoredGrade(g: string | null): void {
   lsSet(KEY_GRADE, g);
 }
+
+/** v0.34.81 iter 15: 学校名 cache (用于 DailySummaryCard footer 等). */
+export function getStoredSchool(): string | null {
+  return lsGet(KEY_SCHOOL);
+}
+export function setStoredSchool(s: string | null): void {
+  lsSet(KEY_SCHOOL, s);
+}
+export function useStoredSchool(): string | null {
+  const [v, setV] = useState(() => getStoredSchool());
+  useEffect(() => {
+    const refresh = () => setV(getStoredSchool());
+    const onStorage = (e: StorageEvent) => { if (e.key === KEY_SCHOOL) refresh(); };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(EVENT_NAME, refresh);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(EVENT_NAME, refresh);
+    };
+  }, []);
+  return v;
+}
 export function useStoredGrade(): string | null {
   const [g, setG] = useState(() => getStoredGrade());
   useEffect(() => {
@@ -129,9 +152,12 @@ export function useStoredGrade(): string | null {
 
 /**
  * 主入口: 返回最佳可用的"同学称呼"。永远返回非空字符串。
- *   1. 用户在 ProfileGate 填的 displayName
- *   2. userId 首字母大写 (alice → Alice; selena → Selena)
+ *
+ *   1. 用户在 ProfileGate 填的 displayName (可能是中文 "布鲁斯" 也可能英文 "Bruce")
+ *   2. userId 首字母大写 (alice → Alice; bruce → Bruce; selena → Selena)
  *   3. "同学" 兜底
+ *
+ * 用于 UI 文字 (中英文混排都 OK)
  */
 export function getDisplayName(): string {
   const dn = getStoredDisplayName();
@@ -141,9 +167,17 @@ export function getDisplayName(): string {
   return "同学";
 }
 
-/** "<displayName> 的小进" — 给 app title / header 等用 */
+/**
+ * v0.34.81 iter 15 (爸爸反馈修正): app title 英文化 "Bruce's Elevate" 而不是
+ * "布鲁斯 的小进". 用 userId (永远 ASCII slug, addNewStudent 强制 [a-zA-Z0-9_-])
+ * 首字母大写 — 自动等同于"拼音名" (bruce → Bruce, david → David).
+ *
+ * 不再用 displayName (中文) 拼 title, 那个留给 in-app 欢迎语 / 称呼用.
+ */
 export function getAppTitle(): string {
-  return `${getDisplayName()} 的小进`;
+  const uid = getUserId();
+  const name = uid ? capitalizeUserId(uid) : "Cadet";
+  return `${name}'s Elevate`;
 }
 
 /** React hook — 自动 re-render 当 displayName 或 userId 变化 */
@@ -164,7 +198,23 @@ export function useDisplayName(): string {
   return name;
 }
 
+/**
+ * useAppTitle — subscribe userId 变化 (登录后), 返 "Bruce's Elevate" 风格.
+ * (爸爸反馈: 不是 "<displayName> 的小进" 全中文, 应该英文/拼音)
+ */
 export function useAppTitle(): string {
-  const dn = useDisplayName();
-  return `${dn} 的小进`;
+  const [t, setT] = useState(() => getAppTitle());
+  useEffect(() => {
+    const refresh = () => setT(getAppTitle());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === KEY_USER_ID || e.key === KEY_DISPLAY) refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(EVENT_NAME, refresh);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(EVENT_NAME, refresh);
+    };
+  }, []);
+  return t;
 }

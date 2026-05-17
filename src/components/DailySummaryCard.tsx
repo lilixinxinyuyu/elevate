@@ -35,7 +35,8 @@ import type { MasteryStat } from "../lib/masteryTier";
 import { expectedProgress } from "../core/semesterProgress";
 import { getUnlockedUnitIdSet } from "../db/unitUnlock";
 import { loadDaily } from "../lib/dailyTarget";
-import { useAppTitle } from "../lib/displayName";
+import { useAppTitle, useStoredSchool } from "../lib/displayName";
+import { getStoredGrade } from "../lib/displayName";
 
 interface DailySummaryCardProps {
   studentId: string;
@@ -143,6 +144,8 @@ function subjectProgress(todayCount: number): number {
 
 export function DailySummaryCard({ studentId, studentName }: DailySummaryCardProps) {
   const appTitle = useAppTitle(); // 替换 hardcoded "Selena's Elevate"
+  const school = useStoredSchool(); // v0.34.81 iter 15: footer 同步 profile.school
+  const gradeStr = getStoredGrade(); // "5" / null
   // v0.31.107：按当前 term 过滤池 — 下册 250 / 上册 250 / 综合 500
   const liveStudent = useLiveQuery(async () => (await db.students.toArray())[0]);
   const currentTerm: Term = (liveStudent?.currentTerm as Term | undefined) ?? "下册";
@@ -909,7 +912,10 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
 
         <div className="text-[10px] text-slate-500 pt-1 border-t border-violet-400/10 flex items-center justify-between">
           <span>{appTitle} · {todayDateStr()}</span>
-          <span className="text-violet-300/70">📚 G4 · 锦江和平街小学</span>
+          {/* v0.34.81 iter 15: 不再 hardcoded "G4 · 和平街", 读 profile.grade + school */}
+          <span className="text-violet-300/70">
+            📚 G{gradeStr || "?"}{school ? ` · ${school}` : ""}
+          </span>
         </div>
       </div>
 

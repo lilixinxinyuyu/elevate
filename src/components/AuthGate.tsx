@@ -5,6 +5,7 @@ import {
   setDisplayName as cacheDisplayName,
   setStoredBirthday,
   setStoredGrade,
+  setStoredSchool,
   getRegisteredAt,
 } from "../lib/displayName";
 
@@ -24,7 +25,7 @@ async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
     if (!r.ok) return;
     const j = (await r.json()) as {
       ok?: boolean;
-      profile?: { displayName?: string | null; birthday?: string | null; grade?: string | null } | null;
+      profile?: { displayName?: string | null; birthday?: string | null; grade?: string | null; school?: string | null } | null;
     };
     if (j?.ok && j.profile?.displayName) {
       cacheDisplayName(j.profile.displayName);
@@ -34,6 +35,9 @@ async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
     }
     if (j?.ok && j.profile?.grade) {
       setStoredGrade(j.profile.grade);
+    }
+    if (j?.ok && j.profile?.school) {
+      setStoredSchool(j.profile.school);
     }
   } catch { /* 静默 */ }
 }
