@@ -10,7 +10,7 @@ import { MistakesPage } from "./pages/Mistakes";
 import { ReportPage } from "./pages/Report";
 import { AdminPage } from "./pages/Admin";
 // Ep159: super-admin 走 lazy import 拆 chunk，学生 bundle 不带管理员代码
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 const SuperAdminPage = lazy(() =>
   import("./pages/SuperAdmin").then((m) => ({ default: m.SuperAdminPage })),
 );
@@ -35,15 +35,40 @@ import { TownHomePage } from "./pages/town/TownHomePage";
 import { BankPage } from "./pages/town/BankPage";
 import { BuildingStubPage } from "./pages/town/BuildingStubPage";
 // v0.32.0: P3 Worlds — 3 学科地图独立沙箱（GDD docs/p3-worlds-gdd-v3.md）
-import { WorldsHomePage } from "./pages/worlds/WorldsHomePage";
-import { BaibaoMapPage } from "./pages/worlds/BaibaoMapPage";
-import { BuildingStubPage as WorldsBuildingStub } from "./pages/worlds/BuildingStubPage";
-import { WorldLockedPage } from "./pages/worlds/WorldLockedPage";
-import { StorePage } from "./pages/worlds/StorePage";
-import { BankPage as WorldsBankPage } from "./pages/worlds/BankPage";
-import { BakeryPage } from "./pages/worlds/BakeryPage";
-import { XingfanMapPage } from "./pages/worlds/XingfanMapPage";
-import { AirportPage } from "./pages/worlds/AirportPage";
+// Ep爸爸-2026-05-17：worlds 还在 WIP，全部 lazy() 拆独立 chunk，
+// 主 bundle 不带 Three.js 场景文件。配合 vite.config 里 manualChunks
+// 把这些 9 个文件 + components/worlds + lib/worlds + content/worlds
+// 合并到一个 worlds-{hash}.js chunk，OSS 只动这一个文件就能独立 ship。
+const WorldsHomePage = lazy(() => import("./pages/worlds/WorldsHomePage").then((m) => ({ default: m.WorldsHomePage })));
+const BaibaoMapPage = lazy(() => import("./pages/worlds/BaibaoMapPage").then((m) => ({ default: m.BaibaoMapPage })));
+const WorldsBuildingStub = lazy(() => import("./pages/worlds/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
+const WorldLockedPage = lazy(() => import("./pages/worlds/WorldLockedPage").then((m) => ({ default: m.WorldLockedPage })));
+const WorldsStorePage = lazy(() => import("./pages/worlds/StorePage").then((m) => ({ default: m.StorePage })));
+const WorldsBankPage = lazy(() => import("./pages/worlds/BankPage").then((m) => ({ default: m.BankPage })));
+const WorldsBakeryPage = lazy(() => import("./pages/worlds/BakeryPage").then((m) => ({ default: m.BakeryPage })));
+const XingfanMapPage = lazy(() => import("./pages/worlds/XingfanMapPage").then((m) => ({ default: m.XingfanMapPage })));
+const WorldsAirportPage = lazy(() => import("./pages/worlds/AirportPage").then((m) => ({ default: m.AirportPage })));
+
+/**
+ * Suspense fallback for worlds lazy chunks. Kawaii 学生风（worlds 在学生
+ * 路径，不用 super-admin 的 x.ai 冷色调）。轻量 spinner，避免空白闪屏。
+ */
+function WorldsLazyFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-violet-950 via-slate-900 to-slate-950">
+      <div className="text-center">
+        <div className="text-5xl mb-3 animate-pulse">🌍</div>
+        <div className="text-sm text-violet-200 font-mono">载入世界中…</div>
+        <div className="text-[10px] text-slate-500 mt-1">worlds chunk lazy-loading</div>
+      </div>
+    </div>
+  );
+}
+
+/** wrap each Worlds element in Suspense once */
+function W(element: ReactNode) {
+  return <Suspense fallback={<WorldsLazyFallback />}>{element}</Suspense>;
+}
 import { MascotComparePage } from "./pages/MascotCompare";
 import { MathTricksPage } from "./pages/MathTricks";
 import { PlaygroundPage } from "./pages/Playground";
@@ -190,17 +215,18 @@ export const router = createBrowserRouter([
     ],
   },
   // v0.32.0: P3 Worlds 独立沙箱 — 跟 /:subject 完全平行，不挂 SubjectShell
-  { path: "/worlds", element: <WorldsHomePage /> },
-  { path: "/worlds/baibao", element: <BaibaoMapPage /> },
-  { path: "/worlds/baibao/store", element: <StorePage /> },
-  { path: "/worlds/baibao/bank", element: <WorldsBankPage /> },
-  { path: "/worlds/baibao/bakery", element: <BakeryPage /> },
-  { path: "/worlds/baibao/:buildingId", element: <WorldsBuildingStub /> },
+  // Ep 爸爸-2026-05-17：每条 element 都用 W() 包成 Suspense，触发 lazy chunk 载入
+  { path: "/worlds", element: W(<WorldsHomePage />) },
+  { path: "/worlds/baibao", element: W(<BaibaoMapPage />) },
+  { path: "/worlds/baibao/store", element: W(<WorldsStorePage />) },
+  { path: "/worlds/baibao/bank", element: W(<WorldsBankPage />) },
+  { path: "/worlds/baibao/bakery", element: W(<WorldsBakeryPage />) },
+  { path: "/worlds/baibao/:buildingId", element: W(<WorldsBuildingStub />) },
   // 星帆岛 (英语世界)
-  { path: "/worlds/xingfan", element: <XingfanMapPage /> },
-  { path: "/worlds/xingfan/airport", element: <AirportPage /> },
-  { path: "/worlds/xingfan/:buildingId", element: <WorldsBuildingStub /> },
-  { path: "/worlds/:worldId", element: <WorldLockedPage /> },
+  { path: "/worlds/xingfan", element: W(<XingfanMapPage />) },
+  { path: "/worlds/xingfan/airport", element: W(<WorldsAirportPage />) },
+  { path: "/worlds/xingfan/:buildingId", element: W(<WorldsBuildingStub />) },
+  { path: "/worlds/:worldId", element: W(<WorldLockedPage />) },
 
   // 老路径重定向：保护 PWA 已装的 Selena 设备。
   // 关键：必须保留 query string + hash —— 老代码里有 `/train?skillIds=...` 类似
