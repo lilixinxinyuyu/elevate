@@ -371,6 +371,104 @@ superAdmin.get("/proxy-fallback-stats", (c) => {
   return c.json({ ok: true, ...getProxyFallbackStats() });
 });
 
+/**
+ * GET /api/super-admin/data-integrity
+ *
+ * Ep41 (2026-05-17): 每个 cadet 的 snapshot 关键表行数矩阵 + 0 行告警.
+ *
+ * 背景：Ep38 救火时发现 OSS snapshot 的 fluencyAttempts/tutorSessions/fluencyStats
+ * 全 0 — Selena 设备 push 时本地 IDB 也丢了 (dexie schema 漂移 / fresh browser 之类).
+ * 这种"隐式数据丢失"完全没告警, 直到爸爸觉得不对手动 dump backup 对比才发现.
+ *
+ * 这个 endpoint 主动暴露: 每个用户每张关键表的当前行数, 哪个为 0 高亮告警.
+ *
+ * 读源：users/{userId}/stats.json (Ep148 在 push 时预计算的, ~1KB/user).
+ * 不去 parse snapshot 本身 (3MB × N 用户 = ESA fetch budget 爆).
+ *
+ * 返回:
+ *   { ok, users: [{userId, counts: {attempts,mistakes,trophies,...}, alerts: [...]}] }
+ */
+const REQUIRED_NONZERO_TABLES = [
+  // 这些表 0 行 = 几乎肯定数据丢了 (Selena 用 > 1 天)
+  "attempts", "mastery", "trophies",
+];
+const OFTEN_USED_TABLES = [
+  // 这些 0 也可疑 (Selena 实际有数据)
+  "mistakes", "fluencyAttempts", "tutorSessions",
+];
+
+superAdmin.get("/data-integrity", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const userIds = await listKnownUserIdsAsync(c.env);
+  // ESA 8 fetch limit: 4 users × 1 stats.json = 4 fetches, safe
+  const rows: Array<{
+    userId: string;
+    counts: Record<string, number>;
+    snapshotBytes?: number;
+    fetchedAt?: number;
+    lastActivityMs?: number | null;
+    alerts: string[];
+    error?: string;
+  }> = [];
+  for (const uid of userIds) {
+    const got = await ossGet(cfg, `users/${uid}/stats.json`);
+    if (!got.ok || !got.text) {
+      rows.push({
+        userId: uid,
+        counts: {},
+        alerts: ["no_stats_json"],
+        error: got.error ?? `oss_${got.status}`,
+      });
+      continue;
+    }
+    let stats: {
+      counts?: Record<string, number>;
+      snapshotBytes?: number;
+      fetchedAt?: number;
+      lastActivityMs?: number | null;
+    };
+    try {
+      stats = JSON.parse(got.text);
+    } catch {
+      rows.push({ userId: uid, counts: {}, alerts: ["stats_corrupt"] });
+      continue;
+    }
+    const counts = stats.counts ?? {};
+    const alerts: string[] = [];
+    // 只对实际"用过的"账号 alert: snapshotBytes 大 = 实际有数据，再有 0 行就告警
+    const hasSnapshotData = (stats.snapshotBytes ?? 0) > 50_000;
+    if (hasSnapshotData) {
+      for (const t of REQUIRED_NONZERO_TABLES) {
+        if ((counts[t] ?? 0) === 0) alerts.push(`${t}_zero`);
+      }
+      for (const t of OFTEN_USED_TABLES) {
+        if ((counts[t] ?? 0) === 0) alerts.push(`${t}_zero_suspicious`);
+      }
+    }
+    rows.push({
+      userId: uid,
+      counts,
+      snapshotBytes: stats.snapshotBytes,
+      fetchedAt: stats.fetchedAt,
+      lastActivityMs: stats.lastActivityMs ?? null,
+      alerts,
+    });
+  }
+  // sort: alert 多的在前 (问题用户优先)
+  rows.sort((a, b) => b.alerts.length - a.alerts.length);
+  const totalAlerts = rows.reduce((s, r) => s + r.alerts.length, 0);
+  return c.json({
+    ok: true,
+    asOf: Date.now(),
+    userCount: rows.length,
+    totalAlerts,
+    requiredTables: REQUIRED_NONZERO_TABLES,
+    suspiciousTables: OFTEN_USED_TABLES,
+    users: rows,
+  });
+});
+
 /** POST /api/super-admin/rebuild-index — 重建 users-index.json from per-user files */
 superAdmin.post("/rebuild-index", async (c) => {
   const ids = await listKnownUserIdsAsync(c.env);

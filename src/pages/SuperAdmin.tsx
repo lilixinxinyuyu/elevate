@@ -175,6 +175,26 @@ export function SuperAdminPage() {
   const [previewExpanded, setPreviewExpanded] = useState<string | null>(null);
   const [previewCache, setPreviewCache] = useState<Record<string, PreviewState>>({});
 
+  // Ep41: fleet data-integrity (per-user table count matrix)
+  interface IntegrityRow {
+    userId: string;
+    counts: Record<string, number>;
+    snapshotBytes?: number;
+    fetchedAt?: number;
+    lastActivityMs?: number | null;
+    alerts: string[];
+    error?: string;
+  }
+  const [integrityData, setIntegrityData] = useState<{
+    asOf: number;
+    userCount: number;
+    totalAlerts: number;
+    requiredTables: string[];
+    suspiciousTables: string[];
+    users: IntegrityRow[];
+  } | null>(null);
+  const [integrityBusy, setIntegrityBusy] = useState(false);
+
   // Ep32: fallback proxy monitor 状态
   interface ProxyHit {
     path: string;
@@ -554,6 +574,24 @@ export function SuperAdminPage() {
       return JSON.stringify(JSON.parse(text), null, 2);
     } catch {
       return text;
+    }
+  }
+
+  /** Ep41: 拉 fleet data-integrity matrix (跨 cadet 每表行数 + 0 行告警) */
+  async function loadIntegrity() {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    setIntegrityBusy(true);
+    try {
+      const r = await fetch("/api/super-admin/data-integrity", {
+        headers: { Authorization: `Bearer ${pwd}` },
+      });
+      const j = (await r.json().catch(() => null)) as
+        | (typeof integrityData & { ok: boolean })
+        | null;
+      if (j?.ok) setIntegrityData(j as typeof integrityData);
+    } finally {
+      setIntegrityBusy(false);
     }
   }
 
@@ -1153,6 +1191,84 @@ export function SuperAdminPage() {
                   })}
                 </div>
               </>
+            )}
+          </div>
+        </details>
+
+        {/* Ep41: fleet data integrity matrix (table count per cadet, 0-row 告警) */}
+        <details
+          className="mb-4 rounded-lg bg-[#1a1c20] border border-[#212327]"
+          onToggle={(e) => {
+            if ((e.target as HTMLDetailsElement).open && !integrityData && !integrityBusy) {
+              void loadIntegrity();
+            }
+          }}
+        >
+          <summary className="cursor-pointer px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] hover:text-white select-none flex items-center gap-2 flex-wrap">
+            <span>⟁ data integrity</span>
+            <span className="text-[#363a3f]">·</span>
+            <span className={integrityData && integrityData.totalAlerts > 0 ? "text-rose-400 font-bold" : "text-[#7d8187]"}>
+              {integrityBusy
+                ? "loading…"
+                : integrityData
+                  ? `${integrityData.totalAlerts} alert${integrityData.totalAlerts === 1 ? "" : "s"} across ${integrityData.userCount} cadets`
+                  : "click to load"}
+            </span>
+            <span className="text-[#363a3f] ml-2">·</span>
+            <span
+              className="text-[#7d8187] normal-case tracking-normal"
+              title="检查每个 cadet 的 stats.json 关键表行数. 大 snapshot 还出现 0 行 = 数据丢风险, 立即查"
+            >
+              prevent silent fluency/tutor data loss
+            </span>
+          </summary>
+          <div className="px-4 pb-3 pt-1">
+            {integrityData && integrityData.totalAlerts > 0 && (
+              <div className="mb-2 text-[10px] font-mono uppercase tracking-wider text-rose-300 bg-rose-900/20 border border-rose-700/40 rounded p-2">
+                ⚠ {integrityData.totalAlerts} 处告警 — 多见于 client 端 IDB 异常导致 push 上来表为空。
+                受影响 cadet 应让她"立即推 OSS"前先 force-pull 一次合并历史。
+              </div>
+            )}
+            {integrityData && integrityData.users.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px] font-mono">
+                  <thead>
+                    <tr className="text-[#7d8187] uppercase tracking-wider">
+                      <th className="text-left py-1.5 px-2">cadet</th>
+                      {["attempts","mastery","mistakes","sessions","trophies","fluencyAttempts","tutorSessions"].map((t) => (
+                        <th key={t} className="text-right py-1.5 px-2">{t}</th>
+                      ))}
+                      <th className="text-right py-1.5 px-2">bytes</th>
+                      <th className="text-left py-1.5 px-2">alerts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {integrityData.users.map((u) => (
+                      <tr key={u.userId} className="border-t border-[#212327]">
+                        <td className="text-white uppercase py-1 px-2">{u.userId}</td>
+                        {["attempts","mastery","mistakes","sessions","trophies","fluencyAttempts","tutorSessions"].map((t) => {
+                          const v = u.counts[t] ?? 0;
+                          const isReqZero = v === 0 && integrityData.requiredTables.includes(t) && (u.snapshotBytes ?? 0) > 50_000;
+                          const isSusZero = v === 0 && integrityData.suspiciousTables.includes(t) && (u.snapshotBytes ?? 0) > 50_000;
+                          const cls = isReqZero ? "text-rose-300 font-bold" : isSusZero ? "text-amber-300" : "text-[#dadbdf]";
+                          return <td key={t} className={`text-right tabular-nums py-1 px-2 ${cls}`}>{v}</td>;
+                        })}
+                        <td className="text-right tabular-nums py-1 px-2 text-[#7d8187]">
+                          {u.snapshotBytes ? `${(u.snapshotBytes/1024).toFixed(0)}K` : "—"}
+                        </td>
+                        <td className="py-1 px-2 text-rose-300 text-[9px]">
+                          {u.alerts.slice(0,3).join(" · ")}
+                          {u.alerts.length > 3 && ` +${u.alerts.length - 3}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="text-[9px] text-[#7d8187] mt-2">
+                  asOf {new Date(integrityData.asOf).toLocaleTimeString("zh-CN")} · refresh
+                  <button type="button" onClick={loadIntegrity} className="ml-1 underline hover:text-white">redo</button>
+                </div>
+              </div>
             )}
           </div>
         </details>
