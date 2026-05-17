@@ -184,7 +184,10 @@ export const QuestionSchema = z.object({
       original: z.boolean().optional(),
     })
     .optional(),
-  grade: z.literal(4),
+  // v0.34.80 iter 14: 多年级支持 — 之前 z.literal(4) 锁死 4 年级, iter 10 合成
+  // grade-5 题 admin import 会被拒. 改 union(1..6) 给 iter 9-11 PDF 流程开闸.
+  // 学生 train scheduler 仍按 student.grade 过滤; 题本身可以是任意年级 (1-6).
+  grade: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)]),
   term: TermSchema,
   unit_id: z.string().min(1),
   unit_name: z.string().optional(),

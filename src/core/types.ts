@@ -238,7 +238,7 @@ export interface Question {
     copyright_safe?: boolean;
     original?: boolean;
   };
-  grade: 4;
+  grade: 1 | 2 | 3 | 4 | 5 | 6;
   term: Term;
   unit_id: string;
   unit_name?: string;
