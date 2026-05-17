@@ -174,12 +174,25 @@ interface BubbleOption {
 function buildOptions(q: Question, salt: string): BubbleOption[] {
   // single_choice 走 options
   if (q.question_format === "single_choice" && q.options) {
-    const opts = q.options.map((o) => ({
-      id: o.id,
-      display: o.text,
-      correct: q.answer.type === "choice" && q.answer.value === o.id,
-      errorTag: o.errorTag,
-    }));
+    // v0.34.63 Q3 fix #1: 之前只按 option.id===answer.value 比对，answer.type==="number"
+    // 时 spec.value 是数字根本不匹配任何 id ("A"/"B"/"C"/"D") → 所有 option correct: false →
+    // 用户点对的题也判错。修：answer.type==="number" 时按 option.text 数字解析后比 spec.value。
+    const numericTarget = q.answer.type === "number" ? q.answer.value : null;
+    const opts = q.options.map((o) => {
+      let correct = false;
+      if (q.answer.type === "choice") {
+        correct = q.answer.value === o.id;
+      } else if (numericTarget != null) {
+        const n = parseOptionNumber(o.text);
+        correct = n != null && Math.abs(n - numericTarget) < 1e-6;
+      }
+      return {
+        id: o.id,
+        display: o.text,
+        correct,
+        errorTag: o.errorTag,
+      };
+    });
     return shuffleWithSeed(opts, `${q.question_id}::${salt}`);
   }
   // numeric / numeric_choice：用 distractors 或生成
@@ -244,6 +257,20 @@ function generateDistractors(correct: number, q: Question): number[] {
 function formatNumber(n: number): string {
   if (Number.isInteger(n)) return String(n);
   return String(Math.round(n * 1000) / 1000);
+}
+
+/** v0.34.63 Q3 fix #1: 从 option.text 抽数值（剥掉单位/中文/空格），用来跟 numeric answer 比对。 */
+function parseOptionNumber(text: string): number | null {
+  if (typeof text !== "string") return null;
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const direct = Number(trimmed);
+  if (Number.isFinite(direct)) return direct;
+  // 剥单位（"22.8 元" "150 厘米"）
+  const stripped = trimmed.replace(/[^\d.\-+]/g, "");
+  if (!stripped || stripped === "-" || stripped === "+" || stripped === ".") return null;
+  const n = Number(stripped);
+  return Number.isFinite(n) ? n : null;
 }
 
 function shuffleWithSeed<T>(arr: T[], seed: string): T[] {

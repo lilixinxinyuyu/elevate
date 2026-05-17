@@ -28,7 +28,48 @@ const FORMAT_MAP: Record<string, GameTemplate> = {
   multi_step: "shop_counter",
 };
 
+/**
+ * v0.34.63 Q3 fix #1 (真 source bug): answer.type==="number" 的题永远不能落到
+ * 「纯 choice 模板」(plain_choice / clue_finder / sort_ladder / true_false_swipe)。
+ *
+ * 这些模板用 option.id ("A"/"B"/"C"/"D") 作为提交答案；而 grader 拿 spec.value (number)
+ * 去比 raw "A"，coerceNumber("A")==null → 一律记错题 + answer=["D"] 灌进 mistakes 库。
+ *
+ * 复现：AI 出 numeric 题误标 question_format: "single_choice" + 4 个数字选项。
+ * 之前修了三层（grader unwrap / resurrection / ShopCounter source），这里堵真源头。
+ */
+const CHOICE_ONLY_TEMPLATES = new Set<GameTemplate>([
+  "plain_choice",
+  "clue_finder",
+  "sort_ladder",
+  "true_false_swipe",
+]);
+
+function rerouteIfNumericMismatch(
+  q: Question,
+  resolved: GameTemplate,
+): GameTemplate {
+  if (q.answer.type !== "number") return resolved;
+  // speed_match 是 "numeric 4 选 1"，内部 buildOptions 也兼容 single_choice + numeric
+  // (本次同步修了)。这里只挡纯 choice 模板。
+  if (!CHOICE_ONLY_TEMPLATES.has(resolved)) return resolved;
+  const hasNumericOptions =
+    (q.options ?? []).length >= 2 &&
+    (q.options ?? []).every((o) => /-?\d+(\.\d+)?/.test(o.text));
+  const replacement: GameTemplate = hasNumericOptions ? "speed_match" : "plain_numeric";
+  console.warn(
+    `[resolveTemplate] q=${q.question_id} answer.type=number 但 resolved=${resolved}（choice-only），` +
+      `自动改判 → ${replacement}。question_format=${q.question_format} game_type=${q.game_type}`,
+  );
+  return replacement;
+}
+
 export function resolveTemplate(q: Question): GameTemplate {
+  const t = resolveTemplateRaw(q);
+  return rerouteIfNumericMismatch(q, t);
+}
+
+function resolveTemplateRaw(q: Question): GameTemplate {
   // v0.33.40 (bug fix): play_as=balance_lab 但缺 eq: tag → 退回 speed_match/plain_choice
   // 否则 BalanceLab parseEq fail → fallback state → 自动判错 bug
   if (q.play_as === "balance_lab") {

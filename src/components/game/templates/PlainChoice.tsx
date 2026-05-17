@@ -48,6 +48,15 @@ export function PlainChoicePanel(props: TemplateRenderProps) {
   const [picked, setPicked] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const rawOptions = question.options ?? [];
+  // v0.34.63 Q3 fix #1 防御层：理论上 resolve.ts 已经把 answer.type==="number" 的题
+  // 重路由到 plain_numeric / speed_match，不会再到 PlainChoice。但万一漏网，警告 + 透明显示
+  // —— 之前 correctId=null 会让所有点击都判错，灌 attempts.answer=["D"] 到 mistakes 库。
+  if (question.answer.type !== "choice") {
+    console.warn(
+      `[PlainChoicePanel] q=${question.question_id} 不是 choice 答案 (type=${question.answer.type})，` +
+        `理论上应被 resolve.ts 重路由。fallback 渲染会让所有选项都判错。`,
+    );
+  }
   const correctId = question.answer.type === "choice" ? question.answer.value : null;
 
   // 防 memorize 答案位置：每次进题都按本次会话的随机种子重排选项。
