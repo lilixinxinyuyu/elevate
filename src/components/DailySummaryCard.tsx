@@ -33,6 +33,8 @@ import { termToSemester } from "./TermSwitcher";
 import type { Term } from "../core/types";
 import type { MasteryStat } from "../lib/masteryTier";
 import { expectedProgress } from "../core/semesterProgress";
+import { getUnlockedUnitIdSet } from "../db/unitUnlock";
+import { loadDaily } from "../lib/dailyTarget";
 
 interface DailySummaryCardProps {
   studentId: string;
@@ -190,9 +192,18 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
     [studentId, currentDateKey],
   );
 
-  // 爸爸 2026-05-17 报告重构 v2：数学累计掌握 % = score ≥ 75 的 skill / 总 skill。
-  // unmasteredUnits 现在 3 学科都列（语文按 char level<3 group 成 "拼音池"，
-  // 英语按 vocab level<3 group 成 "单词池"，没有正式 unit 概念时这样代替）。
+  // v4 (爸爸 2026-05-17 第二轮反馈)：英语朗读 daily（speak）
+  // 用于 9 闭环里的"英语朗读" mode 判定。
+  const englishSpeak = useLiveQuery(async () => {
+    if (!studentId) return null;
+    try { return await loadDaily("english_speak", studentId, 5); } catch { return null; }
+  }, [studentId, currentDateKey]);
+
+  // 爸爸 2026-05-17 报告重构 v4：数学累计掌握。
+  // - 只算"已解锁"的 unit (locked unit 不该出现在待掌握列表)
+  // - 待掌握判定：unit 已解锁但里头有 skill < 75 (含 forgetting curve 退化)
+  // - 现在所有解锁 unit 都 ≥75% → 列表空（即"无待掌握"）；除非退化才显示
+  // - 语文/英语 unit 化未做，暂不算累计 unit 列表（在 v4 删除）
   const mathCumulative = useLiveQuery(async () => {
     const totalSkills = SKILLS.length;
     if (totalSkills === 0) {
@@ -225,11 +236,20 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
       if ((scoreBySkill.get(s.id) ?? 0) >= 75) cur.mastered += 1;
       byUnit.set(s.unitId, cur);
     }
-    // 当前学期的 unit only；未 100% 掌握的列出，按 mastered/total ratio 升序（最薄弱前置）
-    const semesterTerm = currentTerm; // 来自外面闭包：上册 / 下册 / 综合复习
+    // v4 (爸爸 2026-05-17 第二轮反馈)：
+    //   1. 只列"已解锁"的 unit。Locked unit 还没解锁谈何待掌握
+    //   2. 列已解锁 + mastered<total 的（即被 forgetting curve 退化 / 新出错）
+    const semesterTerm = currentTerm;
+    let unlocked: Set<string>;
+    try {
+      unlocked = await getUnlockedUnitIdSet(studentId, semesterTerm);
+    } catch {
+      unlocked = new Set();
+    }
     const unmasteredUnits: Array<{ unitId: string; name: string; mastered: number; total: number; pct: number }> = [];
     for (const u of UNITS) {
       if (semesterTerm !== "综合复习" && u.term !== semesterTerm) continue;
+      if (!unlocked.has(u.id)) continue; // locked → 不出现在 "待掌握"
       const stat = byUnit.get(u.id) ?? { total: 0, mastered: 0 };
       if (stat.total === 0 || stat.mastered >= stat.total) continue;
       unmasteredUnits.push({
@@ -422,26 +442,41 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             数学走 modesToday 真信号；中英文目前只 1 mode（练过/未练），等 Phase 3
             instrument 之后扩开。 */}
         {(() => {
-          const items: Array<{ done: boolean; label: string; emoji: string; href: string; subject: string }> = [];
+          // v4 (爸爸 2026-05-17 第二轮反馈)：9 modes (3 per subject)，所有链接经
+          // src/router.tsx 验证：
+          //   /math/train ✓ /math/big-problems ✓ /math/fluency ✓
+          //   /chinese/char-practice ✓ /english/vocab ✓ /english/sentence ✓
+          //   chinese 拼音 / 词组 暂未实现 → comingSoon=true 灰显
+          //   english 朗读用 daily_english_speak.todayCount > 0 判定（朗读 ≥70 分计入）
+          type Item = { done: boolean; label: string; emoji: string; href: string; subject: string; comingSoon?: boolean };
+          const items: Item[] = [];
           if (math) {
             items.push({ done: math.modesToday.train, label: "数学训练", emoji: "🎯", href: "/math/train", subject: "math" });
-            items.push({ done: math.modesToday.boss, label: "数学闯关", emoji: "⚔️", href: "/math/boss", subject: "math" });
+            items.push({ done: math.modesToday.boss, label: "数学闯关", emoji: "⚔️", href: "/math/big-problems", subject: "math" });
             items.push({ done: math.modesToday.fluency, label: "数学闪电口算", emoji: "⚡", href: "/math/fluency", subject: "math" });
           }
-          // Phase 3: 中/英文 mode 拆分（dailyLog.modeCounts）
-          // chinese: write (手写) + choose (辨字)；english: vocab (单词) + sentence (短句)
+          // 中文 3 modes：写字 (CharPractice write+choose 合并算) + 拼音 + 词组（后 2 还没建模块）
           const chineseModes = chineseDaily?.modeCounts ?? {};
-          const englishModes = englishDaily?.modeCounts ?? {};
-          const chineseWrite = (chineseModes.write?.right ?? 0) + (chineseModes.write?.wrong ?? 0);
-          const chineseChoose = (chineseModes.choose?.right ?? 0) + (chineseModes.choose?.wrong ?? 0);
-          const englishVocab = (englishModes.vocab?.right ?? 0) + (englishModes.vocab?.wrong ?? 0);
-          const englishSentence = (englishModes.sentence?.right ?? 0) + (englishModes.sentence?.wrong ?? 0);
-          items.push({ done: chineseWrite > 0, label: "语文手写", emoji: "✍️", href: "/chinese/char-quest?mode=write", subject: "chinese" });
-          items.push({ done: chineseChoose > 0, label: "语文辨字", emoji: "🔍", href: "/chinese/char-quest?mode=choose", subject: "chinese" });
-          items.push({ done: englishVocab > 0, label: "英语单词", emoji: "🔤", href: "/english/vocab", subject: "english" });
-          items.push({ done: englishSentence > 0, label: "英语短句", emoji: "💬", href: "/english/sentence", subject: "english" });
-          const undone = items.filter((i) => !i.done);
-          const total = items.length;
+          const chineseWriteOrChoose =
+            (chineseModes.write?.right ?? 0) + (chineseModes.write?.wrong ?? 0) +
+            (chineseModes.choose?.right ?? 0) + (chineseModes.choose?.wrong ?? 0);
+          items.push({ done: chineseWriteOrChoose > 0, label: "语文写字", emoji: "✍️", href: "/chinese/char-practice", subject: "chinese" });
+          items.push({ done: false, label: "语文拼音", emoji: "🔡", href: "/chinese", subject: "chinese", comingSoon: true });
+          items.push({ done: false, label: "语文词组", emoji: "📖", href: "/chinese", subject: "chinese", comingSoon: true });
+          // 英语 3 modes：单词 (vocab) + 短句 (sentence) + 朗读 (speak — 朗读 ≥70 分独立计 daily_english_speak)
+          const englishVocab = englishDaily?.modeCounts?.vocab;
+          const englishSentence = englishDaily?.modeCounts?.sentence;
+          const vocabDoneToday = ((englishVocab?.right ?? 0) + (englishVocab?.wrong ?? 0)) > 0;
+          const sentenceDoneToday = ((englishSentence?.right ?? 0) + (englishSentence?.wrong ?? 0)) > 0;
+          const speakDoneToday = (englishSpeak?.todayCount ?? 0) > 0;
+          items.push({ done: vocabDoneToday, label: "英语单词", emoji: "🔤", href: "/english/vocab", subject: "english" });
+          items.push({ done: sentenceDoneToday, label: "英语短句", emoji: "💬", href: "/english/sentence", subject: "english" });
+          items.push({ done: speakDoneToday, label: "英语朗读", emoji: "🎙️", href: "/english/vocab", subject: "english" });
+          // v4: 总数排除 comingSoon (它们不算"今日任务"，只占位提示功能将至)
+          const realItems = items.filter((i) => !i.comingSoon);
+          const soonItems = items.filter((i) => i.comingSoon);
+          const undone = realItems.filter((i) => !i.done);
+          const total = realItems.length;
           const done = total - undone.length;
           if (undone.length === 0) {
             return (
@@ -452,7 +487,7 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
               </div>
             );
           }
-          // 推荐"先做这一个"：取第一个未完成项当今日 CTA（peer review GPT-5.5 建议）
+          // 推荐"先做这一个"：第一个未完成的 real item
           const recommended = undone[0]!;
           return (
             <div className="rounded-xl border border-violet-400/25 bg-violet-500/8 px-3 py-2.5">
@@ -462,7 +497,6 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
                   {done} / {total} ⭐
                 </div>
               </div>
-              {/* 醒目 CTA：先做这一关 */}
               <a
                 href={recommended.href}
                 className="block rounded-lg bg-gradient-to-r from-pink-500/30 to-violet-500/30 border border-pink-400/40 px-3 py-2.5 mb-2 hover:from-pink-500/40 hover:to-violet-500/40 transition-all"
@@ -487,43 +521,32 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
                   ))}
                 </div>
               )}
+              {soonItems.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5 pt-1.5 border-t border-violet-400/15">
+                  {soonItems.map((m) => (
+                    <span
+                      key={m.label}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium bg-slate-900/30 text-slate-500 border border-dashed border-slate-700/50"
+                      title="功能即将开启"
+                    >
+                      <span className="leading-none">⏳</span>
+                      <span className="leading-none">{m.emoji}</span>
+                      <span className="leading-none">{m.label}</span>
+                      <span className="leading-none text-slate-600">· 即将开启</span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })()}
 
-        {/* 爸爸 2026-05-17 v3 (peer review)：正向成就 strip — 平衡满屏负向信号。
-            显示三科累计已掌握 + 今日 streak + AI brief 角标。
-            Hero 大三环 + 这一行 = "you've already won X" 锚点。 */}
-        {(mathCumulative || chineseStats || englishStats) && (
-          <div className="rounded-xl border border-emerald-400/25 bg-gradient-to-r from-emerald-500/12 via-cyan-500/10 to-violet-500/12 px-3 py-2">
-            <div className="text-[10px] font-bold text-emerald-200/85 uppercase tracking-wide mb-1.5">
-              🏆 累计成就
-            </div>
-            <div className="flex items-baseline gap-3 flex-wrap text-[12px]">
-              {mathCumulative && mathCumulative.mastered > 0 && (
-                <span className="text-violet-100">
-                  📐 数学 <span className="font-bold text-violet-50">{mathCumulative.mastered}</span><span className="text-violet-200/60">/{mathCumulative.total}</span> 技能
-                </span>
-              )}
-              {chineseStats && chineseStats.mastered > 0 && (
-                <span className="text-emerald-100">
-                  📚 语文 <span className="font-bold text-emerald-50">{chineseStats.mastered}</span><span className="text-emerald-200/60">/{chineseStats.total}</span> 字
-                </span>
-              )}
-              {englishStats && englishStats.mastered > 0 && (
-                <span className="text-cyan-100">
-                  🔤 英语 <span className="font-bold text-cyan-50">{englishStats.mastered}</span><span className="text-cyan-200/60">/{englishStats.total}</span> 词
-                </span>
-              )}
-              {(!mathCumulative?.mastered && !chineseStats?.mastered && !englishStats?.mastered) && (
-                <span className="text-slate-300">🌱 第一颗星等你来摘</span>
-              )}
-              {totalStreak >= 2 && (
-                <span className="ml-auto text-amber-200 font-bold">🔥 {totalStreak} 天连练</span>
-              )}
-            </div>
-          </div>
-        )}
+        {/* 爸爸 2026-05-17 v4：删 v3 加的"🏆 累计成就 strip" 。
+            原因：peer review (Gemini + GPT-5.5) 建议加是因为他们没有
+            产品全貌 context — 游戏内 (math/chinese/english 训练页)
+            本来就有完整的徽章 / 金币 / streak / 世界解锁 系统。
+            回顾页再加是冗余且跟"回顾整理"产品定位拧巴。
+            累计 mastered 数已经 inline 在下面 SubjectMiniCard 里。 */}
 
         {/* 三学科 mini stats grid — 爸爸 v2: cumulative ExpectedBar 内联进卡片 */}
         <div className="grid grid-cols-3 gap-2">
@@ -781,9 +804,12 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           </div>
         )}
 
-        {/* 爸爸 2026-05-17 v3 (peer review)：知识探险 — 推荐每科攻克 Top 1，
-            其余折叠在 <details> 展开（GPT-5.5 + Gemini 双推荐避免"文字墙"）。
-            措辞从"未掌握"→"推荐攻克"，正向引导而非负向报怨。*/}
+        {/* 爸爸 2026-05-17 v4 (第二轮反馈)：知识探险 仅数学。
+            - 数学：只列"已解锁 unit 里 skill<75 的"。当前所有解锁 unit 都 ≥75% →
+              这里 normally 空（除非 forgetting curve 退化，正是该提醒的时候）。
+            - 中文/英文：未做知识点拆分（语法/句型/拼音 / 单词 group 都没建模）→
+              暂不显示。等知识点系统建好（后续 ep）再统一处理 3 学科。
+            - 折叠 / Top 1 写法跟 v3 一致。 */}
         {(() => {
           interface Row { key: string; name: string; mastered: number; total: number; pct: number; href: string }
           const groups: Array<{ key: string; tone: string; emoji: string; subject: string; top: Row; more: Row[]; moreNote?: string }> = [];
@@ -807,30 +833,19 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
               moreNote: us.length > 8 ? `还有 ${us.length - 8} 个数学单元` : undefined,
             });
           }
-          if (chineseStats && chineseStats.total > chineseStats.mastered) {
-            const remaining = chineseStats.total - chineseStats.mastered;
-            const top = {
-              key: "chinese-pool",
-              name: `${currentTerm}写字 · 还差 ${remaining} 字达 level≥3`,
-              mastered: chineseStats.mastered, total: chineseStats.total,
-              pct: chineseStats.mastered / chineseStats.total, href: "/chinese",
-            };
-            groups.push({ key: "chinese", tone: "border-emerald-400/25 bg-emerald-500/8", emoji: "📚", subject: "语文", top, more: [] });
-          }
-          if (englishStats && englishStats.total > englishStats.mastered) {
-            const remaining = englishStats.total - englishStats.mastered;
-            const top = {
-              key: "english-pool",
-              name: `${currentTerm}单词 · 还差 ${remaining} 词达 level≥3`,
-              mastered: englishStats.mastered, total: englishStats.total,
-              pct: englishStats.mastered / englishStats.total, href: "/english/vocab",
-            };
-            groups.push({ key: "english", tone: "border-cyan-400/25 bg-cyan-500/8", emoji: "🔤", subject: "英语", top, more: [] });
-          }
+          // v4: 中文/英文不再走 "整池字/词" 当作 1 row 列出 —— 那不是真"知识点"
+          //     ，按字典/词典池统计意义不大且 250/112 数字本身就很压。
+          //     等中文/英文知识点系统建好（语法 / 句型 / 字根 等真"可征服点"）
+          //     再统一显示。
           if (groups.length === 0) {
             return (
-              <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-center">
-                <div className="text-[13px] font-bold text-emerald-100">🌟 3 学科全部攻克完成</div>
+              <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2">
+                <div className="text-[12px] font-bold text-emerald-100 mb-0.5">
+                  🌟 数学单元全部掌握 ≥75%
+                </div>
+                <div className="text-[10px] text-emerald-200/70 leading-snug">
+                  退化降到 75% 以下时会自动出现在这里。语文 / 英语 知识点系统建好后会一起加入。
+                </div>
               </div>
             );
           }
@@ -855,7 +870,7 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
           };
           return (
             <section className="space-y-2 pt-1">
-              <SectionTitle icon="🗺️" title="知识探险 · 推荐攻克" />
+              <SectionTitle icon="🗺️" title="知识探险 · 数学待巩固" />
               {groups.map((g) => (
                 <div key={g.key} className={`rounded-xl border ${g.tone} px-3 py-2 space-y-1.5`}>
                   <div className="text-[11px] font-bold text-violet-100 mb-0.5">
