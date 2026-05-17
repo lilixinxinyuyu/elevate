@@ -728,6 +728,42 @@ export function SuperAdminPage() {
     }
   }
 
+  /**
+   * Ep42: 一键下载某 cadet 的完整 snapshot.json
+   * 走 fetch + Blob (因为 <a download> 不会带 Authorization header).
+   */
+  async function exportSnapshot(userId: string) {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    try {
+      const r = await fetch(
+        `/api/super-admin/users/${encodeURIComponent(userId)}/export`,
+        { headers: { Authorization: `Bearer ${pwd}` } },
+      );
+      if (!r.ok) {
+        const j = await r.json().catch(() => null);
+        alert(`导出失败：${j?.error ?? r.status}`);
+        return;
+      }
+      // Server sets Content-Disposition; honor filename if present
+      let filename = `${userId}-snapshot.json`;
+      const cd = r.headers.get("Content-Disposition") ?? "";
+      const m = cd.match(/filename="([^"]+)"/);
+      if (m) filename = m[1]!;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      alert(`导出网络错：${(e as Error).message}`);
+    }
+  }
+
   async function resetPassword(userId: string) {
     const ok = window.confirm(
       `确认重置 ${userId} 的密码？\n\n` +
@@ -1443,6 +1479,17 @@ export function SuperAdminPage() {
                       >
                         Reset PW
                       </button>
+                      {/* Ep42: per-cadet 一键 snapshot 下载存档（爸爸本地保险） */}
+                      {u.snapshot?.present && (
+                        <button
+                          type="button"
+                          onClick={() => exportSnapshot(u.userId)}
+                          className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-[#7c3aed]/40 hover:border-[#c4b5fd] text-[#c4b5fd] hover:text-white px-3 py-1 transition-colors"
+                          title={`下载 ${u.userId} 完整 snapshot.json (${u.snapshot.bytes ? ((u.snapshot.bytes/1024).toFixed(0)+'K') : '?'})`}
+                        >
+                          ⤓ Export
+                        </button>
+                      )}
                       <details className="text-xs">
                         <summary className="cursor-pointer text-slate-400 hover:text-slate-300">
                           JSON

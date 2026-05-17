@@ -372,6 +372,50 @@ superAdmin.get("/proxy-fallback-stats", (c) => {
 });
 
 /**
+ * GET /api/super-admin/users/:userId/export
+ *
+ * Ep42 (2026-05-17): 一键下载某 cadet 的完整 snapshot.json 给爸爸本地存档。
+ *
+ * 跟 download 一样不 parse + re-stringify (3MB+ 会爆 ESA 599) — 直接 OSS
+ * raw text 透传, 加 attachment header 让浏览器触发下载.
+ *
+ * 文件名: {userId}-snapshot-{YYYY-MM-DDTHHMMSS}.json
+ *
+ * 用途: 跟 BackupRestorePanel 的本地导出对称, 但走 super-admin 跨用户.
+ * 爸爸可以从 admin.xiaojin.app 下载任一 cadet 的快照存到本机.
+ */
+superAdmin.get("/users/:userId/export", async (c) => {
+  const targetUserId = c.req.param("userId");
+  if (!isValidUserId(targetUserId)) {
+    return c.json({ ok: false, error: "invalid_target_userId" }, 400);
+  }
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const known = new Set(await listKnownUserIdsAsync(c.env));
+  if (!known.has(targetUserId)) {
+    return c.json({ ok: false, error: "unknown_userId", target: targetUserId }, 404);
+  }
+  const got = await ossGet(cfg, snapshotKey(targetUserId));
+  if (!got.ok || got.text === undefined) {
+    return c.json({ ok: false, error: got.error ?? "snapshot_missing", status: got.status }, 404);
+  }
+  // ISO timestamp safe for filename
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const ts = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const filename = `${targetUserId}-snapshot-${ts}.json`;
+  return new Response(got.text, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      // 防 CDN 缓存（每次导出都该是最新 snapshot）
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
+});
+
+/**
  * GET /api/super-admin/data-integrity
  *
  * Ep41 (2026-05-17): 每个 cadet 的 snapshot 关键表行数矩阵 + 0 行告警.
