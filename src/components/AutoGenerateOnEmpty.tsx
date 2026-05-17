@@ -19,6 +19,7 @@ import { generateAiQuestions } from "../lib/tutor";
 import { sfx } from "../lib/sfx";
 import { MascotAvatar } from "./MascotAvatar";
 import type { Question, Skill, CurriculumUnit } from "../core/types";
+import { getDisplayName } from "../lib/displayName";
 
 interface Props {
   /** "math" 或 "chinese"。决定怎么校验 + 用哪批 unit/skill */
@@ -153,7 +154,7 @@ export function AutoGenerateOnEmpty(props: Props) {
 
   const runGeneration = async () => {
     if (phase.status === "running") return;
-    safeSetPhase({ status: "running", message: "正在挑选最适合 Selena 的 skill…" });
+    safeSetPhase({ status: "running", message: `正在挑选最适合 ${getDisplayName()} 的 skill…` });
     try {
       // multiSkillCount 强制为 1（自由练）当显式给了 preferredSkillId
       const desiredSkillN = props.preferredSkillId ? 1 : Math.max(1, props.multiSkillCount ?? 1);

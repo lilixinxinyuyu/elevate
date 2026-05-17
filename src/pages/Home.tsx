@@ -8,6 +8,7 @@ import { MascotProfile } from "../components/MascotProfile";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { isPhase2Live } from "../lib/featureFlags";
+import { useDisplayName } from "../lib/displayName";
 import {
   isMistakeRingClosedToday,
   markMistakeRingClosedToday,
@@ -165,6 +166,7 @@ function buildTodayRingsInput(args: {
 }
 
 export function HomePage() {
+  const displayName = useDisplayName();
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
   const attempts = useLiveQuery(
     async () => (student ? db.attempts.where({ studentId: student.id }).toArray() : []),
@@ -578,7 +580,7 @@ export function HomePage() {
                 ))}
               </ul>
               <div className="mt-2 text-xs text-rose-200/70">
-                点"找小进讲讲"开口跟小进姐姐说就行——她看得到 Selena 错过哪几道。
+                点"找小进讲讲"开口跟小进姐姐说就行——她看得到 {displayName} 错过哪几道。
               </div>
             </div>
           </div>
@@ -699,7 +701,7 @@ export function HomePage() {
               <div className="text-3xl">🌟</div>
               <div className="flex-1">
                 <div className="font-display font-bold text-amber-100 text-lg">
-                  Selena，这些题你都很熟啦！
+                  {displayName}，这些题你都很熟啦！
                 </div>
                 <div className="text-sm text-amber-200/90 mt-1">
                   还剩 <span className="font-bold">{poolHealth.freshTotal}</span> 道新题没做（期中范围 {poolHealth.freshMidterm} 道）。

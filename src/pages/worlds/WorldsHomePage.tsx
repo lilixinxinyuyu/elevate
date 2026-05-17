@@ -21,6 +21,7 @@ import {
   getAllXingfanStats,
 } from "../../lib/worlds/worldsProgress";
 import { WorldOrb } from "../../components/worlds/WorldOrb";
+import { useDisplayName, getDisplayName } from "../../lib/displayName";
 
 // 3 orb 在 X 轴上等距分布（左 / 中 / 右），间距拉大避免拥挤
 const ORB_POSITIONS: [number, number, number][] = [
@@ -1024,10 +1025,16 @@ interface TourStep {
   arrow: "up" | "down";
 }
 
-const TOUR_STEPS: TourStep[] = [
+/**
+ * v0.34.67 改成函数 — tourSteps 第一句 hardcoded "Selena" 让新同学难过。
+ * 用 getDisplayName() 在 tour 启动时取一次同步值, 不需要传 React state 进顶层 const.
+ */
+function buildTourSteps(): TourStep[] {
+  const name = getDisplayName();
+  return [
   {
     title: "✦ 奇遇乐园",
-    body: "欢迎来到 Selena 的 worlds！这里有 3 个魔法世界等你冒险。",
+    body: `欢迎来到 ${name} 的 worlds！这里有 3 个魔法世界等你冒险。`,
     bubble: { left: "50%", top: "55%" },
     arrow: "up",
   },
@@ -1051,9 +1058,13 @@ const TOUR_STEPS: TourStep[] = [
     bubble: { left: "50%", top: "50%" },
     arrow: "up",
   },
-];
+  ];
+}
 
 function WorldsHomeTour() {
+  // tour 启动时一次性 snapshot 步骤 (含当前 displayName)
+  const tourSteps = useMemo(() => buildTourSteps(), []);
+  useDisplayName(); // subscribe — 用户改 displayName 后下一次开 tour 会反映
   const [stepIdx, setStepIdx] = useState<number | null>(() => {
     if (typeof window === "undefined") return null;
     const forced =
@@ -1067,9 +1078,9 @@ function WorldsHomeTour() {
     return 0;
   });
   if (stepIdx == null) return null;
-  const step = TOUR_STEPS[stepIdx];
+  const step = tourSteps[stepIdx];
   if (!step) return null;
-  const isLast = stepIdx === TOUR_STEPS.length - 1;
+  const isLast = stepIdx === tourSteps.length - 1;
   const finish = () => {
     try {
       localStorage.setItem(TOUR_STORAGE_KEY, "1");
@@ -1233,7 +1244,7 @@ function WorldsHomeTour() {
         <div className="worlds-tour-title">{step.title}</div>
         <div className="worlds-tour-body">{step.body}</div>
         <div className="worlds-tour-progress" aria-hidden>
-          {TOUR_STEPS.map((_, i) => (
+          {tourSteps.map((_, i) => (
             <span
               key={i}
               className={`worlds-tour-dot${i === stepIdx ? " is-active" : ""}`}
@@ -1255,7 +1266,7 @@ function WorldsHomeTour() {
             className="worlds-tour-btn worlds-tour-btn-primary"
             onClick={next}
           >
-            {isLast ? "知道啦 ✨" : `下一步 → ${stepIdx + 2}/${TOUR_STEPS.length}`}
+            {isLast ? "知道啦 ✨" : `下一步 → ${stepIdx + 2}/${tourSteps.length}`}
           </button>
         </div>
       </div>

@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { ORDERED_SUBJECT_IDS, SUBJECTS } from "../subjects";
+import { useAppTitle } from "../lib/displayName";
 import type { SubjectId } from "../core/types";
 import { DailySummaryCard } from "../components/DailySummaryCard";
 
@@ -25,13 +26,14 @@ function formatDaysUntil(at: number): string {
 
 export function SubjectPickerPage() {
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const appTitle = useAppTitle();
 
   return (
     <div className="min-h-screen app-bg text-slate-100 px-4 py-6">
       <div className="max-w-2xl mx-auto space-y-5">
         <div className="text-center pb-1">
           <div className="font-display font-bold text-3xl text-brand">
-            Selena's Elevate
+            {appTitle}
           </div>
         </div>
 

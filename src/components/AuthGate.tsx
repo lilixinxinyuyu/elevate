@@ -1,5 +1,23 @@
 import { useEffect, useState } from "react";
 import { checkPassword, checkPasswordAndUserId, clearPassword, getStoredPassword, pullFromCloud, storePassword } from "../db/cloudSync";
+import { setUserId as cacheUserId, setDisplayName as cacheDisplayName } from "../lib/displayName";
+
+/**
+ * 登录成功后拉一次 /api/profile, 把 displayName 写进 displayName cache。
+ * 不阻塞 UI; 失败静默 (兜底会用 userId 首字母大写).
+ */
+async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
+  try {
+    const r = await fetch("/api/profile", {
+      headers: { Authorization: `Bearer ${pwd}` },
+    });
+    if (!r.ok) return;
+    const j = (await r.json()) as { ok?: boolean; profile?: { displayName?: string | null } | null };
+    if (j?.ok && j.profile?.displayName) {
+      cacheDisplayName(j.profile.displayName);
+    }
+  } catch { /* 静默 */ }
+}
 
 /**
  * Ep 爸爸-2026-05-17: 检测当前子域名跟认证 userId 是否匹配.
@@ -74,6 +92,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         setState("ok");
         // 双保险: server 已 enforce wrong-sub denial, 这里再 client 检测一遍
         if (result.userId) {
+          cacheUserId(result.userId); // displayName 兜底 (alice → Alice)
+          void bootstrapDisplayNameFromProfile(stored); // 拉真实 displayName
           const mm = detectSubdomainMismatch(result.userId);
           if (mm) setSubMismatch({ sub: mm.sub, authedAs: result.userId });
         }
@@ -102,6 +122,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       storePassword(pwd);
       setState("ok");
       if (result.userId) {
+        cacheUserId(result.userId);
+        void bootstrapDisplayNameFromProfile(pwd);
         const mm = detectSubdomainMismatch(result.userId);
         if (mm) setSubMismatch({ sub: mm.sub, authedAs: result.userId });
       }
@@ -174,7 +196,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           className="card-glow max-w-sm w-full text-center"
         >
           <div className="text-5xl mb-2">🔒</div>
-          <div className="font-display font-bold text-2xl text-brand mb-1">Selena's Elevate</div>
+          {/* 登录页用通用品牌名 — 登录前不知道用户是谁 */}
+          <div className="font-display font-bold text-2xl text-brand mb-1">小进 Elevate</div>
           <div className="text-sm text-slate-400 mb-4">输入密码继续</div>
           <input
             type="password"

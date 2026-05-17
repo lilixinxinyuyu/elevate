@@ -21,24 +21,32 @@ import {
   INSPIRATION_THRESHOLDS,
   type RealmProgress,
 } from "../../lib/atelier/atelierProgress";
+import { getDisplayName, useDisplayName } from "../../lib/displayName";
 
 const Mascot3D = lazy(() => import("../../components/Mascot3D"));
 
 // 随机 idle 台词 —— 每次刷新换一句，让 Xiaojin 显得"在思考"
-const IDLE_LINES = [
-  "Selena！今天想去哪个维度？",
-  "工坊的星核今天特别亮 ✨ —— 我们去玩哪个？",
-  "我刚把所有传送门擦干净了，挑一个吧～",
-  "宝石矿里好像新长出了一颗光球，要不要去看看？",
-  "时光塔的指针今天有点迷糊，过去帮一下？",
-  "嘿嘿，听说折扣街又打折了！",
-  "数学就像魔法 —— 选一扇门，我们就开始～",
-];
+// v0.34.67: 第一句插 displayName, 用 getDisplayName() 在构造时取
+function buildIdleLines(name: string): string[] {
+  return [
+    `${name}！今天想去哪个维度？`,
+    "工坊的星核今天特别亮 ✨ —— 我们去玩哪个？",
+    "我刚把所有传送门擦干净了，挑一个吧～",
+    "宝石矿里好像新长出了一颗光球，要不要去看看？",
+    "时光塔的指针今天有点迷糊，过去帮一下？",
+    "嘿嘿，听说折扣街又打折了！",
+    "数学就像魔法 —— 选一扇门，我们就开始～",
+  ];
+}
 
 export function AtelierHomePage() {
+  useDisplayName(); // subscribe so name change re-renders (line refresh on next mount)
   const [inspiration, setInspiration] = useState(0);
   const [progress, setProgress] = useState<Record<string, RealmProgress>>({});
-  const [line, setLine] = useState(() => IDLE_LINES[Math.floor(Math.random() * IDLE_LINES.length)]);
+  const [line, setLine] = useState(() => {
+    const lines = buildIdleLines(getDisplayName());
+    return lines[Math.floor(Math.random() * lines.length)]!;
+  });
   const [gesture, setGesture] = useState<MascotGesture>("idle");
   // 回工坊 banner — 从 SummaryView 跳回来时 URL 带 ?just=N&realm=id
   const [searchParams] = useSearchParams();
@@ -86,7 +94,8 @@ export function AtelierHomePage() {
           setGesture("idle");
           // 偶尔换一句台词
           if (Math.random() < 0.5) {
-            setLine(IDLE_LINES[Math.floor(Math.random() * IDLE_LINES.length)] ?? "");
+            const lines = buildIdleLines(getDisplayName());
+            setLine(lines[Math.floor(Math.random() * lines.length)] ?? "");
           }
           playNext((idx + 1) % cycle.length, step.nextDelayMs);
         }, step.durMs);

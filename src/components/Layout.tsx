@@ -17,6 +17,7 @@ import { trophyImageKey } from "../lib/allTrophies";
 import type { TrophyMeta } from "../lib/trophyImages";
 import { SyncStatusIndicator } from "./SyncStatusIndicator";
 import { flushPushNow, pullIfStale } from "../db/cloudSync";
+import { useAppTitle } from "../lib/displayName";
 
 /**
  * Layout：所有 /:subject/* 子路由共用的壳。
@@ -29,6 +30,11 @@ export function Layout() {
   // 路径直接命中），这种情况下回落到 mathSubject 继续渲染 —— 不让整页崩。
   const subject = useOptionalSubject() ?? mathSubject;
   const items = subject.navItems;
+  const appTitle = useAppTitle(); // "<同学称呼> 的小进" — 旧的 hardcoded "Selena's Elevate"
+  // 把 document.title 同步成 "<同学> 的小进 · <学科>" — 浏览器 tab 名 + iOS PWA 桌面 icon 名都跟着改
+  useEffect(() => {
+    document.title = `${appTitle} · ${subject.label}`;
+  }, [appTitle, subject.label]);
   const [chipOpen, setChipOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   // v0.30.10: 进 layout 时检查"按时间自动解锁"的单元；如果有就排队弹庆祝
@@ -163,7 +169,7 @@ export function Layout() {
             </div>
             <div>
               <div className="font-display font-bold text-brand text-lg leading-none">
-                Selena's Elevate
+                {appTitle}
               </div>
               <div className="text-[10px] text-slate-400">
                 {subject.label} · 本地版

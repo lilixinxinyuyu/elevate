@@ -18,6 +18,7 @@
 
 import { useEffect, useState } from "react";
 import { getStoredPassword } from "../db/cloudSync";
+import { setDisplayName as cacheDisplayName } from "../lib/displayName";
 
 interface Profile {
   schemaVersion?: number;
@@ -153,6 +154,8 @@ export function ProfileGate() {
       setBusy(false);
       return;
     }
+    // 立即把新 displayName 写进 cache, 全 app 同步 "Selena's Elevate" → 用户名
+    if (patch.displayName) cacheDisplayName(patch.displayName);
     setMissing(r.missing ?? []);
     if (!r.needsOnboarding) {
       // 全齐 → 关

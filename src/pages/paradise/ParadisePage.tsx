@@ -21,18 +21,13 @@ import { ParadiseGround } from "../../components/paradise/ParadiseGround";
 import { ParadiseTown } from "../../components/paradise/ParadiseTown";
 import { MascotPIP } from "../../components/atelier/MascotPIP";
 import type { MascotEmotion, MascotGesture } from "../../components/Mascot3D";
+import { useDisplayName } from "../../lib/displayName";
 
 interface PipState {
   gesture: MascotGesture;
   emotion: MascotEmotion;
   line: string;
 }
-
-const INITIAL_PIP: PipState = {
-  gesture: "wave",
-  emotion: "happy",
-  line: "👋 嗨 Selena！点亮发光柱进入对应学科～",
-};
 
 const IDLE_PIP: PipState = {
   gesture: "idle",
@@ -42,9 +37,14 @@ const IDLE_PIP: PipState = {
 
 export function ParadisePage() {
   const navigate = useNavigate();
+  const displayName = useDisplayName();
   const [hoverPortal, setHoverPortal] = useState<SkillPortalDef | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
-  const [pipState, setPipState] = useState<PipState>(INITIAL_PIP);
+  const [pipState, setPipState] = useState<PipState>(() => ({
+    gesture: "wave",
+    emotion: "happy",
+    line: `👋 嗨 ${displayName}！点亮发光柱进入对应学科～`,
+  }));
 
   // 进场 wave 动作播完后切 idle（4 秒后），但 hover 状态会立即覆盖
   useEffect(() => {
@@ -72,7 +72,7 @@ export function ParadisePage() {
     setPipState({
       gesture: "thumbsUp",
       emotion: "happy",
-      line: `加油 Selena！进入 ${portal.label}～`,
+      line: `加油 ${displayName}！进入 ${portal.label}～`,
     });
     // 短延迟再 navigate，让 thumbsUp 来得及播出
     window.setTimeout(() => navigate(portal.route), 250);
