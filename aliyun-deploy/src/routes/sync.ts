@@ -380,14 +380,129 @@ async function aiQuestionsPostHandler(c: Ctx): Promise<Response> {
   return c.json({ ok: true, etag: result.etag });
 }
 
-/** trophy-images endpoint: 老 D1 表，OSS 化暂存空（前端有 fallback） */
+/**
+ * trophy-images endpoint — Ep39 (2026-05-17) per-image API
+ *
+ * 历史：v0.30.0 拆走独立 endpoint, OSS 化时实测把 205 entries / 17MB 整
+ * bundle 返一次 → ESA 599 resource_constraints (ESA worker memory 上限).
+ *
+ * 新架构：
+ *   - 每个 trophy 图存独立 OSS key:  users/{userId}/trophy-images/{trophyId}.json
+ *     value = {trophyId, subjectId, imageDataUrl, generatedAt}
+ *   - GET /trophy-images (manifest)
+ *     → OSS list-v2 users/{userId}/trophy-images/ → 返 [{trophyId, lastModifiedMs, bytes}]
+ *     manifest 小 (~5KB / 205 entry), 安全返
+ *   - GET /trophy-images/:trophyId (单图)
+ *     → OSS get users/{userId}/trophy-images/{trophyId}.json → 返单 entry
+ *     每图 < 100KB, ESA 安全
+ *   - POST /trophy-images (单图写)
+ *     → body = {trophyId, subjectId, imageDataUrl, generatedAt}
+ *     → OSS put users/{userId}/trophy-images/{trophyId}.json
+ *   - GET (legacy, since=N) — backward-compat: 返 [], 让老 client 不报错
+ *     新 client 走 manifest + 增量拉单图
+ *
+ * 客户端 src/db/cloudSync.ts 改造留下个 ep (本 ep 只 ship server API + data)。
+ */
 async function trophyImagesGetHandler(c: Ctx): Promise<Response> {
-  return c.json({ ok: true, images: [], lastModifiedMs: 0 });
+  // legacy compat: 客户端老路径调 GET /trophy-images?since=N → 返空避免报错
+  // 新 manifest 走 GET /trophy-images?list=1
+  const wantList = c.req.query("list") === "1";
+  if (!wantList) {
+    return c.json({ ok: true, images: [], lastModifiedMs: 0, legacy: true });
+  }
+  // manifest path
+  const userId = getUserId(c);
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const prefix = `users/${userId}/trophy-images/`;
+  // ali-oss list via REST: GET /?list-type=2&prefix=...
+  const date = new Date().toUTCString();
+  const stringToSign = ["GET", "", "", date, `/${cfg.bucket}/`].join("\n");
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", enc.encode(cfg.accessKeySecret),
+    { name: "HMAC", hash: "SHA-1" }, false, ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(stringToSign));
+  let bin = "";
+  const bytes = new Uint8Array(sigBuf);
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  const sig = btoa(bin);
+  const host = `${cfg.bucket}.${cfg.region}.aliyuncs.com`;
+  const url = `https://${host}/?list-type=2&prefix=${encodeURIComponent(prefix)}&max-keys=1000`;
+  const items: Array<{ trophyId: string; lastModifiedMs: number; bytes: number }> = [];
+  try {
+    const r = await fetch(url, {
+      method: "GET",
+      headers: { Host: host, Date: date, Authorization: `OSS ${cfg.accessKeyId}:${sig}` },
+    });
+    if (r.ok) {
+      const xml = await r.text();
+      // parse <Contents><Key>users/selena/trophy-images/foo.json</Key><LastModified>...</LastModified><Size>...</Size></Contents>
+      for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+        const block = m[1] ?? "";
+        const key = block.match(/<Key>([^<]+)<\/Key>/)?.[1] ?? "";
+        const tid = key.slice(prefix.length, -".json".length);
+        if (!tid) continue;
+        const lm = block.match(/<LastModified>([^<]+)<\/LastModified>/)?.[1] ?? "";
+        const sz = parseInt(block.match(/<Size>(\d+)<\/Size>/)?.[1] ?? "0", 10);
+        items.push({ trophyId: tid, lastModifiedMs: Date.parse(lm) || 0, bytes: sz });
+      }
+    }
+  } catch (e) {
+    return c.json({ ok: false, error: "list_failed: " + (e as Error).message }, 502);
+  }
+  return c.json({ ok: true, count: items.length, items });
+}
+
+async function trophyImageOneGetHandler(c: Ctx): Promise<Response> {
+  const userId = getUserId(c);
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const trophyId = c.req.param("trophyId") ?? "";
+  if (!trophyId || !/^[A-Za-z0-9_-]{1,128}$/.test(trophyId)) {
+    return c.json({ ok: false, error: "invalid_trophyId" }, 400);
+  }
+  const key = `users/${userId}/trophy-images/${trophyId}.json`;
+  const got = await ossGet(cfg, key);
+  if (!got.ok) {
+    if (got.status === 404) return c.json({ ok: false, error: "not_found" }, 404);
+    return c.json({ ok: false, error: got.error }, 502);
+  }
+  // 不 parse, 透传 text (client 自己 parse)
+  return new Response(got.text ?? "", {
+    status: 200,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
 }
 
 async function trophyImagesPostHandler(c: Ctx): Promise<Response> {
-  // TODO: 实现 trophy 图 OSS 存储；暂时接受但 noop
-  return c.json({ ok: true, stored: 0 });
+  const userId = getUserId(c);
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  let body: { trophyId?: string; subjectId?: string; imageDataUrl?: string; generatedAt?: number };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  const trophyId = (body.trophyId ?? "").trim();
+  if (!trophyId || !/^[A-Za-z0-9_-]{1,128}$/.test(trophyId)) {
+    return c.json({ ok: false, error: "invalid_trophyId" }, 400);
+  }
+  if (!body.imageDataUrl) {
+    return c.json({ ok: false, error: "missing_imageDataUrl" }, 400);
+  }
+  // 上限单图 200KB 防爆 ESA 11s budget (oss put 大文件慢)
+  if (body.imageDataUrl.length > 200_000) {
+    return c.json({ ok: false, error: "image_too_large", detail: ">200KB base64" }, 413);
+  }
+  const key = `users/${userId}/trophy-images/${trophyId}.json`;
+  const r = await ossPut(cfg, key, JSON.stringify(body), {
+    contentType: "application/json; charset=utf-8",
+  });
+  if (!r.ok) return c.json({ ok: false, error: r.error }, 502);
+  return c.json({ ok: true, trophyId, etag: r.etag });
 }
 
 // ─── routes ───────────────────────────────────────────────────────
@@ -399,6 +514,7 @@ sync.get("/download", downloadHandler);
 sync.get("/ai-questions", aiQuestionsGetHandler);
 sync.post("/ai-questions", aiQuestionsPostHandler);
 sync.get("/trophy-images", trophyImagesGetHandler);
+sync.get("/trophy-images/:trophyId", trophyImageOneGetHandler);
 sync.post("/trophy-images", trophyImagesPostHandler);
 
 // 老 path (backward-compat for stale clients)
