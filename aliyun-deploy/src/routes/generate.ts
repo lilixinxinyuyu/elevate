@@ -24,6 +24,7 @@ import type { Env } from "../lib/env";
 import { requireAuth, getUserId } from "../lib/auth";
 import { getOssConfig, ossPut, ossGet } from "../lib/oss";
 import { getChatProviders as getChatProvidersLib, getChatModels as getChatModelsLib } from "../lib/providers";
+import { normalizeAiQuestion } from "../lib/normalizeAiQuestion";
 import proxyFallback from "./proxy-fallback";
 
 const generate = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
@@ -607,7 +608,13 @@ function buildQuestionsSystemPrompt(subjectId: string): string {
 - 数学闭合：实物=整数、钱=2 位小数、答案算得通
 - 不出 forbidden_verb 元注解；distractor 要源自学生具体误解（不是随机数字）
 - options 数量与 game_type 匹配；plain_choice 4 个，true_false 2 个
-- 不要 markdown 代码块、不要解释文字`;
+- 不要 markdown 代码块、不要解释文字
+
+⚠ 严格的字段一致性（违反会被 normalize / 拒收）：
+- answer.type=="number" → question_format 必须是 "numeric" 或 "numeric_choice"，**绝不**写 "single_choice"
+- answer.type=="choice" → question_format=="single_choice" + 至少 2 个 options + answer.value 必须是 options 里某个 id
+- single_choice 题的 answer.value 永远写成 "a"/"b"/"c"/"d"（小写），不是数字
+- 单步题不要塞 subquestions（subquestions 只在 multi_step 多小问时用，且数量必须 ≥2）`;
 }
 
 function buildQuestionsUserPrompt(body: GenReqBody, batchStamp: string): string {
@@ -726,16 +733,18 @@ generate.post("/questions", async (c) => {
           errors.push({ provider: p.label, model, code: "json_parse_failed", message: text.slice(0, 120) });
           continue;
         }
-        // Validate + stamp
+        // Validate + stamp + normalize（v0.34.64: 防 LLM 乱拼 answer.type/question_format）
+        const normalizeReports: { qid: string; rules: string[]; warnings: string[] }[] = [];
         const stamped = rawQs
           .filter((q): q is Record<string, unknown> =>
             typeof q === "object" && q !== null && typeof (q as Record<string, unknown>).stem === "string"
           )
           .map((q, i) => {
             const baseId = typeof q.question_id === "string" ? q.question_id : `AI_${body.skillId}_${i}`;
-            return {
+            const qid = baseId.includes("__") ? baseId : `${baseId}__${stamp}_${i}`;
+            const tagged = {
               ...q,
-              question_id: baseId.includes("__") ? baseId : `${baseId}__${stamp}_${i}`,
+              question_id: qid,
               subjectId,
               skill_id: body.skillId,
               unit_id: body.unitId,
@@ -743,10 +752,22 @@ generate.post("/questions", async (c) => {
                 ? Array.from(new Set([...(q.tags as string[]), "ai_generated"]))
                 : ["ai_generated"],
             };
+            const { q: normalized, report } = normalizeAiQuestion(tagged);
+            if (report.changed || report.warnings.length > 0) {
+              normalizeReports.push({ qid, rules: report.rules, warnings: report.warnings });
+            }
+            return normalized;
           });
         if (stamped.length === 0) {
           errors.push({ provider: p.label, model, code: "no_valid_questions", message: "" });
           continue;
+        }
+        if (normalizeReports.length > 0) {
+          // 把 normalize 报告打到 console (admin 看 routine logs 能看到 LLM 出题质量趋势)
+          console.log(
+            `[generate/questions] normalized ${normalizeReports.length}/${stamped.length}: ` +
+              normalizeReports.map((r) => `${r.qid}[${r.rules.join(",")}]`).join("; "),
+          );
         }
         return c.json({
           ok: true,
@@ -756,6 +777,7 @@ generate.post("/questions", async (c) => {
           generatedCount: stamped.length,
           requestedCount,
           partial: stamped.length < requestedCount,
+          normalized: normalizeReports.length, // 给客户端看（可选透传 admin）
         });
       } catch (e) {
         clearTimeout(timer);
