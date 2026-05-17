@@ -554,6 +554,8 @@ async function pullMainSnapshotOss(
       await applyPayloadMerged(data.latest.payload);
       await cleanupOrphanMistakes().catch(() => {});
       setLastPullAt(data.latest.version);
+      // v0.34.95 iter 29: 记录 server-side lastModifiedMs 给 multi-device 冲突检测用.
+      try { localStorage.setItem("xiaojinapp.snapshot.parent", String(data.latest.version)); } catch { /* */ }
       return { ok: true, changed: true, version: data.latest.version };
     }
     return { ok: true, changed: false };
@@ -675,12 +677,30 @@ export async function pushToCloud(
         Authorization: `Bearer ${pwd}`,
       };
       if (useGzip) headers["X-Body-Encoding"] = "gzip";
+      // v0.34.95 iter 29: 带 X-Parent-LastModified 让 server 检测 multi-device 冲突.
+      // 取上次 pullFromCloud 后存的 server lastModifiedMs (LS xiaojinapp.snapshot.parent).
+      // server head 当前 OSS 比 client-parent 新 → 409, client 走下面 catch 拉一遍再 retry.
+      const parentLm = localStorage.getItem("xiaojinapp.snapshot.parent");
+      if (parentLm) headers["X-Parent-LastModified"] = parentLm;
       const resp = await fetch("/api/sync/upload", {
         method: "POST",
         headers,
         body,
       });
       if (resp.status === 401) return { ok: false, error: "unauthorized" };
+      // iter 29: 409 conflict → pullFromCloud 一遍 (拉新合并到 IDB) → retry push
+      // 防多设备 / 多 tab 互覆盖.
+      if (resp.status === 409) {
+        const j = (await resp.json().catch(() => ({}))) as { error?: string; serverLastModifiedMs?: number };
+        if (j.error === "conflict_stale_parent") {
+          console.warn(`[pushToCloud] conflict_stale_parent: server=${j.serverLastModifiedMs}, pulling and retrying`);
+          await pullFromCloud({ force: true });
+          continue; // retry push (parent LS 已更新)
+        }
+        // 其他 409 (e.g. shrink_blocked) → 不重试, 报错
+        const t = await resp.text().catch(() => "");
+        return { ok: false, error: `http_409: ${t.slice(0, 200)}` };
+      }
       if (resp.status === 400) {
         const t = await resp.text().catch(() => "");
         return { ok: false, error: `http_400: ${t.slice(0, 200)}` };
@@ -700,6 +720,8 @@ export async function pushToCloud(
       if (data.version) {
         setLastPushAt(data.version);
         mainVersion = data.version;
+        // v0.34.95 iter 29: 推完后更新 parent — 下次 push 用 server 新的版本号比.
+        try { localStorage.setItem("xiaojinapp.snapshot.parent", String(data.version)); } catch { /* */ }
       }
       // 成功跳出 retry 循环
       lastErr = null;
@@ -775,6 +797,7 @@ export async function pullFromCloud(opts: { force?: boolean } = {}): Promise<Syn
         // 立刻清一次（按 questions 表为 source of truth）。幂等，0 孤儿时无副作用。
         await cleanupOrphanMistakes().catch(() => {/* 不阻塞 sync */});
         setLastPullAt(data.latest.version);
+        try { localStorage.setItem("xiaojinapp.snapshot.parent", String(data.latest.version)); } catch { /* */ }
         changed = true;
         version = data.latest.version;
       }

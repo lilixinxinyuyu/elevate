@@ -69,12 +69,38 @@ async function uploadHandler(c: Ctx): Promise<Response> {
   const cfg = getOssConfig(c.env);
   if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
 
+  // v0.34.95 iter 29: multi-device conflict detection. Client 在 push 前 在
+  // X-Parent-LastModified header 带它"基于哪个版本"做的 modify. Server head OSS
+  // current lastModifiedMs, 如果 server 比 client-parent 新 ≥ 5s → 409.
+  // 5s 缓冲是给同设备 push-back-to-back 留容差.
+  // Client 收 409 → pullFromCloud() 拉新 → retry push (merge 已发生).
+  // 不带 header 的老客户端 → 跳过检查 (向后兼容).
+  const parentLastModifiedHeader = c.req.header("X-Parent-LastModified");
+  const parentLastModified = parentLastModifiedHeader ? Number(parentLastModifiedHeader) : null;
+
   // v0.34.18: 数据保护 —— 防止小 payload 把已有的大 snapshot 覆写
   // (Ep148 我用 197B 测试 payload 覆写了 Selena 2.5MB snapshot, 触发数据丢失.
   //  幸好 bucket versioning 开了, 通过 _restore-selena.mjs 恢复了)
   // 规则：如果 client 没显式带 X-Allow-Shrink: true 头，并且新 body < 5KB
   //   且现有 snapshot > 100KB，拒绝（明显是 truncate 风险）
   const allowShrink = c.req.header("X-Allow-Shrink") === "true";
+
+  // iter 29: 先 head 当前 OSS snapshot, 比 client-parent 拿到的版本号
+  if (parentLastModified && Number.isFinite(parentLastModified)) {
+    const head = await ossHead(cfg, snapshotKey(userId));
+    if (head.ok && head.lastModifiedMs && head.lastModifiedMs > parentLastModified + 5000) {
+      return c.json(
+        {
+          ok: false,
+          error: "conflict_stale_parent",
+          detail: `server snapshot lastModifiedMs=${head.lastModifiedMs} > client parent=${parentLastModified}. Pull first, merge, then retry push.`,
+          serverLastModifiedMs: head.lastModifiedMs,
+          clientParentLastModifiedMs: parentLastModified,
+        },
+        409,
+      );
+    }
+  }
 
   // 跟 CF Pages 对齐：支持 gzip body（client 用 X-Body-Encoding，老 spec），
   // 也支持 Content-Encoding（HTTP 标准）。读出来后解压成 plain JSON 文本再存 OSS。
