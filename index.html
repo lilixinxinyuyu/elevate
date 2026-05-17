@@ -8,6 +8,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="小进 Elevate" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <!-- v0.34.87 iter 21 perf: preconnect 外部域名 (DashScope trophy images + OSS bucket), -->
+    <!-- 让浏览器在 JS 解析完之前就开 TCP+TLS, 后续 fetch 省 200-500ms -->
+    <link rel="preconnect" href="https://dashscope-result-wlcb.oss-cn-wulanchabu.aliyuncs.com" crossorigin />
+    <link rel="dns-prefetch" href="https://dashscope-result-wlcb.oss-cn-wulanchabu.aliyuncs.com" />
+    <link rel="dns-prefetch" href="https://xiaojinapp.oss-cn-hongkong.aliyuncs.com" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
