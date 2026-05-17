@@ -162,6 +162,8 @@ export const GameTemplateSchema = z.enum([
   "plain_numeric",
   "plain_choice",
   "dot_grid_draw",
+  // v0.35.1 iter 35 P0-3
+  "multi_step_application",
 ]);
 
 export const QuestionSchema = z.object({
@@ -245,6 +247,10 @@ export const QuestionSchema = z.object({
    * v0.35.0 (iter 34 P0-2): ScratchInsurance 显式覆盖. 见 src/core/scratchPolicy.ts.
    */
   requiresScratch: z.boolean().optional(),
+  /**
+   * v0.35.1 (iter 35 P0-3): MultiStepApplication 显式覆盖. 见 src/core/multiStepPolicy.ts.
+   */
+  requiresMultiStep: z.boolean().optional(),
   // Phase 2 Axis 2：点子图画图题载荷。
   dot_grid: z
     .object({

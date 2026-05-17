@@ -163,6 +163,21 @@ export function isScratchInsuranceV1(): boolean {
   }
 }
 
+/**
+ * v0.35.1 (iter 35 P0-3): MultiStepApplication — 应用题 4 步框架.
+ * 已知 / 求 / 算式 / 答. 见 src/core/multiStepPolicy.ts
+ */
+const MULTISTEP_LS_KEY = "multi_step_app_v1";
+
+export function isMultiStepAppV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(MULTISTEP_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function isEstimationGateV1(): boolean {
   if (typeof window === "undefined") return true;
   if (!_estGateSynced) {

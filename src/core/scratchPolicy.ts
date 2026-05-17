@@ -13,6 +13,7 @@ import type { Question } from "./types";
 import { isScratchInsuranceV1 } from "../lib/featureFlags";
 import { classifyStem, isSpeedEligible } from "./speedMatchPolicy";
 import { requiresEstimation } from "./estimationPolicy";
+import { requiresMultiStep } from "./multiStepPolicy";
 
 /* ──────────────────── Trigger heuristic ──────────────────── */
 
@@ -34,6 +35,8 @@ export function requiresScratchByHeuristic(q: Question): boolean {
   if (isSpeedEligible(q)) return false;
   // 跟 EstimationGate 互斥 — 防止双弹窗 (Gemini + GPT 共识)
   if (requiresEstimation(q, { skipDailyCapCheck: true })) return false;
+  // v0.35.1 iter 35 P0-3: 跟 MultiStepApplication 互斥 — 多步框架本身就是结构化思考, 不再加 toolbar
+  if (requiresMultiStep(q)) return false;
   if (q.difficulty >= 3) return true;
   const f = classifyStem(q.stem);
   if (f.digitsMax >= 3) return true;

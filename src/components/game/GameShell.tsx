@@ -40,6 +40,8 @@ import { ChartDetectivePanel } from "./templates/ChartDetective";
 import { CubeViewerPanel } from "./templates/CubeViewer";
 import { TriangleJudgePanel } from "./templates/TriangleJudge";
 import { DotGridDrawPanel } from "./templates/DotGridDraw";
+// v0.35.1 iter 35 P0-3
+import { MultiStepApplicationPanel } from "./templates/MultiStepApplication";
 // v0.31.87 — 5 个新玩法
 import { DiscountDriftPanel } from "./templates/DiscountDrift";
 import { CoinComboPanel } from "./templates/CoinCombo";
@@ -56,6 +58,20 @@ export interface AttemptResult {
   hintsOpened: number;
   elapsedSeconds: number;
   correctAnswerDisplay: string;
+  /**
+   * v0.35.1 iter 35 P0-3: MultiStepApplication 模板专用 — 4 phase 结果 payload.
+   * 由 MultiStepApplicationPanel onFinish 时透传. GameShell handleFinish 把 earnedXp
+   * 累加到 finalPoints, 把整个 payload 透传给 Train → service → attempt.metadata.
+   */
+  multiStep?: {
+    phasePass: boolean[];
+    earnedXp: number;
+    userKnown: string[];
+    userQuestion: string;
+    userEquation: string;
+    userAnswer: number;
+    userUnit: string;
+  };
   /**
    * v0.30.7: 这次答题前是否打开过"小进讲题"。仅 retry 后的 2nd 提交可能为 true。
    * 1st 提交永远 false（讲题入口在 1st 错答之后才出现）。
@@ -403,6 +419,8 @@ export function GameShell(props: GameShellProps) {
                   // 不持久化 textContent (隐私 + 体积) — 只存元数据
                 }
               : undefined,
+            // v0.35.1 iter 35 P0-3: multi-step payload
+            multiStep: r.multiStep,
           },
           displayedQuestion,
         );
@@ -412,7 +430,9 @@ export function GameShell(props: GameShellProps) {
         // v0.34.99 iter 33 P0-1: 把 estimation XP 加到本次主 attempt 分数上.
         // estimation 不存独立 attempt — 通过 points 累计 + UI 标签暴露给 Selena.
         const estXp = estSignal?.estimationXp ?? 0;
-        const finalPoints = res.points + estXp;
+        // v0.35.1 iter 35 P0-3: multi-step XP 同样累加
+        const multiStepXp = r.multiStep?.earnedXp ?? 0;
+        const finalPoints = res.points + estXp + multiStepXp;
         setFeedback({
           isCorrect: r.isCorrect,
           partialCorrect: r.partialCorrect,
@@ -681,6 +701,8 @@ function pickPanel(id: string): (p: TemplateRenderProps) => JSX.Element {
       return TriangleJudgePanel;
     case "dot_grid_draw":
       return DotGridDrawPanel;
+    case "multi_step_application":
+      return MultiStepApplicationPanel;
     // v0.31.87 — 5 个新玩法（Discount Drift / Coin Combo / Time Heist / Number Hunt）
     // shape_builder 复用 dot_grid_draw 不需要新 panel
     case "discount_drift":
@@ -737,6 +759,8 @@ function templateTitle(id: string): string {
       return "时间窃贼";
     case "number_hunt":
       return "数字寻宝";
+    case "multi_step_application":
+      return "应用题 4 步法";
     default:
       return "挑战";
   }

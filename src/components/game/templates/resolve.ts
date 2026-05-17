@@ -1,5 +1,6 @@
 import type { GameTemplate, Question, Skill } from "../../../core/types";
 import { isSpeedEligible, shouldForceNumericFill } from "../../../core/speedMatchPolicy";
+import { requiresMultiStep } from "../../../core/multiStepPolicy";
 
 const GAME_TYPE_MAP: Record<string, GameTemplate> = {
   speed_calc: "speed_match",
@@ -90,6 +91,9 @@ function applyP0Policies(q: Question, resolved: GameTemplate): GameTemplate {
 }
 
 export function resolveTemplate(q: Question): GameTemplate {
+  // v0.35.1 iter 35 P0-3: MultiStepApplication 优先 — 满足条件直接接管
+  // (跟 ScratchInsurance + EstimationGate 互斥 — multiStepPolicy heuristic 内已保证)
+  if (requiresMultiStep(q)) return "multi_step_application";
   const t = resolveTemplateRaw(q);
   const rerouted = rerouteIfNumericMismatch(q, t);
   return applyP0Policies(q, rerouted);

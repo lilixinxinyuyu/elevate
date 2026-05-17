@@ -121,10 +121,20 @@ describe("resolveTemplate 集成 P0 政策", () => {
   it("简单 numeric 题 → speed_match (heuristic 允许)", () => {
     expect(resolveTemplate(base)).toBe("speed_match");
   });
-  it("复杂应用题 numeric → speed_match 被白名单拦, fallback plain_numeric", () => {
+  it("复杂应用题 numeric → MultiStepApplication 接管 (v0.35.1 iter 35), 不是 speed_match/plain_numeric", () => {
+    // 老语义: speed_match 白名单拦 → plain_numeric
+    // 新语义 (iter 35): 应用题 + difficulty 4 → multi_step_application 优先接管
     const q: Question = {
       ...base,
       stem: "小明买了 312 千克苹果, 每千克 47 元, 一共多少元?",
+      difficulty: 4,
+    };
+    expect(resolveTemplate(q)).toBe("multi_step_application");
+  });
+  it("复杂非应用题 numeric → speed_match 白名单 fallback plain_numeric", () => {
+    const q: Question = {
+      ...base,
+      stem: "312 × 47 = ?",  // 无 story
       difficulty: 4,
     };
     expect(resolveTemplate(q)).toBe("plain_numeric");

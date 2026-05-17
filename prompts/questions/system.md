@@ -49,3 +49,21 @@
 # 附加机械约束
 
 {{include:quality-rubric.md}}
+
+---
+
+## v0.35.1+ 可选字段 — Estimation / MultiStep 训练支持
+
+如果题目结构上适合 Selena 43% 期中事件之后的元认知训练系统, 在 JSON 顶层加这些**可选**字段:
+
+- **`keyNumbers: number[]`** (最多 4 个) — 题目主要计算用到的数字, 不含日期/年龄/编号等干扰数. 例: 题 "小明买了 5 千克苹果, 每千克 12 元, 一共多少元?" → `keyNumbers: [5, 12]`.
+
+- **`requiresEstimation: boolean`** — 仅当题主运算符是 × 或 + (排除 -/÷), 且数字 ≥ 3 位 (要"估算"的题). 应用题 / 减法 / 除法**不要**标 true. 不确定就不写.
+
+- **`requiresMultiStep: boolean`** — 应用题 + difficulty ≥ 3 标 true. 同时**必须**填 `word_problem_steps` 完整 (已知/求/关系/算式/检验), 让 4 步框架有数据. 简单一步运算题**不要**标.
+
+- **`requiresScratch: boolean`** — 显式覆盖草稿险 heuristic. 默认 heuristic 已能判 (3+ 位 / multi-op / difficulty ≥ 3), 不必每题都填. 仅当 heuristic 误判时才显式标.
+
+- **`speedEligible: boolean`** — 显式覆盖 SpeedMatch 白名单. true = 适合速算 (一步, 数字 ≤ 2 位, 无单位/故事). false = 不适合. 默认 heuristic 已判.
+
+**重要**: 这些字段都是**可选**, 不影响出题. 但填了能让系统精确触发对应训练模块. **不要乱填** — 错标比不填还坏.

@@ -168,6 +168,8 @@ export function TrainPage() {
         estimationGate: result.estimationGate,
         // v0.35.0 iter 34 P0-2: ScratchInsurance 数据落 attempt.metadata + 触发 insured-wrong XP bypass
         scratch: result.scratch,
+        // v0.35.1 iter 35 P0-3: MultiStepApplication 数据落 attempt.metadata
+        multiStep: result.multiStep,
       });
       setState((s) =>
         s.status === "running"

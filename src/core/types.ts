@@ -85,6 +85,8 @@ export type GameTemplate =
   | "plain_choice"
   /** Phase 2 Axis 2：点子图画图 — 点击格点构造多边形 */
   | "dot_grid_draw"
+  /** v0.35.1 iter 35 P0-3: 应用题 4 步法 (已知/求/算式/答) — 见 multiStepPolicy.ts */
+  | "multi_step_application"
   /** v0.31.87：折扣计算 — 原价 + 折扣 chip → 算折后价（小数乘 / 百分比萌芽） */
   | "discount_drift"
   /** v0.31.87：凑钱 — 5 张面值勾选凑目标金额（小数加 / 元角分换算） */
@@ -303,6 +305,11 @@ export interface Question {
    * v0.35.0 (iter 34 P0-2): ScratchInsurance 显式覆盖. 见 src/core/scratchPolicy.ts.
    */
   requiresScratch?: boolean;
+
+  /**
+   * v0.35.1 (iter 35 P0-3): MultiStepApplication 显式覆盖. 见 src/core/multiStepPolicy.ts.
+   */
+  requiresMultiStep?: boolean;
 
   /**
    * v0.34.99 (iter 33 P0-1): 应用题"关键数字". Estimation Gate Phase 1 显示

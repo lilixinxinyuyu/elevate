@@ -316,4 +316,36 @@
 
 **最终**: 287/289 pass (2 pre-existing mastery), v0.35.0 ship (commit a0016d5, push main)
 
+#### Iter 35 进展 (v0.35.0 → v0.35.1) P0-3 MultiStepApplication
+
+**预审** (Gemini + GPT) 共识收窄 v1:
+- 仅 `word_problem_steps + difficulty ≥ 3 OR known ≥ 2` OR heuristic 触发 (避免简单题被强拆)
+- subquestions 已存在 → 走老 ShopCounter, 不重新接管
+- chip + click 不要拖拽 (10 岁简单, 实现轻)
+- 算式 parser 自写 shunting-yard (支持 +/-/*/  括号/小数/= 多步式, 安全无 eval)
+- "求" 候选 = word_problem_steps.question + heuristic, 不硬凑 3 个 (差就只给"自定义输入")
+- XP 分歧: Gemini 保持 +20 (重 cognitive load 配高回报), GPT 降 +12 防通胀 — 我选 +20 (master plan 原值, 这是 4 步重量级)
+- 过程险: Phase 3 算式对但 Phase 4 答错 → 部分 XP 2/8, attempt.isCorrect=false
+- attempt.isCorrect 统一由 Phase 4 最终答数决定 (GPT 强调)
+- 跟 ScratchInsurance / EstimationGate 互斥 (heuristic 内自检)
+- AI generation prompt 同步加 keyNumbers / requiresEstimation / requiresMultiStep / requiresScratch / speedEligible 可选字段引导 (Gemini 必须, GPT 强推)
+
+**实现**:
+- NEW `src/core/multiStepPolicy.ts` 235 行: heuristic / shunting-yard eval / extract helpers / XP 常量
+- NEW `src/components/game/templates/MultiStepApplication.tsx` 280 行: 4-phase 组件 (已知 chip+click → 求选项 → 算式 textarea → 答+单位)
+- NEW `tests/multiStepPolicy.test.ts` 26 tests 全过 (含 evalEquation 括号/多 op/小数/等号/除 0/不平衡括号/负数)
+- 改 `src/lib/featureFlags.ts` isMultiStepAppV1
+- 加 `src/core/schema.ts` + `types.ts` requiresMultiStep field + multi_step_application GameTemplate
+- 改 `src/components/game/templates/resolve.ts` requiresMultiStep 优先返回
+- 改 `src/components/game/GameShell.tsx` 接 MultiStepApplicationPanel + multiStep payload
+- 改 `src/db/service.ts` AttemptInput.multiStep → attempt.metadata.multiStep
+- 改 `src/pages/Train.tsx` 转发 multiStep
+- 改 `src/core/scratchPolicy.ts` 加 requiresMultiStep 互斥
+- 改 `prompts/questions/system.md` 加 v0.35.1+ 可选字段 section (keyNumbers/requiresEstimation/requiresMultiStep/requiresScratch/speedEligible)
+
+**测试**: 314/316 (2 pre-existing mastery fail)
+**Build**: 4.45s, 主 bundle 待 build prompts
+**Deploy**: 进行中
+**Post-review**: 待 deploy 后发起
+
 

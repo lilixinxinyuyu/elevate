@@ -339,6 +339,19 @@ export interface SubmitAttemptInput {
     insured: boolean;
     mentalOverrideUsed: boolean;
   };
+  /**
+   * v0.35.1 (iter 35 P0-3): MultiStepApplication payload, 落库到 attempt.metadata.multiStep.
+   * 不影响 scoring (earnedXp 已由 GameShell 加到 res.points), 只为 Brainpower Radar + audit.
+   */
+  multiStep?: {
+    phasePass: boolean[];
+    earnedXp: number;
+    userKnown: string[];
+    userQuestion: string;
+    userEquation: string;
+    userAnswer: number;
+    userUnit: string;
+  };
 }
 
 export interface AttemptOutcome {
@@ -485,6 +498,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
       const meta: Record<string, unknown> = {};
       if (input.estimationGate) meta.estimationGate = { version: "v1", ...input.estimationGate };
       if (input.scratch) meta.scratch = { version: "v1", ...input.scratch, insuredWrongBypass };
+      if (input.multiStep) meta.multiStep = { version: "v1", ...input.multiStep };
       return Object.keys(meta).length > 0 ? meta : undefined;
     })(),
     createdAt: Date.now(),
