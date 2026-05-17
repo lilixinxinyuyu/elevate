@@ -561,112 +561,146 @@ export function SuperAdminPage() {
     }
   }
 
+  // Ep164: x.ai engineered-cosmic redesign
+  //   canvas #0a0a0a / card #1a1c20 / hairline #212327
+  //   sunset CTA #ff7a17 / white-pill secondary
+  //   mono UPPERCASE caption for ID/etag/phone
   if (loading) {
     return (
-      <div className="p-6 text-slate-400 text-sm">⏳ 拉同学数据中…</div>
+      <div className="min-h-screen bg-[#0a0a0a] p-6 text-[#7d8187] text-xs font-mono uppercase tracking-wider">
+        Loading fleet…
+      </div>
     );
   }
 
   if (err) {
     return (
-      <div className="p-6 max-w-md">
-        <div className="text-rose-300 font-bold mb-2">⚠️ {err}</div>
-        <Link to="/" className="text-violet-300 underline text-sm">返回首页</Link>
+      <div className="min-h-screen bg-[#0a0a0a] p-6">
+        <div className="max-w-md mx-auto pt-20">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-rose-400 mb-2">
+            ⚠ Access denied
+          </div>
+          <div className="text-white text-base mb-4">{err}</div>
+          <Link
+            to="/"
+            className="inline-block rounded-full border border-white/30 hover:border-white text-white text-xs px-4 py-2 font-medium"
+          >
+            ← Return home
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-3 md:p-6 max-w-5xl mx-auto">
-      <div className="flex items-baseline gap-3 mb-4 flex-wrap">
-        <h1 className="font-display font-bold text-violet-200 text-xl">
-          🛠 项目超级管理员
-        </h1>
-        <span className="text-xs text-slate-400">
-          ({me?.userId} · 共 {users.length} 同学)
-        </span>
-        <button
-          type="button"
-          onClick={() => { setNewOpen(true); setNewErr(null); }}
-          className="text-xs px-3 py-1.5 rounded bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-100 font-bold"
-        >
-          ➕ 加新同学
-        </button>
-        <button
-          type="button"
-          onClick={bulkRefreshSummaries}
-          disabled={bulkRefreshState?.running || bulkFixState?.running}
-          className="text-xs px-3 py-1.5 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-100 font-bold disabled:opacity-40"
-        >
-          {bulkRefreshState?.running
-            ? `🔄 ${bulkRefreshState.done}/${bulkRefreshState.total}${bulkRefreshState.currentUser ? " · " + bulkRefreshState.currentUser : ""}`
-            : "🔄 刷新所有摘要"}
-        </button>
-        <button
-          type="button"
-          onClick={bulkFixPendingReports}
-          disabled={bulkRefreshState?.running || bulkFixState?.running}
-          className="text-xs px-3 py-1.5 rounded bg-amber-500/30 hover:bg-amber-500/50 text-amber-100 font-bold disabled:opacity-40"
-        >
-          {bulkFixState?.running
-            ? `🔧 修中 (扫${bulkFixState.scanned} 修${bulkFixState.fixed})`
-            : "🔧 修所有 pending 报题"}
-        </button>
-        <Link to="/" className="ml-auto text-xs text-violet-300 underline">
-          返回首页
-        </Link>
-      </div>
-
-      <div className="text-xs text-slate-300 mb-4">
-        所有同学的账户 + profile + 上次活跃。点 ✏️ 编辑 / 🔑 重置密码 /
-        📊 学情 / 🤖 AI 摘要 操作。"🔄 刷新所有摘要" 给所有同学跑一遍最新 AI 摘要。
-      </div>
-
-      {/* 批量修题结果 toast */}
-      {bulkFixState && !bulkFixState.running && (
-        <div
-          className={`rounded p-3 mb-3 text-xs ${
-            bulkFixState.failed === 0
-              ? "bg-emerald-500/10 border border-emerald-400/40 text-emerald-200"
-              : "bg-amber-500/10 border border-amber-400/40 text-amber-200"
-          }`}
-        >
-          <div className="font-bold mb-1">
-            🔧 修题结束：扫 {bulkFixState.scanned} · 修 ✓ {bulkFixState.fixed} · 失败 ✗ {bulkFixState.failed} · 跳过 (已修) {bulkFixState.skipped}
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <div className="p-4 md:p-8 max-w-6xl mx-auto">
+        {/* Header — engineered-cosmic command bar */}
+        <div className="mb-6">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <h1 className="font-display text-3xl md:text-4xl font-medium tracking-tight">
+              Command Console
+            </h1>
+            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#7d8187]">
+              {me?.userId} · {users.length} cadets
+            </span>
+            <Link
+              to="/"
+              className="ml-auto text-[10px] font-mono uppercase tracking-wider text-[#7d8187] hover:text-white"
+            >
+              ← Home
+            </Link>
           </div>
-          {bulkFixState.log.length > 0 && (
-            <details className="mt-1">
-              <summary className="cursor-pointer text-slate-300">展开日志 ({bulkFixState.log.length} 条)</summary>
-              <pre className="mt-2 text-[10px] text-slate-400 max-h-64 overflow-y-auto">{bulkFixState.log.join("\n")}</pre>
-            </details>
-          )}
+          <div className="mt-2 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187]">
+            xiaojin · super-admin · classified
+          </div>
+          <div className="mt-3 h-px bg-gradient-to-r from-[#ff7a17]/40 via-[#7c3aed]/30 to-transparent" />
         </div>
-      )}
 
-      {/* 批量刷新结果 toast */}
-      {bulkRefreshState && !bulkRefreshState.running && (
-        <div
-          className={`rounded p-3 mb-3 text-xs ${
-            bulkRefreshState.failed.length === 0
-              ? "bg-emerald-500/10 border border-emerald-400/40 text-emerald-200"
-              : "bg-amber-500/10 border border-amber-400/40 text-amber-200"
-          }`}
-        >
-          {bulkRefreshState.failed.length === 0
-            ? `✅ ${bulkRefreshState.done} 个摘要全部刷新成功`
-            : `⚠️ ${bulkRefreshState.done - bulkRefreshState.failed.length}/${bulkRefreshState.done} 成功；失败：${bulkRefreshState.failed.join(", ")}`}
+        {/* Action bar */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => { setNewOpen(true); setNewErr(null); }}
+            className="text-xs rounded-full bg-[#ff7a17] hover:bg-[#ffc285] text-[#0a0a0a] px-4 py-2 font-medium transition-colors"
+          >
+            + Enlist new cadet
+          </button>
+          <button
+            type="button"
+            onClick={bulkRefreshSummaries}
+            disabled={bulkRefreshState?.running || bulkFixState?.running}
+            className="text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium disabled:opacity-30 disabled:hover:border-white/30 transition-colors"
+          >
+            {bulkRefreshState?.running
+              ? `Briefing ${bulkRefreshState.done}/${bulkRefreshState.total}${bulkRefreshState.currentUser ? " · " + bulkRefreshState.currentUser : ""}`
+              : "Refresh AI briefings"}
+          </button>
+          <button
+            type="button"
+            onClick={bulkFixPendingReports}
+            disabled={bulkRefreshState?.running || bulkFixState?.running}
+            className="text-xs rounded-full border border-white/30 hover:border-white text-white px-4 py-2 font-medium disabled:opacity-30 disabled:hover:border-white/30 transition-colors"
+          >
+            {bulkFixState?.running
+              ? `Repairing (scan ${bulkFixState.scanned} · fix ${bulkFixState.fixed})`
+              : "Repair pending reports"}
+          </button>
         </div>
-      )}
 
-      <div className="overflow-x-auto">
+        <div className="text-[11px] text-[#7d8187] mb-6 leading-relaxed max-w-3xl">
+          Fleet overview. Edit profiles · reset passwords · view stats · pull AI briefings.
+          Bulk actions run sequentially to respect upstream rate limits.
+        </div>
+
+        {/* 批量修题结果 toast */}
+        {bulkFixState && !bulkFixState.running && (
+          <div className="rounded-lg bg-[#1a1c20] border border-[#212327] p-3 mb-3 text-xs text-[#dadbdf]">
+            <div className="font-mono uppercase tracking-wider text-[10px] mb-1">
+              <span className={bulkFixState.failed === 0 ? "text-emerald-400" : "text-amber-400"}>
+                {bulkFixState.failed === 0 ? "● repair complete" : "● repair partial"}
+              </span>
+              <span className="text-[#7d8187] ml-2">
+                scan {bulkFixState.scanned} · fixed {bulkFixState.fixed} · failed {bulkFixState.failed} · skipped {bulkFixState.skipped}
+              </span>
+            </div>
+            {bulkFixState.log.length > 0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[10px] font-mono uppercase tracking-wider text-[#7d8187] hover:text-white">
+                  expand log ({bulkFixState.log.length})
+                </summary>
+                <pre className="mt-2 text-[10px] text-[#7d8187] max-h-64 overflow-y-auto font-mono">{bulkFixState.log.join("\n")}</pre>
+              </details>
+            )}
+          </div>
+        )}
+
+        {/* 批量刷新结果 toast */}
+        {bulkRefreshState && !bulkRefreshState.running && (
+          <div className="rounded-lg bg-[#1a1c20] border border-[#212327] p-3 mb-3 text-xs text-[#dadbdf]">
+            <span className="font-mono uppercase tracking-wider text-[10px]">
+              <span className={bulkRefreshState.failed.length === 0 ? "text-emerald-400" : "text-amber-400"}>
+                {bulkRefreshState.failed.length === 0 ? "● briefings refreshed" : "● refresh partial"}
+              </span>
+              <span className="text-[#7d8187] ml-2">
+                {bulkRefreshState.failed.length === 0
+                  ? `${bulkRefreshState.done} briefings updated`
+                  : `${bulkRefreshState.done - bulkRefreshState.failed.length}/${bulkRefreshState.done} ok · failed: ${bulkRefreshState.failed.join(", ")}`}
+              </span>
+            </span>
+          </div>
+        )}
+
+        <div className="rounded-lg bg-[#1a1c20] border border-[#212327] overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
-            <tr className="text-left text-slate-400 border-b border-white/10">
-              <th className="p-2">同学</th>
-              <th className="p-2">学校 · 年级</th>
-              <th className="p-2">监护人</th>
-              <th className="p-2">上次活跃</th>
-              <th className="p-2">详情</th>
+            <tr className="text-left border-b border-[#212327]">
+              <th className="p-3 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] font-normal">Cadet</th>
+              <th className="p-3 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] font-normal">School · Grade</th>
+              <th className="p-3 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] font-normal">Guardian</th>
+              <th className="p-3 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] font-normal">Last sync</th>
+              <th className="p-3 text-[10px] font-mono uppercase tracking-[0.15em] text-[#7d8187] font-normal">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -675,106 +709,105 @@ export function SuperAdminPage() {
               return (
                 <tr
                   key={u.userId}
-                  className="border-b border-white/5 hover:bg-white/5"
+                  className="border-b border-[#212327] hover:bg-[#191919]/60 transition-colors"
                 >
-                  <td className="p-2">
+                  <td className="p-3">
                     <div className="flex items-center gap-2">
                       {u.isSuperAdmin && (
-                        <span title="super-admin" className="text-amber-300">🛠</span>
+                        <span title="super-admin" className="text-[#ff7a17] text-[10px] font-mono uppercase tracking-wider">★</span>
                       )}
                       <div>
-                        <div className="font-bold text-slate-100">
+                        <div className="font-medium text-white">
                           {p?.displayName ?? u.userId}
                         </div>
-                        <div className="text-[10px] text-slate-500 font-mono">
+                        <div className="text-[10px] text-[#7d8187] font-mono uppercase tracking-wider">
                           {u.userId}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-2 text-slate-300">
+                  <td className="p-3 text-[#dadbdf]">
                     {p?.school ? (
                       <>
-                        <div>{p.school}</div>
-                        <div className="text-[10px] text-slate-500">
-                          {p.city ?? "—"} · {p.grade ? `${p.grade}年级` : ""}
-                          {p.class ? `${p.class}班` : ""}
+                        <div className="text-sm">{p.school}</div>
+                        <div className="text-[10px] text-[#7d8187] font-mono uppercase tracking-wider mt-0.5">
+                          {p.city ?? "—"} · G{p.grade ?? "?"} · CLASS {p.class ?? "?"}
                         </div>
                       </>
                     ) : (
-                      <span className="text-amber-400/70 text-xs">待补</span>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400/70">missing</span>
                     )}
                   </td>
-                  <td className="p-2 text-slate-300">
+                  <td className="p-3 text-[#dadbdf]">
                     {p?.guardianRole ? (
                       <>
-                        <div>{p.guardianRole}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">
+                        <div className="text-sm">{p.guardianRole}</div>
+                        <div className="text-[10px] text-[#7d8187] font-mono">
                           {p.guardianPhone ?? "—"}
                         </div>
                       </>
                     ) : (
-                      <span className="text-amber-400/70 text-xs">待补</span>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400/70">missing</span>
                     )}
                   </td>
-                  <td className="p-2">
+                  <td className="p-3">
                     {u.snapshot.present ? (
                       <>
-                        <div className="text-slate-300">
+                        <div className="text-[#dadbdf] text-sm">
                           {fmtRel(u.snapshot.lastModifiedMs)}
                         </div>
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-[10px] text-[#7d8187] font-mono">
                           {fmtDate(u.snapshot.lastModifiedMs)}
                         </div>
                         {u.statsKpi && (
-                          <div className="text-[10px] text-slate-400 mt-1">
-                            今 <span className="text-emerald-300">{u.statsKpi.todayAttempts ?? 0}</span> ·
-                            7天 <span className="text-violet-300">{u.statsKpi.last7Attempts ?? 0}</span> ·
-                            正确 <span className="text-amber-300">{u.statsKpi.correctRate ?? 0}%</span>
+                          <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mt-1.5 flex gap-2">
+                            <span><span className="text-white">{u.statsKpi.todayAttempts ?? 0}</span> today</span>
+                            <span><span className="text-white">{u.statsKpi.last7Attempts ?? 0}</span> 7d</span>
+                            <span><span className="text-[#ff7a17]">{u.statsKpi.correctRate ?? 0}%</span> acc</span>
                           </div>
                         )}
                         {u.latestSummary?.preview && (
                           <div
-                            className="text-[10px] text-sky-300/80 mt-1 max-w-[180px] truncate"
-                            title={`AI 摘要 (${fmtRel(u.latestSummary.generatedAt ?? null)}): ${u.latestSummary.preview}...`}
+                            className="text-[10px] text-[#a0c3ec]/80 mt-1.5 max-w-[200px] truncate italic"
+                            title={`AI briefing (${fmtRel(u.latestSummary.generatedAt ?? null)}): ${u.latestSummary.preview}...`}
                           >
-                            🤖 {u.latestSummary.preview}…
+                            ⟁ {u.latestSummary.preview}…
                           </div>
                         )}
                       </>
                     ) : (
-                      <span className="text-slate-500 text-xs">从未同步</span>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187]">never synced</span>
                     )}
                   </td>
-                  <td className="p-2">
-                    <div className="flex flex-col gap-1">
+                  <td className="p-3">
+                    <div className="flex flex-col gap-1.5">
                       <button
                         type="button"
                         onClick={() => openStats(u.userId)}
-                        className="text-xs px-2 py-1 rounded bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-100"
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-white/20 hover:border-white text-[#dadbdf] hover:text-white px-3 py-1 transition-colors"
                       >
-                        📊 学情
+                        Stats
                       </button>
                       <button
                         type="button"
                         onClick={() => openAgent(u.userId)}
-                        className="text-xs px-2 py-1 rounded bg-sky-500/30 hover:bg-sky-500/50 text-sky-100"
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-white/20 hover:border-white text-[#dadbdf] hover:text-white px-3 py-1 transition-colors"
                       >
-                        🤖 AI 摘要
+                        AI brief
                       </button>
                       <button
                         type="button"
                         onClick={() => openEdit(u)}
-                        className="text-xs px-2 py-1 rounded bg-violet-500/30 hover:bg-violet-500/50 text-violet-100"
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-white/20 hover:border-white text-[#dadbdf] hover:text-white px-3 py-1 transition-colors"
                       >
-                        ✏️ 编辑
+                        Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => resetPassword(u.userId)}
-                        className="text-xs px-2 py-1 rounded bg-amber-500/30 hover:bg-amber-500/50 text-amber-100"
+                        className="text-[10px] font-mono uppercase tracking-wider rounded-full border border-[#ff7a17]/40 hover:border-[#ff7a17] text-[#ff7a17] hover:text-[#ffc285] px-3 py-1 transition-colors"
                       >
-                        🔑 重置密码
+                        Reset PW
                       </button>
                       <details className="text-xs">
                         <summary className="cursor-pointer text-slate-400 hover:text-slate-300">
@@ -791,7 +824,8 @@ export function SuperAdminPage() {
             })}
           </tbody>
         </table>
-      </div>
+        </div>
+        </div>
 
       {editing && (
         <div
@@ -862,10 +896,11 @@ export function SuperAdminPage() {
         </div>
       )}
 
-      <div className="text-[10px] text-slate-500 mt-4">
-        加同学也可以 CLI（不需要点 UI）:{" "}
-        <code className="text-slate-300">node aliyun-deploy/scripts/add-student.mjs ...</code>
-      </div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-[#7d8187] mt-6 pb-8">
+          CLI alternative:{" "}
+          <code className="text-[#dadbdf] normal-case tracking-normal">node aliyun-deploy/scripts/add-student.mjs …</code>
+        </div>
+      </div>  {/* /max-w container */}
 
       {/* 新建同学 modal */}
       {newOpen && (
