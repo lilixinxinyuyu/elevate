@@ -142,6 +142,13 @@ export function SuperAdminPage() {
   const [synthBusy, setSynthBusy] = useState(false);
   const [synthResult, setSynthResult] = useState<{ count: number; model: string } | null>(null);
   const [synthErr, setSynthErr] = useState<string | null>(null);
+  // v0.34.88 iter 22: auto-seed trophy-images progress toast
+  const [seedingTrophy, setSeedingTrophy] = useState<{
+    userId: string;
+    copied: number;
+    total: number;
+    error?: string;
+  } | null>(null);
   // v0.34.85 iter 19: textbook list 历史上传
   const [textbookHistory, setTextbookHistory] = useState<Array<{
     uploadId: string;
@@ -880,10 +887,54 @@ export function SuperAdminPage() {
       });
       setCredCopied(false);
       await refreshUsers();
+      // v0.34.88 iter 22: 自动种子 trophy-images 给新同学 (后台跑, 不阻塞 admin)
+      // 之前要手动 `node scripts/_copy-trophy-images-to-cadet.mjs <userId>`, 现在
+      // 在 enroll 成功后 client poll batched endpoint 直到 204 张全 copy 完.
+      // 新同学打开 app 立即看到完整勋章柜.
+      void autoSeedTrophyImages(j.userId);
     } catch (e) {
       setNewErr((e as Error).message);
     } finally {
       setNewBusy(false);
+    }
+  }
+
+  /**
+   * v0.34.88 iter 22: 新同学 enroll 后自动种子 204 张 trophy-images.
+   * 客户端 poll seed-trophy-images batched endpoint (6 张/次, ~34 次), 直到 done=true.
+   * 后台跑, 不阻塞 admin UI; 失败 silent (老 manual script 仍可用).
+   * 进度 toast 显示 "🎨 种 trophy N/204" 给 admin 看.
+   */
+  async function autoSeedTrophyImages(userId: string) {
+    const pwd = getStoredPassword();
+    if (!pwd) return;
+    setSeedingTrophy({ userId, copied: 0, total: 204 });
+    let cursor = 0;
+    let total = 204;
+    let totalCopied = 0;
+    try {
+      while (true) {
+        const r = await fetch(
+          `/api/super-admin/users/${encodeURIComponent(userId)}/seed-trophy-images?cursor=${cursor}&batch=6`,
+          { method: "POST", headers: { Authorization: `Bearer ${pwd}` } },
+        );
+        if (!r.ok) throw new Error(`http_${r.status}`);
+        const j = (await r.json()) as {
+          ok: boolean; nextCursor: number; total: number; copied: number; done: boolean;
+        };
+        if (!j.ok) throw new Error("seed_failed");
+        cursor = j.nextCursor;
+        total = j.total;
+        totalCopied += j.copied;
+        setSeedingTrophy({ userId, copied: totalCopied, total });
+        if (j.done) break;
+      }
+      console.log(`[auto-seed] ${userId} trophy-images ${totalCopied}/${total} done`);
+      window.setTimeout(() => setSeedingTrophy(null), 3000);
+    } catch (e) {
+      console.warn(`[auto-seed] ${userId} failed:`, (e as Error).message);
+      setSeedingTrophy({ userId, copied: totalCopied, total, error: (e as Error).message });
+      window.setTimeout(() => setSeedingTrophy(null), 5000);
     }
   }
 
@@ -1056,6 +1107,32 @@ export function SuperAdminPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* v0.34.88 iter 22: 自动种 trophy-images 进度 toast (右上角, 不挡 UI) */}
+      {seedingTrophy && (
+        <div
+          className="fixed top-4 right-4 z-[2000] bg-[#1a1c20] border border-violet-400/40 rounded-lg p-3 min-w-[260px] shadow-2xl"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="text-[10px] font-mono uppercase tracking-wider text-violet-300 mb-1.5">
+            {seedingTrophy.error ? "⚠ trophy seed failed" : "🎨 seeding trophy images"}
+          </div>
+          <div className="text-xs text-slate-300 mb-2 font-mono">
+            <span className="text-white">{seedingTrophy.userId}</span> · {seedingTrophy.copied}/{seedingTrophy.total}
+          </div>
+          <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div
+              className={seedingTrophy.error
+                ? "h-full bg-rose-500 transition-all"
+                : "h-full bg-gradient-to-r from-violet-400 to-emerald-400 transition-all"}
+              style={{ width: `${Math.round((seedingTrophy.copied / seedingTrophy.total) * 100)}%` }}
+            />
+          </div>
+          {seedingTrophy.error && (
+            <div className="text-[10px] text-rose-300 mt-1">{seedingTrophy.error}</div>
+          )}
+        </div>
+      )}
       <div className="p-4 md:p-8 max-w-6xl mx-auto">
         {/* Header — engineered-cosmic command bar */}
         <div className="mb-6">
