@@ -35,12 +35,14 @@ import {
 } from "../db/service";
 import { tierById, TIERS, tierIndex } from "../core/tiers";
 import { TierCard } from "../components/TierCard";
-import { WeeklyCompareCard } from "../components/WeeklyCompareCard";
-import { BossStarCard } from "../components/BossStarCard";
-import { TrophyWall } from "../components/TrophyWall";
-import { BadgeInventory } from "../components/BadgeInventory";
+// v0.34.93 iter 27 perf: 这 5 个 Home 下半屏组件全 lazy — 都不在 above-fold,
+// 用户滚到底部才需要. 减主 bundle 进一步.
+const WeeklyCompareCard = lazy(() => import("../components/WeeklyCompareCard").then((m) => ({ default: m.WeeklyCompareCard })));
+const BossStarCard = lazy(() => import("../components/BossStarCard").then((m) => ({ default: m.BossStarCard })));
+const TrophyWall = lazy(() => import("../components/TrophyWall").then((m) => ({ default: m.TrophyWall })));
+const BadgeInventory = lazy(() => import("../components/BadgeInventory").then((m) => ({ default: m.BadgeInventory })));
+const UnitProgress = lazy(() => import("../components/UnitProgress").then((m) => ({ default: m.UnitProgress })));
 import { UnlockCelebration } from "../components/UnlockCelebration";
-import { UnitProgress } from "../components/UnitProgress";
 import type { RatingResult, AbilityDiagnostic } from "../core/rating";
 import { computeAbilityDiagnostic } from "../core/rating";
 import type { Term } from "../core/types";
@@ -482,13 +484,15 @@ export function HomePage() {
         </section>
       )}
 
-      {/* v0.31.53：闯关星章独立卡 — 24 颗星目标（含期末 4 颗 = 28 极限）。
-          段位是连续 XP，星章是离散里程碑，二者并列让 Selena 多一条进步线。 */}
-      <BossStarCard studentId={student.id} />
+      {/* v0.31.53：闯关星章独立卡 — v0.34.93 lazy */}
+      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+        <BossStarCard studentId={student.id} />
+      </Suspense>
 
-      {/* v0.31.50：本周 vs 上周 — 短周期可见进步，配合"难度加权 XP + 5 段小段位"
-          一起给 Selena 一个"每天都看得到动"的反馈点 */}
-      <WeeklyCompareCard attempts={attempts ?? []} />
+      {/* v0.31.50：本周 vs 上周 — v0.34.93 lazy */}
+      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+        <WeeklyCompareCard attempts={attempts ?? []} />
+      </Suspense>
 
       {/* v0.31.2：今日 3 同心环（取代之前的 chip 行）*/}
       {isPhase2Live() ? (
@@ -732,8 +736,10 @@ export function HomePage() {
           </section>
         )}
 
-      {/* v0.30.9: 学期进度（单元解锁面板） */}
-      <UnitProgress studentId={student.id} term={term} />
+      {/* v0.30.9: 学期进度（单元解锁面板） — v0.34.93 lazy */}
+      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+        <UnitProgress studentId={student.id} term={term} />
+      </Suspense>
 
       {/* 小进姐姐资料卡：等级 + XP 进度 + 切音色 + 一键找小进聊 — v0.34.91 lazy */}
       <Suspense fallback={
@@ -745,25 +751,29 @@ export function HomePage() {
         <MascotProfile studentId={student.id} />
       </Suspense>
 
-      {/* 段位勋章柜 */}
-      <BadgeInventory
-        unlockedTierIds={unlockedTiers}
-        equippedTierId={equippedTierId}
-        onEquip={handleEquip}
-      />
+      {/* 段位勋章柜 — v0.34.93 lazy */}
+      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+        <BadgeInventory
+          unlockedTierIds={unlockedTiers}
+          equippedTierId={equippedTierId}
+          onEquip={handleEquip}
+        />
+      </Suspense>
 
-      {/* 奖杯墙 */}
-      <TrophyWall
-        trophies={trophies ?? []}
-        ctx={{
-          studentId: student?.id ?? "",
-          attempts: attempts ?? [],
-          mastery: mastery ?? [],
-          mistakes: mistakes ?? [],
-          trophies: trophies ?? [],
-          todayDateKey: today,
-        }}
-      />
+      {/* 奖杯墙 — v0.34.93 lazy */}
+      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+        <TrophyWall
+          trophies={trophies ?? []}
+          ctx={{
+            studentId: student?.id ?? "",
+            attempts: attempts ?? [],
+            mastery: mastery ?? [],
+            mistakes: mistakes ?? [],
+            trophies: trophies ?? [],
+            todayDateKey: today,
+          }}
+        />
+      </Suspense>
 
       {/* 跨段升档庆祝 */}
       {celebrationToTier && (
