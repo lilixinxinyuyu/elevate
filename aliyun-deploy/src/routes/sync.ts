@@ -81,9 +81,15 @@ async function uploadHandler(c: Ctx): Promise<Response> {
   // v0.34.18: 数据保护 —— 防止小 payload 把已有的大 snapshot 覆写
   // (Ep148 我用 197B 测试 payload 覆写了 Selena 2.5MB snapshot, 触发数据丢失.
   //  幸好 bucket versioning 开了, 通过 _restore-selena.mjs 恢复了)
-  // 规则：如果 client 没显式带 X-Allow-Shrink: true 头，并且新 body < 5KB
-  //   且现有 snapshot > 100KB，拒绝（明显是 truncate 风险）
-  const allowShrink = c.req.header("X-Allow-Shrink") === "true";
+  // v0.34.96 iter 30 加强: X-Allow-Shrink 单独不够 (Iter 29 我又踩了一次,
+  // 测试时给 Selena 灌 29B JSON 把 5.3MB 覆盖). 现在要双 header:
+  //   X-Allow-Shrink: true     +
+  //   X-Confirm-Wipe: <userId>  (必须跟当前 auth userId 一致)
+  // 单条 X-Allow-Shrink 不再 bypass shrink check. 真的要 wipe 必须明确指认
+  // 哪个用户, 防 typo / 自动化工具误用.
+  const allowShrinkHeader = c.req.header("X-Allow-Shrink") === "true";
+  const confirmWipeHeader = c.req.header("X-Confirm-Wipe") ?? "";
+  const allowShrink = allowShrinkHeader && confirmWipeHeader === userId;
 
   // iter 29: 先 head 当前 OSS snapshot, 比 client-parent 拿到的版本号
   if (parentLastModified && Number.isFinite(parentLastModified)) {
@@ -139,30 +145,42 @@ async function uploadHandler(c: Ctx): Promise<Response> {
   const key = snapshotKey(userId);
   const version = Date.now();
 
-  // 防 truncate（Ep148 救火）—— 不用 ossHead（V8 fetch HEAD 拿不到 Content-Length），
-  // 而是读 stats.json sidecar（每次 push 都写 snapshotBytes）。
-  // 如果 existing snapshotBytes > 50KB 且 incoming < 50% existing → 409。
+  // 防 truncate (v0.34.96 iter 30 强化, 两级 fallback):
+  // - 优先: ossHead snapshot.json 直接拿 Content-Length (最权威)
+  // - 兜底: 读 stats.json sidecar (上次 push 写的 snapshotBytes)
+  //
+  // 之前只用 stats.json sidecar — 但 sidecar 是 push 之后才写的 lagging value.
+  // 如果有人 (admin 测试 / 我!) 先用小 payload 推一次, stats.json 被覆 → 第二次
+  // 推小 payload 时 sidecar 显示 "existingBytes=15", 没触发 50KB 阈值 → 静默
+  // wipe 真数据. iter 29-30 我连续踩两次. 现在 ossHead 优先, 大数 wins.
   if (!allowShrink) {
-    const statsGot = await ossGet(cfg, `users/${userId}/stats.json`);
-    if (statsGot.ok && statsGot.text) {
-      try {
-        const stats = JSON.parse(statsGot.text) as { snapshotBytes?: number };
-        const existingBytes = stats.snapshotBytes ?? 0;
-        if (existingBytes > 50_000 && bodyText.length < existingBytes * 0.5) {
-          return c.json(
-            {
-              ok: false,
-              error: "shrink_blocked",
-              detail: `incoming ${bodyText.length}B is < 50% of existing ${existingBytes}B for ${userId}. Add header X-Allow-Shrink: true to confirm.`,
-              existingBytes,
-              incomingBytes: bodyText.length,
-            },
-            409,
-          );
-        }
-      } catch {
-        /* corrupt stats → allow */
+    let existingBytes = 0;
+    const head = await ossHead(cfg, key);
+    if (head.ok && head.contentLength) {
+      existingBytes = head.contentLength;
+    } else {
+      const statsGot = await ossGet(cfg, `users/${userId}/stats.json`);
+      if (statsGot.ok && statsGot.text) {
+        try {
+          const stats = JSON.parse(statsGot.text) as { snapshotBytes?: number };
+          existingBytes = stats.snapshotBytes ?? 0;
+        } catch { /* */ }
       }
+    }
+    if (existingBytes > 50_000 && bodyText.length < existingBytes * 0.5) {
+      const why = allowShrinkHeader && confirmWipeHeader !== userId
+        ? `X-Allow-Shrink: true 已传 但 X-Confirm-Wipe="${confirmWipeHeader}" 不等于 userId="${userId}"`
+        : `双 header 必传: X-Allow-Shrink: true + X-Confirm-Wipe: ${userId}`;
+      return c.json(
+        {
+          ok: false,
+          error: "shrink_blocked",
+          detail: `incoming ${bodyText.length}B is < 50% of existing ${existingBytes}B for ${userId}. ${why}`,
+          existingBytes,
+          incomingBytes: bodyText.length,
+        },
+        409,
+      );
     }
   }
 
