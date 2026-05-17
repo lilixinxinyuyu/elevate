@@ -379,6 +379,20 @@
 **测试**: 11/11 mistake hunt + 314+ 全套
 **Typecheck**: clean
 **Build**: 进行中
-**Deploy**: 待 build
+**Deploy**: aliyun OSS 231/231 ok
+
+**Post-review** (两位评审 PASS):
+- 共识: Home 入口名"改错挑战" 不够游戏化 → 改 "**错题侦探** 🕵️" + 副标 "当小老师 · 找出错的那一步"
+- 共识: 应该接 IndexedDB 落 attempt metadata (但不污染 mastery/streak) — defer P1-1.1
+- 共识: unit pool 10 道偏少, 扩 30+ — defer P1-1.1
+- 共识: 加 copy_wrong (抄错数字) bug 类型 — defer
+- 共识: 总结页加错因标签 + "复习错题" — defer
+
+**应用的 quick fix** (rename only):
+- ✅ Home 按钮 "改错挑战" → "🕵️ 错题侦探"
+- ✅ MistakeHunt 页面标题改一致
+- 其它 (落库 / pool 扩容 / 总结增强 / 新 bug 类型) 留 P1-1.1 follow-up
+
+**最终**: v0.35.2 ship (commit 573fb36, push main) + rename hotfix
 
 

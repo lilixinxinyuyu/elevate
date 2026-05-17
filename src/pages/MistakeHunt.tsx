@@ -126,7 +126,7 @@ export default function MistakeHuntPage() {
   if (sessionDone) {
     return (
       <div className="max-w-md mx-auto p-4 space-y-4">
-        <h1 className="text-2xl font-bold text-emerald-100 text-center">🎉 改错挑战完成!</h1>
+        <h1 className="text-2xl font-bold text-emerald-100 text-center">🎉 错题侦探完成!</h1>
         <div className="rounded-xl bg-emerald-500/15 border border-emerald-400/40 p-4 space-y-2">
           <p className="text-emerald-100">命中: {totalSolved}/{cards.length}</p>
           <p className="text-emerald-100">总 XP: +{totalXp}</p>
@@ -146,7 +146,7 @@ export default function MistakeHuntPage() {
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-cyan-100">🛠️ 改错挑战 ({idx + 1}/{cards.length})</h1>
+        <h1 className="text-lg font-bold text-cyan-100">🕵️ 错题侦探 ({idx + 1}/{cards.length})</h1>
         <span className="text-xs text-cyan-200/70">已得 +{totalXp} XP</span>
       </div>
 
