@@ -1,12 +1,13 @@
 {
   "name": "heping-math-trainer",
   "private": true,
-  "version": "0.35.34",
+  "version": "0.35.35",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/build-prompts.mjs && node scripts/build-agent-data.mjs && tsc -b && vite build",
+    "build": "node scripts/check-seed-bump.mjs && node scripts/build-prompts.mjs && node scripts/build-agent-data.mjs && tsc -b && vite build",
     "build:prompts": "node scripts/build-prompts.mjs",
+    "check:seed-bump": "node scripts/check-seed-bump.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
