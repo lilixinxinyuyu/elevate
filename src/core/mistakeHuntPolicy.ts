@@ -233,6 +233,139 @@ const UNIT_POOL: Array<{ correct: UnitEntry; wrong: UnitEntry; explanation: stri
     explanation: "1 天 = 24 小时 (12/24 制), 不是 60",
     hint: "一天 24 小时",
   },
+  // v0.35.16 iter 46 P3-2 (爸爸反馈 P1-1.1): pool 扩到 30+ 覆盖 G4B 真考重点
+  // 面积单位 (G4B 重点 — 平方关系学生最容易栽)
+  {
+    correct: { conversion: "1 平方米 = 100 平方分米", isWrong: false },
+    wrong: { conversion: "1 平方米 = 10 平方分米", isWrong: true, correctValue: "100", bugType: "unit_decimal_confused" },
+    explanation: "面积是平方关系! 长度差 10 倍 → 面积差 100 倍",
+    hint: "1 m = 10 dm, 但 1 m² = 10 × 10 = 100 dm²",
+  },
+  {
+    correct: { conversion: "1 平方分米 = 100 平方厘米", isWrong: false },
+    wrong: { conversion: "1 平方分米 = 10 平方厘米", isWrong: true, correctValue: "100", bugType: "unit_decimal_confused" },
+    explanation: "面积平方关系: 1 dm² = 10×10 cm² = 100 cm²",
+    hint: "面积都是平方, 长度 10 倍 → 面积 100 倍",
+  },
+  {
+    correct: { conversion: "1 公顷 = 10000 平方米", isWrong: false },
+    wrong: { conversion: "1 公顷 = 1000 平方米", isWrong: true, correctValue: "10000", bugType: "unit_decimal_confused" },
+    explanation: "1 公顷 = 100 m × 100 m = 10000 m² (一个边长 100 米的正方形)",
+    hint: "公顷 = 100m 正方形 = 100 × 100 = 10000 m²",
+  },
+  {
+    correct: { conversion: "1 平方千米 = 100 公顷", isWrong: false },
+    wrong: { conversion: "1 平方千米 = 1000 公顷", isWrong: true, correctValue: "100", bugType: "unit_decimal_confused" },
+    explanation: "1 km² = 1000 × 1000 m² = 100 × 10000 m² = 100 公顷",
+    hint: "1 km² = 100 公顷, 不是 1000",
+  },
+  {
+    correct: { conversion: "1 平方米 = 10000 平方厘米", isWrong: false },
+    wrong: { conversion: "1 平方米 = 1000 平方厘米", isWrong: true, correctValue: "10000", bugType: "unit_decimal_confused" },
+    explanation: "1 m = 100 cm → 1 m² = 100 × 100 = 10000 cm²",
+    hint: "跨级面积换算, 中间是平方",
+  },
+  // 长度补充
+  {
+    correct: { conversion: "1 米 = 10 分米", isWrong: false },
+    wrong: { conversion: "1 米 = 100 分米", isWrong: true, correctValue: "10", bugType: "unit_decimal_confused" },
+    explanation: "1 米 = 10 分米 (米 → 分米只差一级, 10 倍)",
+    hint: "米 → 分米 一级, 10 倍",
+  },
+  {
+    correct: { conversion: "1 分米 = 10 厘米", isWrong: false },
+    wrong: { conversion: "1 分米 = 100 厘米", isWrong: true, correctValue: "10", bugType: "unit_decimal_confused" },
+    explanation: "1 分米 = 10 厘米 (分米 → 厘米只差一级, 10 倍)",
+    hint: "分米 → 厘米 一级, 10 倍",
+  },
+  {
+    correct: { conversion: "1 米 = 1000 毫米", isWrong: false },
+    wrong: { conversion: "1 米 = 100 毫米", isWrong: true, correctValue: "1000", bugType: "unit_decimal_confused" },
+    explanation: "1 米 = 10 分米 = 100 厘米 = 1000 毫米 (跨 3 级, 10³)",
+    hint: "米 → 毫米 跨 3 级, 1000 倍",
+  },
+  // 质量补充
+  {
+    correct: { conversion: "1 克 = 1000 毫克", isWrong: false },
+    wrong: { conversion: "1 克 = 100 毫克", isWrong: true, correctValue: "1000", bugType: "unit_decimal_confused" },
+    explanation: "毫 = 1/1000, 跟毫米 / 毫升一样",
+    hint: "毫 = 1/1000",
+  },
+  {
+    correct: { conversion: "1 吨 = 1000000 克", isWrong: false },
+    wrong: { conversion: "1 吨 = 100000 克", isWrong: true, correctValue: "1000000", bugType: "unit_decimal_confused" },
+    explanation: "1 吨 = 1000 kg × 1000 g = 1,000,000 g (两级 1000)",
+    hint: "吨 → 千克 → 克, 各 1000",
+  },
+  // 容积补充
+  {
+    correct: { conversion: "1 升 = 1000 立方厘米", isWrong: false },
+    wrong: { conversion: "1 升 = 100 立方厘米", isWrong: true, correctValue: "1000", bugType: "unit_decimal_confused" },
+    explanation: "1 升 = 1 立方分米 = 1000 立方厘米 (跨级立方)",
+    hint: "1 升 = 1 dm³ = 1000 cm³",
+  },
+  {
+    correct: { conversion: "1 立方米 = 1000 升", isWrong: false },
+    wrong: { conversion: "1 立方米 = 100 升", isWrong: true, correctValue: "1000", bugType: "unit_decimal_confused" },
+    explanation: "1 立方米 = 1000 立方分米 = 1000 升",
+    hint: "1 m³ = 1000 L",
+  },
+  {
+    correct: { conversion: "1 毫升 = 1 立方厘米", isWrong: false },
+    wrong: { conversion: "1 毫升 = 10 立方厘米", isWrong: true, correctValue: "1", bugType: "unit_decimal_confused" },
+    explanation: "1 mL = 1 cm³ (这两个换算是 1:1, 不是 10)",
+    hint: "毫升 = 立方厘米, 数字相等",
+  },
+  // 货币补充
+  {
+    correct: { conversion: "1 元 = 100 分", isWrong: false },
+    wrong: { conversion: "1 元 = 10 分", isWrong: true, correctValue: "100", bugType: "unit_decimal_confused" },
+    explanation: "1 元 = 10 角 × 10 分/角 = 100 分",
+    hint: "元 → 角 → 分, 各 10 倍, 总 100",
+  },
+  {
+    correct: { conversion: "1 角 = 10 分", isWrong: false },
+    wrong: { conversion: "1 角 = 100 分", isWrong: true, correctValue: "10", bugType: "unit_decimal_confused" },
+    explanation: "1 角 = 10 分 (角和分只差一级)",
+    hint: "角 → 分 一级 10 倍",
+  },
+  // 时间补充 (60 进制重点 — 学生最易栽)
+  {
+    correct: { conversion: "1 小时 = 3600 秒", isWrong: false },
+    wrong: { conversion: "1 小时 = 360 秒", isWrong: true, correctValue: "3600", bugType: "unit_sexagesimal_confused" },
+    explanation: "1 小时 = 60 分 × 60 秒/分 = 3600 秒",
+    hint: "小时 → 秒 跨 2 级 60",
+  },
+  {
+    correct: { conversion: "1 周 = 7 天", isWrong: false },
+    wrong: { conversion: "1 周 = 10 天", isWrong: true, correctValue: "7", bugType: "unit_decimal_confused" },
+    explanation: "1 周 = 7 天 (周一到周日)",
+    hint: "一周 7 天",
+  },
+  {
+    correct: { conversion: "1 年 = 12 个月", isWrong: false },
+    wrong: { conversion: "1 年 = 10 个月", isWrong: true, correctValue: "12", bugType: "unit_decimal_confused" },
+    explanation: "1 年 = 12 个月 (春夏秋冬各 3 个)",
+    hint: "一年 12 个月",
+  },
+  {
+    correct: { conversion: "1 平年 = 365 天", isWrong: false },
+    wrong: { conversion: "1 平年 = 360 天", isWrong: true, correctValue: "365", bugType: "unit_decimal_confused" },
+    explanation: "平年 365 天, 闰年 366 天 (多 2/29)",
+    hint: "平年 365, 闰年 366",
+  },
+  {
+    correct: { conversion: "1 世纪 = 100 年", isWrong: false },
+    wrong: { conversion: "1 世纪 = 1000 年", isWrong: true, correctValue: "100", bugType: "unit_decimal_confused" },
+    explanation: "1 世纪 = 100 年 (1 千年 = 10 世纪)",
+    hint: "1 世纪 = 100 年, 不是 1000",
+  },
+  {
+    correct: { conversion: "1 季度 = 3 个月", isWrong: false },
+    wrong: { conversion: "1 季度 = 4 个月", isWrong: true, correctValue: "3", bugType: "unit_decimal_confused" },
+    explanation: "1 年 = 4 季度, 12 月 ÷ 4 = 3 月/季度",
+    hint: "一年 4 季度, 12/4 = 3",
+  },
 ];
 
 /**
