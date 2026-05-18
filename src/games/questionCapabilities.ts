@@ -28,8 +28,8 @@ export function getQuestionCapabilities(q: Question): GameCapabilities {
       tmplCaps.writeHeavy ||
       q.requiresScratch === true ||
       q.requiresMultiStep === true,
-    // hasBuiltInCanvas / scoreByStepsNotSpeed 跟模板走 — 是 UI 行为, 题目 flag 不决定
-    hasBuiltInCanvas: tmplCaps.hasBuiltInCanvas,
+    // suppressesExternalScratchTools / scoreByStepsNotSpeed 跟模板走 — 是 UI 行为, 题目 flag 不决定
+    suppressesExternalScratchTools: tmplCaps.suppressesExternalScratchTools,
     scoreByStepsNotSpeed: tmplCaps.scoreByStepsNotSpeed,
   };
 }

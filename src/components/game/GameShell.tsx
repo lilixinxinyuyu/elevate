@@ -60,7 +60,7 @@ import { NumberHuntPanel } from "./templates/NumberHunt";
 import { resolveTemplate } from "./templates/resolve";
 import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAdaptive";
 // v0.35.32 Refactor Priority 1: GameTemplate Capabilities SSOT
-import { hasBuiltInCanvas } from "../../games/templateCapabilities";
+import { suppressesExternalScratchTools } from "../../games/templateCapabilities";
 // v0.35.34 Refactor Priority 2.5: exhaustive switch helper
 // v0.35.36: 用 exhaustiveOr soft fallback 替代 assertUnreachable, 防 IDB cache 的 unknown templateId 崩 render
 import { exhaustiveOr } from "../../lib/exhaustive";
@@ -353,11 +353,11 @@ export function GameShell(props: GameShellProps) {
       // post-review: 每 session 最多弹 1 次 (双家共识)
       // v0.35.27 (爸爸第 3 次反馈): canvas_scratch 模板内置 canvas, **不再弹 ScratchInsurance dialog**
       // (canvas 本身就是草稿, 再问"用草稿还是心算" 多余 + 干扰流程)
-      // v0.35.32 Refactor: hasBuiltInCanvas capability 取代 inline templateId 比对.
+      // v0.35.32 Refactor: suppressesExternalScratchTools capability 取代 inline templateId 比对.
       // multi_step_application 也自带输入面板, 同样跳过 (修上轮漏的边缘 case).
       if (
         !examMode && !noRetry && !wasRetriedRef.current &&
-        !hasBuiltInCanvas(templateId) &&
+        !suppressesExternalScratchTools(templateId) &&
         requiresScratch(displayedQuestion) &&
         scratchState.tool === "none" &&
         !scratchState.insured &&
@@ -649,9 +649,9 @@ export function GameShell(props: GameShellProps) {
         {/* v0.35.0 iter 34 P0-2: ScratchInsurance — answer panel 下方工具栏.
             v0.35.27 (爸爸第 3 次反馈): canvas_scratch 模板自带 canvas, 不再渲染
             ScratchPanel textarea 工具栏 (重复 + 干扰).
-            v0.35.32 Refactor: 用 hasBuiltInCanvas capability — multi_step_application
+            v0.35.32 Refactor: 用 suppressesExternalScratchTools capability — multi_step_application
             也自带输入, 同样跳过. */}
-        {!examMode && !noRetry && starterDone && !feedback && !hasBuiltInCanvas(templateId) && requiresScratch(displayedQuestion) && (
+        {!examMode && !noRetry && starterDone && !feedback && !suppressesExternalScratchTools(templateId) && requiresScratch(displayedQuestion) && (
           <ScratchPanel
             state={scratchState}
             onChange={setScratchState}

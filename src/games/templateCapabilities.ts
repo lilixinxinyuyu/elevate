@@ -30,10 +30,14 @@ export type GameCapabilities = {
   writeHeavy: boolean;
 
   /**
-   * 模板自带 canvas / 输入面板, GameShell 不再叠加 ScratchInsurance dialog
-   * 或 ScratchPanel — 否则会出现 "重复白板" / "未选工具 dialog 拦截已经能写的题".
+   * 模板自带 work-area (canvas / 计算器 / 输入 panel 等), GameShell **不** 叠加
+   * ScratchInsurance dialog 或 ScratchPanel — 否则会出现 "重复白板" / "未选工具
+   * dialog 拦截已经能写的题".
+   *
+   * v0.35.42 rename: 旧名 hasBuiltInCanvas (GPT peer review 指 multi_step 不是 canvas
+   * 而是 work area, 命名误导). 新名按 consumer 行为命名 (suppresses → 抑制外部工具).
    */
-  hasBuiltInCanvas: boolean;
+  suppressesExternalScratchTools: boolean;
 
   /**
    * 用 step 数 / phase 通过情况记分, 而不是速度. 显示速度档位会误导
@@ -44,7 +48,7 @@ export type GameCapabilities = {
 
 const DEFAULT_CAPABILITIES: GameCapabilities = {
   writeHeavy: false,
-  hasBuiltInCanvas: false,
+  suppressesExternalScratchTools: false,
   scoreByStepsNotSpeed: false,
 };
 
@@ -57,11 +61,11 @@ const DEFAULT_CAPABILITIES: GameCapabilities = {
 const CAPABILITY_TABLE: Partial<Record<GameTemplate, Partial<GameCapabilities>>> = {
   canvas_scratch: {
     writeHeavy: true,
-    hasBuiltInCanvas: true,
+    suppressesExternalScratchTools: true,
   },
   multi_step_application: {
     writeHeavy: true,
-    hasBuiltInCanvas: true,
+    suppressesExternalScratchTools: true,
     scoreByStepsNotSpeed: true,
   },
 };
@@ -87,8 +91,8 @@ export function isWriteHeavyTemplate(template: GameTemplate | undefined | null):
   return getCapabilities(template).writeHeavy;
 }
 
-export function hasBuiltInCanvas(template: GameTemplate | undefined | null): boolean {
-  return getCapabilities(template).hasBuiltInCanvas;
+export function suppressesExternalScratchTools(template: GameTemplate | undefined | null): boolean {
+  return getCapabilities(template).suppressesExternalScratchTools;
 }
 
 export function scoreByStepsNotSpeed(template: GameTemplate | undefined | null): boolean {
