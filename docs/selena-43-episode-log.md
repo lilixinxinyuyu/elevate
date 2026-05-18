@@ -508,4 +508,33 @@
 
 **P1 全部完成 4/4** (错题侦探 + 强化挑战 + 进制小课堂 + 脑力雷达). 接下来 P2.
 
+#### Iter 40 进展 (v0.35.5 → v0.35.6) P2-1 稳准挑战
+
+**命名**: SniperMode → "**稳准挑战**" (避 sniper 军事词, 跟"稳准狠"成语对齐, 教育自然).
+
+**预审** 两位评审"改后再做"共识整合:
+- ✅ XP +20 → +15 (评审 B: 防 farm)
+- ✅ 首次太快免扣 (评审 B: 防 rage quit, 用 localStorage fastCount 跟踪)
+- ✅ 每日 bonus cap 5 次 (评审 B: 防发呆刷)
+- ✅ Banner 紫色 chip (不红色, 评审 A+B 共识)
+- ✅ 首次开启强确认 dialog "我想挑战稳准" (不是 toggle)
+- ✅ Anti-AFK ratio > 4 → 0 (已实现)
+- ✅ 入口: Home 底部 inline 弱链接 (评审 B 防误点)
+- ⏭️ 跟其它 gate 关系: 保留 estimation/scratch/multi-step gate, 只换速度 reward 部分
+
+**实现**:
+- NEW `src/core/steadyAimPolicy.ts` (160 行): isSteadyAimActive (sessionStorage) / activate / deactivate / getSteadyAimXp (含首次免扣 + daily cap) / hasSeenIntro + 标记 / daily counters
+- NEW `src/components/SteadyAim.tsx` (160 行): SteadyAimBanner (紫色 chip + 退出) + SteadyAimIntroDialog (强确认) + SteadyAimEntryButton (card / inline 两 variant)
+- NEW `tests/steadyAimPolicy.test.ts` 9 tests 全过
+- 改 `src/core/scoring.ts`: scoreAttempt 优先用 getSteadyAimXp (active 时), 否则 fallback AccuracyFirst / 老 speedBonus
+- 改 `src/lib/featureFlags.ts` isSteadyAimV1
+- 改 `src/components/game/GameShell.tsx` 顶部加 SteadyAimBanner
+- 改 `src/pages/Home.tsx` 底部加 inline entry "想挑战自己?"
+
+**测试**: 9/9 + 全套 pass
+**Typecheck**: clean
+**Build**: 4.78s
+**Deploy**: aliyun OSS 235/235, 107.60MB
+**Post-review**: 进行中
+
 

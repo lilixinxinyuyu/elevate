@@ -29,6 +29,8 @@ import {
   isStrengthenOpportunity,
   pickStrengthSkillContext,
 } from "../../core/strengthenPolicy";
+// v0.35.6 iter 40 P2-1: 稳准挑战 banner
+import { SteadyAimBanner } from "../SteadyAim";
 import { SpeedMatchPanel } from "./templates/SpeedMatch";
 import { ShopCounterPanel } from "./templates/ShopCounter";
 import { EquationBuilderPanel } from "./templates/EquationBuilder";
@@ -519,6 +521,8 @@ export function GameShell(props: GameShellProps) {
   return (
     <div className="relative">
       {showStarter && !starterDone && <StarterOverlay onDone={() => setStarterDone(true)} />}
+      {/* v0.35.6 iter 40 P2-1: 稳准挑战 banner (紫色, 顶部) */}
+      <SteadyAimBanner />
       {/* Top bar */}
       <div className="flex items-center gap-3 mb-3">
         <XpBar xp={xp} />

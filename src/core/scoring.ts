@@ -2,6 +2,7 @@ import type { AbilityId, Question } from "./types";
 import { adjustedEstimatedTime } from "./timing";
 import { isAccuracyFirstV1 } from "../lib/featureFlags";
 import { isSpeedEligible } from "./speedMatchPolicy";
+import { isSteadyAimActive, getSteadyAimXp } from "./steadyAimPolicy";
 
 export interface ScoreInput {
   question: Question;
@@ -237,15 +238,23 @@ export function scoreAttempt(input: ScoreInput): ScoreDelta {
   let slowThink = false;
   if (!noBonusAttempt) {
     const est = adjustedEstimatedTime(question);
-    const accuracyFirst = isAccuracyFirstV1();
-    const allowSpeedReward = !accuracyFirst || isSpeedEligible(question);
-    if (allowSpeedReward) {
-      timeBonus = speedBonus(elapsedSeconds, est, isCorrect).bonus;
-    } else {
-      const r = speedBonusAccuracyFirst(elapsedSeconds, est, isCorrect);
+    // v0.35.6 iter 40: 稳准挑战 mode 优先 — 主动逆向 reward
+    if (isSteadyAimActive()) {
+      const r = getSteadyAimXp(elapsedSeconds, est, isCorrect);
       timeBonus = r.bonus;
       tooFast = r.tier === "too_fast";
       slowThink = r.tier === "deep_think";
+    } else {
+      const accuracyFirst = isAccuracyFirstV1();
+      const allowSpeedReward = !accuracyFirst || isSpeedEligible(question);
+      if (allowSpeedReward) {
+        timeBonus = speedBonus(elapsedSeconds, est, isCorrect).bonus;
+      } else {
+        const r = speedBonusAccuracyFirst(elapsedSeconds, est, isCorrect);
+        timeBonus = r.bonus;
+        tooFast = r.tier === "too_fast";
+        slowThink = r.tier === "deep_think";
+      }
     }
   }
   const hintPenalty = -hintsOpened;

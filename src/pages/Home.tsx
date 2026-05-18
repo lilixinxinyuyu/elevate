@@ -50,6 +50,8 @@ import { useEffect, useState } from "react";
 import { ackMigrationNotice, getMigrationNoticeUnacked } from "../db/seed";
 import { currentExam, daysUntil, FINAL } from "../core/examDates";
 import { getTricksTodayCount } from "../lib/mathTricksProgress";
+// v0.35.6 iter 40 P2-1: 稳准挑战 inline entry
+import { SteadyAimEntryButton } from "../components/SteadyAim";
 
 /** 把毫秒时间戳格式成本地日期字符串 YYYY-MM-DD（与 todayKey 一致） */
 function localDayKey(ts: number): string {
@@ -697,6 +699,11 @@ export function HomePage() {
             5 个属性看你的进步
           </div>
         </Link>
+      </div>
+
+      {/* v0.35.6 iter 40 P2-1: 稳准挑战入口 (Home 底部弱小, 不放主区域防误点) */}
+      <div className="mt-3 flex justify-center">
+        <SteadyAimEntryButton variant="inline" />
       </div>
 
       {/* ROI #2：每周一次的考试模拟 */}

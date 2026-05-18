@@ -238,6 +238,22 @@ export function isBrainpowerRadarV1(): boolean {
   }
 }
 
+/**
+ * v0.35.6 (iter 40 P2-1): 稳准挑战 — 自愿模式逆向奖励 feature flag.
+ * 默认 ON (功能可见, 但需要 Selena 主动开启 session 才生效).
+ * 见 src/core/steadyAimPolicy.ts
+ */
+const STEADY_AIM_LS_KEY = "steady_aim_v1";
+
+export function isSteadyAimV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(STEADY_AIM_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function isEstimationGateV1(): boolean {
   if (typeof window === "undefined") return true;
   if (!_estGateSynced) {
