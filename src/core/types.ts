@@ -66,6 +66,22 @@ export type CognitiveLevel = "recall" | "procedural" | "application" | "reasonin
 
 export type SessionMode = "normal" | "final_sprint" | "midterm" | "weak_skill" | "review" | "free" | "skill" | "mock_exam" | "big_problems";
 
+/**
+ * v0.35.46: runtime-readable SessionMode list. routes.ts parse 用来 validate
+ * URL ?mode= 参数, 防止 typo / unknown mode 进 scheduler.
+ */
+export const SESSION_MODE_IDS = [
+  "normal",
+  "final_sprint",
+  "midterm",
+  "weak_skill",
+  "review",
+  "free",
+  "skill",
+  "mock_exam",
+  "big_problems",
+] as const satisfies readonly SessionMode[];
+
 export type GameTemplate =
   | "speed_match"
   | "shop_counter"

@@ -16,8 +16,11 @@
  * 本轮只迁 builder (低风险). parser 留下一轮再迁 (要小心 ?fresh=Date.now()
  * pattern 跟 history.replaceState 等 React Router 内部行为).
  */
-import type { SessionMode } from "../core/types";
-import type { AtelierRealmId } from "../content/atelier/realms";
+import { SESSION_MODE_IDS, type SessionMode } from "../core/types";
+import { ATELIER_REALM_IDS, type AtelierRealmId } from "../content/atelier/realms";
+
+const VALID_MODES = new Set<string>(SESSION_MODE_IDS);
+const VALID_REALMS = new Set<string>(ATELIER_REALM_IDS);
 
 export type TrainSearchParams = {
   mode?: SessionMode;
@@ -80,18 +83,19 @@ export const TrainRoute = {
     const size = sp.get("size");
     const hard = sp.get("hard");
     // v0.35.44 (GPT peer review HOTFIX): size 必须整数, fresh 必须正数.
-    // 之前 Number("30.5")=30.5 通过 isFinite → fractional 题数漏进 scheduler.
+    // v0.35.46: mode / fromAtelier 也走 union validate, 防 typo 漏进 scheduler.
     const freshNum = fresh ? Number(fresh) : undefined;
     const sizeNum = size ? Number(size) : undefined;
+    const fromAtelier = sp.get("fromAtelier");
     return {
-      mode: (mode as SessionMode | null) ?? undefined,
+      mode: mode && VALID_MODES.has(mode) ? (mode as SessionMode) : undefined,
       fresh: freshNum !== undefined && Number.isFinite(freshNum) && freshNum > 0 ? freshNum : undefined,
       skillId: sp.get("skillId") ?? undefined,
       skillIds: skillIds ? skillIds.split(",").filter(Boolean) : undefined,
       size: sizeNum !== undefined && Number.isInteger(sizeNum) && sizeNum > 0 ? sizeNum : undefined,
       hard: hard === "1" ? true : hard === "0" ? false : undefined,
       unitId: sp.get("unitId") ?? undefined,
-      fromAtelier: (sp.get("fromAtelier") as AtelierRealmId | null) ?? undefined,
+      fromAtelier: fromAtelier && VALID_REALMS.has(fromAtelier) ? (fromAtelier as AtelierRealmId) : undefined,
     };
   },
 };

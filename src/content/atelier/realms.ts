@@ -20,6 +20,19 @@ export type AtelierRealmId =
   | "equation-hall"
   | "data-vault";
 
+/**
+ * v0.35.46: runtime-readable id list. routes.ts parse 用来 validate
+ * URL ?fromAtelier= 参数, 防止 typo / unknown realm 进 atelier flow.
+ */
+export const ATELIER_REALM_IDS = [
+  "discount-street",
+  "chrono-tower",
+  "gem-grotto",
+  "geo-forge",
+  "equation-hall",
+  "data-vault",
+] as const satisfies readonly AtelierRealmId[];
+
 export interface AtelierRealm {
   id: AtelierRealmId;
   name: string;
