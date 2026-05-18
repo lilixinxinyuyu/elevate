@@ -15,6 +15,8 @@ import { db } from "../db/dexie";
 import { computeExamPrep, type MockHistoryEntry } from "../core/examPrep";
 import type { Question } from "../core/types";
 import { MascotQuickAccess } from "../components/MascotQuickAccess";
+// v0.35.39 Refactor Priority 7: URL routes SSOT (强类型, 防 typo)
+import { TrainRoute, MockReportRoute } from "../lib/routes";
 
 export default function ExamPrepPage() {
   const navigate = useNavigate();
@@ -52,13 +54,13 @@ export default function ExamPrepPage() {
   const [hardLimit, setHardLimit] = useState(false);
 
   function startMockExam() {
-    const params = new URLSearchParams({
+    // v0.35.39 Refactor: 改用 TrainRoute.build SSOT (强类型, 防 typo)
+    navigate(TrainRoute.build({
       mode: "mock_exam",
-      fresh: String(Date.now()),
-      size: String(chosenSize),
-      hard: hardLimit ? "1" : "0",
-    });
-    navigate(`/math/train?${params.toString()}`);
+      fresh: Date.now(),
+      size: chosenSize,
+      hard: hardLimit,
+    }));
   }
 
   const hasData = snapshot.totalMockExams > 0 || snapshot.errorTrends.length > 0;
@@ -264,7 +266,7 @@ function HistoryRow({ entry }: { entry: MockHistoryEntry }) {
   const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
   return (
     <button
-      onClick={() => navigate(`/math/mock-report?sessionId=${entry.sessionId}`)}
+      onClick={() => navigate(MockReportRoute.build({ sessionId: entry.sessionId }))}
       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition text-left"
     >
       <span className="text-xs text-slate-300 w-12">{dateStr}</span>

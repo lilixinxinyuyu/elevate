@@ -15,6 +15,8 @@ import { findParallelQuestion } from "../core/scheduler";
 import { isWriteHeavyQuestion } from "../games/questionCapabilities";
 // v0.35.33 Refactor Priority 2: SSOT 常量
 import { MOCK_EXAM_MIN_SIZE, MOCK_EXAM_MAX_SIZE } from "../config/constants";
+// v0.35.39 Refactor Priority 7: URL routes SSOT
+import { TrainRoute, MockReportRoute } from "../lib/routes";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { pushToCloud } from "../db/cloudSync";
@@ -329,7 +331,7 @@ export function TrainPage() {
           await recordMockExamCompleted(state.studentId);
           // 跳转到成绩分析页 (sessionId 透传, isMockExamReportV1 默认 ON)
           if (isMockExamReportV1()) {
-            navigate(`/math/mock-report?sessionId=${state.session.id}`);
+            navigate(MockReportRoute.build({ sessionId: state.session.id }));
             return; // 不再走 done state, 直接由 report page 渲染
           }
         }
@@ -795,7 +797,7 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
             >
               👩‍🏫 跟小进总结今天
             </button>
-            <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary">再来一把</Link>
+            <Link to={TrainRoute.build({ fresh: Date.now() })} className="btn-primary">再来一把</Link>
             <Link to="/math" className="btn-secondary">回首页</Link>
           </div>
         </div>

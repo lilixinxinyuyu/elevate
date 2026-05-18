@@ -54,6 +54,8 @@ import { getTricksTodayCount } from "../lib/mathTricksProgress";
 import { SteadyAimEntryButton } from "../components/SteadyAim";
 // v0.35.33 Refactor Priority 2: SSOT 常量
 import { DAILY_CHALLENGE_TARGET } from "../config/constants";
+// v0.35.39 Refactor Priority 7: URL routes SSOT
+import { TrainRoute } from "../lib/routes";
 
 /** 把毫秒时间戳格式成本地日期字符串 YYYY-MM-DD（与 todayKey 一致） */
 function localDayKey(ts: number): string {
@@ -593,7 +595,7 @@ export function HomePage() {
               </span>
             );
           })()}
-          <Link to={`/math/train?fresh=${Date.now()}`} className="btn-primary ml-auto text-base px-5 py-2.5">
+          <Link to={TrainRoute.build({ fresh: Date.now() })} className="btn-primary ml-auto text-base px-5 py-2.5">
             ▶ 开始今日挑战
           </Link>
         </div>
@@ -616,7 +618,7 @@ export function HomePage() {
                   <li key={s.skillId} className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap min-w-0">
                       <Link
-                        to={`/math/train?skillId=${encodeURIComponent(s.skillId)}&fresh=${Date.now()}`}
+                        to={TrainRoute.build({ skillId: s.skillId, fresh: Date.now() })}
                         className="underline decoration-rose-400/50 underline-offset-2 hover:text-white"
                       >
                         {s.skillName}
@@ -684,7 +686,7 @@ export function HomePage() {
               : `${exam.dateKey}`;
           return (
             <Link
-              to={`/math/train?mode=${exam.mode}&fresh=${Date.now()}`}
+              to={TrainRoute.build({ mode: exam.mode, fresh: Date.now() })}
               className={`card-glow hover:scale-[1.02] transition-transform col-span-2 sm:col-span-1 ${themeCls}`}
             >
               <div className="text-2xl">{icon}</div>
