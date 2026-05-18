@@ -2,6 +2,30 @@ import type { GameTemplate, Question, Skill } from "../../../core/types";
 import { isSpeedEligible, shouldForceNumericFill } from "../../../core/speedMatchPolicy";
 import { requiresMultiStep } from "../../../core/multiStepPolicy";
 
+/**
+ * v0.35.24 iter 53: canvas_scratch heuristic.
+ *
+ * iter 41 ship CanvasScratch 后没自动 trigger condition, 只 admin/AI 显式标
+ * play_as 才用. 旧题库 0 道这么标 → Selena 实际几乎不用.
+ *
+ * iter 49 LLM backfill 后 ~19.6% 题有 requiresScratch=true. 把符合条件的
+ * 自动 route 到 canvas_scratch: 需要列算式 + 不是多步应用题 (多步用 4 步框架)
+ * + 不是速算 (速算不需草稿) + numeric 答 (canvas 答需要数字, choice 不适合).
+ *
+ * 期望: ~10-14% 题自动走 canvas_scratch. Selena 终于真在白板上列算式.
+ */
+function requiresCanvasScratch(q: Question): boolean {
+  if (q.play_as === "canvas_scratch") return true; // 显式标优先
+  // 自动判: 需要列算式 + 不互斥其他模板
+  if (q.requiresScratch !== true) return false;
+  if (q.requiresMultiStep === true) return false; // multi_step 已覆盖
+  if (q.speedEligible === true) return false;     // 速算不需草稿
+  if (q.answer.type !== "number") return false;   // canvas 答需要数字
+  if (q.dot_grid) return false;                   // 几何图形优先 dot_grid_draw
+  if (q.subquestions && q.subquestions.length > 0) return false; // 子题走 shop_counter
+  return true;
+}
+
 const GAME_TYPE_MAP: Record<string, GameTemplate> = {
   speed_calc: "speed_match",
   decimal_shop: "shop_counter",
@@ -94,6 +118,8 @@ export function resolveTemplate(q: Question): GameTemplate {
   // v0.35.1 iter 35 P0-3: MultiStepApplication 优先 — 满足条件直接接管
   // (跟 ScratchInsurance + EstimationGate 互斥 — multiStepPolicy heuristic 内已保证)
   if (requiresMultiStep(q)) return "multi_step_application";
+  // v0.35.24 iter 53: canvas_scratch 自动 trigger — Selena 在白板上列算式
+  if (requiresCanvasScratch(q)) return "canvas_scratch";
   const t = resolveTemplateRaw(q);
   const rerouted = rerouteIfNumericMismatch(q, t);
   return applyP0Policies(q, rerouted);
