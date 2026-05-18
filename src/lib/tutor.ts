@@ -227,14 +227,11 @@ export interface GenerateImageResult {
 }
 
 /**
- * v0.34.12 (Ep142) async pattern：
- * - POST /api/generate/image → 200/202 {taskId, status:"pending"|"done", urls?}
- *   - 老 CF Pages backend 同步返 200 {ok, urls, model, taskId}
- *   - 新 ESA backend 异步返 202 {ok, taskId, status:"pending", statusUrl}
- * - 如果 status===pending → GET /api/generate/image/status/{taskId} 每 2s 轮询
- * - 最长 polling 120s（图生模型一般 30-60s）
- *
- * 兼容两套 backend：解析响应里有 urls 就直接用，否则进 polling。
+ * v0.35.19 (爸爸反馈 5-18): image gen 3 路径自动适配:
+ *   1. **FC-bypass** (新主路径): ESA 返 fcUrl, client 自己 POST FC (走
+ *      token-plan 月订阅, 6-25s sync). ESA 11s 超时绕过.
+ *   2. 老 sync (CF Pages 兼容): ESA 直接返 urls
+ *   3. 老 async (BAILIAN, 已废): ESA 返 taskId, client poll status
  */
 export async function generateImage(args: GenerateImageArgs): Promise<GenerateImageResult> {
   const r = await fetch("/api/generate/image", {
@@ -242,7 +239,6 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
     headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify(args),
   });
-  // 接受 200 + 202
   if (r.status >= 400) {
     let parsed: { error?: string; detail?: string } | null = null;
     try { parsed = await r.json(); } catch { /* */ }
@@ -254,17 +250,43 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
     model?: string;
     taskId?: string;
     status?: "pending" | "done" | "failed";
+    fcUrl?: string;
+    provider?: string;
   };
 
-  // 老 sync 路径：直接给了 urls
+  // 路径 1: FC bypass (v0.35.19 主路径)
+  if (j.provider === "fc-bypass" && typeof j.fcUrl === "string") {
+    const fcR = await fetch(j.fcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader() },
+      body: JSON.stringify(args),
+    });
+    if (!fcR.ok) {
+      let parsed: { error?: string; tried?: unknown } | null = null;
+      try { parsed = await fcR.json(); } catch { /* */ }
+      throw new TutorError(parsed?.error ?? "fc_request_failed", fcR.status, JSON.stringify(parsed?.tried ?? ""));
+    }
+    const fcJ = (await fcR.json()) as {
+      ok?: boolean;
+      urls?: string[];
+      model?: string;
+      provider?: string;
+    };
+    if (!Array.isArray(fcJ.urls) || fcJ.urls.length === 0) {
+      throw new TutorError("fc_no_urls", 502);
+    }
+    return { urls: fcJ.urls, model: fcJ.model ?? "unknown", taskId: "" };
+  }
+
+  // 路径 2: 老 sync (CF Pages 兼容)
   if (Array.isArray(j.urls) && j.urls.length > 0) {
     return { urls: j.urls, model: j.model ?? "unknown", taskId: j.taskId ?? "" };
   }
 
-  // 新 async 路径：需要 polling
+  // 路径 3: 老 async (BAILIAN, 已废止但留 polling 兼容性)
   const taskId = j.taskId;
   if (!taskId) {
-    throw new TutorError("empty_response", r.status, "no urls and no taskId");
+    throw new TutorError("empty_response", r.status, "no urls and no taskId and no fcUrl");
   }
 
   const MAX_POLLS = 60; // 60 × 2s = 120s
@@ -274,7 +296,6 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
       headers: authHeader(),
     });
     if (!sr.ok) {
-      // 401/404 不重试；其他状态码继续
       if (sr.status === 401) throw new TutorError("unauthorized", 401);
       if (sr.status === 404) throw new TutorError("task_not_found", 404);
       continue;
@@ -292,7 +313,6 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
     if (sj.status === "failed") {
       throw new TutorError("gen_failed", 502, sj.error);
     }
-    // pending → continue polling
   }
   throw new TutorError("polling_timeout", 408, `image gen exceeded ${MAX_POLLS * 2}s`);
 }

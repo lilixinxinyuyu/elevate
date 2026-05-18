@@ -1,0 +1,9 @@
+{
+  "name": "xiaojinapp-fc-image-gen",
+  "version": "0.35.19",
+  "description": "Aliyun FC image gen via TOKEN_PLAN_CN sync (bypass ESA 11s timeout)",
+  "type": "module",
+  "main": "index.mjs",
+  "private": true,
+  "dependencies": {}
+}

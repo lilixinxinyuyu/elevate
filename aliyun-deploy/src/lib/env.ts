@@ -42,4 +42,11 @@ export interface Env {
    * 仅作用于 backup-snapshot* paths，其它 super-admin endpoint 仍走原 auth。
    */
   BACKUP_TOKEN?: string;
+  /**
+   * v0.35.19 (爸爸反馈 5-18): Aliyun FC image-gen service URL.
+   * ESA EdgeRoutine 11s 上游超时 → token-plan sync image gen (6-25s) 跑不动,
+   * 用 FC 旁路. 客户端 POST ESA /api/generate/image 拿到这个 URL, 再自己 POST.
+   * 部署见 aliyun-deploy/fc-image-gen/. 当前: https://xiaojinmage-gen-lsrnyfpxfl.cn-hongkong.fcapp.run
+   */
+  FC_IMAGE_GEN_URL?: string;
 }

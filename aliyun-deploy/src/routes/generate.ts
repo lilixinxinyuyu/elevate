@@ -23,7 +23,7 @@ import { Hono } from "hono";
 import type { Env } from "../lib/env";
 import { requireAuth, getUserId } from "../lib/auth";
 import { getOssConfig, ossPut, ossGet } from "../lib/oss";
-import { getChatProviders as getChatProvidersLib, getChatModels as getChatModelsLib } from "../lib/providers";
+import { getChatProviders as getChatProvidersLib, getChatModels as getChatModelsLib, getImageProviders, getImageModels } from "../lib/providers";
 import { normalizeAiQuestion } from "../lib/normalizeAiQuestion";
 import { persistAiQuestions } from "../lib/persistAiQuestions";
 import proxyFallback from "./proxy-fallback";
@@ -178,32 +178,35 @@ async function pollUpstreamTask(
 generate.use("*", requireAuth);
 
 /**
- * POST /api/generate/image
- * 返 202 + {ok:true, taskId, status:"pending", statusUrl}
- * 客户端调 GET /api/generate/image/status/:taskId 轮询
+ * v0.35.19 (爸爸反馈 5-18): image gen 通过 FC 旁路解决 ESA 11s 超时.
  *
- * 🚨 v0.35.14 (2026-05-18 爸爸反馈): BAILIAN async image gen 被默默扣费多日.
- * 现在加 env-flag guard `IMAGE_GEN_ENABLED=true` 才能跑, 默认 disable.
- * 上线 token-plan FC sync 路径 + 爸爸明确同意启用前, 这个 endpoint 始终 503.
- * 见 docs/ai-models-registry.md 顶部"费用敏感铁律" + memory/billing_sensitive_rule.md.
+ * 架构:
+ *   client → POST /api/generate/image (ESA)
+ *   ESA → 返 { ok, fcUrl, provider:"fc-bypass" } (即时, 不调上游)
+ *   client → POST FC URL with Authorization + prompt (~6-25s, FC 60s timeout)
+ *   FC → token-plan chat/completions → 返 { ok, urls, model }
+ *
+ * 为什么不在 ESA 内 proxy: ESA EdgeRoutine 上游 fetch 实测 11s 硬限,
+ * token-plan sync image gen 6-25s, 超过 11s 必 504. FC nodejs20 没此限制.
+ *
+ * 老 BAILIAN async 路径完全废弃 — 不再 fallback, 不再扣按量费用.
+ *
+ * Response (新):
+ *   200 { ok: true, fcUrl, provider: "fc-bypass", note }
+ *   503 { ok: false, error: "fc_image_gen_not_configured" }
+ *
+ * 客户端需要拿到 fcUrl 后自己 POST 一次. 见 src/lib/imageGen.ts (新).
  */
 generate.post("/image", async (c) => {
-  // v0.35.14: 费用 guard. 没有显式 IMAGE_GEN_ENABLED=true → 一律拒绝, 不消费 BAILIAN 配额
-  const env = c.env as { IMAGE_GEN_ENABLED?: string };
-  if (env.IMAGE_GEN_ENABLED !== "true") {
+  const env = c.env as { FC_IMAGE_GEN_URL?: string };
+  const fcUrl = env.FC_IMAGE_GEN_URL;
+  if (!fcUrl) {
     return c.json({
       ok: false,
-      error: "image_gen_disabled",
-      reason: "BAILIAN image gen 已 disable (费用控制). 待 token-plan FC 路径上线后再开. 见 docs/ai-models-registry.md",
+      error: "fc_image_gen_not_configured",
+      reason: "FC_IMAGE_GEN_URL 未 baked 到 ESA env. 部署 fc-image-gen FC 后把 URL 配到 baked-env.ts.",
     }, 503);
   }
-
-  const userId = getUserId(c);
-  const cfg = getOssConfig(c.env);
-  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
-
-  const provider = pickAsyncProvider(c.env);
-  if (!provider) return c.json({ ok: false, error: "image_gen_not_configured" }, 503);
 
   let body: GenImageRequest;
   try {
@@ -213,73 +216,13 @@ generate.post("/image", async (c) => {
   }
   if (!body.prompt) return c.json({ ok: false, error: "missing_prompt" }, 400);
 
-  const fullPrompt = body.style ? `${body.prompt}, ${body.style}` : body.prompt;
-  const size = body.size ?? "1024*1024";
-  const n = body.n ?? 1;
-  const model = body.model ?? DEFAULT_MODELS[0]!;
-
-  // 试模型链直到 createTask 成功（不轮询，只取 task_id）
-  const tried: { model: string; code: string; message: string }[] = [];
-  const models = body.model ? [body.model] : DEFAULT_MODELS;
-  let upstreamTaskId: string | null = null;
-  let pickedModel = model;
-  for (const m of models) {
-    const r = await createUpstreamTask(provider, m, fullPrompt, size, n);
-    if (r.ok) {
-      upstreamTaskId = r.taskId;
-      pickedModel = m;
-      break;
-    }
-    tried.push({ model: m, code: r.code, message: r.message });
-    if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
-  }
-  if (!upstreamTaskId) {
-    return c.json(
-      {
-        ok: false,
-        error: "create_task_failed",
-        tried,
-      },
-      502,
-    );
-  }
-
-  // 我们的 internal taskId（也用 upstream id 简单点）
-  const taskId = upstreamTaskId;
-  const now = Date.now();
-  const state: ImageTaskState = {
-    taskId,
-    userId,
-    upstreamProvider: provider.label,
-    upstreamBaseUrl: provider.baseUrl,
-    upstreamTaskId,
-    model: pickedModel,
-    prompt: fullPrompt,
-    size,
-    status: "pending",
-    urls: [],
-    error: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const putR = await ossPut(cfg, imageTaskKey(userId, taskId), JSON.stringify(state), {
-    contentType: "application/json; charset=utf-8",
+  // 返回 FC URL, 客户端自己 POST (ESA 11s 限制绕不过)
+  return c.json({
+    ok: true,
+    fcUrl,
+    provider: "fc-bypass",
+    note: "client should POST to fcUrl with same Authorization + body to get image. ESA can't proxy because 11s upstream timeout < token-plan image gen 6-25s.",
   });
-  if (!putR.ok) {
-    console.error("[generate/image] save task state failed:", putR.error);
-    // 即使存 OSS 失败也返回 taskId, client 仍可查 upstream（虽然没有元数据）
-  }
-
-  return c.json(
-    {
-      ok: true,
-      taskId,
-      status: "pending",
-      model: pickedModel,
-      statusUrl: `/api/generate/image/status/${taskId}`,
-    },
-    202,
-  );
 });
 
 /**

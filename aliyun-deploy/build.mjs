@@ -41,6 +41,7 @@ const BAKED_KEYS = [
   "DASHSCOPE_API_KEY",
   "SUPER_ADMINS",
   "BACKUP_TOKEN",
+  "FC_IMAGE_GEN_URL",
 ];
 const bakedEnv = {};
 for (const k of BAKED_KEYS) {

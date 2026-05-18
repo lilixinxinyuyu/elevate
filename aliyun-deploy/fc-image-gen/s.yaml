@@ -1,0 +1,43 @@
+# Serverless Devs (s.yaml) — Aliyun FC 3.0 — flat props (fc3@beta.2026.0514+ schema)
+# v0.35.19 (爸爸反馈 5-18): FC service 给 image gen 用, ESA EdgeRoutine 11s
+# 上游超时跑不动 token-plan sync image (~15-25s), FC 没这个限制.
+
+edition: 3.0.0
+name: xiaojinapp-fc-image-gen
+access: default
+
+vars:
+  region: cn-hongkong
+
+resources:
+  xiaojinappImageGen:
+    component: fc3
+    actions:
+      pre-deploy:
+        - run: npm install --omit=dev
+          path: ./
+    props:
+      region: ${vars.region}
+      functionName: xiaojinapp-image-gen
+      runtime: nodejs20
+      handler: index.handler
+      memorySize: 512
+      # token-plan image gen ~15-25s per model, 4 model fallback chain ≤ 50s
+      timeout: 60
+      cpu: 0.35
+      diskSize: 512
+      code: ./
+      internetAccess: true
+      environmentVariables:
+        TOKEN_PLAN_CN_API_KEY: "${env('TOKEN_PLAN_CN_API_KEY')}"
+        APP_PASSWORD: "${env('APP_PASSWORD')}"
+        APP_USERS: "${env('APP_USERS')}"
+      triggers:
+        - triggerName: http
+          triggerType: http
+          triggerConfig:
+            authType: anonymous
+            disableURLInternet: false
+            methods:
+              - POST
+              - OPTIONS
