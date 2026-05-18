@@ -20,3 +20,23 @@
 export function assertUnreachable(x: never, msg?: string): never {
   throw new Error(msg ?? `unreachable: got ${String(x)}`);
 }
+
+/**
+ * v0.35.36 (Gemini peer review HOTFIX): "soft" 版本.
+ *
+ * TS 仍要求 x 类型为 never (= 编译时 exhaustive 一样 enforce),
+ * 但运行时不 throw, 而是返回 fallback 值 + console.error.
+ *
+ * 用于 render path 不能崩的地方: pickPanel / templateTitle 等. 不然 IDB
+ * cache 里有 unknown templateId → render throw → React 整树 unmount → 白屏.
+ *
+ * 用法:
+ *   default: return exhaustiveOr(x, PlainNumericPanel, `pickPanel missing: ${x}`);
+ *
+ * 比单纯 default fallthrough 强: TS 仍抓"加 union member 忘加 case".
+ */
+export function exhaustiveOr<T>(x: never, fallback: T, msg?: string): T {
+  // eslint-disable-next-line no-console
+  console.error(`[exhaustiveOr] ${msg ?? "unreachable"}: got ${String(x)} — falling back`);
+  return fallback;
+}

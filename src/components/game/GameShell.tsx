@@ -62,8 +62,11 @@ import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAd
 // v0.35.32 Refactor Priority 1: GameTemplate Capabilities SSOT
 import { hasBuiltInCanvas } from "../../games/templateCapabilities";
 // v0.35.34 Refactor Priority 2.5: exhaustive switch helper
-import { assertUnreachable } from "../../lib/exhaustive";
+// v0.35.36: 用 exhaustiveOr soft fallback 替代 assertUnreachable, 防 IDB cache 的 unknown templateId 崩 render
+import { exhaustiveOr } from "../../lib/exhaustive";
 import type { GameTemplate } from "../../core/types";
+// v0.35.36 Refactor Priority 4: ErrorBoundary 兜底 unknown templateId
+import { GameErrorBoundary } from "../common/GameErrorBoundary";
 
 export interface AttemptResult {
   answer: unknown;
@@ -618,22 +621,30 @@ export function GameShell(props: GameShellProps) {
           </div>
         </div>
 
-        {/* v0.34.99 iter 33 P0-1: EstimationGate 前置 — 满足 heuristic 的多位数 ×/+ 题先估算 */}
-        {(() => {
-          const needsGate = !examMode && !noRetry && starterDone && !estDone && requiresEstimation(displayedQuestion);
-          if (needsGate) {
-            return (
-              <EstimationGate
-                question={displayedQuestion}
-                onComplete={(signal) => {
-                  setEstSignal(signal);
-                  setEstDone(true);
-                }}
-              />
-            );
-          }
-          return <TemplatePanel key={`${resetKey}::${panelKey}`} {...common} />;
-        })()}
+        {/* v0.34.99 iter 33 P0-1: EstimationGate 前置 — 满足 heuristic 的多位数 ×/+ 题先估算
+            v0.35.36 (Gemini peer review HOTFIX): 用 GameErrorBoundary 兜底 —
+            pickPanel 如果碰到旧 IDB cache 里 unknown templateId 抛 assertUnreachable,
+            ErrorBoundary 接住, 显示"跳过这题"按钮, 不白屏崩溃整个 Train 页. */}
+        <GameErrorBoundary
+          fallbackTitle="这道题渲染出问题了 — 大概率是题型新得系统还没认得. 跳到下一题继续."
+          onSkip={onNext}
+        >
+          {(() => {
+            const needsGate = !examMode && !noRetry && starterDone && !estDone && requiresEstimation(displayedQuestion);
+            if (needsGate) {
+              return (
+                <EstimationGate
+                  question={displayedQuestion}
+                  onComplete={(signal) => {
+                    setEstSignal(signal);
+                    setEstDone(true);
+                  }}
+                />
+              );
+            }
+            return <TemplatePanel key={`${resetKey}::${panelKey}`} {...common} />;
+          })()}
+        </GameErrorBoundary>
 
         {/* v0.35.0 iter 34 P0-2: ScratchInsurance — answer panel 下方工具栏.
             v0.35.27 (爸爸第 3 次反馈): canvas_scratch 模板自带 canvas, 不再渲染
@@ -758,13 +769,15 @@ function pickPanel(id: GameTemplate): (p: TemplateRenderProps) => JSX.Element {
     case "coin_combo": return CoinComboPanel;
     case "time_heist": return TimeHeistPanel;
     case "number_hunt": return NumberHuntPanel;
-    default: return assertUnreachable(id, `pickPanel missing case: ${id}`);
+    default: return exhaustiveOr(id, PlainNumericPanel, `pickPanel missing case: ${id}`);
   }
 }
 
 /**
  * v0.35.34 Refactor Priority 2.5: exhaustive switch — 补 plain_numeric / dot_grid_draw
  * (之前漏 → "挑战" 默认标题, 用户看到错的没人发现).
+ * v0.35.36: default 改用 exhaustiveOr 软 fallback (Gemini HOTFIX) — TS 仍 enforce,
+ * 运行时不崩.
  */
 function templateTitle(id: GameTemplate): string {
   switch (id) {
@@ -791,7 +804,7 @@ function templateTitle(id: GameTemplate): string {
     case "coin_combo": return "凑钱挑战";
     case "time_heist": return "时间窃贼";
     case "number_hunt": return "数字寻宝";
-    default: return assertUnreachable(id, `templateTitle missing case: ${id}`);
+    default: return exhaustiveOr(id, "挑战", `templateTitle missing case: ${id}`);
   }
 }
 

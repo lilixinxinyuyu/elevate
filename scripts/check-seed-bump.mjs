@@ -65,11 +65,19 @@ const hash = createHash("sha256").update(stableStringify(SEED_QUESTIONS)).digest
 const count = SEED_QUESTIONS.length;
 
 // 4. 对比 stored
+// v0.35.36 (GPT peer review HOTFIX): 拆 --check (CI / 默认) vs --update (本地).
+// 默认 --check 不写文件, 只验证. --update 写入新 hash (改 SEED 后本地手动跑).
+// 避免 build 在 CI 里 silently mutate tracked file.
+const isUpdate = process.argv.includes("--update");
 const stored = existsSync(HASH_FILE) ? JSON.parse(readFileSync(HASH_FILE, "utf-8")) : null;
 
 if (!stored) {
-  writeFileSync(HASH_FILE, JSON.stringify({ hash, version: SEED_VERSION, count, updatedAt: new Date().toISOString() }, null, 2) + "\n");
-  console.log(`[check-seed-bump] 第一次 run, 写入: hash=${hash} version=${SEED_VERSION} count=${count}`);
+  if (!isUpdate) {
+    console.error(`[check-seed-bump] FAIL: 没有 ${HASH_FILE}, 第一次 setup. 跑 \`npm run check:seed-bump -- --update\` 写入.`);
+    process.exit(1);
+  }
+  writeFileSync(HASH_FILE, JSON.stringify({ hash, version: SEED_VERSION, count }, null, 2) + "\n");
+  console.log(`[check-seed-bump] 第一次 run (--update), 写入: hash=${hash} version=${SEED_VERSION} count=${count}`);
   process.exit(0);
 }
 
@@ -78,21 +86,34 @@ if (stored.hash === hash) {
   process.exit(0);
 }
 
-// hash changed
-if (stored.version === SEED_VERSION) {
-  console.error(`\n[check-seed-bump] ✗ FAIL: SEED_QUESTIONS content changed but SEED_VERSION not bumped\n`);
+// hash changed — 必须 SEED_VERSION 严格大于 stored.version
+// (GPT peer review 抓的 bug: 之前 `=== `, version 降级也 pass)
+if (SEED_VERSION <= stored.version) {
+  console.error(`\n[check-seed-bump] ✗ FAIL: SEED_QUESTIONS content changed but SEED_VERSION not bumped (or downgraded)\n`);
   console.error(`  stored.hash:     ${stored.hash}  (count=${stored.count})`);
   console.error(`  computed.hash:   ${hash}  (count=${count})`);
   console.error(`  stored.version:  ${stored.version}`);
   console.error(`  current.version: ${SEED_VERSION}\n`);
-  console.error(`  ACTION: bump SEED_VERSION in src/db/seed.ts (${SEED_VERSION} → ${SEED_VERSION + 1})\n`);
+  if (SEED_VERSION === stored.version) {
+    console.error(`  ACTION: bump SEED_VERSION in src/db/seed.ts (${SEED_VERSION} → ${SEED_VERSION + 1})\n`);
+  } else {
+    console.error(`  ACTION: SEED_VERSION 比 stored 小 (${SEED_VERSION} < ${stored.version}), 检查是否误改\n`);
+  }
   console.error(`  否则现有用户 IndexedDB cached 旧 SEED, ensureSeeded() early-return,`);
   console.error(`  新题永远进不来 (v0.35.25 紧急 bug 同种).\n`);
+  console.error(`  本地 SEED 改完确认无误后跑: npm run check:seed-bump -- --update\n`);
   process.exit(1);
 }
 
-// hash changed AND version bumped → 接受 + 更新 stored
-writeFileSync(HASH_FILE, JSON.stringify({ hash, version: SEED_VERSION, count, updatedAt: new Date().toISOString() }, null, 2) + "\n");
-console.log(`[check-seed-bump] ✓ hash 改 + version bumped ${stored.version} → ${SEED_VERSION}, 更新 stored hash`);
+// hash changed AND version bumped strictly
+if (!isUpdate) {
+  console.error(`\n[check-seed-bump] ✗ FAIL: hash & version 都改了, 但 stored 还没同步. 跑 --update 接受.\n`);
+  console.error(`  stored.hash:     ${stored.hash}  -> computed: ${hash}`);
+  console.error(`  stored.version:  ${stored.version} -> current: ${SEED_VERSION}\n`);
+  console.error(`  ACTION: npm run check:seed-bump -- --update\n`);
+  process.exit(1);
+}
+writeFileSync(HASH_FILE, JSON.stringify({ hash, version: SEED_VERSION, count }, null, 2) + "\n");
+console.log(`[check-seed-bump] ✓ --update: hash 改 + version bumped ${stored.version} → ${SEED_VERSION}, 写入新 stored`);
 console.log(`  new hash: ${hash}, count: ${count}`);
 process.exit(0);
