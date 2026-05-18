@@ -36,6 +36,8 @@ import { SteadyAimBanner } from "../SteadyAim";
 import { GAME_TEMPLATES, pickPanel, templateTitle } from "./templateRegistry";
 // v0.35.48 Refactor Priority 15: feedback labels 抽到纯函数
 import { buildFeedbackLabels } from "./feedbackLabels";
+// v0.35.49 Refactor Priority 16: answer describe 纯函数
+import { describeAnswer, describeUserAnswer } from "./answerDescribe";
 import { resolveTemplate } from "./templates/resolve";
 import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAdaptive";
 // v0.35.32 Refactor Priority 1: GameTemplate Capabilities SSOT
@@ -720,39 +722,7 @@ export function GameShell(props: GameShellProps) {
 // 提到 ./templateRegistry.tsx (单一 registry, 23 templates × satisfies enforce).
 // 这里再 re-export 给 GameShell 内部使用 (saves ~60 lines).
 
-function describeAnswer(q: Question): string {
-  const a = q.answer;
-  if (a.type === "number") return `${a.value}`;
-  if (a.type === "choice") {
-    // v0.31.85：只返回 option text。原来带 id 前缀（"C. 1.26"）但 PlainChoice
-    // 视觉洗牌后 user 看到的是 "A. 1.26"，前缀字母不一致 → 反馈"正确答案 C. 1.26"
-    // 跟视觉 "A" 高亮矛盾。只显示 text 完全避开这个错位。
-    const opt = (q.options ?? []).find((o) => o.id === a.value);
-    return opt ? opt.text : a.value;
-  }
-  return a.steps.map((s) => `${s.step_id}=${s.expected}`).join("；");
-}
-
-/** 把用户提交的 answer（unknown）翻译成给 AI tutor 看的人话。 */
-function describeUserAnswer(q: Question, answer: unknown): string {
-  if (answer === null || answer === undefined) return "（未作答）";
-  if (typeof answer === "number") return `${answer}`;
-  if (typeof answer === "string") {
-    // choice 题：answer 是 option id（"A"/"B"…），转成 option text（不带 id 前缀防错位）
-    const opt = (q.options ?? []).find((o) => o.id === answer);
-    if (opt) return opt.text;
-    return answer;
-  }
-  if (typeof answer === "object") {
-    // multi_step 等结构化答案
-    try {
-      return JSON.stringify(answer).slice(0, 80);
-    } catch {
-      return "（结构化答案）";
-    }
-  }
-  return String(answer);
-}
+// v0.35.49 Refactor Priority 16: describeAnswer + describeUserAnswer 抽到 ./answerDescribe.ts
 
 function FeedbackPanel({
   feedback,
