@@ -88,3 +88,46 @@ cron `2ba238c2` 每 30 min 一个 iter. 标准 workflow:
 7. (cron 自动 fire 下轮)
 
 终止: 仅 user explicit "停".
+
+## 进度日志 (2026-05-18 → 19, 20 iters)
+
+| Priority | Version | 内容 | LOC 影响 |
+|---|---|---|---|
+| P1 | v0.35.32 | GameTemplate Capabilities SSOT (templateCapabilities + questionCapabilities) | +140 −56 |
+| P2 | v0.35.33 | SSOT 常量 (config/constants.ts) DAILY_CHALLENGE_TARGET 等 | +51 −7 |
+| P2.5 | v0.35.34 | exhaustive switch + assertUnreachable + 补 plain_numeric/dot_grid_draw title | +22 −96 |
+| P3 | v0.35.35 | scripts/check-seed-bump.mjs (build gate) | +98 |
+| P4 | v0.35.36 | GameErrorBoundary + exhaustiveOr soft fallback (Gemini HOTFIX) | +171 −31 |
+| P5 | v0.35.37 | GAME_TEMPLATES `satisfies` registry | +54 −61 |
+| P6 | v0.35.38 | defineFlag factory (13 flag, 283→174 LOC) | +120 −229 |
+| P7 | v0.35.39 | src/lib/routes.ts URL SSOT (TrainRoute/MockReportRoute) | +124 −13 |
+| P8 | v0.35.40 | scripts/check-content-schema.mjs (cross-ref gate) | +142 |
+| P7.5 | v0.35.41 | Train.tsx parser → TrainRoute.parse | +20 −18 |
+| P9 | v0.35.42 | rename hasBuiltInCanvas → suppressesExternalScratchTools | +20 −16 |
+| P10 | v0.35.43 | src/games/ → src/core/ (反向依赖 cleanup) | +9 −9 |
+| P11 | v0.35.44 | storage.ts SSOT + 2 HOTFIX (routes integer, GAME_TEMPLATE_IDS) | +113 −41 |
+| P12 | v0.35.45 | scripts/check-db-schema.mjs (Dexie migration gate) | +121 |
+| P13 | v0.35.46 | routes union validate (SESSION_MODE_IDS, ATELIER_REALM_IDS) | +39 −6 |
+| P14 | v0.35.47 | 抽 templateRegistry.tsx (GameShell -83) | +101 −90 |
+| P15 | v0.35.48 | 抽 feedbackLabels.ts (GameShell -38) | +92 −46 |
+| P16 | v0.35.49 | 抽 answerDescribe.ts (GameShell -30) | +51 −34 |
+| P17 | v0.35.50 | 抽 RetryHintPanel.tsx (GameShell -71) | +91 −75 |
+
+**GameShell.tsx 1207 → 985 行 (−18%, 4 步).**
+
+**3 build gate**: check-seed-bump / check-content-schema / check-db-schema — 形成 CI 第一防线.
+
+**5 const list satisfies enforce**: GAME_TEMPLATE_IDS / SESSION_MODE_IDS / ATELIER_REALM_IDS / GAME_TEMPLATES (registry) / 各 capability table.
+
+**SSOT 文件**: config/constants.ts / config/storage.ts / lib/routes.ts / lib/exhaustive.ts / lib/featureFlags.ts (defineFlag factory) / core/templateCapabilities + questionCapabilities.
+
+**ErrorBoundary + 软 fallback**: GameErrorBoundary 包 panel render + exhaustiveOr 替代 assertUnreachable 在 render path.
+
+## 后续 deferred (low priority)
+
+- FeedbackPanel 子组件抽出 (~200 行, 但 props 多, risky)
+- useScratchInsuranceState hook (state 深度 woven, 提取净值不高)
+- useEstimationGate hook (同上)
+- TemplateRenderProps + TriggerFx → templates/types.ts (24 file imports 改, 机械工作)
+- SuperAdmin.tsx 拆分 (2500+ 行, 但属内部工具)
+- Train.tsx 拆 (1000+ 行, 跟 GameShell 类似 pattern)
