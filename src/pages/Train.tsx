@@ -38,25 +38,26 @@ import type { MascotEmotion, MascotGesture } from "../components/Mascot3D";
 export function TrainPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const mode = (params.get("mode") as SessionMode | null) ?? "normal";
-  const freshParam = params.get("fresh");
-  const skillIdSingle = params.get("skillId");
-  const skillIdsParam = params.get("skillIds");
+  // v0.35.41 Refactor: URL parse 走 TrainRoute.parse SSOT (强类型 + 容错).
+  // 兼容: parsed.mode undefined → fallback "normal" (跟旧 ?? "normal" 等价).
+  const parsed = TrainRoute.parse(params);
+  const mode: SessionMode = parsed.mode ?? "normal";
+  const freshParam = parsed.fresh !== undefined ? String(parsed.fresh) : null;
+  const skillIdSingle = parsed.skillId ?? null;
+  const skillIdsParsed = parsed.skillIds;
   // v0.35.10: mock_exam ExamPrep dashboard 传 ?size=30|60|80 & ?hard=0|1
-  const sizeParam = params.get("size");
-  const hardParam = params.get("hard");
+  // v0.35.41: parser 已做 clamp 候选, 这里再 clamp [MIN, MAX] (defense in depth)
   const overrideTargetCount = useMemo(() => {
-    if (mode !== "mock_exam" || !sizeParam) return undefined;
-    const n = parseInt(sizeParam, 10);
-    if (!Number.isFinite(n) || n < MOCK_EXAM_MIN_SIZE) return undefined;
-    return Math.min(MOCK_EXAM_MAX_SIZE, n);
-  }, [mode, sizeParam]);
-  const hardTimeLimit = hardParam === "1";
+    if (mode !== "mock_exam" || parsed.size === undefined) return undefined;
+    if (parsed.size < MOCK_EXAM_MIN_SIZE) return undefined;
+    return Math.min(MOCK_EXAM_MAX_SIZE, parsed.size);
+  }, [mode, parsed.size]);
+  const hardTimeLimit = parsed.hard === true;
   const selectedSkillIds = useMemo(() => {
     if (skillIdSingle) return [skillIdSingle];
-    if (skillIdsParam) return skillIdsParam.split(",").filter(Boolean);
+    if (skillIdsParsed && skillIdsParsed.length > 0) return skillIdsParsed;
     return undefined;
-  }, [skillIdSingle, skillIdsParam]);
+  }, [skillIdSingle, skillIdsParsed]);
   const effectiveMode: SessionMode = selectedSkillIds ? "skill" : mode;
 
   const [state, setState] = useState<
@@ -94,9 +95,10 @@ export function TrainPage() {
   });
 
   // 唯一标识本次"想要的训练"——只有 URL 真的改变才重新建会话；HMR / 重渲染都不会重置。
+  // v0.35.41 Refactor: 用 parsed.* 替代散落 params.get
   const initKey = useMemo(
-    () => `${effectiveMode}::${selectedSkillIds?.join(",") ?? ""}::${params.get("unitId") ?? ""}::${freshParam ?? ""}::${sizeParam ?? ""}::${hardParam ?? ""}`,
-    [effectiveMode, selectedSkillIds, freshParam, params, sizeParam, hardParam],
+    () => `${effectiveMode}::${selectedSkillIds?.join(",") ?? ""}::${parsed.unitId ?? ""}::${freshParam ?? ""}::${parsed.size ?? ""}::${parsed.hard === true ? "1" : parsed.hard === false ? "0" : ""}`,
+    [effectiveMode, selectedSkillIds, freshParam, parsed.unitId, parsed.size, parsed.hard],
   );
   const lastInitKeyRef = useRef<string>("__none__");
 
@@ -128,7 +130,7 @@ export function TrainPage() {
           mode: effectiveMode,
           selectedSkillIds,
           fresh: freshParam != null,
-          unitId: params.get("unitId") ?? undefined,
+          unitId: parsed.unitId,
           overrideTargetCount,
           hardTimeLimit,
         });
