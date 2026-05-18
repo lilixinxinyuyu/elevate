@@ -422,6 +422,12 @@
 
 **测试**: 347/349 (2 pre-existing mastery)
 **Typecheck**: clean
-**Build**: 进行中
+**Build**: 4.50s
+**Deploy**: aliyun OSS 232/232, 107.57MB
+
+**Post-review** (两位评审"改后再交"):
+- 共识 blocker #1: Bonus XP 没真发到 student.xp → 已修 (finishSession 把 bonus 加到最后 attempt scoreDelta.total + metadata 记 strengthen session id)
+- 共识 blocker #2: navigate(-1) Train state 可能丢 → defer 调研 (Train state 写 IndexedDB 应该 OK, 留 P1-2.1 验证)
+- 共识 nice-to-have: quiet mode 独立 prop, loading 文案轮播 → defer
 
 

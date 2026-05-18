@@ -50,6 +50,8 @@ export function StrengthenPage() {
   const [xp, setXp] = useState(0);
   const [combo, setCombo] = useState(0);
   const [done, setDone] = useState(false);
+  // Track last attempt id - we'll bump its scoreDelta with bonus on finish
+  const [lastAttemptId, setLastAttemptId] = useState<string | null>(null);
 
   // session id (一次 strengthen session 唯一 — 用于 bonus idempotent)
   const sessionId = useMemo(() => `str-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, []);
@@ -103,6 +105,7 @@ export function StrengthenPage() {
     });
     setXp((x) => x + outcome.points);
     setCombo(outcome.comboAfter);
+    setLastAttemptId(outcome.attempt.id);
     setResults((rs) => {
       const newRs = [...rs];
       newRs[idx] = result.isCorrect;
@@ -115,20 +118,42 @@ export function StrengthenPage() {
     if (!questions) return;
     if (idx >= questions.length - 1) {
       // 最后一题完成 → 总结
-      finishSession();
+      void finishSession();
     } else {
       setIdx(idx + 1);
     }
   }
 
-  function finishSession() {
+  async function finishSession() {
     if (done) return;
-    if (isStrengthenBonusAlreadyAwarded(sessionId)) {
-      // 已经发过 bonus, 不重发 (idempotent)
-      setDone(true);
-      return;
+    const correctCount = results.filter(Boolean).length;
+    const bonus = calcStrengthenBonus(correctCount);
+
+    if (bonus > 0 && lastAttemptId && !isStrengthenBonusAlreadyAwarded(sessionId)) {
+      // 真正发 bonus: 把 bonus 加到最后一道 attempt 的 scoreDelta.total
+      // 这样 getTotalXp (sum attempt scoreDelta.total) 自动算入
+      // 同时 metadata 记下 strengthen session id (评审 B: 让数据可分析)
+      try {
+        const last = await db.attempts.get(lastAttemptId);
+        if (last) {
+          const updated = {
+            ...last,
+            scoreDelta: { ...last.scoreDelta, total: last.scoreDelta.total + bonus },
+            metadata: {
+              ...(last.metadata ?? {}),
+              strengthenBonus: bonus,
+              strengthenSessionId: sessionId,
+              strengthenCorrectCount: correctCount,
+              strengthenTotalQuestions: questions?.length ?? 0,
+            },
+          };
+          await db.attempts.put(updated);
+          markStrengthenBonusAwarded(sessionId);
+        }
+      } catch (e) {
+        console.warn("[strengthen] bonus persist failed:", e);
+      }
     }
-    markStrengthenBonusAwarded(sessionId);
     setDone(true);
   }
 
