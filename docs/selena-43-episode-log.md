@@ -571,4 +571,34 @@
 
 **P2 进度**: 2/3 (稳准挑战 + 模拟整卷成绩分析). 剩 P2-3 试卷 OCR + 收尾 retrospective.
 
+#### Iter 42 进展 (v0.35.7 → v0.35.8) P2-3 试卷错题录入
+
+**预审两位评审"改后再做"共识**:
+- ✅ v1 砍 OCR, 改"手动录入 + 推送" (闭环验证优先)
+- ✅ 不动 db.mistakes (评审 B 防污染 mastery)
+- ✅ 不在录入时调 AI (lazy, Selena 训练时再 generate)
+- ✅ 推送幂等 (paperQuestionId + pushedAt 防重)
+- ✅ UI 用表格/表单, 不是 JSON edit
+- ⏭️ 真 OCR + 自动同型 + Selena 端集成 → 推到 P2-3.1 v2
+
+**实现**:
+- NEW `src/core/paperMistakes.ts`: 类型 + validate + OSS key 约定
+- NEW `src/pages/PaperMistakeEntry.tsx`: 录入页 (cadet + kind + title + 错题表格)
+- NEW `tests/paperMistakes.test.ts` 9 tests 全过
+- 改 `aliyun-deploy/src/routes/super-admin.ts`: 加 POST /papers/save + GET /papers + GET /papers/:cadetUid/:paperId
+- 改 `src/router.tsx` /math/paper-entry lazy 路由
+
+**测试**: 9/9 新 + 全套 pass
+**Build**: 4.54s
+**Deploy**: aliyun OSS 237/237, esa-cli backend 部署 OK
+
+---
+
+### 🎉 Master Plan 全部完成 11/11 件
+
+**P0 全 4/4** + **P1 全 4/4** + **P2 全 3/3** = 11 iter ship.
+v0.34.97 → v0.35.8.
+
+完整 retrospective 见 [`docs/selena-43-retrospective.md`](./selena-43-retrospective.md).
+
 
