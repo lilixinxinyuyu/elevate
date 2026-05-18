@@ -183,7 +183,11 @@ export function requiresEstimationByHeuristic(q: Question): boolean {
   const op = detectMainOperator(q.stem);
   if (op !== "×" && op !== "+") return false;
   const f = classifyStem(q.stem);
-  if (f.digitsMax < 3) return false;
+  // v0.35.9 (爸爸反馈 + audit 发现): 原阈值 digitsMax<3 卡死 95% 题, EstimationGate 实际只触发 1.1%.
+  // 放宽到 digitsMax<2 (即 ≥2 位数也触发). 配合 difficulty/operator 仍能挡掉小学一年级口算 1+2.
+  if (f.digitsMax < 2) return false;
+  // 2 位数 + 单步 + difficulty<3 仍偏简单, 不强制估算 (留给 speedMatch)
+  if (f.digitsMax === 2 && f.opCount <= 1 && q.difficulty < 3) return false;
   // 应用题 (有故事 / 多步) 暂不触发 — 留 P0-3 MultiStepApplication 处理
   if (f.hasStory || f.hasMultiStep) return false;
   return true;

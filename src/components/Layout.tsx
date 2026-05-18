@@ -236,6 +236,24 @@ export function Layout() {
             {/* v0.31.71: 同步状态芯片（已同步/待同步/同步中），点击立即同步 */}
             <SyncStatusIndicator />
 
+            {/* v0.35.9 (爸爸反馈): 管理界面入口 — 从数学 Home 移到 landing header,
+                所有 /:subject/* 子路由可达. */}
+            <NavLink
+              to={`/${subject.id}/admin`}
+              className={({ isActive }) =>
+                `px-2 py-1 rounded-lg text-xs flex items-center gap-1 transition-colors border ${
+                  isActive
+                    ? "bg-orange-500/20 text-orange-200 border-orange-400/40"
+                    : "bg-white/5 hover:bg-white/10 text-slate-300 border-ink-700/60"
+                }`
+              }
+              title="管理 (题库/审核/试卷)"
+              aria-label="管理"
+            >
+              <span aria-hidden>⚙️</span>
+              <span className="hidden sm:inline">管理</span>
+            </NavLink>
+
             {/* 学科切换 chip — v0.30.14: 不再重复显示当前 shortLabel（左上 logo 已经
                 有了），改成中性切换图标，避免视觉冗余但仍保留可点性 */}
             <div className="relative" ref={popoverRef}>

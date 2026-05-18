@@ -74,10 +74,14 @@ export function buildDailySession(input: BuildSessionInput): DailySessionPlan {
   const now = input.now ?? Date.now();
   const rngSeed = input.rngSeed ?? `${input.studentId}:${input.dateKey}:${input.mode}`;
   const rng = input.rng ?? seededRng(hashSeed(rngSeed));
-  const targetCount = Math.max(
-    6,
-    Math.round(input.targetMinutes * (input.mode === "final_sprint" ? 1.3 : 1.0)),
-  );
+  // v0.35.9: 爸爸反馈"今日挑战要 10 题, 不是 15"
+  // 之前公式: targetMinutes (15) * 1.0 = 15 题
+  // 现在: 默认 10 题, final_sprint 13 题 (×1.3). dailyLimitMin 字段 sigfn 改变
+  // 为"建议时长 hint", 题数主导
+  // 这跟"挑战薄弱题/记忆曲线题" 的策略 (见 buildNormalSession) 配合 — 10 题精选
+  // 比 15 题平摊更有针对性.
+  const baseTarget = input.mode === "final_sprint" ? 13 : 10;
+  const targetCount = Math.max(6, baseTarget);
 
   const masteryMap = new Map(input.mastery.map((m) => [m.skillId, m]));
   const dueMistakes = input.mistakes.filter((m) => !m.resolved && m.nextReviewAt <= now);

@@ -1236,6 +1236,13 @@ export function SuperAdminPage() {
           >
             📚 Upload textbook PDF
           </button>
+          {/* v0.35.9 (爸爸反馈): 试卷错题手动录入 — iter 42 ship 后无入口 */}
+          <a
+            href="/math/paper-entry"
+            className="text-xs rounded-full border border-cyan-400/40 hover:border-cyan-300 text-cyan-200 hover:bg-cyan-500/10 px-4 py-2 font-medium transition-colors no-underline"
+          >
+            📝 试卷错题录入
+          </a>
           <button
             type="button"
             onClick={bulkRefreshSummaries}
