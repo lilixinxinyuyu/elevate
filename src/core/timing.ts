@@ -13,7 +13,7 @@
  * 选 B：DB 不动，新题旧题都受益。同一份逻辑也走 audit-questions.mjs 的检查。
  */
 import type { Question } from "./types";
-import { isWriteHeavyQuestion } from "../games/questionCapabilities";
+import { isWriteHeavyQuestion } from "./questionCapabilities";
 
 const READ_BONUS_60 = 15;   // stem 60-119 字
 const READ_BONUS_120 = 25;  // stem ≥ 120 字（替代 60）
@@ -28,7 +28,7 @@ const HARD_CAP = 240;       // 最长 240s（语文阅读理解 D5 级别）
  * 因为电脑书写会比选择答案麻烦很多, 时间不太可控". 草稿/列算式/多步应用 ×2.5
  * 或封顶 240s, 让 Selena 不被倒计时催着不写草稿.
  *
- * v0.35.32 Refactor: 散落的 write-heavy 判定迁到 games/questionCapabilities.ts
+ * v0.35.32 Refactor: 散落的 write-heavy 判定迁到 core/questionCapabilities.ts
  * 单一真相源. 加新 write-heavy 模板只改 templateCapabilities.ts 一处.
  */
 export function adjustedEstimatedTime(q: Question): number {

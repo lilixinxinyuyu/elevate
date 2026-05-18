@@ -13,7 +13,7 @@
  * 自动 reroute (e.g. requiresCanvasScratch 启发式) 走 question 自己的 requiresScratch flag,
  * 这里 union 覆盖, 等价.
  */
-import type { Question, GameTemplate } from "../core/types";
+import type { Question, GameTemplate } from "./types";
 import {
   getCapabilities,
   type GameCapabilities,

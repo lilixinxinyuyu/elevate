@@ -12,7 +12,7 @@ import { sfx } from "../lib/sfx";
 import { ABILITY_LABELS } from "../core/types";
 import { levelFromXp } from "../core/scoring";
 import { findParallelQuestion } from "../core/scheduler";
-import { isWriteHeavyQuestion } from "../games/questionCapabilities";
+import { isWriteHeavyQuestion } from "../core/questionCapabilities";
 // v0.35.33 Refactor Priority 2: SSOT 常量
 import { MOCK_EXAM_MIN_SIZE, MOCK_EXAM_MAX_SIZE } from "../config/constants";
 // v0.35.39 Refactor Priority 7: URL routes SSOT
@@ -447,7 +447,7 @@ export function TrainPage() {
         // v0.35.26 (爸爸 explicit): write-heavy 题 (canvas_scratch / multi_step_application /
         // requiresScratch / requiresMultiStep) 不开 countdown — 电脑书写慢,
         // 倒计时变成"逼孩子心算" 反向激励 (爸爸反馈过 2 次).
-        // v0.35.32: 散落判定收到 games/questionCapabilities.ts 单一真相源.
+        // v0.35.32: 散落判定收到 core/questionCapabilities.ts 单一真相源.
         // mock_exam 硬限时 仍走 examMode 路径 (不被这个 short-circuit 影响).
         countdownEnabled={(() => {
           if (effectiveMode === "big_problems") return false;

@@ -60,7 +60,7 @@ import { NumberHuntPanel } from "./templates/NumberHunt";
 import { resolveTemplate } from "./templates/resolve";
 import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAdaptive";
 // v0.35.32 Refactor Priority 1: GameTemplate Capabilities SSOT
-import { suppressesExternalScratchTools } from "../../games/templateCapabilities";
+import { suppressesExternalScratchTools } from "../../core/templateCapabilities";
 // v0.35.34 Refactor Priority 2.5: exhaustive switch helper
 // v0.35.36: 用 exhaustiveOr soft fallback 替代 assertUnreachable, 防 IDB cache 的 unknown templateId 崩 render
 import { exhaustiveOr } from "../../lib/exhaustive";
@@ -754,7 +754,7 @@ export function GameShell(props: GameShellProps) {
  * 加新模板 step:
  *   1. types.ts 加到 GameTemplate union
  *   2. 在 GAME_TEMPLATES 加 `<id>: { title: "...", Panel: XxxPanel }` 一行
- *   3. (可选) src/games/templateCapabilities.ts 加 writeHeavy 等 capability
+ *   3. (可选) src/core/templateCapabilities.ts 加 writeHeavy 等 capability
  */
 type TemplateDef = {
   readonly title: string;

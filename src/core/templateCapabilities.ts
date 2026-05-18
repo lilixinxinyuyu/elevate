@@ -19,7 +19,7 @@
  *
  * 不要在 consumer 里 inline `templateId === "canvas_scratch"` 判断 — 加新模板会漏.
  */
-import type { GameTemplate } from "../core/types";
+import type { GameTemplate } from "./types";
 
 export type GameCapabilities = {
   /**
