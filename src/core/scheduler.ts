@@ -15,6 +15,8 @@ export interface BuildSessionInput {
   selectedSkillIds?: string[];
   /** v0.31.1：big_problems 模式专用 — 限定到某个单元的大题（点 G4B U1 闯关时） */
   unitId?: string;
+  /** v0.35.10: mock_exam 由 ExamPrep dashboard 传 30/60/80, 覆盖默认 baseTarget */
+  overrideTargetCount?: number;
   now?: number;
   rng?: () => number;
   rngSeed?: string;
@@ -81,7 +83,10 @@ export function buildDailySession(input: BuildSessionInput): DailySessionPlan {
   // 这跟"挑战薄弱题/记忆曲线题" 的策略 (见 buildNormalSession) 配合 — 10 题精选
   // 比 15 题平摊更有针对性.
   const baseTarget = input.mode === "final_sprint" ? 13 : 10;
-  const targetCount = Math.max(6, baseTarget);
+  // v0.35.10: mock_exam 支持外部传 30/60/80 (ExamPrep dashboard)
+  const targetCount = input.overrideTargetCount && input.mode === "mock_exam"
+    ? Math.max(20, Math.min(100, input.overrideTargetCount))
+    : Math.max(6, baseTarget);
 
   const masteryMap = new Map(input.mastery.map((m) => [m.skillId, m]));
   const dueMistakes = input.mistakes.filter((m) => !m.resolved && m.nextReviewAt <= now);
@@ -680,7 +685,8 @@ function buildMockExam(input: InternalInput): DailySessionPlan {
   buckets[4] = sortBucket(buckets[4]);
 
   // 难度配比 10/30/40/20
-  const total = Math.max(20, Math.min(30, input.targetCount));
+  // v0.35.10 (爸爸反馈): 支持 30/60/80 题 (从 Train.tsx ?size= 传 targetCount), cap 100
+  const total = Math.max(20, Math.min(100, input.targetCount));
   const t1 = Math.round(total * 0.1);
   const t2 = Math.round(total * 0.3);
   const t3 = Math.round(total * 0.4);

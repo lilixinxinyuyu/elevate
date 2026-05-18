@@ -706,45 +706,29 @@ export function HomePage() {
         <SteadyAimEntryButton variant="inline" />
       </div>
 
-      {/* ROI #2：每周一次的考试模拟 */}
-      {mockExam && (
-        mockExam.available ? (
-          <Link
-            to={`/math/train?mode=mock_exam&fresh=${Date.now()}`}
-            className="card-glow block border-purple-400/40 bg-gradient-to-br from-purple-600/20 via-fuchsia-500/10 to-pink-500/10 hover:scale-[1.01] transition-transform"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1">
-                <div className="text-xs text-purple-200/70 uppercase tracking-widest">每周一次</div>
-                <div className="font-display font-bold text-lg text-purple-100 mt-0.5">📝 考试模拟</div>
-                <div className="text-xs text-purple-200/80 mt-1">
-                  30 道题 · 锁时钟 · 无提示 · 仿真期末难度（D1:10 / D2:30 / D3:40 / D4:20）
-                </div>
-                {mockExam.lastAt && (
-                  <div className="text-[11px] text-purple-200/60 mt-1">
-                    上次完成：{new Date(mockExam.lastAt).toLocaleDateString()}
-                  </div>
-                )}
-              </div>
-              <div className="chip bg-purple-500/30 border border-purple-300/50 text-purple-50 font-display font-bold">
-                可以挑战
-              </div>
+      {/* v0.35.10 (爸爸反馈): 期末备考中心 — 取代单 card 入口, 内嵌历史/趋势/弱点/小进指导 */}
+      <Link
+        to="/math/exam-prep"
+        className="card-glow block border-purple-400/40 bg-gradient-to-br from-purple-600/20 via-fuchsia-500/10 to-pink-500/10 hover:scale-[1.01] transition-transform"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex-1">
+            <div className="text-xs text-purple-200/70 uppercase tracking-widest">期末冲刺</div>
+            <div className="font-display font-bold text-lg text-purple-100 mt-0.5">📝 期末备考中心</div>
+            <div className="text-xs text-purple-200/80 mt-1">
+              30 / 60 / 80 题模拟卷 · 历史成绩 · 错题趋势 · 小进姐姐指导
             </div>
-          </Link>
-        ) : (
-          <div className="card border-white/10 opacity-70">
-            <div className="flex items-center gap-3">
-              <div className="text-2xl">📝</div>
-              <div className="flex-1">
-                <div className="font-display font-bold text-slate-200">考试模拟</div>
-                <div className="text-xs text-slate-400 mt-0.5">
-                  上次刚做过，{mockExam.daysUntilNext} 天后再开放（每周 1 次保模拟感）
-                </div>
+            {mockExam?.lastAt && (
+              <div className="text-[11px] text-purple-200/60 mt-1">
+                上次模拟:{new Date(mockExam.lastAt).toLocaleDateString()}
               </div>
-            </div>
+            )}
           </div>
-        )
-      )}
+          <div className="chip bg-purple-500/30 border border-purple-300/50 text-purple-50 font-display font-bold">
+            进入 →
+          </div>
+        </div>
+      </Link>
 
       {/* 题库快用完了提示 */}
       {poolHealth &&

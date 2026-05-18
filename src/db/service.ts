@@ -189,6 +189,10 @@ export interface SessionOptions {
   fresh?: boolean;
   /** v0.31.1：big_problems 模式可指定单元（点 G4B U1 闯关 → 只选该单元的大题） */
   unitId?: string;
+  /** v0.35.10 (爸爸反馈): mock_exam 模式可指定题数 (30/60/80, ExamPrep dashboard 传) */
+  overrideTargetCount?: number;
+  /** v0.35.10: mock_exam 硬限时模式 (倒计时强交卷, ExamPrep 传) */
+  hardTimeLimit?: boolean;
 }
 
 export async function getOrCreateSession(
@@ -245,7 +249,8 @@ export async function getOrCreateSession(
     attempts,
     selectedSkillIds: opts.selectedSkillIds,
     unitId: opts.unitId,
-    rngSeed: `${studentId}:${mode}:${term}:${dateKey}:${opts.unitId ?? ""}:${Date.now()}:${Math.random()}`,
+    overrideTargetCount: opts.overrideTargetCount,
+    rngSeed: `${studentId}:${mode}:${term}:${dateKey}:${opts.unitId ?? ""}:${opts.overrideTargetCount ?? ""}:${Date.now()}:${Math.random()}`,
   });
   const session: DailySession = {
     id: uid("s-"),

@@ -37,6 +37,16 @@ export function TrainPage() {
   const freshParam = params.get("fresh");
   const skillIdSingle = params.get("skillId");
   const skillIdsParam = params.get("skillIds");
+  // v0.35.10: mock_exam ExamPrep dashboard 传 ?size=30|60|80 & ?hard=0|1
+  const sizeParam = params.get("size");
+  const hardParam = params.get("hard");
+  const overrideTargetCount = useMemo(() => {
+    if (mode !== "mock_exam" || !sizeParam) return undefined;
+    const n = parseInt(sizeParam, 10);
+    if (!Number.isFinite(n) || n < 20) return undefined;
+    return Math.min(100, n);
+  }, [mode, sizeParam]);
+  const hardTimeLimit = hardParam === "1";
   const selectedSkillIds = useMemo(() => {
     if (skillIdSingle) return [skillIdSingle];
     if (skillIdsParam) return skillIdsParam.split(",").filter(Boolean);
@@ -80,8 +90,8 @@ export function TrainPage() {
 
   // 唯一标识本次"想要的训练"——只有 URL 真的改变才重新建会话；HMR / 重渲染都不会重置。
   const initKey = useMemo(
-    () => `${effectiveMode}::${selectedSkillIds?.join(",") ?? ""}::${params.get("unitId") ?? ""}::${freshParam ?? ""}`,
-    [effectiveMode, selectedSkillIds, freshParam, params],
+    () => `${effectiveMode}::${selectedSkillIds?.join(",") ?? ""}::${params.get("unitId") ?? ""}::${freshParam ?? ""}::${sizeParam ?? ""}::${hardParam ?? ""}`,
+    [effectiveMode, selectedSkillIds, freshParam, params, sizeParam, hardParam],
   );
   const lastInitKeyRef = useRef<string>("__none__");
 
@@ -114,6 +124,8 @@ export function TrainPage() {
           selectedSkillIds,
           fresh: freshParam != null,
           unitId: params.get("unitId") ?? undefined,
+          overrideTargetCount,
+          hardTimeLimit,
         });
         if (lastInitKeyRef.current !== myKey) return;
         if (questions.length === 0) {
