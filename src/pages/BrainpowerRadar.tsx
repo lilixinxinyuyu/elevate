@@ -74,17 +74,21 @@ export default function BrainpowerRadarPage() {
         {snapshot.dimensions.map((d) => {
           const pct = Math.round(d.value * 100);
           const isEmpty = d.denominator === 0;
+          // 评审共识: 样本太少 (< 5) 不显示红色, 改"正在点亮" 蓝色 (防新手满屏红)
+          const isLowSample = !isEmpty && d.denominator < 5;
           return (
             <div
               key={d.id}
               className={`rounded-xl border p-3 ${
                 isEmpty
                   ? "bg-slate-800/30 border-slate-500/30"
-                  : pct >= 70
-                    ? "bg-emerald-500/10 border-emerald-400/40"
-                    : pct >= 40
-                      ? "bg-amber-500/10 border-amber-400/40"
-                      : "bg-rose-500/10 border-rose-400/40"
+                  : isLowSample
+                    ? "bg-sky-500/10 border-sky-400/40"
+                    : pct >= 70
+                      ? "bg-emerald-500/10 border-emerald-400/40"
+                      : pct >= 40
+                        ? "bg-amber-500/10 border-amber-400/40"
+                        : "bg-rose-500/10 border-rose-400/40"
               }`}
             >
               <div className="flex items-center gap-2">
@@ -95,6 +99,7 @@ export default function BrainpowerRadarPage() {
                 </div>
                 {!isEmpty && (
                   <span className={`text-lg font-bold ${
+                    isLowSample ? "text-sky-200" :
                     pct >= 70 ? "text-emerald-200" : pct >= 40 ? "text-amber-200" : "text-rose-200"
                   }`}>
                     {pct}%
@@ -105,13 +110,16 @@ export default function BrainpowerRadarPage() {
                 <div className="mt-2 h-2 rounded-full bg-slate-900/60 overflow-hidden">
                   <div
                     className={`h-full transition-all ${
+                      isLowSample ? "bg-sky-400" :
                       pct >= 70 ? "bg-emerald-400" : pct >= 40 ? "bg-amber-400" : "bg-rose-400"
                     }`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
               )}
-              <p className="mt-1.5 text-xs text-indigo-200/80">{d.detail}</p>
+              <p className="mt-1.5 text-xs text-indigo-200/80">
+                {isLowSample ? `🌱 正在点亮 — ${d.detail}` : d.detail}
+              </p>
             </div>
           );
         })}

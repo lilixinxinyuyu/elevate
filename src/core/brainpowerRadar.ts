@@ -110,7 +110,7 @@ function computeEstimationDimension(attempts: Attempt[]): RadarDimension {
   const value = withEst.length > 0 ? hit.length / withEst.length : 0;
   return {
     id: "estimation",
-    name: "直觉力 | 估算数量级",
+    name: "直觉力 | 先猜个大概",
     icon: "🧠",
     description: "估算数量级命中率",
     value,
@@ -134,7 +134,7 @@ function computeScratchDimension(attempts: Attempt[]): RadarDimension {
   const value = triggered.length > 0 ? usedScratch.length / triggered.length : 0;
   return {
     id: "scratch",
-    name: "严谨力 | 草稿检查",
+    name: "严谨力 | 细节不出错",
     icon: "✍️",
     description: "草稿险使用率",
     value,
@@ -158,7 +158,7 @@ function computeMultiStepDimension(attempts: Attempt[]): RadarDimension {
   const value = multiStepAttempts.length > 0 ? allCorrect.length / multiStepAttempts.length : 0;
   return {
     id: "multiStep",
-    name: "拆解力 | 多步解题",
+    name: "拆解力 | 复杂变简单",
     icon: "📋",
     description: "应用题 4 步法全对率",
     value,
@@ -191,7 +191,7 @@ function computeStrengthenDimension(attempts: Attempt[]): RadarDimension {
   const value = total > 0 ? perfect / total : 0;
   return {
     id: "strengthen",
-    name: "专项力 | 强化挑战",
+    name: "专项力 | 同类题不再错",
     icon: "🎯",
     description: "强化挑战全对率",
     value,
@@ -210,7 +210,7 @@ function computeBaseSystemDimension(): RadarDimension {
   const allDone = areAllLessonsComplete();
   return {
     id: "baseSystem",
-    name: "框架力 | 进制关卡",
+    name: "框架力 | 知识连成网",
     icon: "📐",
     description: "进制小课堂完成度 (不受时间筛选影响, 累计)",
     value,

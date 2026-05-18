@@ -494,8 +494,18 @@
 **Typecheck**: clean
 **Build**: 4.41s
 **Deploy**: aliyun OSS 235/235, 107.59MB
-**Post-review**: 进行中
+**Post-review** (两位 PASS pending blockers):
+- 副标改大白话 (两家共识): "估算数量级" → "先猜个大概" / "数量级"小学生听不懂
+- 样本 < 5 显示蓝色"正在点亮" (防新手满屏红挫败)
+- skillId 加 `virtual/` 前缀 (防 SkillPicker / Admin 误展示)
 
-**P1 全部完成 4/4** (错题侦探 + 强化挑战 + 进制小课堂 + 脑力雷达).
+**应用**:
+- ✅ 5 维度副标全改大白话: 直觉力|先猜个大概 / 严谨力|细节不出错 / 拆解力|复杂变简单 / 专项力|同类题不再错 / 框架力|知识连成网
+- ✅ isLowSample=denominator<5 → 蓝色 sky-400 + "🌱 正在点亮"
+- ✅ 错题侦探 skillId 改 `virtual/mistake_hunt_${kind}`
+
+**最终**: v0.35.5 ship + post-review fix (commit e25fb67 + hotfix)
+
+**P1 全部完成 4/4** (错题侦探 + 强化挑战 + 进制小课堂 + 脑力雷达). 接下来 P2.
 
 

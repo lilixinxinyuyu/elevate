@@ -49,7 +49,7 @@ export default function MistakeHuntPage() {
         studentId,
         subjectId: "math",
         questionId: `mh-${mhSessionId}-${idx}`,
-        skillId: `mistake_hunt_${card.kind}`,
+        skillId: `virtual/mistake_hunt_${card.kind}`, // virtual/ 前缀防 SkillPicker 误展示
         sessionId: undefined,
         answer: { picked: state.solved ? card.buggyLineIdx : -1 },
         isCorrect: state.solved,
