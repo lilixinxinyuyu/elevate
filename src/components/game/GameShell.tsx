@@ -61,6 +61,9 @@ import { resolveTemplate } from "./templates/resolve";
 import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAdaptive";
 // v0.35.32 Refactor Priority 1: GameTemplate Capabilities SSOT
 import { hasBuiltInCanvas } from "../../games/templateCapabilities";
+// v0.35.34 Refactor Priority 2.5: exhaustive switch helper
+import { assertUnreachable } from "../../lib/exhaustive";
+import type { GameTemplate } from "../../core/types";
 
 export interface AttemptResult {
   answer: unknown;
@@ -726,106 +729,69 @@ export function GameShell(props: GameShellProps) {
   );
 }
 
-function pickPanel(id: string): (p: TemplateRenderProps) => JSX.Element {
+/**
+ * v0.35.34 Refactor Priority 2.5: exhaustive switch. GameTemplate 加 member
+ * 不在这里加 case → TS compile error (assertUnreachable never 类型不匹配).
+ */
+function pickPanel(id: GameTemplate): (p: TemplateRenderProps) => JSX.Element {
   switch (id) {
-    case "speed_match":
-      return SpeedMatchPanel;
-    case "shop_counter":
-      return ShopCounterPanel;
-    case "equation_builder":
-      return EquationBuilderPanel;
-    case "clue_finder":
-      return ClueFinderPanel;
-    case "plain_choice":
-      return PlainChoicePanel;
-    case "sort_ladder":
-      return SortLadderPanel;
-    case "true_false_swipe":
-      return TrueFalseSwipePanel;
-    case "vertical_repair":
-      return VerticalRepairPanel;
-    case "decimal_shifter":
-      return DecimalShifterPanel;
-    case "memory_match":
-      return MemoryMatchPanel;
-    case "shape_court":
-      return ShapeCourtPanel;
-    case "balance_lab":
-      return BalanceLabPanel;
-    case "chart_detective":
-      return ChartDetectivePanel;
-    case "cube_view":
-      return CubeViewerPanel;
-    case "triangle_judge":
-      return TriangleJudgePanel;
-    case "dot_grid_draw":
-      return DotGridDrawPanel;
-    case "multi_step_application":
-      return MultiStepApplicationPanel;
-    case "canvas_scratch":
-      return CanvasScratchPanel;
-    // v0.31.87 — 5 个新玩法（Discount Drift / Coin Combo / Time Heist / Number Hunt）
-    // shape_builder 复用 dot_grid_draw 不需要新 panel
-    case "discount_drift":
-      return DiscountDriftPanel;
-    case "coin_combo":
-      return CoinComboPanel;
-    case "time_heist":
-      return TimeHeistPanel;
-    case "number_hunt":
-      return NumberHuntPanel;
-    default:
-      return PlainNumericPanel;
+    case "speed_match": return SpeedMatchPanel;
+    case "shop_counter": return ShopCounterPanel;
+    case "equation_builder": return EquationBuilderPanel;
+    case "clue_finder": return ClueFinderPanel;
+    case "plain_choice": return PlainChoicePanel;
+    case "plain_numeric": return PlainNumericPanel; // v0.35.34 显式 (之前走 default)
+    case "sort_ladder": return SortLadderPanel;
+    case "true_false_swipe": return TrueFalseSwipePanel;
+    case "vertical_repair": return VerticalRepairPanel;
+    case "decimal_shifter": return DecimalShifterPanel;
+    case "memory_match": return MemoryMatchPanel;
+    case "shape_court": return ShapeCourtPanel;
+    case "balance_lab": return BalanceLabPanel;
+    case "chart_detective": return ChartDetectivePanel;
+    case "cube_view": return CubeViewerPanel;
+    case "triangle_judge": return TriangleJudgePanel;
+    case "dot_grid_draw": return DotGridDrawPanel;
+    case "multi_step_application": return MultiStepApplicationPanel;
+    case "canvas_scratch": return CanvasScratchPanel;
+    case "discount_drift": return DiscountDriftPanel;
+    case "coin_combo": return CoinComboPanel;
+    case "time_heist": return TimeHeistPanel;
+    case "number_hunt": return NumberHuntPanel;
+    default: return assertUnreachable(id, `pickPanel missing case: ${id}`);
   }
 }
 
-function templateTitle(id: string): string {
+/**
+ * v0.35.34 Refactor Priority 2.5: exhaustive switch — 补 plain_numeric / dot_grid_draw
+ * (之前漏 → "挑战" 默认标题, 用户看到错的没人发现).
+ */
+function templateTitle(id: GameTemplate): string {
   switch (id) {
-    case "speed_match":
-      return "闪电匹配";
-    case "shop_counter":
-      return "小数商店";
-    case "equation_builder":
-      return "方程拼装";
-    case "clue_finder":
-      return "线索侦探";
-    case "sort_ladder":
-      return "数字阶梯";
-    case "plain_choice":
-      return "选择题";
-    case "true_false_swipe":
-      return "对错冲刺";
-    case "vertical_repair":
-      return "竖式修理厂";
-    case "decimal_shifter":
-      return "小数点滑梯";
-    case "memory_match":
-      return "记忆配对";
-    case "shape_court":
-      return "图形法庭";
-    case "balance_lab":
-      return "天平实验室";
-    case "chart_detective":
-      return "数据侦探";
-    case "cube_view":
-      return "立体观察";
-    case "triangle_judge":
-      return "三角形法庭";
-    // v0.31.87 5 个新玩法
-    case "discount_drift":
-      return "折扣漂移";
-    case "coin_combo":
-      return "凑钱挑战";
-    case "time_heist":
-      return "时间窃贼";
-    case "number_hunt":
-      return "数字寻宝";
-    case "multi_step_application":
-      return "应用题 4 步法";
-    case "canvas_scratch":
-      return "画板列算式";
-    default:
-      return "挑战";
+    case "speed_match": return "闪电匹配";
+    case "shop_counter": return "小数商店";
+    case "equation_builder": return "方程拼装";
+    case "clue_finder": return "线索侦探";
+    case "sort_ladder": return "数字阶梯";
+    case "plain_choice": return "选择题";
+    case "plain_numeric": return "口算挑战";  // v0.35.34 补
+    case "true_false_swipe": return "对错冲刺";
+    case "vertical_repair": return "竖式修理厂";
+    case "decimal_shifter": return "小数点滑梯";
+    case "memory_match": return "记忆配对";
+    case "shape_court": return "图形法庭";
+    case "balance_lab": return "天平实验室";
+    case "chart_detective": return "数据侦探";
+    case "cube_view": return "立体观察";
+    case "triangle_judge": return "三角形法庭";
+    case "dot_grid_draw": return "点子图画图";  // v0.35.34 补
+    case "multi_step_application": return "应用题 4 步法";
+    case "canvas_scratch": return "画板列算式";
+    case "discount_drift": return "折扣漂移";
+    case "coin_combo": return "凑钱挑战";
+    case "time_heist": return "时间窃贼";
+    case "number_hunt": return "数字寻宝";
+    default: return assertUnreachable(id, `templateTitle missing case: ${id}`);
   }
 }
 
