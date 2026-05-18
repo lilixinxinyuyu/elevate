@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { db } from "../db/dexie";
 import { ensureSeeded } from "../db/seed";
 import { finalizeSession, getOrCreateSession, getTotalXp, submitAttempt, trophyById, recordMockExamCompleted } from "../db/service";
+import { isMockExamReportV1 } from "../lib/featureFlags";
 import type { DailySession, Question, SessionMode, SessionSummary } from "../core/types";
 import { GameShell, type AttemptResult } from "../components/game/GameShell";
 import { RewardChest } from "../components/game/RewardChest";
@@ -306,9 +307,14 @@ export function TrainPage() {
       try {
         const summary = await finalizeSession(state.studentId, state.session.id);
         if (summary.levelAfter > summary.levelBefore) sfx.levelUp();
-        // 考试模拟模式：记录完成时间用于一周节流
+        // 考试模拟模式：记录完成时间用于一周节流 + 跳成绩分析报告 (v0.35.7 iter 41 P2-2)
         if (effectiveMode === "mock_exam") {
           await recordMockExamCompleted(state.studentId);
+          // 跳转到成绩分析页 (sessionId 透传, isMockExamReportV1 默认 ON)
+          if (isMockExamReportV1()) {
+            navigate(`/math/mock-report?sessionId=${state.session.id}`);
+            return; // 不再走 done state, 直接由 report page 渲染
+          }
         }
         // v0.32.9: 沙箱版工坊 — 如果本次 session 从工坊启动，给灵感 + 记录 realm 完成
         const fromAtelier = params.get("fromAtelier") as AtelierRealmId | null;

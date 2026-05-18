@@ -254,6 +254,21 @@ export function isSteadyAimV1(): boolean {
   }
 }
 
+/**
+ * v0.35.7 (iter 41 P2-2): 模拟整卷成绩分析报告.
+ * 见 src/core/mockExamReport.ts
+ */
+const MOCK_EXAM_REPORT_LS_KEY = "mock_exam_report_v1";
+
+export function isMockExamReportV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(MOCK_EXAM_REPORT_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function isEstimationGateV1(): boolean {
   if (typeof window === "undefined") return true;
   if (!_estGateSynced) {
