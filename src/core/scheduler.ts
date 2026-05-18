@@ -1,6 +1,14 @@
 import { FINAL_SPRINT_G4B } from "../content/examPriorities";
 import { SKILLS } from "../content/skills";
 import type { Attempt, MasteryScore, MistakeReview, Question, SessionMode, Skill } from "./types";
+// v0.35.33 Refactor Priority 2: SSOT 常量
+import {
+  DAILY_CHALLENGE_TARGET,
+  FINAL_SPRINT_TARGET,
+  MOCK_EXAM_MIN_SIZE,
+  MOCK_EXAM_MAX_SIZE,
+  MIN_VALID_SESSION_SIZE,
+} from "../config/constants";
 
 export interface BuildSessionInput {
   studentId: string;
@@ -82,11 +90,12 @@ export function buildDailySession(input: BuildSessionInput): DailySessionPlan {
   // 为"建议时长 hint", 题数主导
   // 这跟"挑战薄弱题/记忆曲线题" 的策略 (见 buildNormalSession) 配合 — 10 题精选
   // 比 15 题平摊更有针对性.
-  const baseTarget = input.mode === "final_sprint" ? 13 : 10;
+  // v0.35.33 Refactor Priority 2: 常量 SSOT → config/constants.ts
+  const baseTarget = input.mode === "final_sprint" ? FINAL_SPRINT_TARGET : DAILY_CHALLENGE_TARGET;
   // v0.35.10: mock_exam 支持外部传 30/60/80 (ExamPrep dashboard)
   const targetCount = input.overrideTargetCount && input.mode === "mock_exam"
-    ? Math.max(20, Math.min(100, input.overrideTargetCount))
-    : Math.max(6, baseTarget);
+    ? Math.max(MOCK_EXAM_MIN_SIZE, Math.min(MOCK_EXAM_MAX_SIZE, input.overrideTargetCount))
+    : Math.max(MIN_VALID_SESSION_SIZE, baseTarget);
 
   const masteryMap = new Map(input.mastery.map((m) => [m.skillId, m]));
   const dueMistakes = input.mistakes.filter((m) => !m.resolved && m.nextReviewAt <= now);

@@ -52,6 +52,8 @@ import { currentExam, daysUntil, FINAL } from "../core/examDates";
 import { getTricksTodayCount } from "../lib/mathTricksProgress";
 // v0.35.6 iter 40 P2-1: 稳准挑战 inline entry
 import { SteadyAimEntryButton } from "../components/SteadyAim";
+// v0.35.33 Refactor Priority 2: SSOT 常量
+import { DAILY_CHALLENGE_TARGET } from "../config/constants";
 
 /** 把毫秒时间戳格式成本地日期字符串 YYYY-MM-DD（与 todayKey 一致） */
 function localDayKey(ts: number): string {
@@ -552,7 +554,7 @@ export function HomePage() {
           mistakeRingStickyDone: mistakeRingStickyDone ?? false,
           skillsNeedingReview: skillsNeedingReview ?? { toReview: [], practicedToday: 0, total: 0 },
           todayCount: todayAttempts.length,
-          challengeTarget: 10,  // v0.35.31 (爸爸第 5 次反馈 follow-up): 跟 scheduler baseTarget=10 对齐, 不再 15
+          challengeTarget: DAILY_CHALLENGE_TARGET,  // v0.35.33 Refactor Priority 2: 单一真相源 config/constants.ts
           mastery: mastery ?? [],
           mistakes: mistakes ?? [],
           streak,

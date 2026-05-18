@@ -13,6 +13,8 @@ import { ABILITY_LABELS } from "../core/types";
 import { levelFromXp } from "../core/scoring";
 import { findParallelQuestion } from "../core/scheduler";
 import { isWriteHeavyQuestion } from "../games/questionCapabilities";
+// v0.35.33 Refactor Priority 2: SSOT 常量
+import { MOCK_EXAM_MIN_SIZE, MOCK_EXAM_MAX_SIZE } from "../config/constants";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { pushToCloud } from "../db/cloudSync";
@@ -44,8 +46,8 @@ export function TrainPage() {
   const overrideTargetCount = useMemo(() => {
     if (mode !== "mock_exam" || !sizeParam) return undefined;
     const n = parseInt(sizeParam, 10);
-    if (!Number.isFinite(n) || n < 20) return undefined;
-    return Math.min(100, n);
+    if (!Number.isFinite(n) || n < MOCK_EXAM_MIN_SIZE) return undefined;
+    return Math.min(MOCK_EXAM_MAX_SIZE, n);
   }, [mode, sizeParam]);
   const hardTimeLimit = hardParam === "1";
   const selectedSkillIds = useMemo(() => {
