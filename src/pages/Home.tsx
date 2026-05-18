@@ -397,6 +397,22 @@ export function HomePage() {
     await setSelectedTerm(student.id, t);
   };
 
+  // v0.35.13 iter 43 (爸爸反馈): iOS Arcade 风格 3 tab.
+  // 今日 = 今日 ring / 弱点 / 备考 CTA / 池 health 等"现在该做的事"
+  // 游戏厅 = 全部 mini-game grid (巧算 / 错题侦探 / 强化 / 进制 / 雷达 / canvas)
+  // 个人 = TierCard + WeeklyCompare + MascotProfile + 段位柜 + 奖杯墙
+  // tab 状态 sessionStorage 保留 (页内切来切去不掉)
+  const [arcadeTab, setArcadeTab] = useState<"today" | "library" | "profile">(() => {
+    if (typeof window === "undefined") return "today";
+    const saved = sessionStorage.getItem("xiaojinapp.home.tab");
+    if (saved === "library" || saved === "profile") return saved;
+    return "today";
+  });
+  const switchArcadeTab = (t: "today" | "library" | "profile") => {
+    setArcadeTab(t);
+    if (typeof window !== "undefined") sessionStorage.setItem("xiaojinapp.home.tab", t);
+  };
+
   if (!student) return <div className="card">正在初始化…</div>;
 
   // 用本地日期（与 todayKey 一致），避免 UTC 时区导致连续天数错判
@@ -471,33 +487,62 @@ export function HomePage() {
         ))}
       </div>
 
-      {/* Hero：综合分 + 段位 + 佩戴的勋章 + 能力诊断（v0.30.2） */}
-      {rating ? (
-        <TierCard
-          studentName={student.name}
-          rating={rating}
-          equippedBadge={equippedBadge}
-          ability={ability}
-        />
-      ) : (
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/30 via-fuchsia-600/20 to-pink-600/30 border border-violet-400/20 p-6">
-          <div className="text-sm text-violet-200">你好 {student.name} 👋</div>
-          <div className="mt-2 font-display text-2xl text-white">载入中…</div>
-        </section>
+      {/* v0.35.13 iter 43 (爸爸反馈): iOS Arcade 风 3 tab 顶栏 */}
+      <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-slate-900/60 border border-white/10">
+        {([
+          { id: "today", label: "今日", icon: "🎯" },
+          { id: "library", label: "游戏厅", icon: "🎮" },
+          { id: "profile", label: "个人", icon: "👤" },
+        ] as const).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => switchArcadeTab(t.id)}
+            className={`text-xs sm:text-sm font-semibold py-2 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+              arcadeTab === t.id
+                ? "bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/30"
+                : "text-slate-300 hover:bg-white/5"
+            }`}
+          >
+            <span className="text-base">{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Hero：综合分 + 段位 + 佩戴的勋章 + 能力诊断（v0.30.2） — 今日 + 个人都显示 */}
+      {(arcadeTab === "today" || arcadeTab === "profile") && (
+        rating ? (
+          <TierCard
+            studentName={student.name}
+            rating={rating}
+            equippedBadge={equippedBadge}
+            ability={ability}
+          />
+        ) : (
+          <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/30 via-fuchsia-600/20 to-pink-600/30 border border-violet-400/20 p-6">
+            <div className="text-sm text-violet-200">你好 {student.name} 👋</div>
+            <div className="mt-2 font-display text-2xl text-white">载入中…</div>
+          </section>
+        )
       )}
 
-      {/* v0.31.53：闯关星章独立卡 — v0.34.93 lazy */}
-      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
-        <BossStarCard studentId={student.id} />
-      </Suspense>
+      {/* v0.31.53：闯关星章独立卡 — 今日 */}
+      {arcadeTab === "today" && (
+        <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+          <BossStarCard studentId={student.id} />
+        </Suspense>
+      )}
 
-      {/* v0.31.50：本周 vs 上周 — v0.34.93 lazy */}
-      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
-        <WeeklyCompareCard attempts={attempts ?? []} />
-      </Suspense>
+      {/* v0.31.50：本周 vs 上周 — 个人 */}
+      {arcadeTab === "profile" && (
+        <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+          <WeeklyCompareCard attempts={attempts ?? []} />
+        </Suspense>
+      )}
 
-      {/* v0.31.2：今日 3 同心环（取代之前的 chip 行）*/}
-      {isPhase2Live() ? (
+      {/* v0.31.2：今日 3 同心环（取代之前的 chip 行）— 仅今日 tab */}
+      {arcadeTab === "today" && (isPhase2Live() ? (
         <TodayRings {...buildTodayRingsInput({
           fluencyTodayCount: fluencyTodayCount ?? 0,
           tricksTodayCount: tricksTodayCount ?? 0,
@@ -550,13 +595,13 @@ export function HomePage() {
             ▶ 开始今日挑战
           </Link>
         </div>
-      )}
+      ))}
 
       {/* v0.31.113 入口已下线（旧 paradise 实验 → 走 /worlds 奇遇乐园新入口） */}
 
 
-      {/* ROI #1：红旗 skill 提示（连错 3+ 次）— v0.31.19 改"让小进帮忙" */}
-      {struggleSkills.length > 0 && (
+      {/* ROI #1：红旗 skill 提示（连错 3+ 次）— 仅今日 tab */}
+      {arcadeTab === "today" && struggleSkills.length > 0 && (
         <section className="card-glow border-rose-400/50 bg-gradient-to-br from-rose-500/15 to-amber-500/10">
           <div className="flex items-start gap-3">
             <div className="text-3xl">🚩</div>
@@ -617,8 +662,8 @@ export function HomePage() {
         </Suspense>
       )}
 
-      {/* v0.31.92：3 卡同行 — 考试冲刺 / 技能图 / 巧算工具箱。
-          mobile 仍能 2 列 + 1 占满（grid-cols-2 sm:grid-cols-3） */}
+      {/* v0.31.92：3 卡同行 — 考试冲刺 / 技能图 / 巧算工具箱 — 仅游戏厅 tab */}
+      {arcadeTab === "library" && (
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {(() => {
           const exam = currentExam();
@@ -700,13 +745,17 @@ export function HomePage() {
           </div>
         </Link>
       </div>
+      )}
 
-      {/* v0.35.6 iter 40 P2-1: 稳准挑战入口 (Home 底部弱小, 不放主区域防误点) */}
-      <div className="mt-3 flex justify-center">
-        <SteadyAimEntryButton variant="inline" />
-      </div>
+      {/* v0.35.6 iter 40 P2-1: 稳准挑战入口 — 仅游戏厅 */}
+      {arcadeTab === "library" && (
+        <div className="mt-3 flex justify-center">
+          <SteadyAimEntryButton variant="inline" />
+        </div>
+      )}
 
-      {/* v0.35.10 (爸爸反馈): 期末备考中心 — 取代单 card 入口, 内嵌历史/趋势/弱点/小进指导 */}
+      {/* v0.35.10 (爸爸反馈): 期末备考中心 — 今日 + 游戏厅都可点 */}
+      {(arcadeTab === "today" || arcadeTab === "library") && (
       <Link
         to="/math/exam-prep"
         className="card-glow block border-purple-400/40 bg-gradient-to-br from-purple-600/20 via-fuchsia-500/10 to-pink-500/10 hover:scale-[1.01] transition-transform"
@@ -729,9 +778,10 @@ export function HomePage() {
           </div>
         </div>
       </Link>
+      )}
 
-      {/* 题库快用完了提示 */}
-      {poolHealth &&
+      {/* 题库快用完了提示 — 仅今日 */}
+      {arcadeTab === "today" && poolHealth &&
         (poolHealth.freshTotal < 30 ||
           poolHealth.freshMidterm < 15 ||
           poolHealth.starvedSkills.length >= 5) && (
@@ -760,44 +810,52 @@ export function HomePage() {
           </section>
         )}
 
-      {/* v0.30.9: 学期进度（单元解锁面板） — v0.34.93 lazy */}
-      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
-        <UnitProgress studentId={student.id} term={term} />
-      </Suspense>
+      {/* v0.30.9: 学期进度 — 今日 (Selena 看进度) */}
+      {arcadeTab === "today" && (
+        <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+          <UnitProgress studentId={student.id} term={term} />
+        </Suspense>
+      )}
 
-      {/* 小进姐姐资料卡：等级 + XP 进度 + 切音色 + 一键找小进聊 — v0.34.91 lazy */}
-      <Suspense fallback={
-        <div className="card-glow text-center text-slate-400 text-sm py-8">
-          <span className="inline-block w-4 h-4 border-2 border-slate-500 border-t-violet-400 rounded-full animate-spin mr-2 align-middle" />
-          小进姐姐准备中…
-        </div>
-      }>
-        <MascotProfile studentId={student.id} />
-      </Suspense>
+      {/* 小进姐姐资料卡 — 个人 */}
+      {arcadeTab === "profile" && (
+        <Suspense fallback={
+          <div className="card-glow text-center text-slate-400 text-sm py-8">
+            <span className="inline-block w-4 h-4 border-2 border-slate-500 border-t-violet-400 rounded-full animate-spin mr-2 align-middle" />
+            小进姐姐准备中…
+          </div>
+        }>
+          <MascotProfile studentId={student.id} />
+        </Suspense>
+      )}
 
-      {/* 段位勋章柜 — v0.34.93 lazy */}
-      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
-        <BadgeInventory
-          unlockedTierIds={unlockedTiers}
-          equippedTierId={equippedTierId}
-          onEquip={handleEquip}
-        />
-      </Suspense>
+      {/* 段位勋章柜 — 个人 */}
+      {arcadeTab === "profile" && (
+        <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+          <BadgeInventory
+            unlockedTierIds={unlockedTiers}
+            equippedTierId={equippedTierId}
+            onEquip={handleEquip}
+          />
+        </Suspense>
+      )}
 
-      {/* 奖杯墙 — v0.34.93 lazy */}
-      <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
-        <TrophyWall
-          trophies={trophies ?? []}
-          ctx={{
-            studentId: student?.id ?? "",
-            attempts: attempts ?? [],
-            mastery: mastery ?? [],
-            mistakes: mistakes ?? [],
-            trophies: trophies ?? [],
-            todayDateKey: today,
-          }}
-        />
-      </Suspense>
+      {/* 奖杯墙 — 个人 */}
+      {arcadeTab === "profile" && (
+        <Suspense fallback={<div className="card-glow text-slate-500 text-xs text-center py-4">…</div>}>
+          <TrophyWall
+            trophies={trophies ?? []}
+            ctx={{
+              studentId: student?.id ?? "",
+              attempts: attempts ?? [],
+              mastery: mastery ?? [],
+              mistakes: mistakes ?? [],
+              trophies: trophies ?? [],
+              todayDateKey: today,
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* 跨段升档庆祝 */}
       {celebrationToTier && (
