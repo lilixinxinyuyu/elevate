@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { MATH_TRICKS, type MathTrick, type TrickPractice } from "../content/mathTricks";
 import { db } from "../db/dexie";
 import { getCompletedTricks, markTrickDone } from "../lib/mathTricksProgress";
+import { MascotQuickAccess } from "../components/MascotQuickAccess";
 
 /**
  * 巧算工具箱（v0.31.71 起步，v0.31.87 上云）：
@@ -113,6 +114,7 @@ export function MathTricksPage() {
           ← 回首页
         </Link>
       </div>
+      <MascotQuickAccess context="tricks" />
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { computeMockExamReport } from "../core/mockExamReport";
 import type { Question } from "../core/types";
+import { MascotQuickAccess } from "../components/MascotQuickAccess";
 
 export default function MockExamReportPage() {
   const [params] = useSearchParams();
@@ -201,6 +202,7 @@ export default function MockExamReportPage() {
           返回主页
         </Link>
       </div>
+      <MascotQuickAccess context="mock_report" />
     </div>
   );
 }

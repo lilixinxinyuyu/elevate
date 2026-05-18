@@ -22,6 +22,7 @@ import {
   calcXp,
   type BugCard,
 } from "../core/mistakeHuntPolicy";
+import { MascotQuickAccess } from "../components/MascotQuickAccess";
 
 interface QuestionState {
   attempts: number;
@@ -188,6 +189,7 @@ export default function MistakeHuntPage() {
             返回
           </button>
         </div>
+        <MascotQuickAccess context="find_mistakes" />
       </div>
     );
   }
@@ -250,6 +252,7 @@ export default function MistakeHuntPage() {
           </button>
         </div>
       )}
+      <MascotQuickAccess context="find_mistakes" />
     </div>
   );
 }

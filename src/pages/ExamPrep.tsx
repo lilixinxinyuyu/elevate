@@ -14,6 +14,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { computeExamPrep, type MockHistoryEntry } from "../core/examPrep";
 import type { Question } from "../core/types";
+import { MascotQuickAccess } from "../components/MascotQuickAccess";
 
 export default function ExamPrepPage() {
   const navigate = useNavigate();
@@ -216,6 +217,7 @@ export default function ExamPrepPage() {
           </section>
         </>
       )}
+      <MascotQuickAccess context="exam_prep" />
     </div>
   );
 }

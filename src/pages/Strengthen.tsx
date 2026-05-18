@@ -19,6 +19,7 @@ import { db } from "../db/dexie";
 import { requestStrengthenSet } from "../lib/sessionAdaptive";
 import { submitAttempt, getOrCreateSession } from "../db/service";
 import { GameShell, type AttemptResult } from "../components/game/GameShell";
+import { MascotQuickAccess } from "../components/MascotQuickAccess";
 import {
   STRENGTHEN_SESSION_SIZE,
   calcStrengthenBonus,
@@ -223,6 +224,7 @@ export function StrengthenPage() {
         countdownEnabled={false}
         noRetry={true}
       />
+      <MascotQuickAccess context="strengthen" />
     </div>
   );
 }

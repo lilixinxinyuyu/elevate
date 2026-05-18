@@ -19,6 +19,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { computeBrainpowerRadar, type TimeWindow } from "../core/brainpowerRadar";
 import { RadarChart } from "../components/radar/RadarChart";
+import { MascotQuickAccess } from "../components/MascotQuickAccess";
 
 export default function BrainpowerRadarPage() {
   const navigate = useNavigate();
@@ -128,6 +129,7 @@ export default function BrainpowerRadarPage() {
       <div className="rounded-lg bg-slate-900/30 border border-slate-500/30 p-3 text-xs text-slate-300">
         💡 这 5 个属性反映你最近的训练. 多做做对应题型可以提升属性!
       </div>
+      <MascotQuickAccess context="radar" />
     </div>
   );
 }

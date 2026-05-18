@@ -24,6 +24,7 @@ import {
   saveLessonProgress,
   type Lesson,
 } from "../core/baseSystemContent";
+import { MascotQuickAccess } from "../components/MascotQuickAccess";
 
 type PageMode = "menu" | "concept" | "exercise" | "lessonDone";
 
@@ -151,6 +152,7 @@ export default function BaseSystemsPage() {
             <p className="text-xs text-amber-200/80 mt-1">完成 4 节 +{BASE_SYSTEM_XP.ALL_LESSONS_COMPLETE} XP</p>
           </div>
         )}
+        <MascotQuickAccess context="base_systems" />
       </div>
     );
   }
@@ -179,6 +181,7 @@ export default function BaseSystemsPage() {
         >
           ✅ 学完了, 来做 {activeLesson.exercises.length} 道练习 →
         </button>
+        <MascotQuickAccess context="base_systems" />
       </div>
     );
   }
@@ -294,6 +297,7 @@ export default function BaseSystemsPage() {
             </button>
           )}
         </div>
+        <MascotQuickAccess context="base_systems" />
       </div>
     );
   }
@@ -318,6 +322,7 @@ export default function BaseSystemsPage() {
         <button onClick={backToMenu} className="w-full px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-400">
           回主菜单
         </button>
+        <MascotQuickAccess context="base_systems" />
       </div>
     );
   }
