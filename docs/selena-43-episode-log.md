@@ -395,4 +395,33 @@
 
 **最终**: v0.35.2 ship (commit 573fb36, push main) + rename hotfix
 
+#### Iter 37 进展 (v0.35.2 → v0.35.3) P1-2 强化挑战 (原 SkillRepair, 按 AUP 指南改名)
+
+**命名**: SkillRepair (机械味) → "强化挑战" (正向加练). "复仇模式" 太激进 / "技能修复" 像电脑维修.
+
+**预审** 两位评审共识"改后再做":
+- ✅ 默认 3 题 UI 硬编码 (不让 Selena 选, 错答后认知已重)
+- ✅ 取消 10s 倒计时 → inline CTA 用户主动操作
+- ✅ XP +25 → +15 (经济平衡, 防"错了反而赚更多")
+- ✅ session cap 2 次 + 同 skill 10 分钟冷却 (防疲劳)
+- ✅ 同 skill_id + 同 difficulty 严格 match (不够 fallback)
+- ✅ mistake queue 仍走 spaced review (不因 strengthen 而删)
+- ✅ strengthen 内 quiet mode (用 noRetry 实现 — suppress estimation/scratch/嵌套)
+- ✅ bonus idempotent (sessionStorage key)
+- ✅ abandon graceful (退出已答题正常计分)
+
+**实现**:
+- NEW `src/core/strengthenPolicy.ts` (130 行): 触发判定 / XP 公式 / skill cooldown / bonus idempotent / 鼓励文案
+- NEW `src/components/game/StrengthenModal.tsx` (60 行): inline CTA (不是 modal overlay)
+- NEW `src/pages/Strengthen.tsx` (180 行): 3 题 mini-session, 复用 GameShell + 加载变式
+- NEW `tests/strengthenPolicy.test.ts` 22 tests 全过
+- 改 `src/lib/sessionAdaptive.ts` 加 requestStrengthenSet (并发 N variants)
+- 改 `src/lib/featureFlags.ts` isStrengthenChallengeV1
+- 改 `src/router.tsx` /math/strengthen lazy 路由
+- 改 `src/components/game/GameShell.tsx` 错答 FeedbackPanel 下方加 StrengthenInlineCTA
+
+**测试**: 347/349 (2 pre-existing mastery)
+**Typecheck**: clean
+**Build**: 进行中
+
 

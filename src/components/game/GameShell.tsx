@@ -23,6 +23,12 @@ import {
   hasShownInterceptThisSession,
   markInterceptShown,
 } from "../../core/scratchPolicy";
+// v0.35.3 iter 37 P1-2: 强化挑战 inline CTA
+import { StrengthenInlineCTA } from "./StrengthenModal";
+import {
+  isStrengthenOpportunity,
+  pickStrengthSkillContext,
+} from "../../core/strengthenPolicy";
 import { SpeedMatchPanel } from "./templates/SpeedMatch";
 import { ShopCounterPanel } from "./templates/ShopCounter";
 import { EquationBuilderPanel } from "./templates/EquationBuilder";
@@ -203,6 +209,8 @@ export function GameShell(props: GameShellProps) {
     charCount: 0,
   });
   const [pendingSubmit, setPendingSubmit] = useState<AttemptResult | null>(null);
+  // v0.35.3 iter 37 P1-2: 强化挑战 inline CTA dismiss 状态
+  const [strengthenCTADismissed, setStrengthenCTADismissed] = useState(false);
   // 每换题重置
   useEffect(() => {
     setEstDone(false);
@@ -215,6 +223,7 @@ export function GameShell(props: GameShellProps) {
       charCount: 0,
     });
     setPendingSubmit(null);
+    setStrengthenCTADismissed(false);
   }, [resetKey]);
   const [hintsOpened, setHintsOpened] = useState(0);
   const [startedAt, setStartedAt] = useState(() => Date.now());
@@ -657,6 +666,30 @@ export function GameShell(props: GameShellProps) {
             FeedbackPanel 内的"小进讲一讲"按钮也应该讲她刚答的那道，而不是原题。
             之前传 props.question 导致 tutor 打开看到的 stem 跟 feedback 显示的答案对不上。 */}
         {feedback && <FeedbackPanel feedback={feedback} question={displayedQuestion} onNext={onNext} onInjectQuestion={onInjectQuestion} noRetry={noRetry} />}
+
+        {/* v0.35.3 iter 37 P1-2: 强化挑战 inline CTA — 错答 + 满足条件时显示 */}
+        {feedback && !feedback.isCorrect && !strengthenCTADismissed && (() => {
+          // 当前是否在 strengthen / mini-game 内: noRetry=true 视为禁用强化嵌套
+          const eligible = isStrengthenOpportunity(
+            feedback.isCorrect,
+            true, // 1st attempt (handleFinish 内已经过滤了 2nd)
+            displayedQuestion,
+            {
+              examMode,
+              noRetry,
+              insideStrengthen: noRetry, // 复用 noRetry 标记 quiet mode
+              sessionCount: 0, // TODO: 跟 Train.tsx 通讯 session 计数
+            },
+          );
+          if (!eligible) return null;
+          const skillCtx = pickStrengthSkillContext(displayedQuestion);
+          return (
+            <StrengthenInlineCTA
+              skillCtx={skillCtx}
+              onSkip={() => setStrengthenCTADismissed(true)}
+            />
+          );
+        })()}
       </div>
 
       <FloatLayer

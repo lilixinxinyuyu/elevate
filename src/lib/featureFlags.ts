@@ -193,6 +193,21 @@ export function isMistakeHuntV1(): boolean {
   }
 }
 
+/**
+ * v0.35.3 (iter 37 P1-2): 强化挑战 — 错答后弹 3 道同型加练.
+ * 见 src/core/strengthenPolicy.ts
+ */
+const STRENGTHEN_LS_KEY = "strengthen_challenge_v1";
+
+export function isStrengthenChallengeV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(STRENGTHEN_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function isEstimationGateV1(): boolean {
   if (typeof window === "undefined") return true;
   if (!_estGateSynced) {

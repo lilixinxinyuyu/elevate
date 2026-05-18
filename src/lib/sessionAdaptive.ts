@@ -143,6 +143,28 @@ export function requestRetryQuestion(question: Question): Promise<Question[]> {
 }
 
 /**
+ * v0.35.3 (iter 37 P1-2): 强化挑战 — 并发出 N 道同型变式.
+ * 一次性给 N 个 variant 请求, Promise.allSettled 兜底.
+ * 如果某个 fail, fallback 到 mock placeholder 让 UI 至少能渲染.
+ */
+export async function requestStrengthenSet(
+  source: Question,
+  count: number,
+): Promise<Question[]> {
+  const promises = Array.from({ length: count }, (_, i) =>
+    requestVariantQuestion(source, `strengthen-${i + 1}`).catch(() => [] as Question[])
+  );
+  const results = await Promise.allSettled(promises);
+  const questions: Question[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value.length > 0 && r.value[0]) {
+      questions.push(r.value[0]);
+    }
+  }
+  return questions;
+}
+
+/**
  * v0.31.73: 调用 /api/generate/variant — 极简 prompt 出 1 道变式题。
  * 用于 retry / 实时巩固。失败时降级到 requestAdaptiveQuestion（全量 prompt）。
  */
