@@ -212,6 +212,39 @@ await step("D.1 mock_exam ?hard=1 → 硬限时 mode (URL preserved)", async () 
   return `hard mode URL preserved: ${info.url.slice(-50)}`;
 });
 
+// v0.35.25 (爸爸反馈 5-18): 加 panel-mix sampling 防 "ship 了但 user 看不到" 类问题.
+// 跑 20 fresh sessions, 统计 panel 类型分布, 跟 audit 预期对比.
+// 预期 (961 题 backfilled): canvas_scratch ~7%, multi_step ~30%, plain ~63%.
+await step("F.1 panel-mix sampling (20 fresh sessions) — 防 metadata 没 reload", async () => {
+  // Warmup home first 让 ensureSeeded + cloud sync 跑完
+  await page.goto(`${SELENA_URL}/math`, { waitUntil: "load", timeout: 90000 });
+  await new Promise((r) => setTimeout(r, 8000));
+  let canvas = 0, multistep = 0, plain = 0;
+  const N = 20;
+  for (let i = 0; i < N; i++) {
+    await page.goto(`${SELENA_URL}/math/train?fresh=${Date.now() + i * 23}`, { waitUntil: "load", timeout: 60000 });
+    await new Promise((r) => setTimeout(r, 4500));
+    const kind = await page.evaluate(() => {
+      const t = document.body.innerText;
+      if (t.includes("列算式区")) return "canvas";
+      if (t.includes("应用题 4 步法") || t.includes("第 1 步: 题里告诉")) return "multistep";
+      return "plain";
+    });
+    if (kind === "canvas") canvas++;
+    else if (kind === "multistep") multistep++;
+    else plain++;
+  }
+  // 强制 canvas 至少 1 道 (期望 7% × 20 = 1.4 道, 0 命中 p=0.235 — 警告而非 fail)
+  // multistep 至少 3 道 (期望 30% × 20 = 6 道, ≤2 命中 p<5% — fail signal)
+  if (multistep < 3) {
+    throw new Error(`multistep too low (${multistep}/${N}, expected ~30%). 可能 SEED_VERSION 没 bump → metadata 没生效, 或 isMultiStepAppV1 flag off.`);
+  }
+  if (canvas === 0) {
+    console.warn(`  ⚠ canvas 0/${N} — 概率 24% 是正常, 但要重跑 verify`);
+  }
+  return `canvas=${canvas} multistep=${multistep} plain=${plain} (expected canvas~7% multistep~30%)`;
+});
+
 await step("E.1 console errors check", async () => {
   // mascot quick access 浮动按钮触发的 image gen 503 不算 ("known")
   // 实际 image gen 现在走 FC bypass → 200, 不该有错
