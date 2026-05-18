@@ -552,7 +552,7 @@ export function HomePage() {
           mistakeRingStickyDone: mistakeRingStickyDone ?? false,
           skillsNeedingReview: skillsNeedingReview ?? { toReview: [], practicedToday: 0, total: 0 },
           todayCount: todayAttempts.length,
-          challengeTarget: 15,
+          challengeTarget: 10,  // v0.35.31 (爸爸第 5 次反馈 follow-up): 跟 scheduler baseTarget=10 对齐, 不再 15
           mastery: mastery ?? [],
           mistakes: mistakes ?? [],
           streak,
