@@ -1,0 +1,41 @@
+# v0.35.22 iter 51: FC paper-ocr — vision OCR for admin paper-entry.
+# 跟 fc-image-gen 同 fc3 flat schema. nodejs20.
+
+edition: 3.0.0
+name: xiaojinapp-fc-paper-ocr
+access: default
+
+vars:
+  region: cn-hongkong
+
+resources:
+  xiaojinappPaperOcr:
+    component: fc3
+    actions:
+      pre-deploy:
+        - run: npm install --omit=dev
+          path: ./
+    props:
+      region: ${vars.region}
+      functionName: xiaojinapp-paper-ocr
+      runtime: nodejs20
+      handler: index.handler
+      memorySize: 1024  # vision request body 大 (image base64), 内存多点
+      timeout: 90       # vision 11-25s, 2 model 链最坏 50s, buffer 90s
+      cpu: 0.5
+      diskSize: 512
+      code: ./
+      internetAccess: true
+      environmentVariables:
+        TOKEN_PLAN_CN_API_KEY: "${env('TOKEN_PLAN_CN_API_KEY')}"
+        APP_PASSWORD: "${env('APP_PASSWORD')}"
+        APP_USERS: "${env('APP_USERS')}"
+      triggers:
+        - triggerName: http
+          triggerType: http
+          triggerConfig:
+            authType: anonymous
+            disableURLInternet: false
+            methods:
+              - POST
+              - OPTIONS

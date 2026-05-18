@@ -1889,4 +1889,32 @@ superAdmin.get("/papers/:cadetUid/:paperId", async (c) => {
   }
 });
 
+/**
+ * v0.35.22 iter 51 (爸爸 explicit): /api/super-admin/paper-ocr
+ * 返 FC URL — admin 端拍照后客户端自己 POST FC (vision 11-25s 跨 ESA 11s 限制).
+ *
+ * Client flow:
+ *   1. admin POST /api/super-admin/paper-ocr → 200 { fcUrl }
+ *   2. admin POST fcUrl with { image_base64, mode?: "extract_mistakes"|"ocr_raw" }
+ *      → 200 { papers: [{stem, correctAnswer, studentAnswer, errorTag, confidence}] }
+ *   3. admin fill 到 paper-entry 表格, 微调后保存
+ */
+superAdmin.post("/paper-ocr", async (c) => {
+  const env = c.env as { FC_PAPER_OCR_URL?: string };
+  const fcUrl = env.FC_PAPER_OCR_URL;
+  if (!fcUrl) {
+    return c.json({
+      ok: false,
+      error: "fc_paper_ocr_not_configured",
+      reason: "FC_PAPER_OCR_URL 未 baked. 部署 fc-paper-ocr FC 后填到 .dev.vars + rebuild ESA.",
+    }, 503);
+  }
+  return c.json({
+    ok: true,
+    fcUrl,
+    provider: "fc-bypass",
+    note: "client should POST to fcUrl with { image_base64 } and same Authorization. vision ~11-25s, ESA can't proxy.",
+  });
+});
+
 export default superAdmin;

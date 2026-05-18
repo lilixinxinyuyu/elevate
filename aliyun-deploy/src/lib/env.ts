@@ -49,4 +49,9 @@ export interface Env {
    * 部署见 aliyun-deploy/fc-image-gen/. 当前: https://xiaojinmage-gen-lsrnyfpxfl.cn-hongkong.fcapp.run
    */
   FC_IMAGE_GEN_URL?: string;
+  /**
+   * v0.35.22 iter 51: FC paper-ocr 服务 URL (vision OCR for admin paper-entry).
+   * 部署见 aliyun-deploy/fc-paper-ocr/. 当前: https://xiaojinaper-ocr-cszpewbgfj.cn-hongkong.fcapp.run
+   */
+  FC_PAPER_OCR_URL?: string;
 }

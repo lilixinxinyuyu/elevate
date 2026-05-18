@@ -12,7 +12,7 @@
  *
  * 后端: POST /api/super-admin/papers/save
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   genPaperId,
@@ -22,6 +22,7 @@ import {
   type PaperMistakeEntry,
   type PaperRecord,
 } from "../core/paperMistakes";
+import { runPaperOcr } from "../lib/paperOcr";
 
 const KIND_OPTIONS: { value: PaperKind; label: string }[] = [
   { value: "midterm", label: "期中考试" },
@@ -42,6 +43,52 @@ export default function PaperMistakeEntryPage() {
   ]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  // v0.35.22 iter 51: 拍照 OCR
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrMsg, setOcrMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so same file can be re-picked
+    if (!file) return;
+    setOcrBusy(true);
+    setOcrMsg({ type: "ok", text: `📸 识别中: ${file.name} (${(file.size / 1024).toFixed(0)}KB) ... vision 一般 11-25s` });
+    try {
+      const r = await runPaperOcr({ file });
+      if (!r.ok) {
+        setOcrMsg({ type: "err", text: `❌ OCR 失败: ${r.error}${r.detail ? " — " + r.detail : ""}` });
+        return;
+      }
+      if (r.papers.length === 0) {
+        setOcrMsg({ type: "ok", text: `✅ ${r.elapsedMs / 1000 | 0}s · ${r.model} 没识别出错题 (照片里可能全对, 或图不清). 手动加题也行.` });
+        return;
+      }
+      // 把 OCR 结果 fill 进 mistakes 列表 (替换或追加? 评审 careful: 追加,
+      // 让 admin 看到现有 + 新识别, 自己整合)
+      setMistakes((prev) => {
+        // 先去掉空 entry (initial blank), 再 append OCR ones
+        const nonEmpty = prev.filter((m) => m.stem.trim() || m.studentAnswer.trim());
+        const fromOcr: PaperMistakeEntry[] = r.papers.map((p) => ({
+          paperQuestionId: genPaperMistakeId(),
+          stem: p.stem,
+          correctAnswer: p.correctAnswer,
+          studentAnswer: p.studentAnswer,
+          errorTag: p.errorTag,
+          notes: p.confidence != null && p.confidence < 0.7 ? `[OCR 把握度 ${(p.confidence * 100).toFixed(0)}%, 请人工核对]` : undefined,
+        }));
+        return [...nonEmpty, ...fromOcr];
+      });
+      setOcrMsg({
+        type: "ok",
+        text: `✅ ${(r.elapsedMs / 1000).toFixed(1)}s · ${r.model} 识别到 ${r.papers.length} 道错题, 已加入表格. 核对一下再推送.`,
+      });
+    } catch (e) {
+      setOcrMsg({ type: "err", text: `❌ 异常: ${(e as Error).message}` });
+    } finally {
+      setOcrBusy(false);
+    }
+  }
 
   function updateMistake(idx: number, patch: Partial<PaperMistakeEntry>) {
     setMistakes((prev) => prev.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
@@ -125,7 +172,42 @@ export default function PaperMistakeEntryPage() {
       <div className="rounded-lg bg-purple-500/10 border border-purple-400/30 p-3 text-xs text-purple-200/80 space-y-1">
         <p>📌 用于把 Selena 真实考试 / 作业里的错题录入系统.</p>
         <p>录入的错题会单独存档 (不影响 mastery 主数据), 等 Selena 训练时由"错题侦探" / 强化挑战 lazy 拉取.</p>
-        <p className="text-purple-300">v1 是手动录入 — 拍照 OCR 留 v2 (评审共识).</p>
+        <p className="text-emerald-300">v2 加了 📸 拍照 OCR (qwen3.6-plus vision) — 拍照自动出错题列表, 核对后保存.</p>
+      </div>
+
+      {/* v0.35.22 iter 51: 拍照 OCR (vision FC bypass) */}
+      <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/40 p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-sm font-semibold text-emerald-100">📸 拍照识别错题 (省手敲)</div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={ocrBusy}
+            className="px-3 py-1.5 rounded bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-400 disabled:opacity-50"
+          >
+            {ocrBusy ? "识别中…" : "选张卷子照片"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={onPickPhoto}
+          />
+        </div>
+        <p className="text-[11px] text-emerald-200/80">
+          手机拍 / 选相册都行. vision 模型自动找出学生答错的题 + 错因. 11-25s 出结果,
+          填进下面表格. 你核对后再推送给 Selena.
+        </p>
+        {ocrMsg && (
+          <div className={`text-xs px-2 py-1.5 rounded ${
+            ocrMsg.type === "ok"
+              ? "bg-emerald-500/20 text-emerald-100 border border-emerald-400/30"
+              : "bg-rose-500/15 text-rose-100 border border-rose-400/30"
+          }`}>
+            {ocrMsg.text}
+          </div>
+        )}
       </div>
 
       {/* Paper meta */}

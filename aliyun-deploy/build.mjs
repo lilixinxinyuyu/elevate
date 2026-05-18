@@ -42,6 +42,7 @@ const BAKED_KEYS = [
   "SUPER_ADMINS",
   "BACKUP_TOKEN",
   "FC_IMAGE_GEN_URL",
+  "FC_PAPER_OCR_URL",
 ];
 const bakedEnv = {};
 for (const k of BAKED_KEYS) {

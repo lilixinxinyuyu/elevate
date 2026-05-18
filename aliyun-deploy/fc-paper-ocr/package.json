@@ -1,0 +1,9 @@
+{
+  "name": "xiaojinapp-fc-paper-ocr",
+  "version": "0.35.22",
+  "description": "Aliyun FC paper OCR via TOKEN_PLAN_CN vision (qwen3.6-plus)",
+  "type": "module",
+  "main": "index.mjs",
+  "private": true,
+  "dependencies": {}
+}
