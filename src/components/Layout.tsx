@@ -236,23 +236,10 @@ export function Layout() {
             {/* v0.31.71: 同步状态芯片（已同步/待同步/同步中），点击立即同步 */}
             <SyncStatusIndicator />
 
-            {/* v0.35.9 (爸爸反馈): 管理界面入口 — 从数学 Home 移到 landing header,
-                所有 /:subject/* 子路由可达. */}
-            <NavLink
-              to={`/${subject.id}/admin`}
-              className={({ isActive }) =>
-                `px-2 py-1 rounded-lg text-xs flex items-center gap-1 transition-colors border ${
-                  isActive
-                    ? "bg-orange-500/20 text-orange-200 border-orange-400/40"
-                    : "bg-white/5 hover:bg-white/10 text-slate-300 border-ink-700/60"
-                }`
-              }
-              title="管理 (题库/审核/试卷)"
-              aria-label="管理"
-            >
-              <span aria-hidden>⚙️</span>
-              <span className="hidden sm:inline">管理</span>
-            </NavLink>
+            {/* v0.35.26 (爸爸第 2 次反馈): 删掉 v0.35.9 在数学顶部加的 ⚙️ 管理 —
+                这造成跟 subjects/math/index.ts navItems 里的"管理"重复 (2 个管理).
+                真正的需求是把管理移到 landing (SubjectPicker), 见
+                src/pages/SubjectPicker.tsx 顶部右上的 ⚙️ 管理. */}
 
             {/* 学科切换 chip — v0.30.14: 不再重复显示当前 shortLabel（左上 logo 已经
                 有了），改成中性切换图标，避免视觉冗余但仍保留可点性 */}

@@ -32,6 +32,8 @@ export function SubjectPickerPage() {
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
   const appTitle = useAppTitle();
   const [pwdModalOpen, setPwdModalOpen] = useState(false);
+  // v0.35.26 (爸爸 "管理移到 landing" 反复说过): admin 入口 popover
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen app-bg text-slate-100 px-4 py-6">
@@ -39,6 +41,47 @@ export function SubjectPickerPage() {
         <div className="text-center pb-1 relative">
           <div className="font-display font-bold text-3xl text-brand">
             {appTitle}
+          </div>
+          {/* v0.35.26 (爸爸明确反复要求): 管理入口 — 从数学 nav 移到 landing 这里.
+              点开列出 3 个: 题库管理 (各学科) + 超级管理 (账号 / 试卷 / FC 监控). */}
+          <div className="absolute left-0 top-1">
+            <button
+              type="button"
+              onClick={() => setAdminMenuOpen((v) => !v)}
+              className="text-[10px] text-slate-400 hover:text-amber-300 px-2 py-1 rounded border border-white/10 hover:border-amber-400/30 flex items-center gap-1"
+              title="管理 (题库 / 试卷 / 账号)"
+            >
+              <span aria-hidden>⚙️</span>
+              <span>管理</span>
+            </button>
+            {adminMenuOpen && (
+              <div
+                className="absolute left-0 top-full mt-1 z-50 bg-slate-900/95 border border-amber-400/40 rounded-lg shadow-xl min-w-[200px] py-1"
+                onMouseLeave={() => setAdminMenuOpen(false)}
+              >
+                <Link
+                  to="/super-admin"
+                  onClick={() => setAdminMenuOpen(false)}
+                  className="block px-3 py-2 text-xs text-amber-100 hover:bg-amber-500/10"
+                >
+                  👑 超级管理 (账号 · 试卷录入 · FC 监控)
+                </Link>
+                <Link
+                  to="/math/admin"
+                  onClick={() => setAdminMenuOpen(false)}
+                  className="block px-3 py-2 text-xs text-violet-100 hover:bg-violet-500/10"
+                >
+                  📚 数学题库管理
+                </Link>
+                <Link
+                  to="/chinese/admin"
+                  onClick={() => setAdminMenuOpen(false)}
+                  className="block px-3 py-2 text-xs text-cyan-100 hover:bg-cyan-500/10"
+                >
+                  📖 语文题库管理
+                </Link>
+              </div>
+            )}
           </div>
           {/* 改密码入口 — 小而精, 不抢主视觉 */}
           <button

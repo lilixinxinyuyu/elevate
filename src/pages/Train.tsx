@@ -422,9 +422,20 @@ export function TrainPage() {
         onSubmit={handleSubmit}
         onNext={handleNext}
         showStarter={state.index === 0}
-        // v0.31.38: 闯关 (big_problems) 不限时 — 多步应用题需要慢慢想，
-        // 时间压力对孩子是负反馈。原 BigProblems UI 也明示 "不限时"。
-        countdownEnabled={effectiveMode !== "big_problems"}
+        // v0.31.38: 闯关 (big_problems) 不限时
+        // v0.35.26 (爸爸 explicit): 当前题 play_as = canvas_scratch / multi_step_application
+        // 或 requiresScratch/requiresMultiStep=true → 不开 countdown.
+        // 电脑书写慢, 倒计时变成"逼孩子心算" 反向激励 (爸爸反馈过 2 次).
+        // mock_exam 硬限时 仍走 examMode 路径 (不被这个 short-circuit 影响).
+        countdownEnabled={(() => {
+          if (effectiveMode === "big_problems") return false;
+          const q = state.questions[state.index];
+          if (q) {
+            if (q.play_as === "canvas_scratch" || q.play_as === "multi_step_application") return false;
+            if (q.requiresScratch === true || q.requiresMultiStep === true) return false;
+          }
+          return true;
+        })()}
         examMode={effectiveMode === "mock_exam"}
         onRequestVariant={handleRequestVariant}
         onInjectQuestion={handleInjectQuestion}

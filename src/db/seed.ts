@@ -21,12 +21,10 @@ import type { Question, StudentProfile } from "../core/types";
 // 中文 "答 N"，同时补 8 道 decimal_compare 高质量题。
 // v0.31.0 Phase 2 Axis 2：加 DOT_GRID_DEMO_PACK 5 道点子图画图题，bump 版本让现有
 // 用户也下载到（5/8 道画图题型起步）。
-// v0.35.25 (SEED_VERSION 24): iter 49 LLM-backfilled metadata (requiresScratch /
-// requiresMultiStep / requiresEstimation / keyNumbers / speedEligible) 应用 overlay
-// 后 SEED_QUESTIONS 形变. 老用户 IndexedDB cached 仍是 v0.35.19 前的 questions
-// (无 metadata) → resolveTemplate 走 heuristic, EstimationGate/MultiStep/CanvasScratch
-// 触发率全跌. 必须 bump SEED_VERSION 让 ensureSeeded() 重新 bulkPut overlayed 题.
-const SEED_VERSION = 24;
+// v0.35.26 (爸爸第 2 次反馈 reflective): 强制再 reload 一次, 让所有老 IndexedDB
+// 拿到最新的 metadata + 新加的 admin nav 删除. SEED 仅 questions 相关, 但 bump
+// 也确保用户拿到新构建 (浏览器 cache + service worker 都不会 stale 太久).
+const SEED_VERSION = 25;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

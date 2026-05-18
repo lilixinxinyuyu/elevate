@@ -67,8 +67,9 @@ function buildMathNavItems(): SubjectNavItem[] {
   // 最终选"驯龙营" — 错的题是龙，做对了驯服它（保留"驯服"游戏化叙事 +
   // 跟闯关怪兽体系呼应；不用"错"字降低被纠错的羞耻感）。
   base.push({ to: "mistakes", label: "驯龙营" });
-  // 管理（包含周报 + 试玩台 + 题库管理 tabs）
-  base.push({ to: "admin", label: "管理", subtle: true });
+  // v0.35.26 (爸爸第 2 次反馈): "管理" 从数学 nav 删除, 移到 landing
+  // (SubjectPicker 顶部 ⚙️). 之前数学顶部 2 个"管理" 重复 = 1 个 navItems
+  // 1 个我 v0.35.9 加的 Layout NavLink, 都删干净.
   return base;
 }
 

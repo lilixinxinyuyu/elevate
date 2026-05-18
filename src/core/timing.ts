@@ -22,9 +22,26 @@ const HARD_CAP = 240;       // 最长 240s（语文阅读理解 D5 级别）
 /**
  * 按 stem / option 长度给问题加阅读时间。
  * 如果原始 estimated_time_seconds 已经够长（≥ 60s）就不加 — 假定是设计者已经考虑过。
+ *
+ * v0.35.26 (爸爸 explicit 反复): "需要写草稿或算式回答的题都增加时间或者不要求时间,
+ * 因为电脑书写会比选择答案麻烦很多, 时间不太可控". 草稿/列算式/多步应用 ×2.5
+ * 或封顶 240s, 让 Selena 不被倒计时催着不写草稿.
  */
 export function adjustedEstimatedTime(q: Question): number {
   const base = q.estimated_time_seconds ?? 30;
+
+  // v0.35.26: write-heavy 题型 (canvas_scratch / multi_step_application /
+  // requiresScratch=true) 时间放宽到 240s 或 base × 2.5 取大. 电脑书写慢,
+  // 不能让倒计时变成"逼着孩子心算"的反向激励.
+  const isWriteHeavy =
+    q.play_as === "canvas_scratch" ||
+    q.play_as === "multi_step_application" ||
+    q.requiresScratch === true ||
+    q.requiresMultiStep === true;
+  if (isWriteHeavy) {
+    return Math.min(HARD_CAP, Math.max(base * 2.5, 180));
+  }
+
   // 已经给得很足（60s+）的题不二次加成，避免长应用题被加到 120s+
   if (base >= 60) return Math.min(HARD_CAP, base);
 

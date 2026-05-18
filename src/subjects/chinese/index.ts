@@ -39,7 +39,7 @@ const CHINESE_NAV_ITEMS: SubjectNavItem[] = [
   // v0.31.43: 字词大冒险加进顶部主菜单（与数学 UX 一致）
   { to: "char-practice", label: "字词大冒险" },
   { to: "free-practice", label: "选单元" },
-  { to: "admin", label: "管理", subtle: true },
+  // v0.35.26: 管理移到 landing (SubjectPicker), nav 不再重复
 ];
 
 export const chineseSubject: Subject = {
