@@ -413,6 +413,20 @@ export function TrainPage() {
           🏠 回工坊
         </Link>
       )}
+      {/* v0.35.30 (爸爸第 5 次反馈: Selena 不知今天为啥 17 题): mode label
+          让用户清楚是哪个 session 类型 + 多少题. 防混淆"今日挑战 ≠ 期末冲刺". */}
+      <div className="max-w-md mx-auto px-1 mb-1 flex items-center gap-2 text-xs text-slate-400">
+        <span className="px-2 py-0.5 rounded bg-slate-800/60 border border-slate-500/30">
+          {effectiveMode === "mock_exam" ? "📝 模拟考"
+            : effectiveMode === "final_sprint" ? "🚀 期末冲刺"
+            : effectiveMode === "midterm" ? "⏰ 期中冲刺"
+            : effectiveMode === "skill" ? "🎯 专项练"
+            : effectiveMode === "big_problems" ? "🐺 闯关"
+            : effectiveMode === "review" ? "🔁 错题复习"
+            : "✨ 今日挑战"}
+        </span>
+        <span className="text-slate-400">共 {state.questions.length} 道</span>
+      </div>
       <GameShell
         question={question}
         index={state.index}

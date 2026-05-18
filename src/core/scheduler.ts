@@ -452,7 +452,9 @@ function buildNormal(input: InternalInput): DailySessionPlan {
     }
   }
 
-  const trimmed = questions.slice(0, input.targetCount + 2);
+  // v0.35.30 (爸爸第 5 次反馈): cap 到 targetCount (10), 不再 + 2 buffer.
+  // 之前 buffer 让 normal 也可能出 12 道, 跟 "10 题" 承诺不符.
+  const trimmed = questions.slice(0, input.targetCount);
   const finalList = diversifyOrder(trimmed, input.rng);
 
   const starvedSkillIds = focusSkills.filter((s) => !skillHasFreshQuestion(s, input)).map((s) => s.id);
@@ -523,7 +525,8 @@ function buildMidterm(input: InternalInput): DailySessionPlan {
     }
   }
 
-  const finalList = diversifyOrder(questions.slice(0, input.targetCount + 3), input.rng);
+  // v0.35.30 (跟 final_sprint 同 fix): cap 到 targetCount (10), 不再 + 3 buffer
+  const finalList = diversifyOrder(questions.slice(0, input.targetCount), input.rng);
   const starvedSkillIds = unitSkills.filter((s) => !skillHasFreshQuestion(s, input)).map((s) => s.id);
   const poolStarved = finalList.length < input.targetCount || starvedSkillIds.length >= unitSkills.length / 2;
 
@@ -596,7 +599,10 @@ function buildFinalSprint(input: InternalInput): DailySessionPlan {
   }
   breakdown.push({ bucket: "错题复活", count: addedM });
 
-  const finalList = diversifyOrder(questions, input.rng);
+  // v0.35.30 (爸爸第 5 次反馈: Selena 看到 17 题): 之前 buildFinalSprint **没 slice cap**,
+  // 加完 items (各 weight × 13) + 错题变式 + dueMistakes 累积可达 17+. cap 到 baseTarget (13)
+  // 让 final_sprint 体验跟 normal (10) 接近, 不让 Selena 一打开就被 17 道吓到.
+  const finalList = diversifyOrder(questions.slice(0, input.targetCount), input.rng);
   return {
     mode: "final_sprint",
     dateKey: input.dateKey,
