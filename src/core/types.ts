@@ -104,6 +104,39 @@ export type GameTemplate =
   /** v0.31.87：数字寻宝 — 5×5 网格挑出符合条件的数（找规律 / 数感 / 比较） */
   | "number_hunt";
 
+/**
+ * v0.35.44 (GPT peer review HOTFIX): runtime-readable GameTemplate id 列表.
+ * 让 scripts/check-content-schema.mjs 不用 regex parse types.ts (脆弱).
+ *
+ * 加新 GameTemplate union member 时, 也在这里加一条. 不一致 → 类型断言
+ * fails 编译期 (satisfies)
+ */
+export const GAME_TEMPLATE_IDS = [
+  "speed_match",
+  "shop_counter",
+  "equation_builder",
+  "clue_finder",
+  "sort_ladder",
+  "chart_detective",
+  "shape_court",
+  "triangle_judge",
+  "cube_view",
+  "true_false_swipe",
+  "vertical_repair",
+  "decimal_shifter",
+  "memory_match",
+  "balance_lab",
+  "plain_numeric",
+  "plain_choice",
+  "dot_grid_draw",
+  "multi_step_application",
+  "canvas_scratch",
+  "discount_drift",
+  "coin_combo",
+  "time_heist",
+  "number_hunt",
+] as const satisfies readonly GameTemplate[];
+
 export interface CurriculumUnit {
   id: string;
   /** 多学科 v2：所属学科。Dexie 升级时旧数据 stamp 为 "math"。 */

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { checkPassword, checkPasswordAndUserId, clearPassword, getStoredPassword, pullFromCloud, storePassword } from "../db/cloudSync";
+// v0.35.44 Refactor Priority 11: localStorage 跨文件 key SSOT
+import { STORAGE_KEYS } from "../config/storage";
 import {
   setUserId as cacheUserId,
   setDisplayName as cacheDisplayName,
@@ -66,13 +68,13 @@ async function bootstrapDisplayNameFromProfile(pwd: string): Promise<void> {
     // cache 无需学生操作). 比 lastSeen 新就 forceTrophyResync(), 后台 silent.
     if (j?.ok && typeof j.profile?.forceTrophyResyncRequestedAt === "number") {
       const remoteTs = j.profile.forceTrophyResyncRequestedAt;
-      const localSeen = Number(localStorage.getItem("xiaojinapp.lastForceTrophyResyncSeen") ?? "0");
+      const localSeen = Number(localStorage.getItem(STORAGE_KEYS.lastForceTrophyResyncSeen) ?? "0");
       if (remoteTs > localSeen) {
         console.log(`[AuthGate] admin requested force trophy resync (remote=${remoteTs} > local=${localSeen}), triggering...`);
         void import("../db/cloudSync").then(async ({ forceTrophyResync }) => {
           const r = await forceTrophyResync();
           if (r.ok) {
-            localStorage.setItem("xiaojinapp.lastForceTrophyResyncSeen", String(remoteTs));
+            localStorage.setItem(STORAGE_KEYS.lastForceTrophyResyncSeen, String(remoteTs));
             console.log(`[AuthGate] force trophy resync done: pulled ${r.pulled}`);
           }
         }).catch(() => { /* */ });

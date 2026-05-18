@@ -24,7 +24,6 @@ import { writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, "..");
@@ -44,36 +43,17 @@ const mod = await import(tmpFile);
 rmSync(tmpFile, { force: true });
 const { SEED_QUESTIONS, SKILLS, UNITS } = mod;
 
-// 2. 从 src/core/types.ts 自动 parse GameTemplate union (避免手 hardcode 漂移).
-// 不用 indexOf(";") — 因为 jsdoc 里有 ";", 会切短. 改用 split by lines + 状态机:
-// 进入"export type GameTemplate =" 后, 每行抓 `| "X"`, 直到遇到不以 `|` 开头
-// 的非注释非空行 (或下一个 `export`).
-const TYPES_TS = readFileSync(join(PROJECT_ROOT, "src/core/types.ts"), "utf-8");
-const lines = TYPES_TS.split("\n");
-const VALID_TEMPLATES = new Set();
-let inUnion = false;
-for (const ln of lines) {
-  if (!inUnion) {
-    if (/^export type GameTemplate\s*=/.test(ln)) inUnion = true;
-    continue;
-  }
-  // 抓 `| "name"` 行 (允许末尾 `;`)
-  const m = ln.match(/^\s*\|\s*"([a-z_]+)"\s*;?\s*$/);
-  if (m) {
-    VALID_TEMPLATES.add(m[1]);
-    if (ln.trim().endsWith(";")) break; // union 结束
-    continue;
-  }
-  // doc comment / 空行 → 跳过, 继续看下行
-  if (/^\s*(\/\*|\*|\/\/|$)/.test(ln)) continue;
-  // 别的 export / type / interface → union 已结束
-  if (/^\s*(export|type|interface|const|function)\b/.test(ln)) break;
-}
-if (VALID_TEMPLATES.size < 20) {
-  console.error(`[check-content-schema] FAIL: parse GameTemplate 只找到 ${VALID_TEMPLATES.size} 个 (expected 23). union 改 format 了?`);
-  console.error(`  found: ${[...VALID_TEMPLATES].join(", ")}`);
+// 注: GAME_TEMPLATE_IDS 也从 mod 取, 看下面 2.
+
+// 2. v0.35.44 (GPT peer review HOTFIX): 之前 regex parse `types.ts` 脆弱 —
+// 行尾注释 / 一行 union / alias 都会失效. 改用 import GAME_TEMPLATE_IDS
+// (已 `satisfies readonly GameTemplate[]` 保证编译期跟 union 一致).
+const { GAME_TEMPLATE_IDS } = mod;
+if (!Array.isArray(GAME_TEMPLATE_IDS) || GAME_TEMPLATE_IDS.length < 20) {
+  console.error(`[check-content-schema] FAIL: src/core/types.ts 没 export GAME_TEMPLATE_IDS 或长度异常 (${GAME_TEMPLATE_IDS?.length})`);
   process.exit(1);
 }
+const VALID_TEMPLATES = new Set(GAME_TEMPLATE_IDS);
 
 // 3. build lookup sets for cross-ref
 const SKILL_IDS = new Set(SKILLS.map((s) => s.id));

@@ -79,14 +79,16 @@ export const TrainRoute = {
     const skillIds = sp.get("skillIds");
     const size = sp.get("size");
     const hard = sp.get("hard");
+    // v0.35.44 (GPT peer review HOTFIX): size 必须整数, fresh 必须正数.
+    // 之前 Number("30.5")=30.5 通过 isFinite → fractional 题数漏进 scheduler.
     const freshNum = fresh ? Number(fresh) : undefined;
     const sizeNum = size ? Number(size) : undefined;
     return {
       mode: (mode as SessionMode | null) ?? undefined,
-      fresh: Number.isFinite(freshNum) ? freshNum : undefined,
+      fresh: freshNum !== undefined && Number.isFinite(freshNum) && freshNum > 0 ? freshNum : undefined,
       skillId: sp.get("skillId") ?? undefined,
       skillIds: skillIds ? skillIds.split(",").filter(Boolean) : undefined,
-      size: Number.isFinite(sizeNum) ? sizeNum : undefined,
+      size: sizeNum !== undefined && Number.isInteger(sizeNum) && sizeNum > 0 ? sizeNum : undefined,
       hard: hard === "1" ? true : hard === "0" ? false : undefined,
       unitId: sp.get("unitId") ?? undefined,
       fromAtelier: (sp.get("fromAtelier") as AtelierRealmId | null) ?? undefined,

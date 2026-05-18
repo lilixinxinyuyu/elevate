@@ -17,6 +17,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+// v0.35.44 Refactor Priority 11: localStorage 跨文件 key SSOT
+import { STORAGE_KEYS } from "../../config/storage";
 import {
   RealtimeTutor,
   type RealtimeState,
@@ -190,7 +192,7 @@ export function SpeakWordPanel({
     // 取密码（跟 TutorPanel 用同一个 localStorage key）
     const pwd = (() => {
       try {
-        return localStorage.getItem("selena.cloud.pwd");
+        return localStorage.getItem(STORAGE_KEYS.cloudPwd);
       } catch {
         return null;
       }

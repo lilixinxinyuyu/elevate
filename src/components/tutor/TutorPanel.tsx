@@ -23,6 +23,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MascotAvatar } from "../MascotAvatar";
+// v0.35.44 Refactor Priority 11: localStorage 跨文件 key SSOT
+import { STORAGE_KEYS } from "../../config/storage";
 import {
   createMicRecorder,
   explainQuestion,
@@ -440,7 +442,7 @@ export function TutorPanel(props: TutorPanelProps) {
       // 没存密码（开发期可能跳过 AuthGate）→ 直接走文本 fallback
       const pwd = (() => {
         try {
-          return localStorage.getItem("selena.cloud.pwd");
+          return localStorage.getItem(STORAGE_KEYS.cloudPwd);
         } catch {
           return null;
         }

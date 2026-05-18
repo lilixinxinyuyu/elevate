@@ -1,4 +1,6 @@
 import { db } from "./dexie";
+// v0.35.44 Refactor Priority 11: localStorage 跨文件 key SSOT
+import { STORAGE_KEYS } from "../config/storage";
 import { getUnlockedUnitIdSet } from "./unitUnlock";
 import { buildDailySession } from "../core/scheduler";
 import { scoreAttempt, levelFromXp } from "../core/scoring";
@@ -70,7 +72,7 @@ export async function runPassiveTrophyCheck(studentId: string): Promise<string[]
     todayDateKey: todayKey(),
     // v0.34.70 iter 4: 同学生日 (来自 /api/profile, AuthGate bootstrap 时 cache 到 LS)
     // null → birthday_2026 trophy 不弹 (老逻辑写死 Selena 生日导致所有新同学被弹)
-    studentBirthday: typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.birthday") : null,
+    studentBirthday: typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEYS.birthday) : null,
   });
   // 只补 commemorative 类（时间型 + 跨段型），其他类别按设计应在 session 结束时颁发
   const commemorativeAwards = awards.filter((aw) => {
@@ -669,7 +671,7 @@ export async function computeCurrentRating(
   const attempts = await db.attempts.where({ studentId }).toArray();
   const mastery = await db.mastery.where({ studentId }).toArray();
   // v0.34.82 iter 16: 从 LS 读 profile.school, 给 subTierLabel 动态前缀
-  const schoolName = typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.school") : null;
+  const schoolName = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEYS.school) : null;
   return computeRating(attempts, mastery, Date.now(), term, schoolName);
 }
 
@@ -949,7 +951,7 @@ export async function finalizeSession(
     trophies,
     tutorSessions,
     todayDateKey: todayKey(),
-    studentBirthday: typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.birthday") : null,
+    studentBirthday: typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEYS.birthday) : null,
   });
   for (const award of newTrophyAwards) {
     for (let i = 0; i < award.count; i++) {
@@ -1041,7 +1043,7 @@ export async function finalizeSession(
     "下册";
 
   const prevRating = await getCachedRating(studentId, term);
-  const schoolName = typeof window !== "undefined" ? localStorage.getItem("xiaojinapp.school") : null;
+  const schoolName = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEYS.school) : null;
   const rating = computeRating(allAttempts, mastery, Date.now(), term, schoolName);
   await db.meta.put({
     key: termKey("rating", studentId, term),

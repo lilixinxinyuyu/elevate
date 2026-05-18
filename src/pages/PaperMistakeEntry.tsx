@@ -14,6 +14,8 @@
  */
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+// v0.35.44 Refactor Priority 11: localStorage 跨文件 key SSOT
+import { STORAGE_KEYS } from "../config/storage";
 import {
   genPaperId,
   genPaperMistakeId,
@@ -137,7 +139,7 @@ export default function PaperMistakeEntryPage() {
         mistakes: enrichedMistakes,
       };
       const headers: Record<string, string> = { "Content-Type": "application/json" };
-      const password = typeof window !== "undefined" ? localStorage.getItem("selena.cloud.pwd") : null;
+      const password = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEYS.cloudPwd) : null;
       if (password) headers["X-App-Password"] = password;
       const res = await fetch("/api/super-admin/papers/save", {
         method: "POST",
