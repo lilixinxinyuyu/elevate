@@ -34,6 +34,8 @@ import { SteadyAimBanner } from "../SteadyAim";
 // v0.35.47 Refactor Priority 14: 22 panel imports + GAME_TEMPLATES + pickPanel +
 // templateTitle 迁到 ./templateRegistry. GameShell 只引用 registry 入口.
 import { GAME_TEMPLATES, pickPanel, templateTitle } from "./templateRegistry";
+// v0.35.48 Refactor Priority 15: feedback labels 抽到纯函数
+import { buildFeedbackLabels } from "./feedbackLabels";
 import { resolveTemplate } from "./templates/resolve";
 import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAdaptive";
 // v0.35.32 Refactor Priority 1: GameTemplate Capabilities SSOT
@@ -833,51 +835,11 @@ function FeedbackPanel({
       setAdaptiveLoading(null);
     }
   }
-  // 标签：速度档位 / 重做递减 / 新知识点
-  const labels: string[] = [];
-  // v0.34.98 iter 32 P0-0a: Accuracy-First 优先 — 显示新版"🧠 深思" / "🐢 太快了" 标签;
-  //   slowThink/tooFast flag 由 scoreAttempt 在 isAccuracyFirstV1() 为 true 时填充.
-  //   老 speedTier 仅当 flag OFF 时 fallback 使用.
-  if (isCorrect && slowThink) {
-    labels.push("🧠 深思 +5");
-  } else if (isCorrect && tooFast) {
-    // 软化文案 (post-review Gemini + GPT 共识: 不指责, 给可操作建议)
-    labels.push("⏱️ 刚才很快, 下次试试先估一估");
-  } else {
-    // v0.28.1：阶梯速度奖励显示 (老逻辑, accuracy_first 关闭时显示)
-    // v0.31.98：⚡ 数量跟 SpeedMatch gameplay 实时显示完全对齐
-    //   lightning ↔ 3⚡（gameplay tier 3） / quick ↔ 2⚡ / on_time ↔ 1⚡
-    // v0.35.28 (爸爸第 4 次反馈 + AB peer review 共识):
-    // countdownEnabled=false 的题型 (canvas_scratch / multi_step / requiresScratch /
-    // requiresMultiStep), 完全跳过 speed label — 不能让 Selena 看到"⏰ 超时" / "🐢 拖拉 -1"
-    // 在草稿/列算式/多步应用题上, 因为这些题本来就不该计时.
-    if (countdownEnabled) {
-      if (isCorrect && speedTier === "lightning") labels.push("⚡⚡⚡ 闪电 +5");
-      else if (isCorrect && speedTier === "quick") labels.push("⚡⚡ 迅速 +3");
-      else if (isCorrect && speedTier === "on_time") labels.push("⚡ 及时 +2");
-      else if (isCorrect && speedTier === "overdue") labels.push("⏰ 超时");
-      else if (isCorrect && speedTier === "slow") labels.push("🐢 拖拉 -1");
-    }
-  }
-  if (isCorrect && repeatDecay !== undefined && repeatDecay < 1.0 && repeatDecay > 0) {
-    labels.push(`重做 ×${Math.round(repeatDecay * 100)}%`);
-  } else if (isCorrect && repeatDecay === 0) {
-    labels.push("已熟练，不再加分");
-  }
-  if (newSkillBonus && newSkillBonus > 0) {
-    labels.push(`🎓 新知识点 +${newSkillBonus}`);
-  }
-  // v0.34.99 iter 33 P0-1: 估算 XP 标签
-  if (estimationXp && estimationXp > 0) {
-    labels.push(`🧠 估算 +${estimationXp}`);
-  }
-  if (estimationMagnitudeMismatch && isCorrect) {
-    labels.push("⚖️ 数量级跟估算差距大, 下次更准");
-  }
-  // v0.35.0 iter 34 P0-2: 草稿险触发标签
-  if (insuredWrong) {
-    labels.push("🛡️ 草稿险生效 — XP 不扣");
-  }
+  // v0.35.48 Refactor: 标签生成移到 feedbackLabels.ts 纯函数
+  const labels = buildFeedbackLabels({
+    isCorrect, tooFast, slowThink, speedTier, repeatDecay, newSkillBonus,
+    estimationXp, estimationMagnitudeMismatch, insuredWrong, countdownEnabled,
+  });
   return (
     <div className="mt-4 space-y-3 animate-slide-up">
       <div
