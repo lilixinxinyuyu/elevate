@@ -9,6 +9,7 @@
  */
 
 import { getStoredPassword } from "../db/cloudSync";
+import { logFcCall } from "./fcCallLog";
 import type { Question } from "../core/types";
 
 function authHeader(): Record<string, string> {
@@ -233,7 +234,9 @@ export interface GenerateImageResult {
  *   2. 老 sync (CF Pages 兼容): ESA 直接返 urls
  *   3. 老 async (BAILIAN, 已废): ESA 返 taskId, client poll status
  */
-export async function generateImage(args: GenerateImageArgs): Promise<GenerateImageResult> {
+export async function generateImage(args: GenerateImageArgs & { source?: string }): Promise<GenerateImageResult> {
+  const startedAt = Date.now();
+  const source = args.source;
   const r = await fetch("/api/generate/image", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -273,13 +276,16 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
       provider?: string;
     };
     if (!Array.isArray(fcJ.urls) || fcJ.urls.length === 0) {
+      logFcCall({ kind: "image_gen", success: false, elapsedMs: Date.now() - startedAt, error: "fc_no_urls", source });
       throw new TutorError("fc_no_urls", 502);
     }
+    logFcCall({ kind: "image_gen", success: true, elapsedMs: Date.now() - startedAt, model: fcJ.model, source });
     return { urls: fcJ.urls, model: fcJ.model ?? "unknown", taskId: "" };
   }
 
   // 路径 2: 老 sync (CF Pages 兼容)
   if (Array.isArray(j.urls) && j.urls.length > 0) {
+    logFcCall({ kind: "image_gen", success: true, elapsedMs: Date.now() - startedAt, model: j.model, source });
     return { urls: j.urls, model: j.model ?? "unknown", taskId: j.taskId ?? "" };
   }
 

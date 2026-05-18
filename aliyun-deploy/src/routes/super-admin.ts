@@ -1899,6 +1899,177 @@ superAdmin.get("/papers/:cadetUid/:paperId", async (c) => {
  *      → 200 { papers: [{stem, correctAnswer, studentAnswer, errorTag, confidence}] }
  *   3. admin fill 到 paper-entry 表格, 微调后保存
  */
+/**
+ * v0.35.23 iter 52: FC 调用监控 — client 调完 FC 后 fire-and-forget POST 一条 stat.
+ * ESA 写 OSS `_logs/fc-calls/{YYYY-MM-DD}/{ts}-{kind}-{uid}.json`.
+ *
+ * 不需要 strict auth — 任何登录用户都能 log (data only — userId 来自 auth).
+ * 防 abuse: body 必须有合法 kind / success / elapsedMs, 限 max body size.
+ */
+superAdmin.post("/log-fc-call", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const userId = (c.var as { userId?: string }).userId ?? "anon";
+  let body: { kind?: string; success?: boolean; elapsedMs?: number; model?: string; error?: string; source?: string; ts?: number };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  const VALID_KINDS = new Set(["image_gen", "paper_ocr"]);
+  if (!body.kind || !VALID_KINDS.has(body.kind)) {
+    return c.json({ ok: false, error: "invalid_kind" }, 400);
+  }
+  const ts = typeof body.ts === "number" ? body.ts : Date.now();
+  const date = new Date(ts);
+  const dateKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  const ossKey = `_logs/fc-calls/${dateKey}/${ts}-${body.kind}-${userId}.json`;
+  const entry = {
+    ts,
+    userId,
+    kind: body.kind,
+    success: !!body.success,
+    elapsedMs: typeof body.elapsedMs === "number" ? body.elapsedMs : 0,
+    model: typeof body.model === "string" ? body.model.slice(0, 40) : undefined,
+    error: typeof body.error === "string" ? body.error.slice(0, 100) : undefined,
+    source: typeof body.source === "string" ? body.source.slice(0, 40) : undefined,
+  };
+  try {
+    await ossPut(cfg, ossKey, JSON.stringify(entry), { contentType: "application/json; charset=utf-8" });
+  } catch (e) {
+    console.error("[log-fc-call] OSS put failed:", e);
+    // Don't fail user — log loss is acceptable
+  }
+  return c.json({ ok: true });
+});
+
+/**
+ * v0.35.23 iter 52: FC 调用监控聚合查询.
+ * GET /api/super-admin/fc-call-stats?days=7
+ *
+ * 返:
+ *   { ok, days, totalsByKind: {...}, totalsByDay: [{date, image_gen, paper_ocr, failed}],
+ *     recentFailed: [...latest 20 failed entries], avgElapsedMs: {...} }
+ */
+superAdmin.get("/fc-call-stats", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const daysParam = parseInt(c.req.query("days") ?? "7", 10);
+  const days = Math.max(1, Math.min(30, Number.isFinite(daysParam) ? daysParam : 7));
+
+  // OSS list latest N day prefixes
+  const today = new Date();
+  const dayKeys: string[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    dayKeys.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`);
+  }
+
+  const totalsByKind: Record<string, { total: number; failed: number; sumElapsed: number }> = {
+    image_gen: { total: 0, failed: 0, sumElapsed: 0 },
+    paper_ocr: { total: 0, failed: 0, sumElapsed: 0 },
+  };
+  const totalsByDay: { date: string; image_gen: number; paper_ocr: number; failed: number }[] = [];
+  const recentFailed: { ts: number; kind: string; userId: string; error?: string; elapsedMs: number }[] = [];
+
+  // sign OSS list URL (复用 trophy-images list pattern)
+  const date = new Date().toUTCString();
+  const stringToSign = ["GET", "", "", date, `/${cfg.bucket}/`].join("\n");
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw", enc.encode(cfg.accessKeySecret),
+    { name: "HMAC", hash: "SHA-1" }, false, ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(stringToSign));
+  let bin = "";
+  const bytes = new Uint8Array(sigBuf);
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  const sig = btoa(bin);
+  const host = `${cfg.bucket}.${cfg.region}.aliyuncs.com`;
+
+  for (const dk of dayKeys) {
+    const prefix = `_logs/fc-calls/${dk}/`;
+    const url = `https://${host}/?list-type=2&prefix=${encodeURIComponent(prefix)}&max-keys=1000`;
+    let dayImageGen = 0;
+    let dayPaperOcr = 0;
+    let dayFailed = 0;
+    try {
+      const r = await fetch(url, {
+        method: "GET",
+        headers: { Host: host, Date: date, Authorization: `OSS ${cfg.accessKeyId}:${sig}` },
+      });
+      if (!r.ok) {
+        console.warn(`[fc-call-stats] list ${dk} failed: http ${r.status}`);
+        continue;
+      }
+      const xml = await r.text();
+      const keys: string[] = [];
+      for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+        const block = m[1] ?? "";
+        const key = block.match(/<Key>([^<]+)<\/Key>/)?.[1] ?? "";
+        if (key) keys.push(key);
+      }
+      // Fetch each entry (parallel batches of 10)
+      const BATCH = 10;
+      for (let i = 0; i < keys.length; i += BATCH) {
+        const batch = keys.slice(i, i + BATCH);
+        const results = await Promise.all(
+          batch.map(async (k) => {
+            const got = await ossGet(cfg, k);
+            if (!got.ok || !got.text) return null;
+            try { return JSON.parse(got.text); } catch { return null; }
+          }),
+        );
+        for (const entry of results) {
+          if (!entry || typeof entry !== "object") continue;
+          const e = entry as { kind?: string; success?: boolean; elapsedMs?: number; ts?: number; userId?: string; error?: string };
+          if (!e.kind || !totalsByKind[e.kind]) continue;
+          totalsByKind[e.kind].total++;
+          if (e.success) {
+            totalsByKind[e.kind].sumElapsed += typeof e.elapsedMs === "number" ? e.elapsedMs : 0;
+          } else {
+            totalsByKind[e.kind].failed++;
+            dayFailed++;
+            if (recentFailed.length < 20) {
+              recentFailed.push({
+                ts: e.ts ?? 0,
+                kind: e.kind,
+                userId: e.userId ?? "?",
+                error: e.error,
+                elapsedMs: e.elapsedMs ?? 0,
+              });
+            }
+          }
+          if (e.kind === "image_gen") dayImageGen++;
+          else if (e.kind === "paper_ocr") dayPaperOcr++;
+        }
+      }
+    } catch (e) {
+      console.error(`[fc-call-stats] day ${dk} threw:`, e);
+    }
+    totalsByDay.push({ date: dk, image_gen: dayImageGen, paper_ocr: dayPaperOcr, failed: dayFailed });
+  }
+
+  // Compute averages
+  const avgElapsedMs: Record<string, number> = {};
+  for (const [k, v] of Object.entries(totalsByKind)) {
+    const successCount = v.total - v.failed;
+    avgElapsedMs[k] = successCount > 0 ? Math.round(v.sumElapsed / successCount) : 0;
+  }
+
+  recentFailed.sort((a, b) => b.ts - a.ts);
+
+  return c.json({
+    ok: true,
+    days,
+    totalsByKind,
+    totalsByDay,
+    avgElapsedMs,
+    recentFailed,
+  });
+});
+
 superAdmin.post("/paper-ocr", async (c) => {
   const env = c.env as { FC_PAPER_OCR_URL?: string };
   const fcUrl = env.FC_PAPER_OCR_URL;

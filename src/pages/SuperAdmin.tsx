@@ -13,6 +13,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getStoredPassword } from "../db/cloudSync";
+import { FcCallStatsPanel } from "../components/FcCallStatsPanel";
 
 interface UserProfile {
   schemaVersion?: number;
@@ -2500,6 +2501,11 @@ export function SuperAdminPage() {
           </div>
         </div>
       )}
+
+      {/* v0.35.23 iter 52: FC 调用监控面板 (image-gen + paper-ocr) */}
+      <div className="p-4 md:p-8 max-w-6xl mx-auto pt-0">
+        <FcCallStatsPanel pwd={getStoredPassword() ?? ""} />
+      </div>
 
       {/* 新密码 / 新账号成功 modal */}
       {credResult && (

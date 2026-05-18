@@ -8,6 +8,7 @@
  * 0 BAILIAN — qwen3.6-plus / kimi-k2.6 via TOKEN_PLAN_CN 月订阅.
  */
 import { getStoredPassword } from "../db/cloudSync";
+import { logFcCall } from "./fcCallLog";
 
 export interface OcrMistake {
   stem: string;
@@ -49,7 +50,8 @@ export async function fileToBase64(file: File): Promise<string> {
 /**
  * Run paper OCR. file 或 already-encoded base64.
  */
-export async function runPaperOcr(input: { file?: File; base64?: string }): Promise<OcrResult | OcrError> {
+export async function runPaperOcr(input: { file?: File; base64?: string; source?: string }): Promise<OcrResult | OcrError> {
+  const startedAt = Date.now();
   const pwd = getStoredPassword();
   if (!pwd) return { ok: false, error: "no_password" };
   let imageBase64 = input.base64;
@@ -91,7 +93,11 @@ export async function runPaperOcr(input: { file?: File; base64?: string }): Prom
       return { ok: false, error: j?.error ?? `fc_${r.status}`, detail: JSON.stringify(j?.tried ?? "") };
     }
     const j = (await r.json()) as { ok: boolean; papers?: OcrMistake[]; model?: string; elapsedMs?: number; error?: string; rawContent?: string };
-    if (!j.ok) return { ok: false, error: j.error ?? "fc_failed", detail: j.rawContent?.slice(0, 200) };
+    if (!j.ok) {
+      logFcCall({ kind: "paper_ocr", success: false, elapsedMs: Date.now() - startedAt, error: j.error ?? "fc_failed", source: input.source });
+      return { ok: false, error: j.error ?? "fc_failed", detail: j.rawContent?.slice(0, 200) };
+    }
+    logFcCall({ kind: "paper_ocr", success: true, elapsedMs: Date.now() - startedAt, model: j.model, source: input.source });
     return {
       ok: true,
       papers: Array.isArray(j.papers) ? j.papers : [],
@@ -99,6 +105,7 @@ export async function runPaperOcr(input: { file?: File; base64?: string }): Prom
       elapsedMs: j.elapsedMs ?? 0,
     };
   } catch (e) {
+    logFcCall({ kind: "paper_ocr", success: false, elapsedMs: Date.now() - startedAt, error: "fc_network", source: input.source });
     return { ok: false, error: "fc_network", detail: (e as Error).message };
   }
 }
