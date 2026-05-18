@@ -208,6 +208,21 @@ export function isStrengthenChallengeV1(): boolean {
   }
 }
 
+/**
+ * v0.35.4 (iter 38 P1-3): 进制小课堂 — 4 节微课讲清进率概念.
+ * 见 src/core/baseSystemContent.ts
+ */
+const BASE_SYSTEM_LS_KEY = "base_system_lesson_v1";
+
+export function isBaseSystemLessonV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(BASE_SYSTEM_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function isEstimationGateV1(): boolean {
   if (typeof window === "undefined") return true;
   if (!_estGateSynced) {

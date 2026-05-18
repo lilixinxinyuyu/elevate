@@ -430,4 +430,32 @@
 - 共识 blocker #2: navigate(-1) Train state 可能丢 → defer 调研 (Train state 写 IndexedDB 应该 OK, 留 P1-2.1 验证)
 - 共识 nice-to-have: quiet mode 独立 prop, loading 文案轮播 → defer
 
+#### Iter 38 进展 (v0.35.3 → v0.35.4) P1-3 进制小课堂
+
+**命名**: P1-3 原"单位换算按进制讲" → "**进制小课堂**" (符 AUP, 教育自然词).
+
+**预审** 两位评审"改后再做":
+- ✅ 节 3 改名"特殊进率" (评审 B: "进制"在小学语境 = "进率")
+- ✅ "月/年"明确不固定 (大月 31 / 小月 30 / 闰年, 评审 B: 防概念反噬)
+- ✅ 节 2 + 节 4 加判断题 (评审 B: 专门打"1 小时 = 100 分钟"直觉错)
+- ✅ 加面积单位 corner case 提示 (1 平方米 = 100 平方分米, 不是 10)
+- ✅ "进制 / 进率" 并列写 (跟小学课本对齐)
+- ✅ Trophy 只全部完成给一次 (评审 B: 防奖章膨胀)
+- ✅ 自由顺序进入 (评审 B: 自由, 默认推荐顺序)
+- ⏭️ 错题侦探集成 (软提示而非强弹) → defer P1-4 一起
+- ⏭️ 阶梯图 / 钟表 SVG 视觉 → 用 ASCII 钟表示意 (现有), SVG defer
+
+**实现**:
+- NEW `src/core/baseSystemContent.ts` 230 行: 4 节微课内容 (decimal/sexagesimal/special/confusing) + 进度持久化 + XP 常量
+- NEW `src/pages/BaseSystems.tsx` 250 行: 4 节菜单 + 概念卡片 + 练习页 + 完成总结
+- NEW `tests/baseSystemContent.test.ts` 9 tests 全过
+- 改 `src/lib/featureFlags.ts` isBaseSystemLessonV1
+- 改 `src/router.tsx` /math/base-systems lazy 路由
+- 改 `src/pages/Home.tsx` 加入口按钮 "📐 进制小课堂" (indigo 渐变)
+
+**测试**: 9/9 + 全套 pass
+**Build**: 4.53s
+**Deploy**: aliyun OSS 233/233, 107.58MB
+**Post-review**: 进行中
+
 

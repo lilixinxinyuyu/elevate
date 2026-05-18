@@ -675,6 +675,17 @@ export function HomePage() {
             当小老师 · 找出错的那一步
           </div>
         </Link>
+        {/* v0.35.4 iter 38: 进制小课堂 (P1-3) */}
+        <Link
+          to="/math/base-systems"
+          className="card-glow hover:scale-[1.02] transition-transform border-indigo-400/30 bg-gradient-to-br from-indigo-500/20 via-purple-500/15 to-blue-500/10"
+        >
+          <div className="text-2xl">📐</div>
+          <div className="font-display font-bold mt-1.5 text-sm text-indigo-100">进制小课堂</div>
+          <div className="text-[11px] text-indigo-200/80 mt-0.5">
+            单位换算的"为什么" · 4 节微课
+          </div>
+        </Link>
       </div>
 
       {/* ROI #2：每周一次的考试模拟 */}
