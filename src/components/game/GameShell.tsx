@@ -685,7 +685,7 @@ export function GameShell(props: GameShellProps) {
         {/* v0.31.25：传 displayedQuestion 而非原题 — 变式题流程下 Selena 答的是变式题，
             FeedbackPanel 内的"小进讲一讲"按钮也应该讲她刚答的那道，而不是原题。
             之前传 props.question 导致 tutor 打开看到的 stem 跟 feedback 显示的答案对不上。 */}
-        {feedback && <FeedbackPanel feedback={feedback} question={displayedQuestion} onNext={onNext} onInjectQuestion={onInjectQuestion} noRetry={noRetry} />}
+        {feedback && <FeedbackPanel feedback={feedback} question={displayedQuestion} onNext={onNext} onInjectQuestion={onInjectQuestion} noRetry={noRetry} countdownEnabled={countdownEnabled} />}
 
         {/* v0.35.3 iter 37 P1-2: 强化挑战 inline CTA — 错答 + 满足条件时显示 */}
         {feedback && !feedback.isCorrect && !strengthenCTADismissed && (() => {
@@ -863,6 +863,7 @@ function FeedbackPanel({
   onNext,
   onInjectQuestion,
   noRetry,
+  countdownEnabled,
 }: {
   feedback: {
     isCorrect: boolean; partialCorrect: boolean; correctAnswerDisplay: string;
@@ -889,6 +890,7 @@ function FeedbackPanel({
   onInjectQuestion?: (q: Question) => void;
   /** v0.31.85：boss 模式下不渲染"小进讲讲" + "再出一道类似" 这俩 CTA（boss 有自己的救场流） */
   noRetry?: boolean;
+  countdownEnabled: boolean;
 }) {
   const { isCorrect, partialCorrect, repeatDecay, newSkillBonus, speedTier, tooFast, slowThink, estimationXp, estimationMagnitudeMismatch, insuredWrong, errorPattern } = feedback;
   const [showTutor, setShowTutor] = useState(false);
@@ -950,11 +952,17 @@ function FeedbackPanel({
     // v0.28.1：阶梯速度奖励显示 (老逻辑, accuracy_first 关闭时显示)
     // v0.31.98：⚡ 数量跟 SpeedMatch gameplay 实时显示完全对齐
     //   lightning ↔ 3⚡（gameplay tier 3） / quick ↔ 2⚡ / on_time ↔ 1⚡
-    if (isCorrect && speedTier === "lightning") labels.push("⚡⚡⚡ 闪电 +5");
-    else if (isCorrect && speedTier === "quick") labels.push("⚡⚡ 迅速 +3");
-    else if (isCorrect && speedTier === "on_time") labels.push("⚡ 及时 +2");
-    else if (isCorrect && speedTier === "overdue") labels.push("⏰ 超时");
-    else if (isCorrect && speedTier === "slow") labels.push("🐢 拖拉 -1");
+    // v0.35.28 (爸爸第 4 次反馈 + AB peer review 共识):
+    // countdownEnabled=false 的题型 (canvas_scratch / multi_step / requiresScratch /
+    // requiresMultiStep), 完全跳过 speed label — 不能让 Selena 看到"⏰ 超时" / "🐢 拖拉 -1"
+    // 在草稿/列算式/多步应用题上, 因为这些题本来就不该计时.
+    if (countdownEnabled) {
+      if (isCorrect && speedTier === "lightning") labels.push("⚡⚡⚡ 闪电 +5");
+      else if (isCorrect && speedTier === "quick") labels.push("⚡⚡ 迅速 +3");
+      else if (isCorrect && speedTier === "on_time") labels.push("⚡ 及时 +2");
+      else if (isCorrect && speedTier === "overdue") labels.push("⏰ 超时");
+      else if (isCorrect && speedTier === "slow") labels.push("🐢 拖拉 -1");
+    }
   }
   if (isCorrect && repeatDecay !== undefined && repeatDecay < 1.0 && repeatDecay > 0) {
     labels.push(`重做 ×${Math.round(repeatDecay * 100)}%`);
@@ -1090,8 +1098,8 @@ function FeedbackPanel({
           </button>
         )}
 
-        {/* v0.31.34: 答对 + 闪电速度时给"加难度"选项 */}
-        {isCorrect && (speedTier === "lightning" || speedTier === "quick") && question.difficulty < 5 && (
+        {/* v0.31.34: 答对 + 闪电速度时给"加难度"选项 — v0.35.28 加 countdownEnabled gate */}
+        {isCorrect && countdownEnabled && (speedTier === "lightning" || speedTier === "quick") && question.difficulty < 5 && (
           <button
             type="button"
             onClick={onBumpHarder}
