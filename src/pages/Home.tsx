@@ -686,6 +686,17 @@ export function HomePage() {
             单位换算的"为什么" · 4 节微课
           </div>
         </Link>
+        {/* v0.35.5 iter 39: 脑力雷达 (P1-4) */}
+        <Link
+          to="/math/radar"
+          className="card-glow hover:scale-[1.02] transition-transform border-violet-400/30 bg-gradient-to-br from-violet-500/20 via-indigo-500/15 to-purple-500/10"
+        >
+          <div className="text-2xl">🧠</div>
+          <div className="font-display font-bold mt-1.5 text-sm text-violet-100">脑力雷达</div>
+          <div className="text-[11px] text-violet-200/80 mt-0.5">
+            5 个属性看你的进步
+          </div>
+        </Link>
       </div>
 
       {/* ROI #2：每周一次的考试模拟 */}

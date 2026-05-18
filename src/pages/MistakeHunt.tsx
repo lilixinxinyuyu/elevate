@@ -14,6 +14,9 @@
  */
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "../db/dexie";
+import { uid } from "../lib/format";
 import {
   generateSession,
   calcXp,
@@ -32,6 +35,46 @@ export default function MistakeHuntPage() {
   const navigate = useNavigate();
   const [sessionSeed, setSessionSeed] = useState(() => Date.now());
   const cards = useMemo(() => generateSession(seededRng(sessionSeed)), [sessionSeed]);
+  // v0.35.5 iter 39: 落库到 db.attempts (source=mistake_hunt 标 mini-game, 不污染 mastery)
+  // 用 useLiveQuery 拿 student
+  const studentId = useLiveQuery(async () => (await db.students.toCollection().first())?.id ?? null, []) ?? null;
+  const mhSessionId = useMemo(() => `mh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, []);
+
+  // 落 attempt 的 helper (调用 db.attempts.put 异步)
+  async function persistAttempt(card: BugCard, idx: number, state: QuestionState) {
+    if (!studentId) return;
+    try {
+      await db.attempts.put({
+        id: uid("mh-"),
+        studentId,
+        subjectId: "math",
+        questionId: `mh-${mhSessionId}-${idx}`,
+        skillId: `mistake_hunt_${card.kind}`,
+        sessionId: undefined,
+        answer: { picked: state.solved ? card.buggyLineIdx : -1 },
+        isCorrect: state.solved,
+        partialCorrect: false,
+        hintsOpened: state.hintUsed ? 1 : 0,
+        elapsedSeconds: 0,
+        errorTags: state.solved ? [] : [`mh_miss_${card.bugType}`],
+        scoreDelta: { total: state.earnedXp, byAbility: {} },
+        masteryDelta: 0,
+        isReview: false,
+        comboAtEnd: 0,
+        metadata: {
+          source: "mistake_hunt",
+          mhSessionId,
+          bugType: card.bugType,
+          attempts: state.attempts,
+          hintUsed: state.hintUsed,
+          cardKind: card.kind,
+        },
+        createdAt: Date.now(),
+      });
+    } catch (e) {
+      console.warn("[MistakeHunt] persistAttempt failed:", e);
+    }
+  }
   const [idx, setIdx] = useState(0);
   const [states, setStates] = useState<QuestionState[]>(() =>
     cards.map(() => ({ attempts: 0, hintUsed: false, solved: false, skipped: false, earnedXp: 0 }))
@@ -55,12 +98,15 @@ export default function MistakeHuntPage() {
     if (lineIdx === card.buggyLineIdx) {
       // 命中
       const earned = calcXp(newAttempts, state.hintUsed);
+      const finalState = { ...state, attempts: newAttempts, solved: true, earnedXp: earned };
       setStates((prev) => {
         const next = [...prev];
-        next[idx] = { ...state, attempts: newAttempts, solved: true, earnedXp: earned };
+        next[idx] = finalState;
         return next;
       });
       setReveal(true);
+      // v0.35.5 iter 39: 落库
+      void persistAttempt(card, idx, finalState);
       // 2.5s 后下一题
       setTimeout(() => {
         if (idx < cards.length - 1) {
@@ -94,12 +140,15 @@ export default function MistakeHuntPage() {
   }
 
   function onSkip() {
-    if (!state) return;
+    if (!state || !card) return;
+    const finalState = { ...state, skipped: true, earnedXp: 0 };
     setStates((prev) => {
       const next = [...prev];
-      next[idx] = { ...state, skipped: true, earnedXp: 0 };
+      next[idx] = finalState;
       return next;
     });
+    // v0.35.5 iter 39: 跳过也落库 (但 isCorrect=false + earnedXp=0)
+    void persistAttempt(card, idx, finalState);
     if (idx < cards.length - 1) {
       setIdx(idx + 1);
       setReveal(false);

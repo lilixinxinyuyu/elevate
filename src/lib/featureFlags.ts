@@ -223,6 +223,21 @@ export function isBaseSystemLessonV1(): boolean {
   }
 }
 
+/**
+ * v0.35.5 (iter 39 P1-4): 脑力雷达 — Selena 可见 dashboard.
+ * 见 src/core/brainpowerRadar.ts
+ */
+const BRAINPOWER_RADAR_LS_KEY = "brainpower_radar_v1";
+
+export function isBrainpowerRadarV1(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem(BRAINPOWER_RADAR_LS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export function isEstimationGateV1(): boolean {
   if (typeof window === "undefined") return true;
   if (!_estGateSynced) {

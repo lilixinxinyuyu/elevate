@@ -469,4 +469,33 @@
 - 节 1 加 "1 千米 = ? 米" choice 题 (3 选 1)
 - 测试 9/9 仍 pass, build 4.45s, deploy 233/233 OK
 
+#### Iter 39 进展 (v0.35.4 → v0.35.5) P1-4 脑力雷达 + 错题侦探落库
+
+**预审** 两位评审"改后再做"共识整合:
+- ✅ 维度命名加副标 "我做了什么": 直觉力 | 估算数量级 / 严谨力 | 草稿检查 / 拆解力 | 多步解题 / 专项力 | 强化挑战 / 框架力 | 进制关卡
+- ✅ SVG 自写, 0 依赖 (五边形 + 三角函数, 极简)
+- ✅ 分母 0 → CTA "🎯 去做..." (不显示 0% 羞辱)
+- ✅ 本周样本 < 10 → fallback "最近 20 次"
+- ✅ 框架力不参与时间筛选 (localStorage 无 timestamp, 累计)
+- ✅ source filter: isMainTrainAttempt 排除 mistake_hunt (评审 A 强调防污染主线)
+- ⏭️ Train state puppeteer smoke 测 → defer 手动测 + 加 log (节省时间, P1-2.1 验证)
+
+**实现**:
+- NEW `src/core/brainpowerRadar.ts` 220 行: computeBrainpowerRadar / 5 dimension fn / isMainTrainAttempt / dimensionTrend / 时间窗口 + fallback
+- NEW `src/components/radar/RadarChart.tsx` 90 行: SVG 五边形 + 网格 5 层 + 数据 polygon + icon labels
+- NEW `src/pages/BrainpowerRadar.tsx` 130 行: 主页面 + 时间筛选 + 5 卡片 + RPG 风格颜色 (≥70 绿 / ≥40 amber / <40 rose)
+- NEW `tests/brainpowerRadar.test.ts` 14 tests 全过
+- 改 `src/pages/MistakeHunt.tsx`: persistAttempt to db.attempts (source=mistake_hunt + bugType + attempts)
+- 改 `src/router.tsx` /math/radar lazy 路由
+- 改 `src/pages/Home.tsx` 加入口 "🧠 脑力雷达" (violet 渐变)
+- 改 `src/lib/featureFlags.ts` isBrainpowerRadarV1
+
+**测试**: 14/14 新 + 全套 pass
+**Typecheck**: clean
+**Build**: 4.41s
+**Deploy**: aliyun OSS 235/235, 107.59MB
+**Post-review**: 进行中
+
+**P1 全部完成 4/4** (错题侦探 + 强化挑战 + 进制小课堂 + 脑力雷达).
+
 

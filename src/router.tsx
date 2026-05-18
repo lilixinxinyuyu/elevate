@@ -17,6 +17,7 @@ const MistakesPage = lazy(() => import("./pages/Mistakes").then((m) => ({ defaul
 const MistakeHuntPage = lazy(() => import("./pages/MistakeHunt"));
 const StrengthenPage = lazy(() => import("./pages/Strengthen").then((m) => ({ default: m.StrengthenPage })));
 const BaseSystemsPage = lazy(() => import("./pages/BaseSystems"));
+const BrainpowerRadarPage = lazy(() => import("./pages/BrainpowerRadar"));
 const ReportPage = lazy(() => import("./pages/Report").then((m) => ({ default: m.ReportPage })));
 const AdminPage = lazy(() => import("./pages/Admin").then((m) => ({ default: m.AdminPage })));
 const ChineseTrainPage = lazy(() => import("./pages/chinese/ChineseTrain").then((m) => ({ default: m.ChineseTrainPage })));
@@ -205,6 +206,7 @@ export const router = createBrowserRouter([
       { path: "find-mistakes", element: L(<MathOnlyRoute><MistakeHuntPage /></MathOnlyRoute>) },
       { path: "strengthen", element: L(<MathOnlyRoute><StrengthenPage /></MathOnlyRoute>) },
       { path: "base-systems", element: L(<MathOnlyRoute><BaseSystemsPage /></MathOnlyRoute>) },
+      { path: "radar", element: L(<MathOnlyRoute><BrainpowerRadarPage /></MathOnlyRoute>) },
       { path: "report", element: L(<MathOnlyRoute><ReportPage /></MathOnlyRoute>) },
       { path: "fluency", element: L(<Phase2Route><FluencyPage /></Phase2Route>) },
       { path: "fluency/:moduleId", element: L(<Phase2Route><FluencySessionPage /></Phase2Route>) },
