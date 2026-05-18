@@ -51,10 +51,14 @@ export default function MockExamReportPage() {
 
   const summary = useMemo(() => computeMockExamReport(attempts, questionsById), [attempts, questionsById]);
 
-  // 中途退出 / 未完成判断: 题目数 < 30 OR session.completedAt null
-  // (现有 session 没 completedAt — 用 attempts ≥ 30 作 proxy)
-  const TARGET_QUESTIONS = 30;
-  const isIncomplete = summary.totalQuestions > 0 && summary.totalQuestions < TARGET_QUESTIONS;
+  // 评审共识 blocker fix: 不能硬编码 < 30 (scheduler 可能出 20/25 题, 永远 stuck)
+  // 改: 用 session.questionIds 实际数量判定. 完成 = answered ≥ session 实际分配题数.
+  const sessionTotal = session?.questionIds?.length ?? 0;
+  const TARGET_QUESTIONS_DISPLAY = 30; // 仅展示文案用
+  const isIncomplete =
+    sessionTotal > 0 &&
+    summary.totalQuestions > 0 &&
+    summary.totalQuestions < sessionTotal;
 
   if (!sessionId) {
     return (
@@ -83,8 +87,8 @@ export default function MockExamReportPage() {
       <div className="max-w-md mx-auto p-4 space-y-3">
         <h1 className="text-lg font-bold text-amber-100">📝 模拟整卷进行中</h1>
         <div className="rounded-xl bg-amber-500/15 border border-amber-400/40 p-3">
-          <p className="text-sm text-amber-100">已做: {summary.totalQuestions} / {TARGET_QUESTIONS} 题</p>
-          <p className="text-xs text-amber-200/80 mt-1">完成全部 {TARGET_QUESTIONS} 题后, 才能看到完整分析报告.</p>
+          <p className="text-sm text-amber-100">已做: {summary.totalQuestions} / {sessionTotal} 题</p>
+          <p className="text-xs text-amber-200/80 mt-1">完成全部题目后, 才能看到完整分析报告.</p>
         </div>
         <Link to={`/math/train?mode=mock_exam&sessionId=${sessionId}`} className="block text-center px-4 py-2 rounded-lg bg-amber-500 text-white font-semibold">
           继续完成模拟卷
@@ -120,6 +124,11 @@ export default function MockExamReportPage() {
         </p>
         {summary.totalMinutes !== null && (
           <p className="text-xs text-slate-300/80 mt-2">用时 ≈ {summary.totalMinutes} 分钟 (建议 60 分钟内)</p>
+        )}
+        {summary.totalQuestions < TARGET_QUESTIONS_DISPLAY && (
+          <p className="text-[10px] text-amber-200/70 mt-2">
+            本次共 {summary.totalQuestions} 题, 非完整 {TARGET_QUESTIONS_DISPLAY} 题模拟卷, 结果仅供参考
+          </p>
         )}
       </div>
 
