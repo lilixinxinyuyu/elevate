@@ -542,4 +542,33 @@
 
 **最终**: v0.35.6 ship (commit 730c42a) + 文案 hotfix
 
+#### Iter 41 进展 (v0.35.6 → v0.35.7) P2-2 模拟整卷成绩分析
+
+**复用现有 infra**: mock_exam session mode + 一周节流 + Home 入口 (都已有), 加 3 件:
+1. 完成后专属"成绩分析"页 (新 /math/mock-report)
+2. 错题诊断 (基于 attempt.metadata, 用 iter 32-39 累积数据)
+3. Train.tsx mock_exam 完成 → 直接 navigate report
+
+**预审两位评审"改后再做"共识整合**:
+- ✅ 软限时不强退 (报告显示用时, 不超时判败)
+- ✅ 错题诊断 Top 3 + 阈值规则 (count ≥ 2 才显示, 高风险类型 count=1 也显示)
+- ✅ 样本 < 3 题型标"仅供参考"
+- ✅ 1 主推荐 + 2 次推荐 (避免 3 个强 CTA)
+- ✅ 未完成 session 显示"继续完成" 不算正式成绩
+- ⏭️ session blueprint metadata → defer (现有 infra 不支持)
+- ⏭️ 30 题强制 → defer (改 scheduler 风险大)
+
+**实现**:
+- NEW `src/core/mockExamReport.ts` (180 行): 题型分类 (5 大类) + 错题诊断 + Top 3 阈值
+- NEW `src/pages/MockExamReport.tsx` (190 行): 总分 + breakdown + Top 3 诊断 + 1主2次推荐
+- NEW `tests/mockExamReport.test.ts` 10 tests 全过
+- 改 `src/router.tsx` /math/mock-report 路由
+- 改 `src/lib/featureFlags.ts` isMockExamReportV1
+- 改 `src/pages/Train.tsx` mock_exam 完成自动 navigate report
+
+**测试**: 10/10 新 + 全套 pass
+**Build**: 5.29s, **Deploy**: aliyun OSS 236/236
+
+**P2 进度**: 2/3 (稳准挑战 + 模拟整卷成绩分析). 剩 P2-3 试卷 OCR + 收尾 retrospective.
+
 
