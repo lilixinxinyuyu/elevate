@@ -1809,4 +1809,84 @@ superAdmin.post("/textbooks/:uploadId/synthesize", async (c) => {
   });
 });
 
+/* ──────────────────── v0.35.8 iter 42 P2-3: 试卷错题录入 ──────────────────── */
+
+/**
+ * POST /api/super-admin/papers/save
+ * 保存或更新一份试卷错题记录 (admin 手敲, OCR v2 再加).
+ *
+ * Body: PaperRecord JSON (见 src/core/paperMistakes.ts)
+ *
+ * 写到 OSS `users/{cadetUid}/paper-mistakes/{paperId}.json`.
+ * 不动 db.mistakes (评审 B 共识防污染 mastery), 单独存档.
+ */
+superAdmin.post("/papers/save", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  let body: Record<string, unknown>;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  const paperId = body.paperId;
+  const cadetUid = body.cadetUid;
+  if (typeof paperId !== "string" || !/^[\w-]+$/.test(paperId)) {
+    return c.json({ ok: false, error: "invalid_paperId" }, 400);
+  }
+  if (typeof cadetUid !== "string" || !/^[\w-]+$/.test(cadetUid)) {
+    return c.json({ ok: false, error: "invalid_cadetUid" }, 400);
+  }
+  // Stamp updatedAt
+  const record = { ...body, updatedAt: Date.now() };
+  const key = `users/${cadetUid}/paper-mistakes/${paperId}.json`;
+  await ossPut(cfg, key, JSON.stringify(record, null, 2), "application/json");
+  console.log(`[super-admin] paper saved: ${paperId} for ${cadetUid} (${(record as any).mistakes?.length ?? 0} mistakes)`);
+  return c.json({ ok: true, paperId, ossKey: key, savedAt: Date.now() });
+});
+
+/**
+ * GET /api/super-admin/papers?cadetUid=xxx
+ * 列出某 cadet 的所有试卷错题记录.
+ */
+superAdmin.get("/papers", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const cadetUid = c.req.query("cadetUid");
+  if (!cadetUid || !/^[\w-]+$/.test(cadetUid)) {
+    return c.json({ ok: false, error: "invalid_cadetUid" }, 400);
+  }
+  const prefix = `users/${cadetUid}/paper-mistakes/`;
+  // 简单 list - 复用 textbooks 类似 pattern, 但此处直接 try get index. 暂时返回 stub list.
+  // 实际 list 需要 OSS list API, 这里 v1 fallback 返空 (admin 用本地 cache).
+  return c.json({ ok: true, cadetUid, papers: [], note: "list API v1 stub, 单 paper get OK" });
+});
+
+/**
+ * GET /api/super-admin/papers/:cadetUid/:paperId
+ * 获取单份试卷记录.
+ */
+superAdmin.get("/papers/:cadetUid/:paperId", async (c) => {
+  const cfg = getOssConfig(c.env);
+  if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);
+  const cadetUid = c.req.param("cadetUid");
+  const paperId = c.req.param("paperId");
+  if (!/^[\w-]+$/.test(cadetUid) || !/^[\w-]+$/.test(paperId)) {
+    return c.json({ ok: false, error: "invalid_id" }, 400);
+  }
+  const key = `users/${cadetUid}/paper-mistakes/${paperId}.json`;
+  const got = await ossGet(cfg, key);
+  if (got.status === 404) {
+    return c.json({ ok: false, error: "not_found" }, 404);
+  }
+  if (got.status >= 400) {
+    return c.json({ ok: false, error: "oss_error", status: got.status }, 502);
+  }
+  try {
+    return c.json({ ok: true, record: JSON.parse(got.text) });
+  } catch {
+    return c.json({ ok: false, error: "corrupt_record" }, 500);
+  }
+});
+
 export default superAdmin;
