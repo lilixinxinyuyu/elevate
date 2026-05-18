@@ -1,14 +1,14 @@
 # Visual Diff Report
 
-Generated: 2026-05-17T12:04:29.356Z
+Generated: 2026-05-18T06:14:45.199Z
 
 | Page | Status | Baseline | Current | Δ |
 |---|---|---|---|---|
-| selena-home | ⚠ minor | 274.0 KB | 278.8 KB | 1.8% |
-| selena-math | ⚠ minor | 204.1 KB | 209.1 KB | 2.5% |
-| selena-mistakes | ⚠ minor | 85.6 KB | 85.6 KB | 0.0% |
-| bruce-home | ⚠ minor | 285.5 KB | 280.9 KB | 1.6% |
-| bruce-math | ⚠ minor | 208.8 KB | 203.6 KB | 2.5% |
+| selena-home | 🔄 refreshed | — | 273.9 KB | — |
+| selena-math | 🔄 refreshed | — | 209.2 KB | — |
+| selena-mistakes | 🔄 refreshed | — | 85.7 KB | — |
+| bruce-home | 🔄 refreshed | — | 280.8 KB | — |
+| bruce-math | 🔄 refreshed | — | 208.8 KB | — |
 
 ## Notes
 
