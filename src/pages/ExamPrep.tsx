@@ -62,6 +62,19 @@ export default function ExamPrepPage() {
   }
 
   const hasData = snapshot.totalMockExams > 0 || snapshot.errorTrends.length > 0;
+  // v0.35.15 iter 45: 纸面试卷错题 (爸爸 admin 录入) 入口
+  const paperMistakeCount = useLiveQuery(
+    async () => studentId ? db.paperMistakes.where("studentId").equals(studentId).count() : 0,
+    [studentId],
+  ) ?? 0;
+  const paperMistakeUnreviewed = useLiveQuery(
+    async () => {
+      if (!studentId) return 0;
+      const rows = await db.paperMistakes.where("studentId").equals(studentId).toArray();
+      return rows.filter((r) => !r.reviewedAt).length;
+    },
+    [studentId],
+  ) ?? 0;
 
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
@@ -69,6 +82,28 @@ export default function ExamPrepPage() {
         <h1 className="text-xl font-bold text-purple-100">📝 期末备考中心</h1>
         <button onClick={() => navigate(-1)} className="text-xs text-slate-400 hover:text-slate-200">返回</button>
       </div>
+
+      {/* v0.35.15 iter 45 P3-1: 纸面试卷错题入口 (爸爸 admin 录入, Selena 端这边复习) */}
+      {paperMistakeCount > 0 && (
+        <Link
+          to="/math/paper-mistakes"
+          className="block rounded-xl bg-cyan-500/15 border border-cyan-400/40 p-3 hover:bg-cyan-500/20 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📄</span>
+            <div className="flex-1">
+              <div className="font-semibold text-cyan-100 text-sm">爸爸录的纸面试卷错题</div>
+              <div className="text-xs text-cyan-200/80">
+                共 {paperMistakeCount} 道
+                {paperMistakeUnreviewed > 0 && (
+                  <span className="text-amber-200"> · {paperMistakeUnreviewed} 未复</span>
+                )}
+              </div>
+            </div>
+            <span className="text-cyan-300 text-sm">→</span>
+          </div>
+        </Link>
+      )}
 
       {/* 开始新模拟卷 */}
       <section className="rounded-xl bg-purple-500/15 border border-purple-400/40 p-4 space-y-3">

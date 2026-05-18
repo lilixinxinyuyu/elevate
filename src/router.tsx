@@ -21,6 +21,7 @@ const BrainpowerRadarPage = lazy(() => import("./pages/BrainpowerRadar"));
 const MockExamReportPage = lazy(() => import("./pages/MockExamReport"));
 const PaperMistakeEntryPage = lazy(() => import("./pages/PaperMistakeEntry"));
 const ExamPrepPage = lazy(() => import("./pages/ExamPrep"));
+const PaperMistakesPage = lazy(() => import("./pages/PaperMistakes"));
 const ReportPage = lazy(() => import("./pages/Report").then((m) => ({ default: m.ReportPage })));
 const AdminPage = lazy(() => import("./pages/Admin").then((m) => ({ default: m.AdminPage })));
 const ChineseTrainPage = lazy(() => import("./pages/chinese/ChineseTrain").then((m) => ({ default: m.ChineseTrainPage })));
@@ -213,6 +214,7 @@ export const router = createBrowserRouter([
       { path: "mock-report", element: L(<MathOnlyRoute><MockExamReportPage /></MathOnlyRoute>) },
       { path: "exam-prep", element: L(<MathOnlyRoute><ExamPrepPage /></MathOnlyRoute>) },
       { path: "paper-entry", element: L(<MathOnlyRoute><PaperMistakeEntryPage /></MathOnlyRoute>) },
+      { path: "paper-mistakes", element: L(<MathOnlyRoute><PaperMistakesPage /></MathOnlyRoute>) },
       { path: "report", element: L(<MathOnlyRoute><ReportPage /></MathOnlyRoute>) },
       { path: "fluency", element: L(<Phase2Route><FluencyPage /></Phase2Route>) },
       { path: "fluency/:moduleId", element: L(<Phase2Route><FluencySessionPage /></Phase2Route>) },

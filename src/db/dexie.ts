@@ -29,6 +29,48 @@ export interface TrophyImageRow {
   isLottery?: boolean;
 }
 
+/**
+ * v0.35.15 iter 45 P3-1: 纸面试卷错题 row.
+ *
+ * 爸爸在 admin /math/paper-entry 录入一份 paper × N 错题 → 推送到 OSS
+ * `users/{cadetUid}/paper-mistakes/{paperId}.json`. 这边 cloudSync pull
+ * 下来按"一行一道纸面错题"打平存表. Selena 端 /math/paper-mistakes 列出
+ * 让她"再写一次答案", reviewedAt 记录她已复习的时间.
+ *
+ * 关键: 完全独立于 db.mistakes — 不 dilute mastery, 不算 SRS, 不入主 attempts.
+ * 只是给 Selena 一个"爸爸帮我记的纸面错题在这" 的入口. 配合 EXAM_PAPER_PACK
+ * (硬编码真题题库) 形成"线上 + 线下 错题双闭环".
+ */
+export interface PaperMistakeRow {
+  /** primary key, 组合 `${studentId}::${paperId}::${paperQuestionId}` */
+  id: string;
+  studentId: string;
+  /** 这份 paper 的 ID (一份 paper 多道 row 共享) */
+  paperId: string;
+  /** 这道纸面题在 paper 内的 ID (admin 端 genPaperMistakeId 生成的) */
+  paperQuestionId: string;
+  /** 题干 */
+  stem: string;
+  /** 正解 */
+  correctAnswer: string;
+  /** Selena 当时写的错答 */
+  studentAnswer: string;
+  /** 错因 tag (admin 选的) */
+  errorTag?: string;
+  /** admin 备注 (可选) */
+  notes?: string;
+  /** 试卷类型 */
+  paperKind: "midterm" | "final" | "homework" | "quiz" | "other";
+  /** 试卷名称/标题 */
+  paperTitle: string;
+  /** admin 推送时间 */
+  pushedAt: number;
+  /** Selena 端复习过的时间 (null = 未复); 复习后写答 + 标对错都记进 reviewLog */
+  reviewedAt?: number;
+  /** Selena 端再答的内容 + 自评 (可多次) */
+  reviewLog?: { ts: number; myAnswer: string; correct: boolean }[];
+}
+
 /** v0.31.22：小进衣柜（mascotWardrobe）— Selena 用装扮卡 AI 生成的造型。 */
 export interface MascotWardrobeRow {
   id: string;
@@ -69,6 +111,8 @@ export class HepingDB extends Dexie {
   fluencyStats!: Table<FluencyStatsRow, string>;
   /** v0.31.22：小进衣柜 — AI 生成的造型 outfit */
   mascotWardrobe!: Table<MascotWardrobeRow, string>;
+  /** v0.35.15 iter 45 P3-1：爸爸录入的纸面试卷错题. 跟 db.mistakes 完全独立, 不进 mastery (评审 B 防污染). */
+  paperMistakes!: Table<PaperMistakeRow, string>;
 
   constructor() {
     super("heping-math-trainer");
@@ -253,6 +297,13 @@ export class HepingDB extends Dexie {
     // 卡片余额放 db.meta::wardrobeCards::math::<studentId>，不在表里。
     this.version(7).stores({
       mascotWardrobe: "id, studentId, subjectId, equipped, createdAt",
+    });
+
+    // v8 (v0.35.15 iter 45 P3-1): 纸面试卷错题 (爸爸 admin 录入, 从 OSS pull).
+    // 完全独立, 不进 mastery / mistakes / attempts. Selena 端只读 + 自己再写一次答案. row 表示
+    // 一个 paper × paper_mistake 组合 (一份 paper 可能多条). reviewedAt 索引用于"待复"过滤.
+    this.version(8).stores({
+      paperMistakes: "id, studentId, paperId, paperQuestionId, pushedAt, reviewedAt",
     });
   }
 }

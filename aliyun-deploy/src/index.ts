@@ -31,6 +31,7 @@ import superAdmin from "./routes/super-admin";
 import tutor from "./routes/tutor";
 import admin from "./routes/admin";
 import agent from "./routes/agent";
+import paperMistakes from "./routes/paper-mistakes";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -79,6 +80,7 @@ app.route("/api/tts", tts);
 app.route("/api/generate", generate);        // Ep7: async pattern
 app.route("/api/tutor", tutor);              // Ep18: /explain native, others proxy
 app.route("/api/admin", admin);              // Ep19: report-question + list-reports native
+app.route("/api/paper-mistakes", paperMistakes);  // v0.35.15 iter 45: Selena 端拉爸爸录入的纸面错题
 
 // /api/agent/judge-questions native (Ep34) + 其他 agent/* 路径 fall through
 // 到 proxy-fallback via agent.all("*") 内部 handler
