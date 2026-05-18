@@ -607,6 +607,10 @@ function PromptBuilder() {
   · 给三条边（自动判断能否围成）tags: ["tri-sides:5,8,7"]
   · 等腰三角形特殊渲染 tags: ["tri-iso:apex=110,base=8","tri-mark:isoceles"]
   · 直角标记 tags: ["tri-mark:right"]
+- 列算式很重要的多步 / 多位运算 / 部分应用题 → "canvas_scratch"
+  · 学生在 canvas 白板上手写列式 + 下方填数字答; 列式 PNG 落 attempt.metadata 供复盘
+  · 跟 multi_step_application 互斥: 4 步框架完整的应用题优先 multi_step_application
+  · 适合: 三位数乘除竖式 / 简单两步应用 (题面会提示"列式再算")
 - 立体观察 / 数正方体 / 三视图 → "cube_view"
   · 题面立体图形 tags: ["solid:0,0,0|1,0,0|0,1,0"]（每个 x,y,z 是一个单位立方体；x→右、y→上、z→后）
   · 题面 2D 视图 tags: ["grid-front:3x2:1,1,1|0,1,0"]（WxH，行用 \\| 分，1=有方块、0=空），同理 grid-top / grid-left

@@ -183,6 +183,8 @@ export function TrainPage() {
         scratch: result.scratch,
         // v0.35.1 iter 35 P0-3: MultiStepApplication 数据落 attempt.metadata
         multiStep: result.multiStep,
+        // v0.35.10 iter 41 (爸爸反馈): CanvasScratch 数据落 attempt.metadata
+        canvasScratch: result.canvasScratch,
       });
       setState((s) =>
         s.status === "running"

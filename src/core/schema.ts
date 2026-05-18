@@ -164,6 +164,8 @@ export const GameTemplateSchema = z.enum([
   "dot_grid_draw",
   // v0.35.1 iter 35 P0-3
   "multi_step_application",
+  // v0.35.10 iter 41 (爸爸反馈): canvas 列算式 + 数字答, 见 src/components/game/templates/CanvasScratch.tsx
+  "canvas_scratch",
 ]);
 
 export const QuestionSchema = z.object({

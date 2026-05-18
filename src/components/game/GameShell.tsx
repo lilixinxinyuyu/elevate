@@ -50,6 +50,8 @@ import { TriangleJudgePanel } from "./templates/TriangleJudge";
 import { DotGridDrawPanel } from "./templates/DotGridDraw";
 // v0.35.1 iter 35 P0-3
 import { MultiStepApplicationPanel } from "./templates/MultiStepApplication";
+// v0.35.10 iter 41 (爸爸反馈): canvas 列算式 + 数字答模板
+import { CanvasScratchPanel } from "./templates/CanvasScratch";
 // v0.31.87 — 5 个新玩法
 import { DiscountDriftPanel } from "./templates/DiscountDrift";
 import { CoinComboPanel } from "./templates/CoinCombo";
@@ -109,6 +111,16 @@ export interface AttemptResult {
     charCount: number;
     insured: boolean;
     mentalOverrideUsed: boolean;
+  };
+  /**
+   * v0.35.10 iter 41 (爸爸反馈): canvas_scratch 模板 payload.
+   * imageBase64 是手写 PNG (列算式区), 落 attempt.metadata.canvasScratch.
+   * mistake 复盘时可还原 Selena 当时怎么列的式子.
+   */
+  canvasScratch?: {
+    imageBase64: string;
+    strokeCount: number;
+    hasWork: boolean;
   };
 }
 
@@ -740,6 +752,8 @@ function pickPanel(id: string): (p: TemplateRenderProps) => JSX.Element {
       return DotGridDrawPanel;
     case "multi_step_application":
       return MultiStepApplicationPanel;
+    case "canvas_scratch":
+      return CanvasScratchPanel;
     // v0.31.87 — 5 个新玩法（Discount Drift / Coin Combo / Time Heist / Number Hunt）
     // shape_builder 复用 dot_grid_draw 不需要新 panel
     case "discount_drift":
@@ -798,6 +812,8 @@ function templateTitle(id: string): string {
       return "数字寻宝";
     case "multi_step_application":
       return "应用题 4 步法";
+    case "canvas_scratch":
+      return "画板列算式";
     default:
       return "挑战";
   }

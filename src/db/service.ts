@@ -357,6 +357,16 @@ export interface SubmitAttemptInput {
     userAnswer: number;
     userUnit: string;
   };
+  /**
+   * v0.35.10 (iter 41 爸爸反馈): CanvasScratch payload, 落库到 attempt.metadata.canvasScratch.
+   * imageBase64 是手写 PNG (列算式区); mistake 复盘时 / Brainpower Radar 可还原.
+   * 不影响 scoring (numeric 答还是 gradeAttempt 主导).
+   */
+  canvasScratch?: {
+    imageBase64: string;
+    strokeCount: number;
+    hasWork: boolean;
+  };
 }
 
 export interface AttemptOutcome {
@@ -504,6 +514,7 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
       if (input.estimationGate) meta.estimationGate = { version: "v1", ...input.estimationGate };
       if (input.scratch) meta.scratch = { version: "v1", ...input.scratch, insuredWrongBypass };
       if (input.multiStep) meta.multiStep = { version: "v1", ...input.multiStep };
+      if (input.canvasScratch) meta.canvasScratch = { version: "v1", ...input.canvasScratch };
       return Object.keys(meta).length > 0 ? meta : undefined;
     })(),
     createdAt: Date.now(),

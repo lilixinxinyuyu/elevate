@@ -87,6 +87,14 @@ export type GameTemplate =
   | "dot_grid_draw"
   /** v0.35.1 iter 35 P0-3: 应用题 4 步法 (已知/求/算式/答) — 见 multiStepPolicy.ts */
   | "multi_step_application"
+  /**
+   * v0.35.10 iter 41 (爸爸反馈): 手写画板列算式 + 数字答案.
+   * 列算式区让 Selena 像在纸上一样画;
+   * 下方仍有数字答案输入 (grader 用). canvas base64 + strokeCount 落 attempt.metadata.canvasScratch.
+   * 触发: play_as === "canvas_scratch" (admin / AI 显式标).
+   * 适合: 列算式有价值的应用题 / 多位列式; 不替代 multi_step_application (有 step 框架的优先后者).
+   */
+  | "canvas_scratch"
   /** v0.31.87：折扣计算 — 原价 + 折扣 chip → 算折后价（小数乘 / 百分比萌芽） */
   | "discount_drift"
   /** v0.31.87：凑钱 — 5 张面值勾选凑目标金额（小数加 / 元角分换算） */
