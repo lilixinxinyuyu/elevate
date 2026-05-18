@@ -343,8 +343,11 @@ export function GameShell(props: GameShellProps) {
       // v0.35.0 iter 34 P0-2: ScratchInsurance 拦截 — requiresScratch 题 + 未选工具 → 弹 dialog
       // 仅 1st attempt 拦截 (2nd retry 不再打扰), 仅非考试模式
       // post-review: 每 session 最多弹 1 次 (双家共识)
+      // v0.35.27 (爸爸第 3 次反馈): canvas_scratch 模板内置 canvas, **不再弹 ScratchInsurance dialog**
+      // (canvas 本身就是草稿, 再问"用草稿还是心算" 多余 + 干扰流程)
       if (
         !examMode && !noRetry && !wasRetriedRef.current &&
+        templateId !== "canvas_scratch" &&
         requiresScratch(displayedQuestion) &&
         scratchState.tool === "none" &&
         !scratchState.insured &&
@@ -626,8 +629,9 @@ export function GameShell(props: GameShellProps) {
         })()}
 
         {/* v0.35.0 iter 34 P0-2: ScratchInsurance — answer panel 下方工具栏.
-            条件: 非考试 / 非 boss / starter 已完成 / 没在 feedback / EstimationGate 跟它互斥 (heuristic 已保证 requiresScratch 不会触发 estimation 题) */}
-        {!examMode && !noRetry && starterDone && !feedback && requiresScratch(displayedQuestion) && (
+            v0.35.27 (爸爸第 3 次反馈): canvas_scratch 模板自带 canvas, 不再渲染
+            ScratchPanel textarea 工具栏 (重复 + 干扰). */}
+        {!examMode && !noRetry && starterDone && !feedback && templateId !== "canvas_scratch" && requiresScratch(displayedQuestion) && (
           <ScratchPanel
             state={scratchState}
             onChange={setScratchState}

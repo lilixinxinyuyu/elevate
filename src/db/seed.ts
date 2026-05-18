@@ -24,7 +24,7 @@ import type { Question, StudentProfile } from "../core/types";
 // v0.35.26 (爸爸第 2 次反馈 reflective): 强制再 reload 一次, 让所有老 IndexedDB
 // 拿到最新的 metadata + 新加的 admin nav 删除. SEED 仅 questions 相关, 但 bump
 // 也确保用户拿到新构建 (浏览器 cache + service worker 都不会 stale 太久).
-const SEED_VERSION = 25;
+const SEED_VERSION = 26;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

@@ -67,6 +67,32 @@ function checkAuth(authHeader, env) {
   return null;
 }
 
+// v0.35.27 (爸爸第 3 次反馈): canvas_judge mode — 判 Selena 在 canvas 上列的算式
+// 是否正确. 配合 src/components/game/templates/CanvasScratch.tsx 自动 fire 一调.
+const CANVAS_JUDGE_SYS_PROMPT = `你是小学四年级数学家教. 学生在数学题白板上手写了她的解题过程, 我给你:
+- 题面 (stem)
+- 她写的最终数字答 (finalAnswer)
+- 这道题的标准答对错 (isCorrect, true 表示她最终答对了)
+- 她手写的过程图 (image, 列算式 / 草稿)
+
+任务: 判她的**列式过程**对不对 (不是只看最终答). 输出 JSON:
+{
+  "processOk": bool,        // 列式过程是否合理 / 对
+  "feedback": "..."         // 50 字内, 中文, 具体指出问题 / 表扬 / 改进建议
+}
+
+判定原则:
+- processOk=true 仅当: 列式步骤逻辑对, 即使中间数字有 typo / 算错也算"过程对"
+- processOk=false: 思路错 / 用错运算 / 漏步骤 / 完全没相关算式
+- feedback 要具体: 别说"还可以", 要说"第二步 23 × 4 写成了 32 × 4" 或
+  "你想到了用乘法很好, 但忘了进位"
+- 学生答对 + 列式漂亮 → 表扬 "列得清楚, 思路完整 ✨"
+- 学生答对 + 列式马虎 → 提醒 "答对了但下次列式时写大点更清楚"
+- 学生答错 + 列式对 → "你想得对, 只是 X 步算错了, 改一下数字就对"
+- 学生答错 + 列式错 → "X 这种题应该用 Y 方法, 而不是 Z" (建议下次怎么做)
+
+仅输出 JSON, 无 markdown, 无解释.`;
+
 const EXTRACT_MISTAKES_SYS_PROMPT = `你是小学四年级数学卷子分析助手. 给你一张学生写的卷子照片, 找出**所有学生答错的题**.
 
 每道错题输出:
@@ -181,7 +207,9 @@ export const handler = async (rawEvent, _context) => {
   const imageDataUrl = imageBase64.startsWith("data:")
     ? imageBase64
     : `data:image/png;base64,${imageBase64}`;
-  const mode = body.mode === "ocr_raw" ? "ocr_raw" : "extract_mistakes";
+  // v0.35.27: 3 modes — extract_mistakes (默认) / ocr_raw / canvas_judge
+  const validModes = new Set(["extract_mistakes", "ocr_raw", "canvas_judge"]);
+  const mode = validModes.has(body.mode) ? body.mode : "extract_mistakes";
 
   if (!env.TOKEN_PLAN_CN_API_KEY) {
     return jsonResp(503, { ok: false, error: "token_plan_not_configured" });
@@ -200,6 +228,18 @@ export const handler = async (rawEvent, _context) => {
         "请抄写这张图片所有文字.",
         imageDataUrl,
       );
+    } else if (mode === "canvas_judge") {
+      // v0.35.27: 判 Selena canvas 列式. body 必须带 stem + finalAnswer + isCorrect
+      const stem = (typeof body.stem === "string" ? body.stem : "").slice(0, 300);
+      const finalAnswer = String(body.finalAnswer ?? "").slice(0, 50);
+      const isCorrect = !!body.isCorrect;
+      r = await callVision(
+        env.TOKEN_PLAN_CN_API_KEY,
+        m,
+        CANVAS_JUDGE_SYS_PROMPT,
+        `题面: ${stem}\n学生最终数字答: ${finalAnswer}\n标准判定 isCorrect=${isCorrect}\n\n请判她手写过程对不对, 输出 {"processOk": bool, "feedback": "..."} JSON.`,
+        imageDataUrl,
+      );
     } else {
       r = await callVision(
         env.TOKEN_PLAN_CN_API_KEY,
@@ -215,9 +255,25 @@ export const handler = async (rawEvent, _context) => {
       if (mode === "ocr_raw") {
         return jsonResp(200, { ok: true, raw: r.content, model: m, provider: "token-plan-cn", elapsedMs });
       }
+      if (mode === "canvas_judge") {
+        // LLM 返 { processOk, feedback } JSON object (not array)
+        const cleaned = r.content.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+        let parsed;
+        try { parsed = JSON.parse(cleaned); }
+        catch { return jsonResp(200, { ok: false, error: "llm_output_not_json", rawContent: cleaned.slice(0, 500), model: m, elapsedMs }); }
+        if (typeof parsed?.processOk !== "boolean" || typeof parsed?.feedback !== "string") {
+          return jsonResp(200, { ok: false, error: "judge_missing_fields", rawContent: cleaned.slice(0, 500), model: m, elapsedMs });
+        }
+        return jsonResp(200, {
+          ok: true,
+          canvasJudge: { processOk: parsed.processOk, feedback: parsed.feedback.slice(0, 300) },
+          model: m,
+          provider: "token-plan-cn",
+          elapsedMs,
+        });
+      }
       const parsed = tryParseJsonArray(r.content);
       if (!parsed.ok) {
-        // LLM 返了 OK content 但 JSON parse fail. Return as-is for client debug.
         return jsonResp(200, {
           ok: false,
           error: "llm_output_not_json",
