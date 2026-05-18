@@ -741,71 +741,64 @@ export function GameShell(props: GameShellProps) {
 }
 
 /**
- * v0.35.34 Refactor Priority 2.5: exhaustive switch. GameTemplate 加 member
- * 不在这里加 case → TS compile error (assertUnreachable never 类型不匹配).
+ * v0.35.37 Refactor Priority 5 (peer review consensus #1): GAME_TEMPLATES 单一 registry.
+ *
+ * `satisfies Record<GameTemplate, TemplateDef>` 让 TS 编译时 enforce:
+ *   - 加新 GameTemplate union member 不在这里加 entry → TS error
+ *   - 删 union member 不在这里删 → TS error
+ *   - 类型还保留每个 entry 的具体 narrow 信息 (用 satisfies, 不是 :Record<...>)
+ *
+ * 之前 pickPanel + templateTitle 各一个 switch, 加新模板要在 2 处加 case.
+ * 漏过 plain_numeric / dot_grid_draw / balance_lab. 现在物理上不可能漏.
+ *
+ * 加新模板 step:
+ *   1. types.ts 加到 GameTemplate union
+ *   2. 在 GAME_TEMPLATES 加 `<id>: { title: "...", Panel: XxxPanel }` 一行
+ *   3. (可选) src/games/templateCapabilities.ts 加 writeHeavy 等 capability
  */
+type TemplateDef = {
+  readonly title: string;
+  readonly Panel: (p: TemplateRenderProps) => JSX.Element;
+};
+
+const GAME_TEMPLATES = {
+  speed_match:           { title: "闪电匹配",     Panel: SpeedMatchPanel },
+  shop_counter:          { title: "小数商店",     Panel: ShopCounterPanel },
+  equation_builder:      { title: "方程拼装",     Panel: EquationBuilderPanel },
+  clue_finder:           { title: "线索侦探",     Panel: ClueFinderPanel },
+  plain_choice:          { title: "选择题",       Panel: PlainChoicePanel },
+  plain_numeric:         { title: "口算挑战",     Panel: PlainNumericPanel },
+  sort_ladder:           { title: "数字阶梯",     Panel: SortLadderPanel },
+  true_false_swipe:      { title: "对错冲刺",     Panel: TrueFalseSwipePanel },
+  vertical_repair:       { title: "竖式修理厂",   Panel: VerticalRepairPanel },
+  decimal_shifter:       { title: "小数点滑梯",   Panel: DecimalShifterPanel },
+  memory_match:          { title: "记忆配对",     Panel: MemoryMatchPanel },
+  shape_court:           { title: "图形法庭",     Panel: ShapeCourtPanel },
+  balance_lab:           { title: "天平实验室",   Panel: BalanceLabPanel },
+  chart_detective:       { title: "数据侦探",     Panel: ChartDetectivePanel },
+  cube_view:             { title: "立体观察",     Panel: CubeViewerPanel },
+  triangle_judge:        { title: "三角形法庭",   Panel: TriangleJudgePanel },
+  dot_grid_draw:         { title: "点子图画图",   Panel: DotGridDrawPanel },
+  multi_step_application:{ title: "应用题 4 步法", Panel: MultiStepApplicationPanel },
+  canvas_scratch:        { title: "画板列算式",   Panel: CanvasScratchPanel },
+  discount_drift:        { title: "折扣漂移",     Panel: DiscountDriftPanel },
+  coin_combo:            { title: "凑钱挑战",     Panel: CoinComboPanel },
+  time_heist:            { title: "时间窃贼",     Panel: TimeHeistPanel },
+  number_hunt:           { title: "数字寻宝",     Panel: NumberHuntPanel },
+} as const satisfies Record<GameTemplate, TemplateDef>;
+
 function pickPanel(id: GameTemplate): (p: TemplateRenderProps) => JSX.Element {
-  switch (id) {
-    case "speed_match": return SpeedMatchPanel;
-    case "shop_counter": return ShopCounterPanel;
-    case "equation_builder": return EquationBuilderPanel;
-    case "clue_finder": return ClueFinderPanel;
-    case "plain_choice": return PlainChoicePanel;
-    case "plain_numeric": return PlainNumericPanel; // v0.35.34 显式 (之前走 default)
-    case "sort_ladder": return SortLadderPanel;
-    case "true_false_swipe": return TrueFalseSwipePanel;
-    case "vertical_repair": return VerticalRepairPanel;
-    case "decimal_shifter": return DecimalShifterPanel;
-    case "memory_match": return MemoryMatchPanel;
-    case "shape_court": return ShapeCourtPanel;
-    case "balance_lab": return BalanceLabPanel;
-    case "chart_detective": return ChartDetectivePanel;
-    case "cube_view": return CubeViewerPanel;
-    case "triangle_judge": return TriangleJudgePanel;
-    case "dot_grid_draw": return DotGridDrawPanel;
-    case "multi_step_application": return MultiStepApplicationPanel;
-    case "canvas_scratch": return CanvasScratchPanel;
-    case "discount_drift": return DiscountDriftPanel;
-    case "coin_combo": return CoinComboPanel;
-    case "time_heist": return TimeHeistPanel;
-    case "number_hunt": return NumberHuntPanel;
-    default: return exhaustiveOr(id, PlainNumericPanel, `pickPanel missing case: ${id}`);
-  }
+  const def = GAME_TEMPLATES[id];
+  if (def) return def.Panel;
+  // 运行时兜底 (e.g. 旧 IDB cache 里非法 templateId 字符串绕过 TS).
+  // assertUnreachable 用 exhaustiveOr 软 fallback — TS 编译时仍 enforce satisfies 完整覆盖.
+  return exhaustiveOr(id as never, PlainNumericPanel, `pickPanel missing case: ${id}`);
 }
 
-/**
- * v0.35.34 Refactor Priority 2.5: exhaustive switch — 补 plain_numeric / dot_grid_draw
- * (之前漏 → "挑战" 默认标题, 用户看到错的没人发现).
- * v0.35.36: default 改用 exhaustiveOr 软 fallback (Gemini HOTFIX) — TS 仍 enforce,
- * 运行时不崩.
- */
 function templateTitle(id: GameTemplate): string {
-  switch (id) {
-    case "speed_match": return "闪电匹配";
-    case "shop_counter": return "小数商店";
-    case "equation_builder": return "方程拼装";
-    case "clue_finder": return "线索侦探";
-    case "sort_ladder": return "数字阶梯";
-    case "plain_choice": return "选择题";
-    case "plain_numeric": return "口算挑战";  // v0.35.34 补
-    case "true_false_swipe": return "对错冲刺";
-    case "vertical_repair": return "竖式修理厂";
-    case "decimal_shifter": return "小数点滑梯";
-    case "memory_match": return "记忆配对";
-    case "shape_court": return "图形法庭";
-    case "balance_lab": return "天平实验室";
-    case "chart_detective": return "数据侦探";
-    case "cube_view": return "立体观察";
-    case "triangle_judge": return "三角形法庭";
-    case "dot_grid_draw": return "点子图画图";  // v0.35.34 补
-    case "multi_step_application": return "应用题 4 步法";
-    case "canvas_scratch": return "画板列算式";
-    case "discount_drift": return "折扣漂移";
-    case "coin_combo": return "凑钱挑战";
-    case "time_heist": return "时间窃贼";
-    case "number_hunt": return "数字寻宝";
-    default: return exhaustiveOr(id, "挑战", `templateTitle missing case: ${id}`);
-  }
+  const def = GAME_TEMPLATES[id];
+  if (def) return def.title;
+  return exhaustiveOr(id as never, "挑战", `templateTitle missing case: ${id}`);
 }
 
 function describeAnswer(q: Question): string {
