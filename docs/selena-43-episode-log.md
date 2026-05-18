@@ -535,6 +535,11 @@
 **Typecheck**: clean
 **Build**: 4.78s
 **Deploy**: aliyun OSS 235/235, 107.60MB
-**Post-review**: 进行中
+**Post-review** (两位 PASS):
+- 评审 A: 通过, 唯一建议 Home 入口改卡片"精英挑战" (B 不同意, 我保 inline 防误开)
+- 评审 B: 通过, 建议 Banner 文案改中性化 "今日奖励" 不诱导刷满
+- 实际应用: B 的中性文案 ✅ + 保持 inline 入口 (B 支持, A 不同意分歧, 我倾向防御派)
+
+**最终**: v0.35.6 ship (commit 730c42a) + 文案 hotfix
 
 

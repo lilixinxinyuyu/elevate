@@ -26,11 +26,13 @@ interface BannerProps {
 export function SteadyAimBanner({ onExit }: BannerProps) {
   if (!isSteadyAimActive()) return null;
   const counters = getSteadyAimDailyCounters();
+  // 评审 B 共识: 文案改中性化, 不诱导"刷满 5 次"
+  const capReached = counters.bonus >= counters.bonusCap;
   return (
     <div className="mb-2 rounded-lg bg-purple-500/20 border border-purple-400/50 px-3 py-1.5 flex items-center gap-2">
       <span className="text-sm">🎯</span>
       <span className="text-xs text-purple-100 font-semibold flex-1">
-        稳准挑战中 · 今日 bonus {counters.bonus}/{counters.bonusCap}
+        稳准挑战中 · {capReached ? "今日奖励已达上限" : `今日奖励 ${counters.bonus}/${counters.bonusCap}`}
       </span>
       <button
         onClick={() => {
