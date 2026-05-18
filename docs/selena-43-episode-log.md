@@ -456,6 +456,17 @@
 **测试**: 9/9 + 全套 pass
 **Build**: 4.53s
 **Deploy**: aliyun OSS 233/233, 107.58MB
-**Post-review**: 进行中
+**Post-review** (两位评审 PASS pending blockers):
+- 共识 blocker: 判断题输入 0/1 太程序员思维 → 改 ✓对/✗错 大按钮 (kind="judgment")
+- 共识 推荐: 1 千米 = 1000 米 单独加题 (kid 易顺手写 100) → 加 choice 题 (3 选 1)
+- 共识 nice-to-have: 面积单位移出 10 进制节 (A: 移走 / B: 保留降权), 用"小提醒"降权方式
+- ⏭️ ASCII 钟表 → emoji 排版替代 → defer (A 建议, B 说可保留)
+
+**Final hot fix**: 
+- LessonExercise 加 `kind: "numeric" | "judgment" | "choice"`
+- BaseSystems.tsx render 3 类型分支
+- 节 2 判断题: ✓对 (绿) + ✗错 (红) 大按钮
+- 节 1 加 "1 千米 = ? 米" choice 题 (3 选 1)
+- 测试 9/9 仍 pass, build 4.45s, deploy 233/233 OK
 
 

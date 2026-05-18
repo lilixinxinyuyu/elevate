@@ -10,10 +10,16 @@
  * 评审共识: 不要做太重 — 卡片纯文本 + emoji + 2-3 题练习 即可. v1 教育效率优先.
  */
 
+export type ExerciseKind = "numeric" | "judgment" | "choice";
+
 export interface LessonExercise {
   prompt: string;
-  /** 数字答案 (主流) */
+  /** 类型: numeric (输入数字) / judgment (对错按钮) / choice (多选) */
+  kind?: ExerciseKind;
+  /** 数字答案 (numeric/judgment 用; judgment 时 1=对 / 0=错) */
   answer: number;
+  /** choice 题的选项 (A/B/C/D) */
+  choices?: { label: string; value: number }[];
   /** 答案 unit (例 "厘米") */
   unit?: string;
   /** 一句话解释 (答错时显示) */
@@ -79,6 +85,18 @@ export const BASE_SYSTEM_LESSONS: Lesson[] = [
         explanation: "角→元 升一级, 除 10. 30 ÷ 10 = 3",
         hint: "小单位 → 大单位 用除",
       },
+      {
+        prompt: "1 千米 = ? 米",
+        kind: "choice",
+        answer: 1000,
+        choices: [
+          { label: "100 米", value: 100 },
+          { label: "1000 米", value: 1000 },
+          { label: "10 米", value: 10 },
+        ],
+        explanation: "1 千米 = 1000 米. '千' 字本身就 = 1000 (跟千克 = 1000 克一个道理)",
+        hint: "'千' = 1000, 不管跟在啥单位后面",
+      },
     ],
   },
 
@@ -129,11 +147,11 @@ export const BASE_SYSTEM_LESSONS: Lesson[] = [
         hint: "先把 1 小时换成分钟, 再加",
       },
       {
-        prompt: "判断: 1 小时 = 100 分钟 这样写对吗? (对 = 1, 错 = 0)",
-        answer: 0,
-        unit: "",
-        explanation: "❌ 错的! 时间是 60 进制, 1 小时 = 60 分钟",
-        hint: "想想钟表 — 是 60 还是 100?",
+        prompt: "判断: 1 小时 = 100 分钟 对吗?",
+        kind: "judgment",
+        answer: 0, // 0 = 错
+        explanation: "❌ 错的! 时间是 60 进制, 1 小时 = 60 分钟. 钟表 60 个小格不是 100",
+        hint: "想想钟表 — 是 60 还是 100 个小格?",
       },
     ],
   },

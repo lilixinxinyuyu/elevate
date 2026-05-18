@@ -187,6 +187,16 @@ export default function BaseSystemsPage() {
   if (mode === "exercise") {
     const ex = activeLesson.exercises[exerciseIdx];
     if (!ex) return null;
+    const kind = ex.kind ?? "numeric";
+    const isAnswerCorrect = Number(answer) === ex.answer;
+
+    function pickValue(v: number) {
+      if (reveal) return;
+      setAnswer(String(v));
+      setReveal(true);
+      if (v === ex!.answer) setCorrectCount((c) => c + 1);
+    }
+
     return (
       <div className="max-w-md mx-auto p-4 space-y-4">
         <div className="flex items-center justify-between">
@@ -198,32 +208,72 @@ export default function BaseSystemsPage() {
         <div className="rounded-xl bg-slate-900/50 border border-indigo-400/30 p-4">
           <p className="text-base text-indigo-50">{ex.prompt}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            inputMode="decimal"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            disabled={reveal}
-            autoFocus
-            className="flex-1 px-3 py-2 rounded-lg bg-slate-800 text-indigo-50 border border-indigo-400/40 focus:outline-none focus:border-indigo-300 text-lg"
-          />
-          {ex.unit && <span className="text-indigo-200 font-semibold">{ex.unit}</span>}
-        </div>
-        {errMsg && <p className="text-xs text-rose-200 bg-rose-500/15 px-2 py-1 rounded">{errMsg}</p>}
+
+        {/* numeric: 数字输入 */}
+        {kind === "numeric" && (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                disabled={reveal}
+                autoFocus
+                className="flex-1 px-3 py-2 rounded-lg bg-slate-800 text-indigo-50 border border-indigo-400/40 focus:outline-none focus:border-indigo-300 text-lg"
+              />
+              {ex.unit && <span className="text-indigo-200 font-semibold">{ex.unit}</span>}
+            </div>
+            {errMsg && <p className="text-xs text-rose-200 bg-rose-500/15 px-2 py-1 rounded">{errMsg}</p>}
+          </>
+        )}
+
+        {/* judgment: 对/错 大按钮 (post-review 共识 blocker) */}
+        {kind === "judgment" && !reveal && (
+          <div className="flex gap-3">
+            <button
+              onClick={() => pickValue(1)}
+              className="flex-1 py-4 rounded-xl bg-emerald-500 text-white text-2xl font-bold hover:bg-emerald-400 transition"
+            >
+              ✓ 对
+            </button>
+            <button
+              onClick={() => pickValue(0)}
+              className="flex-1 py-4 rounded-xl bg-rose-500 text-white text-2xl font-bold hover:bg-rose-400 transition"
+            >
+              ✗ 错
+            </button>
+          </div>
+        )}
+
+        {/* choice: 多选 (post-review 加 1 千米 = ? 米 用) */}
+        {kind === "choice" && !reveal && ex.choices && (
+          <div className="flex flex-col gap-2">
+            {ex.choices.map((c, i) => (
+              <button
+                key={i}
+                onClick={() => pickValue(c.value)}
+                className="text-left px-4 py-3 rounded-xl bg-slate-800 border border-indigo-400/40 text-indigo-50 hover:bg-slate-700 transition"
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {showHint && !reveal && (
           <p className="text-xs text-amber-200 bg-amber-500/15 px-2 py-1 rounded">💡 {ex.hint ?? "再想想"}</p>
         )}
         {reveal && (
-          <div className={`rounded-lg px-3 py-2 ${Number(answer) === ex.answer ? "bg-emerald-500/15 border border-emerald-400/40" : "bg-rose-500/15 border border-rose-400/40"}`}>
-            <p className={`font-semibold ${Number(answer) === ex.answer ? "text-emerald-100" : "text-rose-100"}`}>
-              {Number(answer) === ex.answer ? "✓ 对了!" : `✗ 正解: ${ex.answer}${ex.unit ?? ""}`}
+          <div className={`rounded-lg px-3 py-2 ${isAnswerCorrect ? "bg-emerald-500/15 border border-emerald-400/40" : "bg-rose-500/15 border border-rose-400/40"}`}>
+            <p className={`font-semibold ${isAnswerCorrect ? "text-emerald-100" : "text-rose-100"}`}>
+              {isAnswerCorrect ? "✓ 对了!" : kind === "judgment" ? "✗ 想错了" : `✗ 正解: ${ex.answer}${ex.unit ?? ""}`}
             </p>
             <p className="text-sm text-slate-200/90 mt-1">{ex.explanation}</p>
           </div>
         )}
         <div className="flex gap-2">
-          {!reveal && (
+          {!reveal && kind === "numeric" && (
             <>
               <button onClick={() => setShowHint(true)} disabled={showHint} className="px-3 py-2 rounded-lg bg-slate-800 text-amber-200 text-sm border border-amber-400/30 hover:bg-slate-700 disabled:opacity-50">
                 💡 提示
@@ -232,6 +282,11 @@ export default function BaseSystemsPage() {
                 提交答案
               </button>
             </>
+          )}
+          {!reveal && kind !== "numeric" && (
+            <button onClick={() => setShowHint(true)} disabled={showHint} className="px-3 py-2 rounded-lg bg-slate-800 text-amber-200 text-sm border border-amber-400/30 hover:bg-slate-700 disabled:opacity-50">
+              💡 提示
+            </button>
           )}
           {reveal && (
             <button onClick={nextExercise} className="flex-1 px-3 py-2 rounded-lg bg-indigo-500 text-white font-semibold hover:bg-indigo-400">
