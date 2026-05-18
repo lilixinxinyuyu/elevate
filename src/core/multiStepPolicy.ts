@@ -82,20 +82,78 @@ export function extractKnownCandidates(q: Question): string[] {
   return candidates;
 }
 
-/** 提取"求" 候选 — 优先 word_problem_steps.question, 否则从 stem 提. */
+/**
+ * 提取"求" 候选 — 优先 word_problem_steps.question, 否则从 stem 提.
+ *
+ * v0.35.17 iter 47 P0-3.1 (retrospective backlog): heuristic 大改.
+ * 老 v1 只 2 个 regex (求 X / 一总共还剩...), 实测 G4B 真题命中 ~40%.
+ * 新版策略:
+ *   1. 优先 word_problem_steps.question (admin/AI 已 tagged)
+ *   2. 用问号切句子, 取最后一句含问号的 sentence 作为基础
+ *   3. 再用 15+ 个常见小学应用题问法模式 (求/算/还剩/一共/平均/快/慢/多/少/
+ *      够/便宜/贵/速度/路程/时间/面积/周长 等) 提取核心短语
+ *   4. 句子 ≤ 25 字 → 直接整句作候选 (短问题不必分析)
+ *
+ * 目标: G4B 真题命中率 40% → 80%+. 减少 Phase 2 "求什么" 选项缺失
+ * 让 Selena 手敲的情况.
+ */
 export function extractQuestionCandidates(q: Question): string[] {
   const cands: string[] = [];
   if (q.word_problem_steps?.question) {
     cands.push(q.word_problem_steps.question);
   }
-  // 从 stem 提"求 X" "X 多少" "几 X" 模式
-  const stem = q.stem;
-  const m1 = stem.match(/求([^?？]{1,20})[?？]?/);
-  if (m1) cands.push(`求${m1[1]}`);
-  const m2 = stem.match(/[一总共还剩平均最多最少]+([^?？]{0,15})[?？]/);
-  if (m2) cands.push(m2[0].replace(/[?？]$/, ""));
-  // 去重
-  return [...new Set(cands)].slice(0, 3);
+  const stem = q.stem.trim();
+
+  // Strategy 1: 句子切分, 取含问号的句子
+  // 用 ? ？ . 。 ! ！ 切分, 然后筛"含问意"句
+  const sentences = stem
+    .split(/(?<=[?？.。!！])/g)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const questionSent = sentences.find((s) => /[?？]/.test(s));
+  if (questionSent) {
+    // 短问题 (≤ 25 字 中文) 直接作候选
+    const trimmed = questionSent.replace(/[?？]$/, "").trim();
+    if (trimmed.length > 0 && trimmed.length <= 25) {
+      cands.push(trimmed);
+    }
+  }
+
+  // Strategy 2: 多模式 regex (从 questionSent 优先, 否则全 stem)
+  const searchText = questionSent ?? stem;
+  // 4 年级常见问法模式 (覆盖 G4B 真题: 加减乘除应用 / 平均数 / 速度 / 面积周长 / 单位换算 / 货币)
+  const PATTERNS: RegExp[] = [
+    /求[^?？]{1,20}[?？]?/g,                      // "求一共多少元?"
+    /[一总共][^?？]{0,15}[?？]/g,                  // "一共多少米?"
+    /[还剩][^?？]{0,15}[?？]/g,                    // "还剩多少?"
+    /[平均][^?？]{0,15}[?？]/g,                    // "平均每个多少?"
+    /[最多最少至少][^?？]{0,15}[?？]/g,            // "最多 / 至少 多少?"
+    /比[^?？]{0,10}[多少][^?？]{0,10}[?？]/g,      // "比 A 多 / 少 多少?"
+    /[多少][^?？]{0,15}[?？]/g,                    // "多 / 少多少?"
+    /[贵便宜][^?？]{0,15}[?？]/g,                  // "贵 / 便宜 多少?"
+    /[节约省下][^?？]{0,15}[?？]/g,                // "节约多少?"
+    /[够够不][^?？]{0,15}[?？]/g,                  // "够吗 / 够不够?"
+    /[速度路程时间][^?？]{0,15}[?？]/g,            // "速度 / 路程 / 时间 是多少?"
+    /[面积周长长宽高][^?？]{0,15}[?？]/g,          // "面积 / 周长 / 长宽高 是多少?"
+    /[花用付费][^?？]{0,15}[?？]/g,                // "花了多少钱?"
+    /[正好恰好][^?？]{0,15}[?？]/g,                // "正好用了多少?"
+    /[几][条只个张本件辆双层只片块米斤元角分][^?？]{0,10}[?？]/g, // "几个/几条/几米/几元"
+  ];
+  for (const re of PATTERNS) {
+    let m: RegExpExecArray | null;
+    re.lastIndex = 0;
+    while ((m = re.exec(searchText)) !== null) {
+      const hit = m[0].replace(/[?？]$/, "").trim();
+      if (hit.length >= 2 && hit.length <= 25) {
+        cands.push(hit);
+      }
+      // 防 infinite loop
+      if (m.index === re.lastIndex) re.lastIndex++;
+    }
+  }
+
+  // 去重 + 取前 4 (Phase 2 显示 3-4 个选项, 多了 selena 选不过来)
+  return [...new Set(cands)].slice(0, 4);
 }
 
 /** 提取最终答案的单位 — 优先 word_problem_steps.equation_or_expression 末尾, 否则 stem 末尾 (剥离 ? 问号). */

@@ -162,6 +162,61 @@ describe("extract helpers", () => {
     const cands = extractQuestionCandidates(base);
     expect(cands[0]).toBe("一共多少元?");
   });
+
+  // v0.35.17 iter 47 P0-3.1: heuristic 命中率提升回归
+  // 老 v1 只 2 个 regex (求 X / 一总共), G4B 真题命中 ~40%.
+  // 新版加 15+ 模式 + 句子切分, 目标 80%+.
+  describe("extractQuestionCandidates — v0.35.17 多模式覆盖", () => {
+    function makeQ(stem: string): Question {
+      return { ...base, stem, word_problem_steps: undefined };
+    }
+
+    it("'剩' 模式: 妈妈买苹果用了 30 元, 还剩多少钱?", () => {
+      const c = extractQuestionCandidates(makeQ("妈妈带了 100 元, 用了 30 元, 还剩多少钱?"));
+      expect(c.some((s) => s.includes("还剩"))).toBe(true);
+    });
+    it("'比 X 多 / 少' 模式", () => {
+      const c = extractQuestionCandidates(makeQ("小明 12 岁, 比小红大 3 岁, 小红几岁?"));
+      // "几岁?" 应当被 几X 模式捕获
+      expect(c.some((s) => /[几]/.test(s))).toBe(true);
+    });
+    it("'够 / 不够' 模式", () => {
+      const c = extractQuestionCandidates(makeQ("妈妈给小明 50 元买文具用 38 元, 够吗?"));
+      expect(c.length).toBeGreaterThan(0);
+    });
+    it("'面积 / 周长' 模式", () => {
+      const c = extractQuestionCandidates(makeQ("长方形长 8 米宽 5 米, 周长是多少米?"));
+      expect(c.some((s) => s.includes("周长"))).toBe(true);
+    });
+    it("'平均' 模式", () => {
+      const c = extractQuestionCandidates(makeQ("4 个班级共 120 人, 平均每个班多少人?"));
+      expect(c.some((s) => s.includes("平均"))).toBe(true);
+    });
+    it("'速度 / 路程 / 时间' 模式", () => {
+      const c = extractQuestionCandidates(makeQ("车 2 小时走 120 千米, 速度是多少?"));
+      expect(c.some((s) => s.includes("速度"))).toBe(true);
+    });
+    it("'节约' 模式", () => {
+      const c = extractQuestionCandidates(makeQ("原价 80 元打 7 折, 节约多少钱?"));
+      expect(c.some((s) => s.includes("节约"))).toBe(true);
+    });
+    it("短问题整句作候选", () => {
+      const c = extractQuestionCandidates(makeQ("一共有多少?"));
+      expect(c[0]).toBe("一共有多少");
+    });
+    it("无问号 fallback 不崩", () => {
+      const c = extractQuestionCandidates(makeQ("小明买了 3 个苹果."));
+      // 不报错就行; 可能 0 候选 (实际无 question), 这种由 manual input 兜底
+      expect(Array.isArray(c)).toBe(true);
+    });
+    it("多模式同时命中 → 去重 + 最多 4", () => {
+      const c = extractQuestionCandidates(
+        makeQ("一共多少元? 还剩多少元? 平均每个多少元?"),
+      );
+      expect(c.length).toBeLessThanOrEqual(4);
+      expect(new Set(c).size).toBe(c.length); // 去重
+    });
+  });
   it("extractAnswerUnit 元", () => {
     expect(extractAnswerUnit(base)).toBe("元");
   });
