@@ -192,6 +192,11 @@ export const handler = async (rawEvent, _context) => {
   if (method !== "POST") return jsonResp(405, { ok: false, error: "method_not_allowed" });
 
   const auth = lh.authorization ?? "";
+  // v0.35.29 iter 2 (puppeteer 发现 CORS 401 bug): 浏览器 OPTIONS preflight 不发
+  // Authorization header. 即使 FC 没把 method 识别为 OPTIONS (FC HTTP gateway
+  // event shape 不一致), 没 auth 时也当 preflight 处理返 204, 不返 401 (浏览器
+  // 视为 preflight 失败 → 后续真 POST 都 fetch 不到).
+  if (!auth) return { statusCode: 204, headers: CORS, body: "" };
   const userId = checkAuth(auth, env);
   if (!userId) return jsonResp(401, { ok: false, error: "unauthorized" });
 

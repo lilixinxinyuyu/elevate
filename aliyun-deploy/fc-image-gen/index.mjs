@@ -155,6 +155,8 @@ export const handler = async (rawEvent, _context) => {
   }
 
   const auth = lh.authorization ?? "";
+  // v0.35.29 iter 2 (跟 fc-paper-ocr 同 fix): 没 auth header 当 preflight 处理返 204
+  if (!auth) return { statusCode: 204, headers: CORS, body: "" };
   const userId = checkAuth(auth, env);
   if (!userId) {
     return jsonResp(401, { ok: false, error: "unauthorized" });
