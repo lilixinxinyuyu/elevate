@@ -13,6 +13,7 @@
  * 选 B：DB 不动，新题旧题都受益。同一份逻辑也走 audit-questions.mjs 的检查。
  */
 import type { Question } from "./types";
+import { isWriteHeavyQuestion } from "../games/questionCapabilities";
 
 const READ_BONUS_60 = 15;   // stem 60-119 字
 const READ_BONUS_120 = 25;  // stem ≥ 120 字（替代 60）
@@ -26,19 +27,14 @@ const HARD_CAP = 240;       // 最长 240s（语文阅读理解 D5 级别）
  * v0.35.26 (爸爸 explicit 反复): "需要写草稿或算式回答的题都增加时间或者不要求时间,
  * 因为电脑书写会比选择答案麻烦很多, 时间不太可控". 草稿/列算式/多步应用 ×2.5
  * 或封顶 240s, 让 Selena 不被倒计时催着不写草稿.
+ *
+ * v0.35.32 Refactor: 散落的 write-heavy 判定迁到 games/questionCapabilities.ts
+ * 单一真相源. 加新 write-heavy 模板只改 templateCapabilities.ts 一处.
  */
 export function adjustedEstimatedTime(q: Question): number {
   const base = q.estimated_time_seconds ?? 30;
 
-  // v0.35.26: write-heavy 题型 (canvas_scratch / multi_step_application /
-  // requiresScratch=true) 时间放宽到 240s 或 base × 2.5 取大. 电脑书写慢,
-  // 不能让倒计时变成"逼着孩子心算"的反向激励.
-  const isWriteHeavy =
-    q.play_as === "canvas_scratch" ||
-    q.play_as === "multi_step_application" ||
-    q.requiresScratch === true ||
-    q.requiresMultiStep === true;
-  if (isWriteHeavy) {
+  if (isWriteHeavyQuestion(q)) {
     return Math.min(HARD_CAP, Math.max(base * 2.5, 180));
   }
 
