@@ -110,12 +110,23 @@ export const handler = async (rawEvent, _context) => {
   const env = process.env;
   const start = Date.now();
 
+  // FC 3.0 HTTP trigger 给 OPTIONS preflight 时 event 可能是空 Buffer.
+  // 在 JSON.parse 失败前先识别这种情况, 返 204 让浏览器 CORS pass.
+  const isEmptyEvent =
+    !rawEvent ||
+    (Buffer.isBuffer(rawEvent) && rawEvent.length === 0) ||
+    (typeof rawEvent === "string" && rawEvent.length === 0);
+  if (isEmptyEvent) {
+    return { statusCode: 204, headers: CORS, body: "" };
+  }
+
   let event;
   if (Buffer.isBuffer(rawEvent)) {
     try {
       event = JSON.parse(rawEvent.toString("utf8"));
     } catch {
-      return jsonResp(400, { ok: false, error: "event_parse_failed" });
+      // 不是 JSON → 也当 preflight / 非标 invocation 处理, 返 204 比 400 友好
+      return { statusCode: 204, headers: CORS, body: "" };
     }
   } else {
     event = rawEvent ?? {};
@@ -124,7 +135,13 @@ export const handler = async (rawEvent, _context) => {
   const headers = event.headers ?? {};
   const lh = {};
   for (const [k, v] of Object.entries(headers)) lh[k.toLowerCase()] = v;
-  const method = (event.method ?? event.httpMethod ?? "POST").toUpperCase();
+  // method 检测: event.method / httpMethod / requestContext.http.method 三路兜底
+  const method = (
+    event.method ??
+    event.httpMethod ??
+    event.requestContext?.http?.method ??
+    "POST"
+  ).toUpperCase();
   let bodyStr = event.body ?? "";
   if (event.isBase64Encoded && bodyStr) {
     bodyStr = Buffer.from(bodyStr, "base64").toString("utf8");
