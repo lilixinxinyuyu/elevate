@@ -1,0 +1,9515 @@
+{
+  "G4B_em2_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_ac_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      120,
+      128,
+      124,
+      132
+    ]
+  },
+  "G4B_am_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      128,
+      125,
+      132,
+      127
+    ]
+  },
+  "G4B_at_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      24
+    ]
+  },
+  "G4B_amean_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_bar_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      7
+    ]
+  },
+  "G4B_ti_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_ta_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      45,
+      75
+    ]
+  },
+  "G4B_ta_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      40
+    ]
+  },
+  "G4B_tc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      60,
+      90
+    ]
+  },
+  "G4B_obs_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4A_mul_1": {
+    "speedEligible": false,
+    "requiresEstimation": true,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      234,
+      12
+    ]
+  },
+  "G4A_mul_2": {
+    "speedEligible": false,
+    "requiresEstimation": true,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      126,
+      25
+    ]
+  },
+  "G4A_mule_1": {
+    "speedEligible": false,
+    "requiresEstimation": true,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      198,
+      52
+    ]
+  },
+  "G4A_div_1": {
+    "speedEligible": false,
+    "requiresEstimation": true,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      486,
+      18
+    ]
+  },
+  "G4A_div_2": {
+    "speedEligible": false,
+    "requiresEstimation": true,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      672,
+      21
+    ]
+  },
+  "G4A_std_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      180
+    ]
+  },
+  "G4A_dl_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      99
+    ]
+  },
+  "G4A_dl_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18,
+      25,
+      2
+    ]
+  },
+  "G4A_si_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      36,
+      74,
+      26,
+      64
+    ]
+  },
+  "G4B_dpq_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3.8,
+      6
+    ]
+  },
+  "G4B_dpq_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2.5,
+      8
+    ]
+  },
+  "G4B_dpq_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4.8,
+      7
+    ]
+  },
+  "G4B_dsd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12.5,
+      4
+    ]
+  },
+  "G4B_dsd_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3.6,
+      5
+    ]
+  },
+  "G4B_dwt_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6.5,
+      8
+    ]
+  },
+  "G4B_dsp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      8,
+      1.6,
+      8
+    ]
+  },
+  "G4B_dmmix_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.4,
+      5,
+      1.6
+    ]
+  },
+  "G4B_dmmix_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.5,
+      4,
+      2.8
+    ]
+  },
+  "G4B_dmmix_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6.5,
+      2,
+      8.5
+    ]
+  },
+  "G4B_dms_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      0.8,
+      4
+    ]
+  },
+  "G4B_dms_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      4.8
+    ]
+  },
+  "G4B_dmv_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      4
+    ]
+  },
+  "G4B_dmv_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      1.6
+    ]
+  },
+  "G4B_dmv_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.45,
+      6
+    ]
+  },
+  "G4B_dmv_4": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.2,
+      0.5
+    ]
+  },
+  "G4B_dmm_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_dmm_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_dps_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      10
+    ]
+  },
+  "G4B_dps_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      254,
+      100
+    ]
+  },
+  "G4B_dpd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.25,
+      0.4
+    ]
+  },
+  "G4B_das_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.35,
+      8.7
+    ]
+  },
+  "G4B_das_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      10,
+      3.6
+    ]
+  },
+  "G4B_das_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.2,
+      3.6
+    ]
+  },
+  "G4B_das_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.8,
+      2.5
+    ]
+  },
+  "G4B_dasp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.6,
+      3.4,
+      7.4,
+      6.6
+    ]
+  },
+  "G4B_dip_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2.58,
+      1.42
+    ]
+  },
+  "G4B_dmp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.35
+    ]
+  },
+  "G4B_dmp_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.6,
+      0.1
+    ]
+  },
+  "G4B_duc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5
+    ]
+  },
+  "G4B_duc_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.2
+    ]
+  },
+  "G4B_dcmp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_es_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      10
+    ]
+  },
+  "G4B_es_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      27
+    ]
+  },
+  "G4B_es_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      2.5
+    ]
+  },
+  "G4B_e1_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1.6,
+      3.5
+    ]
+  },
+  "G4B_e2_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      86,
+      2,
+      4
+    ]
+  },
+  "G4B_em_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      120,
+      50,
+      70
+    ]
+  },
+  "G4B_esum_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      480
+    ]
+  },
+  "G4B_el_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5
+    ]
+  },
+  "Q_mul_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.2,
+      5
+    ]
+  },
+  "Q_mul_4": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      0.25
+    ]
+  },
+  "Q_mul_5": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.7,
+      3
+    ]
+  },
+  "Q_mul_6": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.4,
+      5
+    ]
+  },
+  "Q_simp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      49,
+      75
+    ]
+  },
+  "Q_ang_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "Q_ang_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "Q_avg_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      6,
+      8
+    ]
+  },
+  "Q_avg_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      80,
+      85,
+      90,
+      85
+    ]
+  },
+  "Q_eq_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      6
+    ]
+  },
+  "Q_eq_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      1.2
+    ]
+  },
+  "Q_unit_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.5
+    ]
+  },
+  "Q_unit_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.05
+    ]
+  },
+  "DS_shift_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      10
+    ]
+  },
+  "DS_shift_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      254,
+      100
+    ]
+  },
+  "DS_shift_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.45,
+      1000
+    ]
+  },
+  "MM_dec_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "MM_unit_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "SC_tri_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "SC_tri_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "TF_avg_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "TF_neg_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "VR_dmv_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      4
+    ]
+  },
+  "VR_dmv_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      1.6
+    ]
+  },
+  "VR_das_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.35,
+      8.7
+    ]
+  },
+  "VR_imul_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      234,
+      12
+    ]
+  },
+  "VR_idiv_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      486,
+      18
+    ]
+  },
+  "Q_add_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.3,
+      0.4
+    ]
+  },
+  "Q_add_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.2,
+      0.5
+    ]
+  },
+  "Q_add_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.7,
+      2.3
+    ]
+  },
+  "Q_add_4": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6.5,
+      1.5
+    ]
+  },
+  "Q_add_5": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.9,
+      0.1
+    ]
+  },
+  "Q_add_6": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.6,
+      3.4
+    ]
+  },
+  "Q_sub_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1,
+      0.3
+    ]
+  },
+  "Q_sub_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      1.7
+    ]
+  },
+  "Q_sub_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      10,
+      4.5
+    ]
+  },
+  "Q_sub_4": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.4,
+      2.8
+    ]
+  },
+  "Q_sub_5": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.1,
+      0.6
+    ]
+  },
+  "Q_mul_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.3,
+      6
+    ]
+  },
+  "Q_mul_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.5,
+      8
+    ]
+  },
+  "G4A_mob_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12,
+      8,
+      5
+    ]
+  },
+  "G4A_lpv_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      100000
+    ]
+  },
+  "G4A_lrw_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4A_lc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4A_lr_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      320000
+    ]
+  },
+  "G4A_lap_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      34789
+    ]
+  },
+  "G4A_at_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4A_at_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      90
+    ]
+  },
+  "G4A_am_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4A_gc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      5
+    ]
+  },
+  "G4A_nt_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      -10,
+      -3
+    ]
+  },
+  "G4A_pc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      1
+    ]
+  },
+  "TF_dec_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.7,
+      7,
+      0.1
+    ]
+  },
+  "TF_dec_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.4,
+      0.4
+    ]
+  },
+  "TF_dec_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.45,
+      0.5
+    ]
+  },
+  "TF_dmul_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      0.5
+    ]
+  },
+  "TF_dmul_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.5,
+      4
+    ]
+  },
+  "TF_eq_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5
+    ]
+  },
+  "TF_eq_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      3,
+      11
+    ]
+  },
+  "TF_tri_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      4,
+      7
+    ]
+  },
+  "SC_tri_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "BL_eq_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "BL_eq_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "BL_eq_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "CD_avg_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5
+    ]
+  },
+  "CD_avg_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4
+    ]
+  },
+  "CD_avg_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7
+    ]
+  },
+  "CD_bar_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u2_ineq_5_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      8
+    ]
+  },
+  "EX_u2_ineq_tf_3_4_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      4,
+      7
+    ]
+  },
+  "EX_u2_ineq_tf_OAOB16": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9,
+      6,
+      16
+    ]
+  },
+  "EX_u2_ineq_max_int": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7,
+      9
+    ]
+  },
+  "EX_u2_ineq_min_int": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7,
+      9
+    ]
+  },
+  "EX_u2_ang_85_unknown": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      85
+    ]
+  },
+  "EX_u2_class_after95": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      85,
+      95
+    ]
+  },
+  "EX_u2_ang_isoceles_apex110": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      110
+    ]
+  },
+  "EX_u2_ang_isoceles_4x": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4
+    ]
+  },
+  "EX_u2_ang_hexagon_inner_sum": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4
+    ]
+  },
+  "EX_u2_ang_outer_sum": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      180
+    ]
+  },
+  "EX_u2_iso_perim_3_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      7
+    ]
+  },
+  "EX_u3_2318_c": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.023,
+      18
+    ]
+  },
+  "EX_u3_2318_d": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.23,
+      1.8
+    ]
+  },
+  "EX_u3_2318_e": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.3,
+      0.18
+    ]
+  },
+  "EX_u3_compare_18_x_099": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.8,
+      0.99
+    ]
+  },
+  "EX_u3_compare_325_x_101": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.25,
+      1.01
+    ]
+  },
+  "EX_u3_compare_190div100_019": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      190,
+      100,
+      0.19
+    ]
+  },
+  "EX_u3_compare_27x48_48x27": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.7,
+      48,
+      4.8,
+      27
+    ]
+  },
+  "EX_u3_compare_nonzero_x_decimal": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u3_addzero_tail": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.8,
+      100
+    ]
+  },
+  "EX_u3_19x54_eq_19x54": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      19,
+      54,
+      1.9
+    ]
+  },
+  "EX_u3_quick_32_x_03": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.2,
+      0.3
+    ]
+  },
+  "EX_u3_quick_022_x_40": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.22,
+      40
+    ]
+  },
+  "EX_u3_quick_28_x_02": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.8,
+      0.2
+    ]
+  },
+  "EX_u3_quick_34_x_5": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.4,
+      5
+    ]
+  },
+  "EX_u3_quick_004_x_10": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.04,
+      10
+    ]
+  },
+  "EX_u3_quick_024_x_100": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.24,
+      100
+    ]
+  },
+  "EX_u3_digits_27_x_04": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.7,
+      0.4
+    ]
+  },
+  "EX_u3_digits_125_x_005": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      0.05
+    ]
+  },
+  "EX_u3_digits_47_x_18": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.7,
+      18
+    ]
+  },
+  "EX_u3_digits_432_x_19": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      43.2,
+      1.9
+    ]
+  },
+  "EX_u3_vr_305_x_47": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.05,
+      4.7
+    ]
+  },
+  "EX_u3_vr_205_x_400": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      20.5,
+      400
+    ]
+  },
+  "EX_u3_vr_42_x_695": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.2,
+      6.95
+    ]
+  },
+  "EX_u3_dmv_85x014": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.5,
+      0.14
+    ]
+  },
+  "EX_u3_mix_75_plus_25_x_507": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.5,
+      2.5,
+      5.07
+    ]
+  },
+  "EX_u3_simp_4_04_x_25": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      0.4,
+      2.5
+    ]
+  },
+  "EX_u3_simp_125_x_39_x_08": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      3.9,
+      0.8
+    ]
+  },
+  "EX_u3_simp_24_x_35_plus_65_x_024": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.4,
+      3.5,
+      65,
+      0.24
+    ]
+  },
+  "EX_u3_simp_125_x_61_plus_125_x_39": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      61,
+      39
+    ]
+  },
+  "EX_u3_choice_25_x_12_not_equal": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u3_choice_paren_missing_4_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      17,
+      0.3
+    ]
+  },
+  "EX_u3_belt_fold_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      2.4
+    ]
+  },
+  "EX_u3_app_fish_3_2kg_165": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3.2,
+      16.5,
+      50
+    ]
+  },
+  "EX_u3_app_school_065_2_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.65,
+      5
+    ]
+  },
+  "EX_u3_app_garden_perim_56_24": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5.6,
+      2.4
+    ]
+  },
+  "EX_u3_app_garden_area_56_24": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5.6,
+      2.4,
+      0.5
+    ]
+  },
+  "EX_u3_app_rackets_20_36": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      20,
+      82.3,
+      36,
+      43.5
+    ]
+  },
+  "EX_u3_app_panda_705x017": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      705,
+      0.17
+    ]
+  },
+  "EX_u3_app_lijiao_98_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2,
+      9.85,
+      985
+    ]
+  },
+  "EX_u3_app_dryface_230g_5g": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      100,
+      5,
+      230
+    ]
+  },
+  "EX_u2_stability_4items": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u2_quad_stable_tf": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u2_rect_pull_diagonal": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u2_pattern_4n_minus_n_minus_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1,
+      2,
+      3,
+      5
+    ]
+  },
+  "EX_u2_pattern_4n_minus_n_minus_1_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      8
+    ]
+  },
+  "EX_u2_parallelogram_perimeter_trees": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      30,
+      50,
+      5
+    ]
+  },
+  "EX_u2_visual_class_45_45_90": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u2_visual_class_60_60_60": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u2_visual_class_obtuse": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u2_visual_can_triangle_3_4_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      4,
+      8
+    ]
+  },
+  "EX_u2_pentagon_inner": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3
+    ]
+  },
+  "EX_u2_octagon_inner": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6
+    ]
+  },
+  "EX_u3_shift_021_x1000": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.21,
+      1000
+    ]
+  },
+  "EX_u3_shift_008_x10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.08,
+      10
+    ]
+  },
+  "EX_u3_shift_267_div100": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      26.7,
+      100
+    ]
+  },
+  "EX_u3_shift_985_div10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.85,
+      10
+    ]
+  },
+  "EX_u3_shift_inc36_orig": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      36
+    ]
+  },
+  "EX_u3_shift_product_201_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      201.9,
+      1000,
+      100
+    ]
+  },
+  "EX_u3_2318_a": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      23,
+      18,
+      414,
+      0.18
+    ]
+  },
+  "EX_u3_2318_b": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      23,
+      18,
+      414,
+      2.3
+    ]
+  },
+  "EX_u3_app_photo_12": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12,
+      10.5,
+      2.4
+    ]
+  },
+  "EX_u4_min_cubes_L4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_min_cubes_T": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_tf_same_shape_diff_pos": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_tf_cube_top_front_same": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_tf_4cells_must_4cubes": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_count_arrangements_4cubes": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      2
+    ]
+  },
+  "EX_u4_tf_right_view_invariance": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_count_min_cubes_pyramid": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_solid_to_front_v1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_views_to_solid_v1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u4_three_views_min_cubes": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "EX_u1_meaning_130_eq_13": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.3,
+      1.3
+    ]
+  },
+  "EX_u1_meaning_decimal_unit": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.05,
+      5,
+      0.01
+    ]
+  },
+  "EX_u1_unit_3m5cm_in_m": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      5
+    ]
+  },
+  "EX_u1_unit_2kg30g": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      30
+    ]
+  },
+  "EX_u1_vr_1305_minus_54": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      13.05,
+      5.4
+    ]
+  },
+  "EX_u1_vr_85_plus_055": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.5,
+      0.55
+    ]
+  },
+  "EX_u1_simplify_27_plus_38_plus_73": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.7,
+      3.8,
+      7.3
+    ]
+  },
+  "EX_u1_inverse_25_minus_x_07": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      0.7
+    ]
+  },
+  "EX_u1_compare_045_05": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.45,
+      0.5
+    ]
+  },
+  "EX_u1_unit_yuan_jiao_fen": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      6,
+      8
+    ]
+  },
+  "MB_dass_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.7,
+      5.6,
+      7.3
+    ]
+  },
+  "MB_dass_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.9,
+      4.6,
+      3.9
+    ]
+  },
+  "MB_dass_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.85,
+      2.6,
+      0.85
+    ]
+  },
+  "MB_dass_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.7,
+      1.4,
+      1.3,
+      0.6
+    ]
+  },
+  "MB_dass_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.43,
+      2.9,
+      1.43
+    ]
+  },
+  "MB_dasi_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      23.5,
+      50
+    ]
+  },
+  "MB_dasi_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1248,
+      156
+    ]
+  },
+  "MB_dasi_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2.6,
+      1.8,
+      0.6
+    ]
+  },
+  "MB_dasi_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      18.4,
+      5.6
+    ]
+  },
+  "MB_dasi_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.5,
+      3.6
+    ]
+  },
+  "MB_work_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      28.5,
+      6
+    ]
+  },
+  "MB_work_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4.5
+    ]
+  },
+  "MB_work_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.5,
+      1.6
+    ]
+  },
+  "MB_seg_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      9,
+      3,
+      2.5,
+      8
+    ]
+  },
+  "MB_seg_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      3.5,
+      4
+    ]
+  },
+  "MB_spd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      60.5,
+      3
+    ]
+  },
+  "MB_spd_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      280,
+      6.5,
+      0.5
+    ]
+  },
+  "MB_eq1_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.6,
+      8.4
+    ]
+  },
+  "G4B_FILL_meaning_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7,
+      0.01
+    ]
+  },
+  "G4B_FILL_meaning_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.6,
+      0.1
+    ]
+  },
+  "G4B_FILL_unit_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      5
+    ]
+  },
+  "G4B_FILL_unit_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1,
+      4
+    ]
+  },
+  "G4B_FILL_compare_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_compare_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.3,
+      5.3
+    ]
+  },
+  "G4B_FILL_compare_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.4,
+      0.05
+    ]
+  },
+  "G4B_FILL_compare_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.8,
+      0.79
+    ]
+  },
+  "G4B_FILL_compare_5": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.7,
+      2.07
+    ]
+  },
+  "G4B_FILL_compare_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_compare_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.27,
+      0.207
+    ]
+  },
+  "G4B_FILL_dasimp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.27,
+      0.85,
+      0.73
+    ]
+  },
+  "G4B_FILL_dasimp_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.6,
+      1.8,
+      1.2
+    ]
+  },
+  "G4B_FILL_dasimp_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      1.74,
+      6.4,
+      0.26
+    ]
+  },
+  "G4B_FILL_dasimp_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.8,
+      1.8,
+      1.4
+    ]
+  },
+  "G4B_FILL_inv_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1.85,
+      0.92
+    ]
+  },
+  "G4B_FILL_inv_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1.6,
+      0.85
+    ]
+  },
+  "G4B_FILL_inv_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12.4,
+      3.5
+    ]
+  },
+  "G4B_FILL_inv_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.45,
+      1.2
+    ]
+  },
+  "G4B_FILL_mul_mean_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.4,
+      3
+    ]
+  },
+  "G4B_FILL_mul_mean_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.2,
+      5
+    ]
+  },
+  "G4B_FILL_mul_mean_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.25,
+      4
+    ]
+  },
+  "G4B_FILL_mul_mean_4": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.5,
+      2
+    ]
+  },
+  "G4B_FILL_mul_mean_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.6,
+      5
+    ]
+  },
+  "G4B_FILL_mul_mean_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.7,
+      4
+    ]
+  },
+  "G4B_FILL_mul_mean_7": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.8,
+      6
+    ]
+  },
+  "G4B_FILL_pd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.3,
+      0.4
+    ]
+  },
+  "G4B_FILL_pd_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.2,
+      3.5
+    ]
+  },
+  "G4B_FILL_pd_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      0.8
+    ]
+  },
+  "G4B_FILL_pd_4": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.05,
+      0.2
+    ]
+  },
+  "G4B_FILL_mix_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.4,
+      5,
+      1.2
+    ]
+  },
+  "G4B_FILL_mix_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.5,
+      0.6,
+      4
+    ]
+  },
+  "G4B_FILL_mix_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5,
+      3,
+      2.4,
+      2
+    ]
+  },
+  "G4B_FILL_mix_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      10,
+      1.2,
+      5
+    ]
+  },
+  "G4B_FILL_mix_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.8,
+      6,
+      1.4,
+      3
+    ]
+  },
+  "G4B_FILL_msimp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5,
+      4,
+      6
+    ]
+  },
+  "G4B_FILL_msimp_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.25,
+      8,
+      4
+    ]
+  },
+  "G4B_FILL_msimp_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      3.6
+    ]
+  },
+  "G4B_FILL_sd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      56,
+      3
+    ]
+  },
+  "G4B_FILL_sd_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      24,
+      4
+    ]
+  },
+  "G4B_FILL_sd_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      30
+    ]
+  },
+  "G4B_FILL_sd_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      84,
+      5
+    ]
+  },
+  "G4B_FILL_sd_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      56,
+      2,
+      8
+    ]
+  },
+  "G4B_FILL_wt_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      24.5,
+      6
+    ]
+  },
+  "G4B_FILL_wt_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      16.5,
+      10
+    ]
+  },
+  "G4B_FILL_wt_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2.4,
+      25
+    ]
+  },
+  "G4B_FILL_wt_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5400,
+      4.5
+    ]
+  },
+  "G4B_FILL_wt_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      28.5,
+      7
+    ]
+  },
+  "G4B_FILL_wt_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4.8,
+      12
+    ]
+  },
+  "G4B_FILL_seg_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      8,
+      1.5,
+      5
+    ]
+  },
+  "G4B_FILL_seg_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1,
+      5,
+      3,
+      4
+    ]
+  },
+  "G4B_FILL_seg_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      30,
+      100,
+      0.2,
+      150
+    ]
+  },
+  "G4B_FILL_seg_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1,
+      8,
+      2,
+      4
+    ]
+  },
+  "G4B_FILL_seg_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      50,
+      0.5,
+      0.6,
+      80
+    ]
+  },
+  "G4B_FILL_seg_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      30,
+      2,
+      1
+    ]
+  },
+  "G4B_FILL_seg_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.2,
+      100,
+      0.15,
+      200
+    ]
+  },
+  "G4B_FILL_letter_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5
+    ]
+  },
+  "G4B_FILL_letter_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6
+    ]
+  },
+  "G4B_FILL_letter_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3
+    ]
+  },
+  "G4B_FILL_letter_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_letter_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3
+    ]
+  },
+  "G4B_FILL_letter_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25
+    ]
+  },
+  "G4B_FILL_letter_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_letter_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4
+    ]
+  },
+  "G4B_FILL_letter_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      4
+    ]
+  },
+  "G4B_FILL_em_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_em_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      50
+    ]
+  },
+  "G4B_FILL_em_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_em_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      100,
+      25
+    ]
+  },
+  "G4B_FILL_em_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      13
+    ]
+  },
+  "G4B_FILL_em_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      12
+    ]
+  },
+  "G4B_FILL_em_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8
+    ]
+  },
+  "G4B_FILL_solve_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18,
+      42
+    ]
+  },
+  "G4B_FILL_solve_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      36
+    ]
+  },
+  "G4B_FILL_one_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      28,
+      56
+    ]
+  },
+  "G4B_FILL_one_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      92
+    ]
+  },
+  "G4B_FILL_one_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      18
+    ]
+  },
+  "G4B_FILL_one_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12,
+      145
+    ]
+  },
+  "G4B_FILL_two_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      8,
+      2
+    ]
+  },
+  "G4B_FILL_two_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      1.5,
+      24
+    ]
+  },
+  "MB_eq1_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5,
+      4.7
+    ]
+  },
+  "MB_eq1_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      18.6
+    ]
+  },
+  "MB_eq1_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      4.2
+    ]
+  },
+  "MB_eq1_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3.6,
+      12.5
+    ]
+  },
+  "MB_eq2_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      18.5,
+      2
+    ]
+  },
+  "MB_eq2_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      22
+    ]
+  },
+  "MB_eq2_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      532,
+      70,
+      2
+    ]
+  },
+  "MB_eq2_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      9,
+      2.5,
+      24
+    ]
+  },
+  "MB_meet_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      240,
+      60,
+      80
+    ]
+  },
+  "MB_meet_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      60,
+      50,
+      220
+    ]
+  },
+  "MB_meet_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12,
+      3,
+      2.4
+    ]
+  },
+  "MB_sd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      24
+    ]
+  },
+  "MB_sd_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      27
+    ]
+  },
+  "MB_sd_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2,
+      64
+    ]
+  },
+  "MB_avgT_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      168
+    ]
+  },
+  "MB_avgT_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      168,
+      7
+    ]
+  },
+  "MB_avgM_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      7.5
+    ]
+  },
+  "MB_avgM_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      165,
+      158,
+      170,
+      162
+    ]
+  },
+  "G4B_FILL_meaning_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_two_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      23,
+      7
+    ]
+  },
+  "G4B_FILL_two_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      240,
+      100,
+      3
+    ]
+  },
+  "G4B_FILL_two_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2,
+      5,
+      25
+    ]
+  },
+  "G4B_FILL_meet_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      240,
+      50,
+      70
+    ]
+  },
+  "G4B_FILL_meet_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      480,
+      60,
+      60
+    ]
+  },
+  "G4B_FILL_meet_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      360,
+      50,
+      70
+    ]
+  },
+  "G4B_FILL_meet_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      360,
+      40
+    ]
+  },
+  "G4B_FILL_meet_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      600,
+      5,
+      55
+    ]
+  },
+  "G4B_FILL_meet_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      800,
+      50,
+      30
+    ]
+  },
+  "G4B_FILL_sd_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      60
+    ]
+  },
+  "G4B_FILL_bar_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12,
+      18,
+      20
+    ]
+  },
+  "G4B_FILL_bar_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      12,
+      15
+    ]
+  },
+  "G4B_FILL_bar_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      60,
+      20
+    ]
+  },
+  "G4B_FILL_bar_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      24,
+      18
+    ]
+  },
+  "G4B_FILL_bar_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      320,
+      450,
+      500
+    ]
+  },
+  "G4B_FILL_bar_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12,
+      18,
+      15,
+      20
+    ]
+  },
+  "G4B_FILL_bar_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      30,
+      20
+    ]
+  },
+  "G4B_FILL_bar_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      36,
+      28,
+      32
+    ]
+  },
+  "G4B_FILL_avg_m_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_avg_m_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      6
+    ]
+  },
+  "G4B_FILL_avg_m_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      120
+    ]
+  },
+  "G4B_FILL_avg_m_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      10,
+      8,
+      12
+    ]
+  },
+  "G4B_FILL_avg_m_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      15
+    ]
+  },
+  "G4B_FILL_avg_m_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      60,
+      65,
+      58,
+      62
+    ]
+  },
+  "G4B_FILL_avg_m_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      25,
+      30
+    ]
+  },
+  "G4B_FILL_avg_m_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_FILL_avg_c_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12,
+      18,
+      15
+    ]
+  },
+  "G4B_FILL_avg_c_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      30,
+      28,
+      33
+    ]
+  },
+  "G4B_FILL_avg_c_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      140,
+      142,
+      138,
+      144
+    ]
+  },
+  "G4B_FILL_avg_c_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      120,
+      150,
+      130,
+      140
+    ]
+  },
+  "G4B_FILL_avg_t_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      24
+    ]
+  },
+  "G4B_FILL_avg_t_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      7
+    ]
+  },
+  "G4B_FILL_avg_t_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      12
+    ]
+  },
+  "G4B_FILL_avg_t_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      480,
+      60
+    ]
+  },
+  "G4B_FILL_avg_t_5": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      25
+    ]
+  },
+  "G4B_FILL_avg_t_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      36,
+      142
+    ]
+  },
+  "G4B_FILL_avg_m1_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      20,
+      15,
+      22,
+      18
+    ]
+  },
+  "G4B_FILL_avg_m1_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      92,
+      88,
+      95,
+      90
+    ]
+  },
+  "G4B_FILL_avg_m1_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2.4,
+      2,
+      2.5,
+      2.3
+    ]
+  },
+  "G4B_FILL_avg_m1_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      50,
+      240,
+      6
+    ]
+  },
+  "G4B_FILL_avg_m1_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      110,
+      100,
+      115,
+      120
+    ]
+  },
+  "G4B_FILL_avg_m1_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      95,
+      92,
+      94,
+      98
+    ]
+  },
+  "G4B_FILL_avg_m1_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      11,
+      102,
+      10
+    ]
+  },
+  "G4B_v2_inv_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      60,
+      25
+    ]
+  },
+  "G4B_v2_inv_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      3
+    ]
+  },
+  "G4B_v2_inv_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      24,
+      14
+    ]
+  },
+  "G4B_v2_inv_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5,
+      0.7
+    ]
+  },
+  "G4B_v2_inv_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.4,
+      0.6
+    ]
+  },
+  "G4B_v2_inv_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      1.1
+    ]
+  },
+  "G4B_v2_inv_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      18.6,
+      5.4,
+      4.5
+    ]
+  },
+  "G4B_v2_inv_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.45,
+      1.6
+    ]
+  },
+  "G4B_v2_inv_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      50,
+      12.5
+    ]
+  },
+  "G4B_v2_inv_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2.4,
+      0.2
+    ]
+  },
+  "G4B_v2_inv_11": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      92,
+      4.5
+    ]
+  },
+  "G4B_v2_inv_12": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1250,
+      250
+    ]
+  },
+  "G4B_v2_inv_13": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      65,
+      5
+    ]
+  },
+  "G4B_v2_inv_14": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      8.4,
+      2.5,
+      3.2
+    ]
+  },
+  "G4B_v2_inv_15": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      245.5,
+      78.8
+    ]
+  },
+  "G4B_v2_inv_16": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      84,
+      32,
+      28
+    ]
+  },
+  "G4B_v2_inv_17": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12.5,
+      1.5
+    ]
+  },
+  "G4B_v2_inv_18": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4.2,
+      1.35,
+      1.4
+    ]
+  },
+  "G4B_v2_inv_19": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      25.8,
+      8.5,
+      9.2
+    ]
+  },
+  "G4B_v2_inv_20": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      1.85,
+      0.65
+    ]
+  },
+  "G4B_v2_seg_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      8,
+      2
+    ]
+  },
+  "G4B_v2_seg_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1,
+      5,
+      3
+    ]
+  },
+  "G4B_v2_seg_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      8,
+      2,
+      4
+    ]
+  },
+  "G4B_v2_seg_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1,
+      5,
+      3,
+      3
+    ]
+  },
+  "G4B_v2_seg_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      30,
+      100,
+      0.2,
+      120
+    ]
+  },
+  "G4B_v2_seg_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1,
+      8,
+      2,
+      3
+    ]
+  },
+  "G4B_v2_seg_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      60,
+      0.5,
+      0.6,
+      80
+    ]
+  },
+  "G4B_v2_seg_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      30,
+      1.2,
+      1
+    ]
+  },
+  "G4B_v2_seg_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.2,
+      100,
+      0.15,
+      150
+    ]
+  },
+  "G4B_v2_seg_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      10,
+      2.4,
+      5
+    ]
+  },
+  "G4B_v2_seg_11": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1,
+      6,
+      4,
+      5
+    ]
+  },
+  "G4B_v2_seg_12": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      50,
+      0.5,
+      0.7,
+      100
+    ]
+  },
+  "G4B_v2_two_13": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      240,
+      60,
+      90
+    ]
+  },
+  "G4B_v2_two_14": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4500,
+      80,
+      30,
+      60
+    ]
+  },
+  "G4B_v2_two_15": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      92,
+      4,
+      97
+    ]
+  },
+  "G4B_v2_two_16": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      50,
+      12.5,
+      5
+    ]
+  },
+  "G4B_v2_two_17": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      8,
+      4.5,
+      2
+    ]
+  },
+  "G4B_v2_two_18": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      580,
+      280,
+      3
+    ]
+  },
+  "G4B_v2_two_19": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      96,
+      30,
+      6
+    ]
+  },
+  "G4B_v2_two_20": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      78,
+      12,
+      4,
+      6
+    ]
+  },
+  "G4B_v2_meet_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      100,
+      30,
+      20
+    ]
+  },
+  "G4B_v2_meet_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      200,
+      25
+    ]
+  },
+  "G4B_v2_meet_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      360,
+      50,
+      40
+    ]
+  },
+  "G4B_v2_meet_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      600,
+      40,
+      60
+    ]
+  },
+  "G4B_v2_meet_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      480,
+      6,
+      50
+    ]
+  },
+  "G4B_v2_meet_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      720,
+      80,
+      40
+    ]
+  },
+  "G4B_v2_meet_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      540,
+      3,
+      90
+    ]
+  },
+  "G4B_v2_meet_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1200,
+      3,
+      220
+    ]
+  },
+  "G4B_v2_meet_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      480,
+      4,
+      10
+    ]
+  },
+  "G4B_v2_meet_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      60,
+      80
+    ]
+  },
+  "G4B_v2_meet_11": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      200,
+      150,
+      1750
+    ]
+  },
+  "G4B_v2_meet_12": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      360,
+      4,
+      45
+    ]
+  },
+  "G4B_v2_seg_13": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2,
+      8,
+      1.8,
+      7
+    ]
+  },
+  "G4B_v2_seg_14": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      50,
+      2,
+      2
+    ]
+  },
+  "G4B_v2_seg_15": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      39,
+      80,
+      0.25,
+      200
+    ]
+  },
+  "G4B_v2_seg_16": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1,
+      12,
+      4,
+      3.5
+    ]
+  },
+  "G4B_v2_seg_17": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      8,
+      2,
+      3
+    ]
+  },
+  "G4B_v2_seg_18": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      10,
+      2,
+      12
+    ]
+  },
+  "G4B_v2_seg_19": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      100,
+      0.5,
+      200,
+      250
+    ]
+  },
+  "G4B_v2_seg_20": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      30,
+      3,
+      2,
+      15
+    ]
+  },
+  "G4B_v2_two_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      8,
+      2
+    ]
+  },
+  "G4B_v2_two_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      7,
+      1
+    ]
+  },
+  "G4B_v2_two_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      50,
+      4,
+      8
+    ]
+  },
+  "G4B_v2_two_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      17,
+      1,
+      5
+    ]
+  },
+  "G4B_v2_two_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      3,
+      23
+    ]
+  },
+  "G4B_v2_two_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      380,
+      2,
+      150,
+      3
+    ]
+  },
+  "G4B_v2_two_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      100,
+      6,
+      12
+    ]
+  },
+  "G4B_v2_two_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      240,
+      3,
+      30,
+      5
+    ]
+  },
+  "G4B_v2_two_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      100,
+      5,
+      18
+    ]
+  },
+  "G4B_v2_two_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      2,
+      50,
+      8
+    ]
+  },
+  "G4B_v2_two_11": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      4,
+      980,
+      80
+    ]
+  },
+  "G4B_v2_two_12": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      22,
+      1,
+      6
+    ]
+  },
+  "G4B_v2_meet_13": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      252,
+      3,
+      40
+    ]
+  },
+  "G4B_v2_meet_14": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5.4,
+      5.2,
+      4.8
+    ]
+  },
+  "G4B_v2_meet_15": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      280,
+      2.5,
+      60
+    ]
+  },
+  "G4B_v2_meet_16": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      75,
+      65
+    ]
+  },
+  "G4B_v2_meet_17": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      800,
+      5,
+      90
+    ]
+  },
+  "G4B_v2_meet_18": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      30,
+      60,
+      80,
+      5400
+    ]
+  },
+  "G4B_v2_meet_19": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      480,
+      20
+    ]
+  },
+  "G4B_v2_meet_20": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      65,
+      75,
+      2330
+    ]
+  },
+  "G4B_v2_sd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      60,
+      2
+    ]
+  },
+  "G4B_v2_sd_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      60,
+      5
+    ]
+  },
+  "G4B_v2_sd_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      320,
+      3
+    ]
+  },
+  "G4B_v2_sd_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12.4,
+      1.5
+    ]
+  },
+  "G4B_v2_sd_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      280,
+      25
+    ]
+  },
+  "G4B_v2_sd_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      18.5,
+      4
+    ]
+  },
+  "G4B_v2_sd_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      78,
+      2.5
+    ]
+  },
+  "G4B_v2_sd_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      32.4,
+      0.5
+    ]
+  },
+  "G4B_v2_sd_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      825,
+      1.4
+    ]
+  },
+  "G4B_v2_sd_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4.5,
+      72
+    ]
+  },
+  "G4B_v2_sd_11": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      18,
+      6
+    ]
+  },
+  "G4B_v2_sd_12": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2,
+      3,
+      27
+    ]
+  },
+  "G4B_v2_avgm_13": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      25,
+      5,
+      28
+    ]
+  },
+  "G4B_v2_avgm_14": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      30,
+      4,
+      32
+    ]
+  },
+  "G4B_v2_avgm_15": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      92,
+      5
+    ]
+  },
+  "G4B_v2_avgm_16": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      50,
+      4,
+      48
+    ]
+  },
+  "G4B_v2_avgm_17": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      85,
+      5,
+      88
+    ]
+  },
+  "G4B_v2_avgm_18": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      120,
+      22,
+      122,
+      18
+    ]
+  },
+  "G4B_v2_avgm_19": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      1.5,
+      5,
+      1.45
+    ]
+  },
+  "G4B_v2_avgm_20": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      30,
+      60,
+      35
+    ]
+  },
+  "G4B_v2_dass_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.7,
+      2.3
+    ]
+  },
+  "G4B_v2_dass_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.5,
+      3.5
+    ]
+  },
+  "G4B_v2_dass_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.6,
+      3.4,
+      2.5
+    ]
+  },
+  "G4B_v2_dass_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.45,
+      0.55,
+      2.1
+    ]
+  },
+  "G4B_v2_dass_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.8,
+      2.6,
+      0.4
+    ]
+  },
+  "G4B_v2_dass_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.7,
+      3.7,
+      1.5
+    ]
+  },
+  "G4B_v2_dass_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.85,
+      1.74,
+      7.15,
+      6.26
+    ]
+  },
+  "G4B_v2_dass_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.5,
+      3.7,
+      6.3
+    ]
+  },
+  "G4B_v2_dass_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6.85,
+      2.4,
+      0.85
+    ]
+  },
+  "G4B_v2_dass_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      2.9,
+      4.4,
+      1.1
+    ]
+  },
+  "G4B_v2_mix_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.5,
+      4,
+      1
+    ]
+  },
+  "G4B_v2_mix_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      10,
+      0.4,
+      5
+    ]
+  },
+  "G4B_v2_sd_13": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      60,
+      12
+    ]
+  },
+  "G4B_v2_sd_14": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      7,
+      90
+    ]
+  },
+  "G4B_v2_sd_15": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      156,
+      2,
+      12
+    ]
+  },
+  "G4B_v2_sd_16": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      270,
+      5
+    ]
+  },
+  "G4B_v2_sd_17": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      96,
+      3
+    ]
+  },
+  "G4B_v2_sd_18": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      102,
+      4,
+      8
+    ]
+  },
+  "G4B_v2_sd_19": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      130,
+      5,
+      2
+    ]
+  },
+  "G4B_v2_sd_20": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      19,
+      2,
+      1
+    ]
+  },
+  "G4B_v2_avgm_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      8,
+      6,
+      9
+    ]
+  },
+  "G4B_v2_avgm_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      10,
+      8,
+      12
+    ]
+  },
+  "G4B_v2_avgm_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      20,
+      84
+    ]
+  },
+  "G4B_v2_avgm_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      100,
+      95,
+      102
+    ]
+  },
+  "G4B_v2_avgm_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      40,
+      158
+    ]
+  },
+  "G4B_v2_avgm_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      2,
+      1.8,
+      2.2
+    ]
+  },
+  "G4B_v2_avgm_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      90,
+      85,
+      92
+    ]
+  },
+  "G4B_v2_avgm_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      12,
+      65
+    ]
+  },
+  "G4B_v2_avgm_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      15,
+      4,
+      12
+    ]
+  },
+  "G4B_v2_avgm_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      3,
+      65,
+      70,
+      60
+    ]
+  },
+  "G4B_v2_avgm_11": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      10,
+      140,
+      9,
+      138
+    ]
+  },
+  "G4B_v2_avgm_12": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      36,
+      88,
+      20,
+      90
+    ]
+  },
+  "G4B_v2_mix_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5,
+      4,
+      2.3
+    ]
+  },
+  "G4B_v2_mix_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.6,
+      7,
+      0.4,
+      3
+    ]
+  },
+  "G4B_v2_mix_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.5,
+      0.8,
+      6
+    ]
+  },
+  "G4B_v2_mix_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.25,
+      8,
+      1.5
+    ]
+  },
+  "G4B_v2_mix_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      20,
+      1.5,
+      8
+    ]
+  },
+  "G4B_v2_mix_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.4,
+      5,
+      1.6,
+      4
+    ]
+  },
+  "G4B_v2_mix_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.2,
+      1.8,
+      4
+    ]
+  },
+  "G4B_v2_mix_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      1.6,
+      2,
+      0.4
+    ]
+  },
+  "G4B_v2_msimp_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      4
+    ]
+  },
+  "G4B_v2_msimp_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      8
+    ]
+  },
+  "G4B_v2_msimp_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      6,
+      2.5,
+      4
+    ]
+  },
+  "G4B_v2_msimp_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.25,
+      4,
+      7
+    ]
+  },
+  "G4B_v2_msimp_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      8,
+      6
+    ]
+  },
+  "G4B_v2_msimp_6": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.8,
+      1.01
+    ]
+  },
+  "G4B_v2_msimp_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      9,
+      6.4,
+      9
+    ]
+  },
+  "G4B_v2_msimp_8": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.6,
+      25
+    ]
+  },
+  "G4B_v2_msimp_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.4,
+      2.5,
+      0.4
+    ]
+  },
+  "G4B_v2_msimp_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.7,
+      99,
+      8.7
+    ]
+  },
+  "G4B_v2_wt_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      20,
+      5
+    ]
+  },
+  "G4B_v2_wt_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      10
+    ]
+  },
+  "G4B_v2_wt_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4500,
+      1.5
+    ]
+  },
+  "G4B_v2_wt_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      320,
+      6.5
+    ]
+  },
+  "G4B_v2_wt_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.355,
+      20
+    ]
+  },
+  "G4B_v2_wt_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      38.6,
+      6
+    ]
+  },
+  "G4B_v2_wt_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      24.5,
+      30
+    ]
+  },
+  "G4B_v2_wt_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1.85,
+      60
+    ]
+  },
+  "G4B_v2_wt_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.75,
+      30
+    ]
+  },
+  "G4B_v2_wt_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.32,
+      1000
+    ]
+  },
+  "G4B_v2_eo_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      60
+    ]
+  },
+  "G4B_v2_eo_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      32
+    ]
+  },
+  "G4B_v2_avgt_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      10,
+      145
+    ]
+  },
+  "G4B_v2_avgt_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      720,
+      80
+    ]
+  },
+  "G4B_v2_avgt_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12.5,
+      12
+    ]
+  },
+  "G4B_v2_avgt_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      7,
+      8
+    ]
+  },
+  "G4B_v2_avgt_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      35
+    ]
+  },
+  "G4B_v2_avgt_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      2.4
+    ]
+  },
+  "G4B_v2_avgt_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      40,
+      3520
+    ]
+  },
+  "G4B_v2_avgt_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12,
+      96
+    ]
+  },
+  "G4B_v2_let_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2
+    ]
+  },
+  "G4B_v2_let_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2
+    ]
+  },
+  "G4B_v2_let_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3
+    ]
+  },
+  "G4B_v2_let_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v2_let_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v2_let_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      28
+    ]
+  },
+  "G4B_v2_let_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5
+    ]
+  },
+  "G4B_v2_let_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5
+    ]
+  },
+  "G4B_v2_let_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      5
+    ]
+  },
+  "G4B_v2_let_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      5,
+      8
+    ]
+  },
+  "G4B_v2_em_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v2_em_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7,
+      5,
+      12
+    ]
+  },
+  "G4B_v2_em_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      3,
+      24
+    ]
+  },
+  "G4B_v2_em_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18,
+      6
+    ]
+  },
+  "G4B_v2_em_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      90
+    ]
+  },
+  "G4B_v2_em_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      2,
+      5,
+      11
+    ]
+  },
+  "G4B_v2_em_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      50
+    ]
+  },
+  "G4B_v2_em_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      80,
+      480
+    ]
+  },
+  "G4B_v2_em_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12,
+      3
+    ]
+  },
+  "G4B_v2_em_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      8,
+      5
+    ]
+  },
+  "G4B_v2_es_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      12
+    ]
+  },
+  "G4B_v2_es_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      14
+    ]
+  },
+  "G4B_v2_es_3": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      24
+    ]
+  },
+  "G4B_v2_es_4": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      7
+    ]
+  },
+  "G4B_v2_es_5": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15,
+      32
+    ]
+  },
+  "G4B_v2_es_6": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      65
+    ]
+  },
+  "G4B_v2_es_7": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12,
+      28
+    ]
+  },
+  "G4B_v2_es_8": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      9
+    ]
+  },
+  "G4B_v2_es_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      5,
+      17
+    ]
+  },
+  "G4B_v2_es_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      8,
+      19
+    ]
+  },
+  "G4B_v2_amn_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v2_amn_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      8
+    ]
+  },
+  "G4B_v2_eo_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1.5,
+      5.5
+    ]
+  },
+  "G4B_v2_eo_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      92,
+      6
+    ]
+  },
+  "G4B_v2_eo_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      24,
+      8
+    ]
+  },
+  "G4B_v2_eo_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      144,
+      4
+    ]
+  },
+  "G4B_v2_eo_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      240,
+      95
+    ]
+  },
+  "G4B_v2_eo_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      65
+    ]
+  },
+  "G4B_v2_eo_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      285,
+      3
+    ]
+  },
+  "G4B_v2_eo_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      168,
+      2
+    ]
+  },
+  "G4B_v2_avgc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      12
+    ]
+  },
+  "G4B_v2_avgc_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      7,
+      9
+    ]
+  },
+  "G4B_v2_avgc_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18,
+      22,
+      20,
+      24
+    ]
+  },
+  "G4B_v2_avgc_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      138,
+      142,
+      140,
+      145
+    ]
+  },
+  "G4B_v2_avgc_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      30,
+      28,
+      32
+    ]
+  },
+  "G4B_v2_avgc_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      250,
+      10
+    ]
+  },
+  "G4B_v2_avgc_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      480,
+      5,
+      392,
+      4
+    ]
+  },
+  "G4B_v2_avgc_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      80,
+      100,
+      120,
+      90
+    ]
+  },
+  "G4B_v2_avgc_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      36,
+      42,
+      45
+    ]
+  },
+  "G4B_v2_avgc_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5,
+      2.5,
+      3.5,
+      4.5
+    ]
+  },
+  "G4B_v2_avgt_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      6
+    ]
+  },
+  "G4B_v2_avgt_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      3
+    ]
+  },
+  "G4B_v2_cmp_13": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.5,
+      0.5
+    ]
+  },
+  "G4B_v2_cmp_14": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.23,
+      1.32
+    ]
+  },
+  "G4B_v2_cmp_15": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.45,
+      0.405,
+      0.5
+    ]
+  },
+  "G4B_v2_cmp_16": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.45,
+      0.405,
+      0.5
+    ]
+  },
+  "G4B_v2_cmp_17": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v2_cmp_18": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1.42,
+      0.18
+    ]
+  },
+  "G4B_v3_mng_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.7,
+      0.4
+    ]
+  },
+  "G4B_v3_mng_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      0.1
+    ]
+  },
+  "G4B_v3_mng_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.83
+    ]
+  },
+  "G4B_v3_mng_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12,
+      0.01
+    ]
+  },
+  "G4B_v3_mng_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.05
+    ]
+  },
+  "G4B_v3_mng_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.6,
+      100
+    ]
+  },
+  "G4B_v3_mng_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.205
+    ]
+  },
+  "G4B_v3_mng_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      4,
+      0.01
+    ]
+  },
+  "G4B_v3_mng_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.025,
+      25
+    ]
+  },
+  "G4B_v3_mng_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      0.1,
+      0.001
+    ]
+  },
+  "G4B_v3_uc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5
+    ]
+  },
+  "G4B_v3_uc_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8
+    ]
+  },
+  "G4B_v3_uc_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      5
+    ]
+  },
+  "G4B_v3_uc_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1,
+      250
+    ]
+  },
+  "G4B_v3_uc_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      300
+    ]
+  },
+  "G4B_v3_uc_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1
+    ]
+  },
+  "G4B_v3_uc_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.5
+    ]
+  },
+  "G4B_v3_uc_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      350
+    ]
+  },
+  "G4B_v3_uc_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      3,
+      5
+    ]
+  },
+  "G4B_v3_uc_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.45
+    ]
+  },
+  "G4B_v3_ti_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      4,
+      5
+    ]
+  },
+  "G4B_v3_ti_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_ti_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      12
+    ]
+  },
+  "G4B_v3_ti_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7,
+      8,
+      9
+    ]
+  },
+  "G4B_v3_ti_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      9
+    ]
+  },
+  "G4B_v3_ti_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      8
+    ]
+  },
+  "G4B_v3_ti_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6
+    ]
+  },
+  "G4B_v3_ti_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12
+    ]
+  },
+  "G4B_v3_ti_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_as_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_as_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      60,
+      80
+    ]
+  },
+  "G4B_v3_as_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      50
+    ]
+  },
+  "G4B_v3_as_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      35
+    ]
+  },
+  "G4B_v3_as_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      80
+    ]
+  },
+  "G4B_v3_as_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      45
+    ]
+  },
+  "G4B_v3_as_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_as_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      110
+    ]
+  },
+  "G4B_v3_as_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      40
+    ]
+  },
+  "G4B_v3_tc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      90
+    ]
+  },
+  "G4B_v3_tc_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_tc_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_tc_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      90
+    ]
+  },
+  "G4B_v3_tc_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_tc_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_tc_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      70,
+      50
+    ]
+  },
+  "G4B_v3_tc_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      50
+    ]
+  },
+  "G4B_v3_mm_1": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.5,
+      2
+    ]
+  },
+  "G4B_v3_mm_2": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.3,
+      3
+    ]
+  },
+  "G4B_v3_mm_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.7,
+      5
+    ]
+  },
+  "G4B_v3_mm_4": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5,
+      4
+    ]
+  },
+  "G4B_v3_mm_5": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.4,
+      3
+    ]
+  },
+  "G4B_v3_mm_6": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.9,
+      6
+    ]
+  },
+  "G4B_v3_mm_7": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.15,
+      4
+    ]
+  },
+  "G4B_v3_mm_8": {
+    "speedEligible": true,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.2,
+      7
+    ]
+  },
+  "G4B_v2_amn_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      24,
+      3
+    ]
+  },
+  "G4B_v2_amn_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      100
+    ]
+  },
+  "G4B_v2_amn_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      36,
+      4
+    ]
+  },
+  "G4B_v2_amn_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v2_amn_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      12,
+      18,
+      6
+    ]
+  },
+  "G4B_v2_amn_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      10,
+      50,
+      100
+    ]
+  },
+  "G4B_v2_amn_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      92,
+      6,
+      80
+    ]
+  },
+  "G4B_v2_amn_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      12,
+      6,
+      13
+    ]
+  },
+  "G4B_v2_cmp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.5,
+      0.6
+    ]
+  },
+  "G4B_v2_cmp_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.4,
+      0.4
+    ]
+  },
+  "G4B_v2_cmp_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.3,
+      0.3
+    ]
+  },
+  "G4B_v2_cmp_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.05,
+      1.5
+    ]
+  },
+  "G4B_v2_cmp_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.7,
+      2.07
+    ]
+  },
+  "G4B_v2_cmp_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v2_cmp_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.85,
+      0.9
+    ]
+  },
+  "G4B_v2_cmp_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.6,
+      0.05
+    ]
+  },
+  "G4B_v2_cmp_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.06,
+      0.6,
+      0.066,
+      0.606
+    ]
+  },
+  "G4B_v2_cmp_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1.85,
+      0.07
+    ]
+  },
+  "G4B_v2_cmp_11": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.6,
+      0.3,
+      0.3,
+      0.06
+    ]
+  },
+  "G4B_v2_cmp_12": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.4,
+      0.4,
+      0.04
+    ]
+  },
+  "G4B_v3_pq_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.5,
+      8
+    ]
+  },
+  "G4B_v3_pq_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.8,
+      12
+    ]
+  },
+  "G4B_v3_pq_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      32
+    ]
+  },
+  "G4B_v3_pq_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      8.5,
+      15.4
+    ]
+  },
+  "G4B_v3_pq_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      38.5,
+      5
+    ]
+  },
+  "G4B_v3_ob_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_ob_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_ob_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_ob_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_ob_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_ob_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_ob_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_ob_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "G4B_v3_bc_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15,
+      20,
+      10
+    ]
+  },
+  "G4B_v3_bc_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      25
+    ]
+  },
+  "G4B_v3_bc_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      12,
+      20,
+      15
+    ]
+  },
+  "G4B_v3_bc_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      24,
+      30,
+      18
+    ]
+  },
+  "G4B_v3_bc_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      30,
+      28,
+      22
+    ]
+  },
+  "G4B_v3_bc_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      30,
+      35,
+      40,
+      25
+    ]
+  },
+  "G4B_v3_bc_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12,
+      18,
+      25,
+      20
+    ]
+  },
+  "G4B_v3_mm_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.45,
+      2
+    ]
+  },
+  "G4B_v3_mm_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.36,
+      5
+    ]
+  },
+  "G4B_v3_mv_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.78,
+      9
+    ]
+  },
+  "G4B_v3_mv_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      24
+    ]
+  },
+  "G4B_v3_mv_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.36,
+      15
+    ]
+  },
+  "G4B_v3_mv_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.85,
+      16
+    ]
+  },
+  "G4B_v3_pd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.4,
+      6
+    ]
+  },
+  "G4B_v3_pd_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.2,
+      0.5
+    ]
+  },
+  "G4B_v3_pd_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.35,
+      28
+    ]
+  },
+  "G4B_v3_pd_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.2,
+      0.5
+    ]
+  },
+  "G4B_v3_pd_5": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.04,
+      0.3
+    ]
+  },
+  "G4B_v3_pd_6": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.2,
+      0.45
+    ]
+  },
+  "G4B_v3_pd_7": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.5,
+      1.2
+    ]
+  },
+  "G4B_v3_pd_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.25,
+      0.4
+    ]
+  },
+  "G4B_v3_pd_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.25,
+      3.6
+    ]
+  },
+  "G4B_v3_pd_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.05,
+      0.04
+    ]
+  },
+  "G4B_v3_pq_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      3
+    ]
+  },
+  "G4B_v3_pq_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      4
+    ]
+  },
+  "G4B_v3_pq_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.6,
+      5
+    ]
+  },
+  "G4B_v3_pq_4": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      0.8
+    ]
+  },
+  "G4B_v3_bc_8": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      145,
+      142
+    ]
+  },
+  "G4B_v3_bc_9": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      18,
+      24
+    ]
+  },
+  "G4B_v3_bc_10": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      320,
+      450,
+      380,
+      500
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_001__morv4q6w_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15,
+      8
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morv4q6w_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      5
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_001__morv4q6w_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      8
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morv4q6w_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      60
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_001__morv57je_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      8
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morv57je_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      650
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_001__morv57je_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      8
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morv57je_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      40
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_001__morv6lrh_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      65
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morv6lrh_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      5,
+      3,
+      20
+    ]
+  },
+  "AI_decimal_meaning_place_002__morv5kk4_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morv6ua1_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morv7d7d_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morv7d7d_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__morynnvj_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_decimal_meaning_place_002__morynous_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_decimal_add_sub_vertical_001__morv64ge_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.07,
+      2.8
+    ]
+  },
+  "AI_decimal_add_sub_vertical_002__morv64ge_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15,
+      6.48
+    ]
+  },
+  "AI_decimal_add_sub_vertical_001__morv64ge_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.07,
+      2.9
+    ]
+  },
+  "AI_decimal_add_sub_vertical_002__morv64ge_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15,
+      6.84
+    ]
+  },
+  "AI_decimal_add_sub_vertical_001__morv6qy2_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6.03,
+      2.9
+    ]
+  },
+  "AI_decimal_add_sub_vertical_002__morv6qy2_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15.2,
+      6.75
+    ]
+  },
+  "AI_decimal_add_sub_vertical_001__morv6qy2_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6.03,
+      2.9
+    ]
+  },
+  "AI_decimal_add_sub_vertical_002__morv6qy2_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15.04,
+      7.6
+    ]
+  },
+  "AI_TJ_001__morv7wcg_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      45,
+      65
+    ]
+  },
+  "AI_TJ_002__morv7wcg_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      40,
+      50
+    ]
+  },
+  "AI_TJ_001__morv7wcg_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      45,
+      45,
+      90
+    ]
+  },
+  "AI_TJ_002__morv7wcg_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      35
+    ]
+  },
+  "AI_TJ_001__morv9aml_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      65
+    ]
+  },
+  "AI_TJ_001__morvaouo_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      52,
+      38
+    ]
+  },
+  "AI_TJ_002__morvaouo_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      25,
+      50
+    ]
+  },
+  "AI_decimal_add_sub_simplify_001__morv7zzl_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.85,
+      0.15,
+      3.2
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__morv7zzl_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.4,
+      8.6,
+      5.35
+    ]
+  },
+  "AI_decimal_add_sub_simplify_001__morv8lu4_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.8,
+      1.2,
+      10
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__morv8lu4_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.45,
+      1.55,
+      3.7
+    ]
+  },
+  "AI_decimal_add_sub_simplify_001__morv8lu4_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.65,
+      0.65,
+      2.4
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__morv8lu4_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      10,
+      2.85,
+      1.15,
+      0.9
+    ]
+  },
+  "AI_decimal_add_sub_simplify_001__morv97ga_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.35,
+      1.28,
+      2.65,
+      3.72
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__morv97ga_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15.4,
+      3.86,
+      1.14
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__morv97ga_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15.4,
+      3.87,
+      1.13
+    ]
+  },
+  "AI_TJ_001__morv8565_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      12
+    ]
+  },
+  "AI_TJ_002__morv8565_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8,
+      15
+    ]
+  },
+  "AI_TJ_001__morv9jek_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      7,
+      11
+    ]
+  },
+  "AI_TJ_002__morv9jek_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18
+    ]
+  },
+  "AI_TJ_001__morvaxmo_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      7,
+      11
+    ]
+  },
+  "AI_TJ_002__morvaxmo_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      16
+    ]
+  },
+  "AI_TJ_001__morymycz_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      10,
+      17
+    ]
+  },
+  "AI_TJ_002__morymycz_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9,
+      13
+    ]
+  },
+  "AI_TJ_001__morymycz_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9,
+      4
+    ]
+  },
+  "AI_TJ_002__morymycz_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      11,
+      6
+    ]
+  },
+  "AI_TJ_001__morynsmi_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      10
+    ]
+  },
+  "AI_TJ_002__morynsmi_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18,
+      7,
+      5
+    ]
+  },
+  "AI_TJ_001__morv9sme_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      45,
+      45,
+      90
+    ]
+  },
+  "AI_TJ_002__morv9sme_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      8,
+      10
+    ]
+  },
+  "AI_TJ_001__morv9sme_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      45,
+      45,
+      90
+    ]
+  },
+  "AI_TJ_002__morv9sme_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      8,
+      10
+    ]
+  },
+  "AI_decimal_product_digits_002__morvcc1t_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_decimal_product_digits_002__morvcc1t_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.05,
+      0.4
+    ]
+  },
+  "AI_decimal_product_digits_001__morvdq9z_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.7,
+      0.08
+    ]
+  },
+  "AI_decimal_product_digits_002__morvdq9z_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.06,
+      0.9
+    ]
+  },
+  "AI_decimal_product_digits_001__morve96m_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.08,
+      0.5
+    ]
+  },
+  "AI_decimal_product_digits_001__morve96m_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.8,
+      0.06
+    ]
+  },
+  "AI_decimal_mul_simplify_001__morveevd_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4.8,
+      5.5
+    ]
+  },
+  "AI_decimal_mul_simplify_002__morveevd_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.9,
+      7.2
+    ]
+  },
+  "AI_decimal_mul_simplify_001__morveevd_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.4,
+      5,
+      3.6
+    ]
+  },
+  "AI_decimal_mul_simplify_002__morveevd_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.5,
+      2.5,
+      12
+    ]
+  },
+  "AI_decimal_mul_simplify_001__morvfkzn_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      3.6,
+      4
+    ]
+  },
+  "AI_decimal_mul_simplify_002__morvfkzn_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.8,
+      10.1
+    ]
+  },
+  "AI_decimal_mul_simplify_001__morvfkzn_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.5,
+      4.2,
+      2
+    ]
+  },
+  "AI_decimal_mul_simplify_002__morvfkzn_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6.8,
+      9.9
+    ]
+  },
+  "AI_Q1_G4B_DECIMAL_MULTIPLY_001__morz4ch6_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      8.6,
+      3
+    ]
+  },
+  "AI_Q2_G4B_DECIMAL_MULTIPLY_002__morz4ch6_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      14.9,
+      3.2,
+      2,
+      5
+    ]
+  },
+  "AI_G4B_SHOP_001__morz5ozp_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      8.6,
+      3,
+      50
+    ]
+  },
+  "AI_G4B_SHOP_002__morz5ozp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12.9,
+      6.5,
+      2,
+      40
+    ]
+  },
+  "AI_G4B_SD_001__morvg5ug_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      8.4,
+      2.5
+    ]
+  },
+  "AI_G4B_SD_002__morvg5ug_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      24.6,
+      0.8
+    ]
+  },
+  "AI_G4B_SD_001__morvg5ug_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      9.8,
+      2.5
+    ]
+  },
+  "AI_G4B_SD_002__morvg5ug_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      56.4,
+      1.8
+    ]
+  },
+  "AI_G4B_SD_001__morvhk2m_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      16.8,
+      0.75
+    ]
+  },
+  "AI_G4B_SD_002__morvhk2m_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.36,
+      2.5
+    ]
+  },
+  "AI_G4B_SD_001__moryqzu4_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      15.6,
+      1.5
+    ]
+  },
+  "AI_G4B_SD_002__moryqzu4_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      92.4,
+      0.75
+    ]
+  },
+  "AI_G4B_SD_001__moryrqhi_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      0.24,
+      15
+    ]
+  },
+  "AI_G4B_SD_002__moryrqhi_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      92.8,
+      0.75
+    ]
+  },
+  "AI_CV_G4B_001__morvj22f_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      2,
+      2
+    ]
+  },
+  "AI_CV_G4B_002__morvj22f_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      4,
+      5,
+      3
+    ]
+  },
+  "AI_G4B_CUBE_VIEW_001__morvj22f_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      2,
+      2
+    ]
+  },
+  "AI_G4B_CUBE_VIEW_002__morvj22f_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      2,
+      2,
+      3
+    ]
+  },
+  "AI_G4B_OBSERVE_OBJECTS_01__morvjop7_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      1
+    ]
+  },
+  "AI_G4B_OBSERVE_OBJECTS_02__morvjop7_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      4,
+      2
+    ]
+  },
+  "AI_G4B_CUBE_VIEW_01__morvjop7_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      2,
+      2,
+      4
+    ]
+  },
+  "AI_G4B_CUBE_VIEW_02__morvjop7_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      2,
+      3
+    ]
+  },
+  "AI_CV_001__morvk9sr_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      1
+    ]
+  },
+  "AI_CV_002__morvk9sr_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      1
+    ]
+  },
+  "AI_G4B_CUBE_001__morvk9sr_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      2,
+      4,
+      1
+    ]
+  },
+  "AI_G4B_CUBE_002__morvk9sr_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      1,
+      1
+    ]
+  },
+  "AI_TJ_002__morvadmu_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      8,
+      10
+    ]
+  },
+  "AI_TJ_002__morvadmu_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      8,
+      10
+    ]
+  },
+  "AI_decimal_mul_vertical_001__morvbknf_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.68,
+      7
+    ]
+  },
+  "AI_decimal_mul_vertical_002__morvbknf_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      0.8
+    ]
+  },
+  "AI_decimal_mul_vertical_001__morvbknf_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6.8,
+      0.5
+    ]
+  },
+  "AI_decimal_mul_vertical_002__morvbknf_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.04,
+      2.5
+    ]
+  },
+  "AI_decimal_mul_vertical_001__morvc4kf_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6.4,
+      0.35
+    ]
+  },
+  "AI_decimal_mul_vertical_002__morvc4kf_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.08,
+      7.5
+    ]
+  },
+  "AI_decimal_mul_vertical_001__morvc4kf_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.6,
+      0.32
+    ]
+  },
+  "AI_decimal_mul_vertical_002__morvc4kf_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.08,
+      2.5,
+      2700
+    ]
+  },
+  "AI_decimal_mul_vertical_001__morvcp6t_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.46,
+      12
+    ]
+  },
+  "AI_decimal_mul_vertical_002__morvcp6t_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.08,
+      0.25
+    ]
+  },
+  "AI_decimal_mul_vertical_001__morvcp6t_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.42,
+      18,
+      756
+    ]
+  },
+  "AI_decimal_mul_vertical_002__morvcp6t_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3.05,
+      2.4,
+      610
+    ]
+  },
+  "AI_decimal_mul_meaning_002__morvbz87_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      0.25
+    ]
+  },
+  "AI_decimal_mul_meaning_002__morvcjm4_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      0.36
+    ]
+  },
+  "AI_decimal_mul_meaning_002__morvcjm4_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7,
+      1.2
+    ]
+  },
+  "AI_decimal_mul_meaning_002__moryo7c7_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      0.25
+    ]
+  },
+  "AI_decimal_mul_meaning_002__moryoy0k_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      1.25
+    ]
+  },
+  "AI_decimal_product_digits_001__morvcc1t_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.7,
+      0.09
+    ]
+  },
+  "AI_average_meaning_002__morvqaas_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      140
+    ]
+  },
+  "AI_average_meaning_001__morvqu1l_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      23
+    ]
+  },
+  "AI_average_meaning_001__morvqu1l_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      24
+    ]
+  },
+  "AI_average_meaning_002__morvqu1l_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      2
+    ]
+  },
+  "AI_average_compute_001__morvrds3_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      90
+    ]
+  },
+  "AI_average_compute_002__morvrds3_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      145
+    ]
+  },
+  "AI_average_compute_001__morvss06_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      160
+    ]
+  },
+  "AI_average_compute_002__morvss06_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      92,
+      72
+    ]
+  },
+  "AI_average_compute_001__morvu689_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      90
+    ]
+  },
+  "AI_average_compute_002__morvu689_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      4
+    ]
+  },
+  "AI_average_compute_001__moryw0p2_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      200
+    ]
+  },
+  "AI_average_compute_002__moryw0p2_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12,
+      15,
+      9,
+      4
+    ]
+  },
+  "AI_average_compute_001__moryw0p2_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      200
+    ]
+  },
+  "AI_average_compute_002__moryw0p2_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4,
+      12,
+      5,
+      15
+    ]
+  },
+  "AI_average_compute_001__morywdw0_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      25
+    ]
+  },
+  "AI_average_compute_002__morywdw0_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6,
+      1.4
+    ]
+  },
+  "AI_G4B_SHOP_001__mos6vr8t_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5.8,
+      7,
+      9.5,
+      3
+    ]
+  },
+  "AI_G4B_SHOP_002__mos6vr8t_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12.6,
+      4,
+      60
+    ]
+  },
+  "AI_G4B_SM_001__mos6vr8t_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5.6,
+      3,
+      20
+    ]
+  },
+  "AI_G4B_SM_002__mos6vr8t_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      1.25,
+      0.9,
+      4,
+      5
+    ]
+  },
+  "AI_G4B_SM_001__mos6vwaz_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4.2,
+      7,
+      50
+    ]
+  },
+  "AI_G4B_SM_002__mos6vwaz_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      13.6,
+      9.8,
+      2.5,
+      1.5
+    ]
+  },
+  "AI_G4B_SM_002__mos6vwaz_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      4.2,
+      5.8,
+      2,
+      3
+    ]
+  },
+  "AI_G4B_SM_001__mos6wlc6_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      12.6,
+      3,
+      50
+    ]
+  },
+  "AI_G4B_SM_002__mos6wlc6_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5.8,
+      3.2,
+      2,
+      4
+    ]
+  },
+  "AI_decimal_mul_meaning_002__mos6x22w_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.16,
+      7
+    ]
+  },
+  "AI_decimal_mul_meaning_002__mos6xqxa_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.6,
+      7
+    ]
+  },
+  "AI_decimal_mul_meaning_002__mos6xw3r_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.12,
+      6
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_decimal_meaning_place_001__mos6xk9o_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      9
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_decimal_meaning_place_002__mos6xk9o_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7
+    ]
+  },
+  "AI_decimal_meaning_place_002__mos6xk9o_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      8,
+      5
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_001__mos6xons_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      8,
+      3
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__mos6xons_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6,
+      2,
+      0,
+      9
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_001__mos6xons_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2,
+      9
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__mos6xons_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.804
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__mos6y2wt_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      4,
+      0,
+      3,
+      1
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_001__mos6y2wt_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.809
+    ]
+  },
+  "AI_G4B_U1_DECIMAL_ADD_SUB_002__mos6y2wt_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3,
+      2,
+      1
+    ]
+  },
+  "AI_TJ_001__mos6yiil_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      5,
+      7,
+      10
+    ]
+  },
+  "AI_TJ_002__mos6yiil_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": true,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      9,
+      12,
+      15
+    ]
+  },
+  "AI_G4B_U5_EQUATIONS_letter_expression_001__morvjfhq_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3
+    ]
+  },
+  "AI_letter_expression_002__morvjfhq_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      7,
+      3
+    ]
+  },
+  "AI_letter_expression_002__morysbbq_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      6
+    ]
+  },
+  "AI_letter_expression_002__morysbbq_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      7,
+      15
+    ]
+  },
+  "AI_letter_expression_001__moryscrb_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      3
+    ]
+  },
+  "AI_letter_expression_002__moryscrb_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      2,
+      5
+    ]
+  },
+  "AI_data_bar_chart_001__morvpirx_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18,
+      22,
+      15,
+      20
+    ]
+  },
+  "AI_data_bar_chart_002__morvpirx_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      36,
+      29,
+      42,
+      33
+    ]
+  },
+  "AI_data_bar_chart_001__morvqwzz_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18,
+      22,
+      15,
+      26
+    ]
+  },
+  "AI_data_bar_chart_002__morvqwzz_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      35,
+      28,
+      42,
+      19
+    ]
+  },
+  "AI_data_bar_chart_001__morvsb83_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      16,
+      22,
+      19,
+      25
+    ]
+  },
+  "AI_data_bar_chart_002__morvsb83_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      28,
+      32,
+      17,
+      23
+    ]
+  },
+  "AI_data_bar_chart_001__moryw52c_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15,
+      19,
+      13,
+      21
+    ]
+  },
+  "AI_data_bar_chart_001__morywdf5_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      15,
+      19,
+      13,
+      21
+    ]
+  },
+  "AI_data_bar_chart_002__morywdf5_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      24,
+      18,
+      32,
+      26
+    ]
+  },
+  "AI_average_meaning_001__morvpsng_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_average_meaning_002__morvpsng_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      138,
+      135
+    ]
+  },
+  "AI_average_meaning_001__morvqaas_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_average_meaning_001__morvqaas_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_TJ_001__mos6yiil_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      12,
+      13
+    ]
+  },
+  "AI_TJ_002__mos6yiil_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7,
+      10,
+      15
+    ]
+  },
+  "AI_TJ_001__mos6z560_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      5,
+      7,
+      10
+    ]
+  },
+  "AI_TJ_002__mos6z560_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      40
+    ]
+  },
+  "AI_decimal_product_digits_001__mos6ymvp_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.8,
+      0.06
+    ]
+  },
+  "AI_decimal_product_digits_002__mos6ymvp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_decimal_product_digits_002__mos6z24y_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_decimal_product_digits_001__mos6z24y_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.8,
+      0.06
+    ]
+  },
+  "AI_decimal_product_digits_002__mos6z24y_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.125,
+      0.08
+    ]
+  },
+  "AI_decimal_product_digits_001__mos6z7xm_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      0.007,
+      0.3
+    ]
+  },
+  "AI_decimal_product_digits_002__mos6z7xm_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_decimal_add_sub_vertical_001__mos6znha_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      6.4,
+      12.75
+    ]
+  },
+  "AI_decimal_add_sub_vertical_002__mos6znha_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      20,
+      3.68
+    ]
+  },
+  "AI_decimal_add_sub_vertical_001__mos6znha_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.4,
+      12.06
+    ]
+  },
+  "AI_decimal_add_sub_vertical_002__mos6znha_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      20,
+      3.75
+    ]
+  },
+  "AI_TJ_001__mos6zttw_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      52,
+      38
+    ]
+  },
+  "DOT_DEMO_ANY_TRI": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "AI_TJ_002__mos6zttw_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      50,
+      60
+    ]
+  },
+  "AI_TJ_001__mos6zttw_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      52,
+      38
+    ]
+  },
+  "AI_TJ_002__mos6zttw_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": true,
+    "keyNumbers": [
+      40
+    ]
+  },
+  "AI_decimal_mul_simplify_001__mos70av5_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.8,
+      4.5,
+      7.2
+    ]
+  },
+  "AI_decimal_mul_simplify_002__mos70av5_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      3.2,
+      8
+    ]
+  },
+  "AI_decimal_mul_simplify_002__mos70av5_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.25,
+      3.2
+    ]
+  },
+  "AI_decimal_mul_simplify_001__mos711pp_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.5,
+      1.2,
+      4
+    ]
+  },
+  "AI_decimal_mul_simplify_002__mos711pp_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.8,
+      99
+    ]
+  },
+  "AI_decimal_add_sub_simplify_001__mos70gnl_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.7,
+      4.25,
+      0.7
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__mos70gnl_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      18.6,
+      3.45,
+      50
+    ]
+  },
+  "AI_decimal_add_sub_simplify_001__mos70gnl_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.75,
+      2.3,
+      1.7
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__mos70gnl_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      12.8,
+      15.2,
+      13.6
+    ]
+  },
+  "AI_decimal_add_sub_simplify_001__mos70xhv_0": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      7.35,
+      1.8,
+      0.35
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__mos70xhv_1": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      2.45,
+      1.55,
+      3.6
+    ]
+  },
+  "AI_decimal_add_sub_simplify_001__mos70xhv_2": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      9.75,
+      1.6,
+      0.75
+    ]
+  },
+  "AI_decimal_add_sub_simplify_002__mos70xhv_3": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": [
+      1.28,
+      0.92,
+      1.08
+    ]
+  },
+  "DOT_DEMO_PARALLELOGRAM": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "DOT_DEMO_TRAPEZOID": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "DOT_DEMO_RECTANGLE": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  },
+  "DOT_DEMO_ISOSCELES": {
+    "speedEligible": false,
+    "requiresEstimation": false,
+    "requiresScratch": false,
+    "requiresMultiStep": false,
+    "keyNumbers": []
+  }
+}

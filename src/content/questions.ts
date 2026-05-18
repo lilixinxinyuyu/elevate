@@ -7,6 +7,36 @@ import { GAP_FILL_PACK_G4B_V3 } from "./gapFillPackG4B_v3";
 import { AI_GEN_G4B_PACK } from "./aiGenG4BPack";
 import { AI_GEN_G4B_U14_PACK } from "./aiGenG4B_U14_Pack";
 import { DOT_GRID_DEMO_PACK } from "./dotGridDemoPack";
+// v0.35.20 iter 49: LLM backfilled metadata overlay (token-plan qwen3.6-flash 跑的).
+// 见 scripts/_backfill-question-metadata.mjs. Empty {} 时无副作用.
+import METADATA_BACKFILL from "./questions-backfilled-metadata.json";
+
+/**
+ * v0.35.20 iter 49 (retrospective P-AI-backfill):
+ * 把 LLM-backfill 的 metadata merge 进每个 Question. 只在原 question 没 explicit
+ * 设置该字段时才填. 0 影响已显式标 metadata 的题.
+ */
+function applyMetadataBackfill(qs: Question[]): Question[] {
+  const overlay = METADATA_BACKFILL as Record<string, {
+    speedEligible?: boolean;
+    requiresEstimation?: boolean;
+    requiresScratch?: boolean;
+    requiresMultiStep?: boolean;
+    keyNumbers?: number[];
+  }>;
+  return qs.map((q) => {
+    const m = overlay[q.question_id];
+    if (!m) return q;
+    return {
+      ...q,
+      speedEligible: q.speedEligible ?? m.speedEligible,
+      requiresEstimation: q.requiresEstimation ?? m.requiresEstimation,
+      requiresScratch: q.requiresScratch ?? m.requiresScratch,
+      requiresMultiStep: q.requiresMultiStep ?? m.requiresMultiStep,
+      keyNumbers: q.keyNumbers ?? m.keyNumbers,
+    };
+  });
+}
 
 const base = {
   version: 1 as const,
@@ -2600,7 +2630,7 @@ const expansionV04: Question[] = [
   ...chartDetectiveQs,
 ];
 
-export const SEED_QUESTIONS: Question[] = [
+const SEED_QUESTIONS_RAW: Question[] = [
   ...decimalPriceQuantity,
   ...decimalSpeedDistance,
   ...decimalWorkTotal,
@@ -2633,3 +2663,8 @@ export const SEED_QUESTIONS: Question[] = [
   ...AI_GEN_G4B_U14_PACK,
   ...DOT_GRID_DEMO_PACK,
 ];
+
+// v0.35.20 iter 49: 把 LLM-backfilled metadata overlay 应用上去.
+// 空 overlay {} 时无副作用. backfill 跑完 questions-backfilled-metadata.json
+// 有内容后, 主路径 EstimationGate / SpeedMatch / Scratch / MultiStep 触发率提升.
+export const SEED_QUESTIONS: Question[] = applyMetadataBackfill(SEED_QUESTIONS_RAW);
