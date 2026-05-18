@@ -181,8 +181,23 @@ generate.use("*", requireAuth);
  * POST /api/generate/image
  * 返 202 + {ok:true, taskId, status:"pending", statusUrl}
  * 客户端调 GET /api/generate/image/status/:taskId 轮询
+ *
+ * 🚨 v0.35.14 (2026-05-18 爸爸反馈): BAILIAN async image gen 被默默扣费多日.
+ * 现在加 env-flag guard `IMAGE_GEN_ENABLED=true` 才能跑, 默认 disable.
+ * 上线 token-plan FC sync 路径 + 爸爸明确同意启用前, 这个 endpoint 始终 503.
+ * 见 docs/ai-models-registry.md 顶部"费用敏感铁律" + memory/billing_sensitive_rule.md.
  */
 generate.post("/image", async (c) => {
+  // v0.35.14: 费用 guard. 没有显式 IMAGE_GEN_ENABLED=true → 一律拒绝, 不消费 BAILIAN 配额
+  const env = c.env as { IMAGE_GEN_ENABLED?: string };
+  if (env.IMAGE_GEN_ENABLED !== "true") {
+    return c.json({
+      ok: false,
+      error: "image_gen_disabled",
+      reason: "BAILIAN image gen 已 disable (费用控制). 待 token-plan FC 路径上线后再开. 见 docs/ai-models-registry.md",
+    }, 503);
+  }
+
   const userId = getUserId(c);
   const cfg = getOssConfig(c.env);
   if (!cfg) return c.json({ ok: false, error: "oss_not_configured" }, 503);

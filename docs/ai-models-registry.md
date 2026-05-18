@@ -1,7 +1,13 @@
 # AI 模型与供应商注册表
 
-> **最后更新**: v0.33.59 (2026-05)
+> **最后更新**: v0.35.14 (2026-05-18)
 > **维护原则**: 改 endpoint / 加 key / 加 model 时必同步更新本文档。
+>
+> ## ⚠️ 费用敏感铁律 (2026-05-18 爸爸明确要求)
+> 1. **本文档可能跟实际代码不同步** — 改 wiring 前必须 `grep` 实际代码 verify
+> 2. **任何会产生计费请求的代码改动 (image gen / 按量 LLM / TTS / 批量任务) 必须明确得到爸爸同意才能 ship**
+> 3. **得到同意可以跨 iter 保持; 同意被撤回必须立刻撤回, 不准默默继续**
+> 4. **image gen 当前实际情况 (v0.35.13)**: ESA 上 `aliyun-deploy/src/routes/generate.ts` 只走 BAILIAN async (按量付费), **没有 token-plan 路径**, 因为 EdgeRoutine 11s timeout < token-plan sync image gen 25s. 本文档第 2 章把 token-plan 写为"image 主路径"是**设计意图, 非现实**. v0.35.14 起方案: 走 Aliyun Function Compute (FC, 无 11s 限制) 调 token-plan chat/completions 同步出图. 在此架构改造完成 + 爸爸同意启用前, **image gen endpoint 应保持 disable 状态**.
 
 ## 1. Provider 与 Endpoint
 
