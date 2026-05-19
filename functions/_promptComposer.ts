@@ -39,8 +39,19 @@ export interface SkillScope {
 /** 安全拿 skill scope。没有就返回 null，调用方走 fallback 路径。 */
 export function getSkillScope(skillId?: string): SkillScope | null {
   if (!skillId) return null;
-  const scope = (PROMPTS.skillScope as unknown as Record<string, SkillScope | undefined>)[skillId];
-  return scope ?? null;
+  const all = PROMPTS.skillScope as unknown as Record<string, SkillScope | undefined>;
+  const direct = all[skillId];
+  if (direct) return direct;
+  // v0.36.14 (爸爸 P0 prompt 系统覆盖): 题型级 generic fallback.
+  // 语文新题型按 unit 拆 (C4B_U1_TYPOS / C4B_U2_TYPOS ...), 出题方法跨 unit 一致,
+  // 用一个 generic scope 覆盖全部 unit, 避免每 unit 重复写 scope.
+  // C4B_U1_TYPOS → C4B_TYPOS_GENERIC. 字词内容差异由 skill_name + unit context 提供.
+  const m = /_(TYPOS|BADSENT|IMITATE|READING)$/.exec(skillId);
+  if (m) {
+    const generic = all[`C4B_${m[1]}_GENERIC`];
+    if (generic) return generic;
+  }
+  return null;
 }
 
 /** 把 skill scope 渲染成 markdown 段，注入到 user prompt 里。 */
