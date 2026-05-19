@@ -43,14 +43,27 @@ const ERASER_RADIUS = 18; // canvas units
 export function CanvasScratchPanel(props: TemplateRenderProps) {
   const { question, onFinish, triggerFx, disabled } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // v0.35.97 (爸爸 P0 bug fix): "写一笔就把上一笔删掉".
+  // 原因: redraw useCallback 依赖 strokes state, 但 setStrokes async — 用户
+  // 在下一笔 onPointerDown 时 state 还没 propagate, redraw closure 拿 stale
+  // strokes=[] (空的上轮 closure), 导致 onPointerMove redraw 时上一笔被擦掉.
+  // 修: 加 strokesRef 同步 mirror, redraw 永远从 ref 读 (无 stale closure).
   const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const strokesRef = useRef<Stroke[]>([]);
   const drawingRef = useRef(false);
   const currentStrokeRef = useRef<Stroke>([]);
   const [tool, setTool] = useState<Tool>("pen");
   const [value, setValue] = useState("");
   const [locked, setLocked] = useState(false);
 
-  // 重画 canvas — useCallback 让 useEffect deps 稳定
+  // commit 一条新 stroke (同步 ref + queue state)
+  const commitStrokes = useCallback((next: Stroke[]) => {
+    strokesRef.current = next;
+    setStrokes(next);
+  }, []);
+
+  // 重画 canvas — 永远从 strokesRef.current 读 (不依赖 closure)
+  // deps 空: redraw 是稳定函数, 用 ref 读最新数据
   const redraw = useCallback(() => {
     const cv = canvasRef.current;
     if (!cv) return;
@@ -68,13 +81,14 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
       for (let i = 1; i < s.length; i++) ctx.lineTo(s[i]!.x, s[i]!.y);
       ctx.stroke();
     };
-    for (const s of strokes) drawStroke(s);
+    for (const s of strokesRef.current) drawStroke(s);
     if (currentStrokeRef.current.length >= 2) drawStroke(currentStrokeRef.current);
-  }, [strokes]);
+  }, []);
 
+  // 当 state 真正 commit 后 (用 setStrokes 路径) 再 redraw 一次, 防漏
   useEffect(() => {
     redraw();
-  }, [redraw]);
+  }, [strokes, redraw]);
 
   function exportBase64(): string {
     const cv = canvasRef.current;
@@ -100,21 +114,22 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
   }
 
   // 擦: 用 segment-to-circle 距离判断哪些 stroke 经过 eraser 中心半径内
+  // v0.35.97: 用 ref-sync commitStrokes, 不再 stale closure
   function eraseAt(pt: Point) {
-    setStrokes((all) => {
-      return all.filter((stroke) => {
-        // 任一 segment / 顶点距 pt 小于 ERASER_RADIUS → 整条 stroke 删掉 (简化)
-        for (let i = 0; i < stroke.length; i++) {
-          const p = stroke[i]!;
-          const dx = p.x - pt.x;
-          const dy = p.y - pt.y;
-          if (dx * dx + dy * dy <= ERASER_RADIUS * ERASER_RADIUS) {
-            return false; // 删整条 stroke
-          }
+    const filtered = strokesRef.current.filter((stroke) => {
+      for (let i = 0; i < stroke.length; i++) {
+        const p = stroke[i]!;
+        const dx = p.x - pt.x;
+        const dy = p.y - pt.y;
+        if (dx * dx + dy * dy <= ERASER_RADIUS * ERASER_RADIUS) {
+          return false; // 删整条 stroke
         }
-        return true;
-      });
+      }
+      return true;
     });
+    if (filtered.length !== strokesRef.current.length) {
+      commitStrokes(filtered);
+    }
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -161,7 +176,8 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     if (tool === "pen" && currentStrokeRef.current.length >= 2) {
       const stroke = currentStrokeRef.current;
       currentStrokeRef.current = [];
-      setStrokes((s) => [...s, stroke]);
+      // v0.35.97: 用 commitStrokes 同步 ref+state, 不再 stale closure
+      commitStrokes([...strokesRef.current, stroke]);
     } else {
       currentStrokeRef.current = [];
       redraw();
@@ -171,13 +187,13 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
 
   function clearAll() {
     if (locked || disabled) return;
-    setStrokes([]);
     currentStrokeRef.current = [];
+    commitStrokes([]);
   }
 
   function undoLast() {
     if (locked || disabled) return;
-    setStrokes((s) => s.slice(0, -1));
+    commitStrokes(strokesRef.current.slice(0, -1));
   }
 
   // ────────── Vision judge (爸爸 explicit): submit 后 fire-and-forget ──────────
