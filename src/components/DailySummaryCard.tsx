@@ -460,14 +460,18 @@ export function DailySummaryCard({ studentId, studentName }: DailySummaryCardPro
             items.push({ done: math.modesToday.boss, label: "数学闯关", emoji: "⚔️", href: "/math/big-problems", subject: "math" });
             items.push({ done: math.modesToday.fluency, label: "数学闪电口算", emoji: "⚡", href: "/math/fluency", subject: "math" });
           }
-          // 中文 3 modes：写字 (CharPractice write+choose 合并算) + 拼音 + 词组（后 2 还没建模块）
+          // v0.35.91 (爸爸 2026-05-19): 中文 3 modes 全开通 (之前 拼音/词组 hardcoded comingSoon=true).
+          // 拆 write/choose 让 3 个 mode 各有清晰 done 判定:
+          //   写字 = CharPractice 手写题 (write mode > 0)
+          //   拼音 = ChineseTrain 选择题 (choose mode > 0, 因 PINYIN skill 在题库主要走 choose)
+          //   词组 = ChineseTrain 听写 (dictation, choose 也算; 优先 dict > write)
           const chineseModes = chineseDaily?.modeCounts ?? {};
-          const chineseWriteOrChoose =
-            (chineseModes.write?.right ?? 0) + (chineseModes.write?.wrong ?? 0) +
-            (chineseModes.choose?.right ?? 0) + (chineseModes.choose?.wrong ?? 0);
-          items.push({ done: chineseWriteOrChoose > 0, label: "语文写字", emoji: "✍️", href: "/chinese/char-practice", subject: "chinese" });
-          items.push({ done: false, label: "语文拼音", emoji: "🔡", href: "/chinese", subject: "chinese", comingSoon: true });
-          items.push({ done: false, label: "语文词组", emoji: "📖", href: "/chinese", subject: "chinese", comingSoon: true });
+          const chineseWriteCount = (chineseModes.write?.right ?? 0) + (chineseModes.write?.wrong ?? 0);
+          const chineseChooseCount = (chineseModes.choose?.right ?? 0) + (chineseModes.choose?.wrong ?? 0);
+          // (dictation mode 也归在 write 里 — 看 questionHelpers 设的 mode field)
+          items.push({ done: chineseWriteCount > 0, label: "语文写字", emoji: "✍️", href: "/chinese/char-practice", subject: "chinese" });
+          items.push({ done: chineseChooseCount > 0, label: "语文拼音", emoji: "🔡", href: "/chinese/train?ability=phonics", subject: "chinese" });
+          items.push({ done: (chineseWriteCount + chineseChooseCount) >= 2, label: "语文词组", emoji: "📖", href: "/chinese/train?ability=vocabulary", subject: "chinese" });
           // 英语 3 modes：单词 (vocab) + 短句 (sentence) + 朗读 (speak — 朗读 ≥70 分独立计 daily_english_speak)
           const englishVocab = englishDaily?.modeCounts?.vocab;
           const englishSentence = englishDaily?.modeCounts?.sentence;
