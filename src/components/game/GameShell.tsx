@@ -562,6 +562,7 @@ export function GameShell(props: GameShellProps) {
             state={scratchState}
             onChange={setScratchState}
             onMentalCalcRequest={() => useMentalCalcQuota()}
+            resetKey={resetKey}
           />
         )}
 

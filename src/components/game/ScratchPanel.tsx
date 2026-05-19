@@ -1,8 +1,12 @@
 /**
  * v0.35.0 (iter 34 P0-2): ScratchPanel — 软锁草稿险工具.
  *
- * 2-button v1 (peer review 共识简化):
- *   1. 📝 写草稿 → 展开 textarea (等宽 + grid 背景), 用了且答错 → insurance (不扣 XP, 不更新 mastery/streak)
+ * v0.36.8 (爸爸 P0 "所有草稿不能 textarea"): textarea 替换成 MiniDrawingPad
+ * (复用 CanvasScratch stroke 逻辑). 任何"开草稿"UI 都用 canvas, 跟 chinese
+ * HandwriteCanvas 模式一致. 不再有输入框出现.
+ *
+ * 2-button v1:
+ *   1. 📝 写草稿 → 展开 MiniDrawingPad (像作业本一样画), 用了且答错 → insurance (不扣 XP, 不更新 mastery/streak)
  *   2. 🧠 心算挑战 (今日还有 N 次) → 消耗配额, 答对正常, 答错正常扣
  *
  * 默认 (不选工具): 等于"心算 (不耗配额)" — 但 GameShell 在 submit 时如果 scratch 必选未选,
@@ -13,15 +17,18 @@
 import { useState } from "react";
 import {
   getMentalCalcRemaining,
-  isMeaningfulScratch,
+  isMeaningfulScratchStrokes,
   type ScratchTool,
 } from "../../core/scratchPolicy";
+import { MiniDrawingPad } from "./MiniDrawingPad";
 
 export interface ScratchState {
   tool: ScratchTool;
+  /** v0.36.8: 已废弃 (canvas mode 没文本), 保留空 string 作 backward compat */
   textContent: string;
   insured: boolean;
   mentalOverrideUsed: boolean;
+  /** v0.36.8: 现在存 strokeCount (canvas 笔画数), 不是字符数 */
   charCount: number;
 }
 
@@ -32,9 +39,11 @@ interface Props {
   onChange: (next: ScratchState) => void;
   /** Mental quota 消耗回调 (持久化由 parent 决定何时调用 useMentalCalcQuota) */
   onMentalCalcRequest: () => void;
+  /** v0.36.8: 题切换时 MiniDrawingPad reset 用 */
+  resetKey?: string | number;
 }
 
-export function ScratchPanel({ state, onChange, onMentalCalcRequest }: Props) {
+export function ScratchPanel({ state, onChange, onMentalCalcRequest, resetKey }: Props) {
   const remaining = getMentalCalcRemaining();
   const [showMentalConfirm, setShowMentalConfirm] = useState(false);
 
@@ -42,8 +51,8 @@ export function ScratchPanel({ state, onChange, onMentalCalcRequest }: Props) {
     onChange({
       ...state,
       tool: "scratch",
-      // 切换工具时不清空已有文本 — 保留她写的
-      insured: isMeaningfulScratch(state.textContent),
+      // canvas mode: 切工具时保留笔画数 (state.charCount 是 strokeCount)
+      insured: isMeaningfulScratchStrokes(state.charCount),
       mentalOverrideUsed: false,
     });
   }
@@ -66,14 +75,13 @@ export function ScratchPanel({ state, onChange, onMentalCalcRequest }: Props) {
     setShowMentalConfirm(false);
   }
 
-  function onTextChange(text: string) {
-    const cleaned = text.replace(/\s/g, "");
+  function onStrokeCountChange(count: number) {
     onChange({
       ...state,
       tool: state.tool === "none" ? "scratch" : state.tool,
-      textContent: text,
-      insured: isMeaningfulScratch(text),
-      charCount: cleaned.length,
+      textContent: "",
+      insured: isMeaningfulScratchStrokes(count),
+      charCount: count,
     });
   }
 
@@ -107,23 +115,15 @@ export function ScratchPanel({ state, onChange, onMentalCalcRequest }: Props) {
 
       {state.tool === "scratch" && (
         <div className="space-y-1">
-          <textarea
-            value={state.textContent}
-            onChange={(e) => onTextChange(e.target.value)}
-            placeholder="在这里写你的算式 / 竖式 / 思路..."
-            rows={4}
-            className="w-full rounded-md px-2 py-1.5 bg-slate-900/60 text-emerald-50 text-sm font-mono border border-emerald-400/30 focus:outline-none focus:border-emerald-300 resize-y"
-            style={{
-              backgroundImage:
-                "repeating-linear-gradient(to bottom, transparent, transparent 22px, rgba(52, 211, 153, 0.08) 22px, rgba(52, 211, 153, 0.08) 23px)",
-              backgroundSize: "100% 23px",
-              lineHeight: "23px",
-            }}
+          {/* v0.36.8: textarea → MiniDrawingPad (canvas widget) */}
+          <MiniDrawingPad
+            onStrokeCountChange={onStrokeCountChange}
+            resetKey={resetKey}
           />
           <p className={`text-xs ${state.insured ? "text-emerald-200" : "text-emerald-300/60"}`}>
             {state.insured
               ? "✓ 草稿险已激活: 这道题答错不扣 XP"
-              : "再多写几个数字或算式, 草稿险就激活了"}
+              : "在白板上多画几笔, 草稿险就激活了"}
           </p>
         </div>
       )}

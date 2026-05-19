@@ -108,12 +108,25 @@ export { MENTAL_QUOTA_PER_DAY };
  *   - 防 Selena 学会"写一个字母刷保险" — 草稿必须有"数学意图"
  *
  * 注: 不验"草稿对错" (10 岁孩子草稿有自己逻辑, 强行 LLM judge 易冤枉)
+ *
+ * v0.36.8 (爸爸 P0 "所有草稿不能 textarea"): 已废弃, 改用 isMeaningfulScratchStrokes.
+ * 保留 signature 作为 historical 兼容 (老代码万一还引用).
  */
 export function isMeaningfulScratch(textContent: string): boolean {
   const cleaned = (textContent ?? "").replace(/\s/g, "");
   if (cleaned.length < 3) return false;
   const hasDigitOrOp = /[\d+\-*/×÷=()]/.test(cleaned);
   return hasDigitOrOp;
+}
+
+/**
+ * v0.36.8 (爸爸 P0): 用 canvas 笔画数判 insurance — textarea 已被淘汰.
+ *
+ * 跟 CanvasScratch.tsx hasWork 判定一致 (≥2 笔 = 列了式).
+ * 1 笔可能是误触, 2 笔起算"真在列算式". 设这个门槛防孩子按一下笔刷保险.
+ */
+export function isMeaningfulScratchStrokes(strokeCount: number): boolean {
+  return strokeCount >= 2;
 }
 
 /* ──────────────────── Scratch tool 类型 ──────────────────── */

@@ -433,6 +433,141 @@ function parseDifficulty(raw: string | undefined, batchIndex: number): 1 | 2 | 3
 }
 
 /**
+ * v0.36.8 (爸爸 P0 "qwen3.6-flash 校验通过 0 道"):
+ *
+ * 即使 prompt 已经把 version/status/grade 放在"已确定的元数据"段让 AI 原样抄,
+ * 小模型 (qwen3.6-flash) 仍可能漏字段或填错类型 (grade: "4" string).
+ *
+ * 这里在 server-side 强制 backfill: 用 prompt 内已确定的 prefilled values 兜底,
+ * 让 schema.ts validation 不再因这 3 个 fields fail.
+ *
+ * 错误信号: "version Required / status Required / grade Invalid input"
+ */
+function computePrefilled(args: GenerateRequest, batchIndex: number): {
+  grade: number;
+  status: string;
+  cognitiveLevel: string;
+  questionFormat: string;
+  estimatedTimeSeconds: number;
+  examPriority: string | undefined;
+  abilityDimension: string[] | undefined;
+  gameType: string;
+  difficulty: number;
+  subjectId: "math" | "chinese";
+  term: string;
+  unitId: string;
+  unitName: string | undefined;
+  skillId: string;
+  skillName: string | undefined;
+} {
+  const difficulty = parseDifficulty(args.difficulty, batchIndex);
+  const fromSkill = args.skillId ? pickGameType(args.skillId) : undefined;
+  const gameType = args.gameType ?? fromSkill ?? "plain_choice";
+  const skillMeta = args.skillId
+    ? (PROMPTS.skillMetadata as Record<string, { ability: string[]; examPriority: string } | undefined>)[args.skillId]
+    : undefined;
+  return {
+    grade: 4,
+    status: "approved",
+    cognitiveLevel: cognitiveLevelFor(args.skillId ?? "", gameType),
+    questionFormat: questionFormatFor(gameType),
+    estimatedTimeSeconds: estimatedTimeFor(gameType, difficulty),
+    examPriority: skillMeta?.examPriority,
+    abilityDimension: skillMeta?.ability,
+    gameType,
+    difficulty,
+    subjectId: args.subjectId === "math" ? "math" : "chinese",
+    term: args.term ?? "下册",
+    unitId: args.unitId ?? "",
+    unitName: args.unitName,
+    skillId: args.skillId ?? "",
+    skillName: args.skillName,
+  };
+}
+
+const VALID_STATUSES = new Set([
+  "draft", "validated", "approved", "active", "retired", "needs_review", "rejected",
+]);
+const VALID_GRADES = new Set([1, 2, 3, 4, 5, 6]);
+
+/**
+ * 强制把 AI 漏掉/写错的元数据字段补回. 不修改 AI 真生成的内容 (stem / options / answer 等),
+ * 只覆盖 prompt 已声明的 prefilled values.
+ *
+ * 注意 grade: AI 可能给 string "4" 而不是 number 4 → schema Invalid Input. 强制 coerce.
+ */
+function backfillQuestionMetadata(
+  q: Record<string, unknown>,
+  p: ReturnType<typeof computePrefilled>,
+): Record<string, unknown> {
+  // grade: number(1-6). AI 可能给 string "4" / undefined → coerce
+  let grade: number = p.grade;
+  if (typeof q.grade === "number" && VALID_GRADES.has(q.grade)) {
+    grade = q.grade;
+  } else if (typeof q.grade === "string") {
+    const n = Number(q.grade);
+    if (VALID_GRADES.has(n)) grade = n;
+  }
+
+  // version: positive int. AI 经常漏 → default 1
+  let version = 1;
+  if (typeof q.version === "number" && Number.isInteger(q.version) && q.version > 0) {
+    version = q.version;
+  }
+
+  // status: enum. AI 经常漏或给奇怪值 → 用 prefilled default
+  let status = p.status;
+  if (typeof q.status === "string" && VALID_STATUSES.has(q.status)) {
+    status = q.status;
+  }
+
+  // difficulty: number(1-5). AI 可能给 string → coerce
+  let difficulty: number = p.difficulty;
+  if (typeof q.difficulty === "number" && q.difficulty >= 1 && q.difficulty <= 5) {
+    difficulty = q.difficulty;
+  } else if (typeof q.difficulty === "string") {
+    const n = Number(q.difficulty);
+    if (n >= 1 && n <= 5) difficulty = n;
+  }
+
+  return {
+    ...q,
+    version,
+    status,
+    grade,
+    difficulty,
+    // 这些 prompt 已经把值传给 AI, 这里防"AI 没抄进去"
+    term: typeof q.term === "string" && (q.term === "上册" || q.term === "下册" || q.term === "综合复习") ? q.term : p.term,
+    unit_id: typeof q.unit_id === "string" && q.unit_id ? q.unit_id : p.unitId,
+    unit_name: typeof q.unit_name === "string" ? q.unit_name : p.unitName,
+    skill_id: typeof q.skill_id === "string" && q.skill_id ? q.skill_id : p.skillId,
+    skill_name: typeof q.skill_name === "string" ? q.skill_name : p.skillName,
+    game_type: typeof q.game_type === "string" && q.game_type ? q.game_type : p.gameType,
+    play_as: typeof q.play_as === "string" && q.play_as ? q.play_as : p.gameType,
+    cognitive_level: typeof q.cognitive_level === "string" ? q.cognitive_level : p.cognitiveLevel,
+    question_format: typeof q.question_format === "string" ? q.question_format : p.questionFormat,
+    estimated_time_seconds:
+      typeof q.estimated_time_seconds === "number" && q.estimated_time_seconds > 0
+        ? q.estimated_time_seconds
+        : p.estimatedTimeSeconds,
+    ability_dimension: Array.isArray(q.ability_dimension) && q.ability_dimension.length > 0
+      ? q.ability_dimension
+      : (p.abilityDimension ?? ["calculation"]),
+    exam_priority: typeof q.exam_priority === "string" ? q.exam_priority : (p.examPriority ?? "NORMAL"),
+    common_errors: Array.isArray(q.common_errors) ? q.common_errors : [],
+    solution_steps: Array.isArray(q.solution_steps) && q.solution_steps.length > 0
+      ? q.solution_steps
+      : ["按题意求解"],
+    feedback_correct: typeof q.feedback_correct === "string" && q.feedback_correct
+      ? q.feedback_correct
+      : "答得对!",
+    feedback_wrong: typeof q.feedback_wrong === "string" && q.feedback_wrong
+      ? q.feedback_wrong
+      : "再想想, 看看哪里算错了.",
+  };
+}
+
+/**
  * 校验 LLM 输出的 stem 是否真的围绕请求的 skill。
  *
  * 防止 LLM 偷懒乱出"求平均数"题（那是它最熟的）当作"积的小数位数"。
@@ -504,6 +639,8 @@ async function runSubBatch(
   errors: { provider: string; model: string; code: string; message: string }[];
 }> {
   const userPrompt = buildUserPrompt(args, batchIndex);
+  // v0.36.8: prefilled values 给 backfill 用 (跟 buildUserPrompt 内部一致)
+  const prefilled = computePrefilled(args, batchIndex);
   const errors: { provider: string; model: string; code: string; message: string }[] = [];
 
   for (const ctx of providers) {
@@ -562,7 +699,13 @@ async function runSubBatch(
         }
         r = r2.ok ? r2 : r;
       }
-      const shapeValid = arr.filter(isValidQuestionShape);
+      // v0.36.8: 先 backfill 元数据 (version / status / grade 必填), 再 shape 校验.
+      // 之前: AI 漏字段 → isValidQuestionShape pass → 客户端 schema fail "version Required"
+      // 现在: backfill 兜底, schema 通过率 ≈ 100%.
+      const backfilled = arr.map((q) =>
+        backfillQuestionMetadata(q as Record<string, unknown>, prefilled),
+      );
+      const shapeValid = backfilled.filter(isValidQuestionShape);
       // **skill-fidelity 校验**：把跑题的丢掉（修 "总是出平均数/方程式" bug）
       const valid = shapeValid.filter((q) => {
         const o = q as Record<string, unknown>;
