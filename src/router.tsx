@@ -47,6 +47,8 @@ const HubScreenPage = lazy(() => import("./pages/HubScreen").then((m) => ({ defa
 const CelebrationPreviewPage = lazy(() => import("./pages/CelebrationPreview").then((m) => ({ default: m.CelebrationPreviewPage })));
 // v0.35.73 Hub Screen v3 (Bruce 反馈 "真游戏 1 屏不 scroll", fixed inset overlay)
 const HubScreenV3Page = lazy(() => import("./pages/HubScreenV3").then((m) => ({ default: m.HubScreenV3Page })));
+// v0.35.74 Streak Screen 评审 (Sprint 4, Duolingo style 火焰 + 周日 dots)
+const StreakPreviewPage = lazy(() => import("./pages/StreakPreview").then((m) => ({ default: m.StreakPreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -244,6 +246,8 @@ export const router = createBrowserRouter([
       { path: "celebration-preview", element: L(<MathOnlyRoute><CelebrationPreviewPage /></MathOnlyRoute>) },
       // v0.35.73 Hub Screen v3 (锁视口不 scroll, overlay SubjectShell)
       { path: "hub-v3", element: L(<MathOnlyRoute><HubScreenV3Page /></MathOnlyRoute>) },
+      // v0.35.74 Streak Screen 评审 (3 scenario)
+      { path: "streak-preview", element: L(<MathOnlyRoute><StreakPreviewPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
