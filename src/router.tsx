@@ -43,6 +43,8 @@ const AtelierRealmPage = lazy(() => import("./pages/atelier/AtelierRealmPage").t
 const WorldMapPreviewPage = lazy(() => import("./pages/WorldMapPreview").then((m) => ({ default: m.WorldMapPreviewPage })));
 // v0.35.71 Hub Screen prototype v2 (hamster-game style Mascot 中心 + 单 PLAY)
 const HubScreenPage = lazy(() => import("./pages/HubScreen").then((m) => ({ default: m.HubScreenPage })));
+// v0.35.72 Celebration Screen 评审入口 (Sprint 2, Duolingo Lesson Complete style)
+const CelebrationPreviewPage = lazy(() => import("./pages/CelebrationPreview").then((m) => ({ default: m.CelebrationPreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -236,6 +238,8 @@ export const router = createBrowserRouter([
       { path: "world-preview", element: L(<MathOnlyRoute><WorldMapPreviewPage /></MathOnlyRoute>) },
       // v0.35.71 Hub Screen 小样 v2 (Mascot 中心 + 单 PLAY, hamster-game style)
       { path: "hub-preview", element: L(<MathOnlyRoute><HubScreenPage /></MathOnlyRoute>) },
+      // v0.35.72 Celebration Screen 评审 (3 scenario: high/mid/low)
+      { path: "celebration-preview", element: L(<MathOnlyRoute><CelebrationPreviewPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
