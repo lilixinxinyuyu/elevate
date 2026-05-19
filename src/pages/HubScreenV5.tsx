@@ -247,83 +247,128 @@ export function HubScreenV5Page() {
         </div>
       </div>
 
-      {/* ─── 左上 浮件: 段位徽章 (大金圆) — scene-relative % offset ─── */}
-      <div className="absolute left-[3%] top-[4%] z-10 max-w-[200px] pointer-events-auto">
-        <div className="relative">
-          {/* badge 光环 */}
-          <div
-            className="absolute inset-0 -m-3 rounded-full blur-2xl opacity-50"
-            style={{ background: "radial-gradient(circle, rgba(252,211,77,0.6), transparent 65%)" }}
-          />
-          <div
-            className="relative w-24 h-24 rounded-full flex items-center justify-center text-5xl shadow-2xl border-4 border-amber-300 bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500"
-            style={{
-              boxShadow: "0 0 40px rgba(252,211,77,0.5), inset 0 2px 8px rgba(255,255,255,0.3)",
-            }}
-          >
-            {tier.badgeIcon}
-          </div>
-        </div>
-        <div className="mt-2 px-3 py-1.5 rounded-xl bg-black/40 backdrop-blur-md border border-amber-300/30">
-          <div className="font-display font-bold text-amber-200 text-xs leading-tight">{tier.name}</div>
-          <div className="h-1 mt-1 rounded-full bg-black/40 overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-orange-400 to-amber-300" style={{ width: `${tierProgress}%` }} />
-          </div>
-          <div className="text-[10px] text-amber-100/70 tabular-nums mt-0.5">{Math.round(tierProgress)}%</div>
-        </div>
-      </div>
-
-      {/* ─── 右上 浮件: 能力诊断 4 mini-bar ─── */}
-      <div className="absolute right-[3%] top-[4%] z-10 w-[clamp(160px,18vw,220px)] pointer-events-auto">
-        <div className="px-3 py-2.5 rounded-2xl bg-black/40 backdrop-blur-md border border-violet-300/30 shadow-lg">
-          <div className="text-[10px] text-violet-200 uppercase tracking-widest mb-2">⚡ 能力诊断</div>
-          {[
-            { label: "准确", value: ability.accuracy, color: "#22d3ee" },
-            { label: "熟练", value: ability.mastery, color: "#a78bfa" },
-            { label: "坚持", value: ability.continuity, color: "#f97316" },
-            { label: "广度", value: ability.volume, color: "#10b981" },
-          ].map((a) => (
-            <div key={a.label} className="mb-1.5 last:mb-0">
-              <div className="flex justify-between text-[10px] mb-0.5">
-                <span className="text-slate-200">{a.label}</span>
-                <span className="text-slate-300 tabular-nums">{Math.round(a.value * 100)}</span>
+      {/* ─── 左 Mission Panel — 合并段位 + 反复出错 + 期末挑战 (peer P1: 真解决"左一块右一块") ─── */}
+      <aside className="hidden md:flex absolute left-[2%] top-1/2 -translate-y-1/2 z-10 w-[clamp(200px,20vw,260px)] flex-col gap-3 pointer-events-auto">
+        <div className="rounded-3xl bg-black/40 backdrop-blur-md border border-white/15 shadow-2xl overflow-hidden">
+          {/* 段位 section (头部) */}
+          <div className="relative px-4 py-3 bg-gradient-to-br from-amber-500/20 to-orange-600/10 border-b border-white/10">
+            <div
+              className="absolute -top-4 -right-4 w-20 h-20 rounded-full blur-xl opacity-50 pointer-events-none"
+              style={{ background: "radial-gradient(circle, rgba(252,211,77,0.6), transparent 65%)" }}
+            />
+            <div className="flex items-center gap-3">
+              <div
+                className="relative w-16 h-16 rounded-full flex items-center justify-center text-3xl shadow-xl border-[3px] border-amber-300 bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 shrink-0"
+                style={{ boxShadow: "0 0 25px rgba(252,211,77,0.4), inset 0 2px 6px rgba(255,255,255,0.3)" }}
+              >
+                {tier.badgeIcon}
               </div>
-              <div className="h-1 rounded-full bg-black/40 overflow-hidden">
-                <div
-                  className="h-full transition-all duration-700"
-                  style={{ width: `${a.value * 100}%`, background: a.color }}
-                />
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] text-amber-200 uppercase tracking-widest leading-none mb-0.5">段位</div>
+                <div className="font-display font-bold text-amber-100 text-sm leading-tight truncate">{tier.name}</div>
+                <div className="h-1.5 mt-1.5 rounded-full bg-black/40 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-orange-400 to-amber-300 transition-all duration-700" style={{ width: `${tierProgress}%` }} />
+                </div>
+                <div className="text-[10px] text-amber-100/70 tabular-nums leading-none mt-0.5">{Math.round(tierProgress)}%</div>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* ─── 左下 浮件: 反复出错 (red flag) — mobile hidden 防挤 (peer review) ─── */}
-      {fragileSkills.length > 0 && (
-        <div className="hidden md:block absolute bottom-[6%] left-[3%] z-10 w-[clamp(180px,18vw,240px)] pointer-events-auto">
-          <Link to="/math/mistakes" className="block px-3 py-2 rounded-2xl bg-rose-500/15 backdrop-blur-md border border-rose-300/40 shadow-lg hover:scale-105 active:scale-95 transition">
-            <div className="text-[10px] text-rose-200 uppercase tracking-widest mb-1">🚩 反复出错</div>
-            {fragileSkills.slice(0, 2).map((s) => (
-              <div key={s.skillId} className="text-xs text-rose-100 truncate leading-tight mb-0.5">• {s.skillName}</div>
+          {/* 反复出错 section */}
+          {fragileSkills.length > 0 && (
+            <Link to="/math/mistakes" className="block px-4 py-2.5 hover:bg-rose-500/10 active:bg-rose-500/20 transition border-b border-white/10">
+              <div className="text-[10px] text-rose-300 uppercase tracking-widest mb-1">🚩 反复出错</div>
+              {fragileSkills.slice(0, 2).map((s) => (
+                <div key={s.skillId} className="text-xs text-rose-100 truncate leading-tight mb-0.5">• {s.skillName}</div>
+              ))}
+              <div className="text-[10px] text-rose-300/70 mt-0.5">→ 找小进讲</div>
+            </Link>
+          )}
+
+          {/* 期末倒计时 section (底) */}
+          {exam && examDays !== null && examDays >= 0 && (
+            <Link to="/math/exam-prep" className="block px-4 py-2.5 hover:bg-violet-500/10 active:bg-violet-500/20 transition">
+              <div className="text-[10px] text-violet-300 uppercase tracking-widest mb-0.5">⏳ {exam.name}挑战</div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-display font-black text-xl text-violet-100 leading-none tabular-nums">
+                  {examDays === 0 ? "今天!" : `${examDays}`}
+                </span>
+                {examDays > 0 && <span className="text-[11px] text-violet-200">天</span>}
+              </div>
+              <div className="text-[10px] text-violet-200/80 leading-tight mt-0.5">今天赢 1 ⭐ 就近一步</div>
+            </Link>
+          )}
+        </div>
+
+        {/* connector — 视觉关联到中央 ring */}
+        <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-3 h-px bg-gradient-to-r from-amber-300/40 to-transparent pointer-events-none" />
+      </aside>
+
+      {/* ─── 右 Stats Panel — 能力诊断 4 维 + 总分 (peer P1) ─── */}
+      <aside className="hidden md:flex absolute right-[2%] top-1/2 -translate-y-1/2 z-10 w-[clamp(200px,20vw,260px)] flex-col gap-3 pointer-events-auto">
+        <div className="rounded-3xl bg-black/40 backdrop-blur-md border border-white/15 shadow-2xl overflow-hidden">
+          {/* 总分 header */}
+          <div className="relative px-4 py-3 bg-gradient-to-br from-violet-500/20 to-cyan-600/10 border-b border-white/10">
+            <div className="text-[10px] text-violet-200 uppercase tracking-widest mb-0.5">⚡ 能力诊断</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-display font-black text-2xl text-violet-100 tabular-nums leading-none">
+                {Math.round((ability.accuracy + ability.mastery + ability.continuity + ability.volume) * 250)}
+              </span>
+              <span className="text-[10px] text-violet-200/70">/ 1000</span>
+            </div>
+            <div className="text-[10px] text-violet-200/60 mt-0.5">本学期综合分</div>
+          </div>
+
+          {/* 4 维 bar */}
+          <div className="px-4 py-3 space-y-2">
+            {[
+              { label: "准确", value: ability.accuracy, color: "#22d3ee", desc: "近 7 天准确率" },
+              { label: "熟练", value: ability.mastery, color: "#a78bfa", desc: "skill 平均熟练" },
+              { label: "坚持", value: ability.continuity, color: "#f97316", desc: "连续 + 累计天" },
+              { label: "广度", value: ability.volume, color: "#10b981", desc: "skill 覆盖" },
+            ].map((a) => (
+              <div key={a.label}>
+                <div className="flex justify-between items-baseline text-[11px] mb-0.5">
+                  <span className="text-slate-200 font-bold">{a.label}</span>
+                  <span className="text-slate-400 tabular-nums">{Math.round(a.value * 100)}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-black/40 overflow-hidden">
+                  <div
+                    className="h-full transition-all duration-700"
+                    style={{ width: `${a.value * 100}%`, background: a.color }}
+                  />
+                </div>
+              </div>
             ))}
-            <div className="text-[10px] text-rose-200/70 mt-1 underline">→ 找小进讲</div>
-          </Link>
+          </div>
         </div>
-      )}
 
-      {/* ─── 右下 浮件: 期末倒计时 — mobile hidden + 文案改可行动 (peer review) ─── */}
-      {exam && examDays !== null && examDays >= 0 && (
-        <div className="hidden md:block absolute bottom-[6%] right-[3%] z-10 w-[clamp(150px,15vw,200px)] pointer-events-auto">
-          <Link to="/math/exam-prep" className="block px-3 py-2 rounded-2xl bg-violet-700/25 backdrop-blur-md border border-violet-300/40 shadow-lg hover:scale-105 active:scale-95 transition">
-            <div className="text-[10px] text-violet-200 uppercase tracking-widest mb-1">⏳ {exam.name}挑战</div>
-            <div className="font-display font-black text-2xl text-violet-100 leading-none tabular-nums">
-              {examDays === 0 ? "今天!" : `${examDays} 天`}
+        {/* connector */}
+        <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-3 h-px bg-gradient-to-l from-violet-300/40 to-transparent pointer-events-none" />
+      </aside>
+
+      {/* ─── Mobile focus card (替代 2 浮件 panel 在 < md) ─── */}
+      <div className="md:hidden absolute top-[10%] left-1/2 -translate-x-1/2 z-10 w-[min(92vw,360px)] pointer-events-auto">
+        <div className="rounded-2xl bg-black/40 backdrop-blur-md border border-white/15 shadow-lg px-4 py-2.5">
+          <div className="flex items-center gap-3">
+            {/* 段位徽章 mini */}
+            <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl shrink-0 border-2 border-amber-300 bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500">
+              {tier.badgeIcon}
             </div>
-            <div className="text-[10px] text-violet-200/80 mt-1 leading-tight">今天赢 1 ⭐ 就近一步</div>
-          </Link>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] text-amber-200 uppercase tracking-widest leading-none">{tier.name}</div>
+              <div className="h-1 mt-1 rounded-full bg-black/40 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-orange-400 to-amber-300" style={{ width: `${tierProgress}%` }} />
+              </div>
+              <div className="text-[10px] text-violet-200 mt-1 truncate">
+                {exam && examDays !== null && examDays >= 0
+                  ? `⏳ ${exam.name} ${examDays} 天 · 今天赢 1 ⭐`
+                  : "⚡ 准备好开始"}
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
 
         </section>
       </main>
