@@ -12,6 +12,7 @@
 
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../db/dexie";
 import { useSubject } from "../../subjects/context";
@@ -96,12 +97,21 @@ export function ChineseHomePage() {
 
   return (
     <div className="space-y-5">
-      {/* 期中冲刺 banner */}
-      <div className="card-glow bg-gradient-to-br from-amber-500/20 to-rose-500/20 border border-amber-400/30">
+      {/* 期中冲刺 banner — v0.36.6 framer-motion 入场 + PLAY pulse */}
+      <motion.div
+        className="card-glow bg-gradient-to-br from-amber-500/20 to-rose-500/20 border border-amber-400/30"
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 120, damping: 14 }}
+      >
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-rose-400 text-white flex items-center justify-center font-display font-bold shadow-glow">
+          <motion.div
+            className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-rose-400 text-white flex items-center justify-center font-display font-bold shadow-glow"
+            animate={{ rotate: [0, -3, 3, -3, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          >
             语
-          </div>
+          </motion.div>
           <div className="flex-1">
             <div className="font-display font-bold text-xl">期中冲刺</div>
             <div className="text-xs text-slate-300 mt-0.5">
@@ -109,23 +119,40 @@ export function ChineseHomePage() {
             </div>
           </div>
           {days >= 0 && (
-            <div className="text-right">
+            <motion.div
+              className="text-right"
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            >
               <div className="text-xs text-slate-400">距期中</div>
               <div className="text-2xl font-display font-bold text-rose-300">
                 {days} <span className="text-sm">天</span>
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
         <div className="mt-4 flex justify-end">
-          <Link
-            to={`/chinese/train?fresh=${Date.now()}`}
-            className="btn-primary text-base px-5 py-2.5"
+          <motion.div
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.96 }}
           >
-            ▶ 开始今日挑战
-          </Link>
+            <Link
+              to={`/chinese/train?fresh=${Date.now()}`}
+              className="btn-primary text-base px-5 py-2.5 inline-block"
+            >
+              <motion.span
+                animate={{ x: [0, 3, 0] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                className="inline-block"
+              >
+                ▶
+              </motion.span>{" "}
+              开始今日挑战
+            </Link>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
       {/* 等级 / XP / 整体掌握度 / 错题数 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -262,51 +289,51 @@ export function ChineseHomePage() {
 
       {/* v0.36.2 (爸爸 2026-05-19): 新玩法入口 — 4 cluster minigame prototype
           (Sprint C1-C4). Selena 之前找不到, 这里加入口 */}
-      <div>
+      {/* v0.36.6 (爸爸 2026-05-19): framer-motion 入场 stagger + hover spring,
+          降低 SaaS 感, Selena 反馈 "动态多看着有意思了" */}
+      <motion.div
+        initial="hidden"
+        animate="show"
+        variants={{
+          hidden: {},
+          show: { transition: { staggerChildren: 0.08 } },
+        }}
+      >
         <div className="text-sm text-slate-400 mb-2">🎮 新玩法 (体验)</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <Link
-            to="/chinese/poem-lantern-preview"
-            className="card-glow bg-gradient-to-br from-red-500/15 to-amber-500/15 border-red-400/40 hover:scale-[1.02] transition-transform"
-          >
-            <div className="text-3xl mb-1">🏮</div>
-            <div className="font-display font-bold text-amber-100 text-sm">古诗拍灯笼</div>
-            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">元宵补字</div>
-          </Link>
-          <Link
-            to="/chinese/glyph-detective-preview"
-            className="card-glow bg-gradient-to-br from-amber-700/15 to-orange-600/15 border-amber-400/40 hover:scale-[1.02] transition-transform"
-          >
-            <div className="text-3xl mb-1">🔍</div>
-            <div className="font-display font-bold text-amber-100 text-sm">字形侦探</div>
-            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">偏旁部首</div>
-          </Link>
-          <Link
-            to="/chinese/sentence-dragon-preview"
-            className="card-glow bg-gradient-to-br from-emerald-600/15 to-amber-500/15 border-emerald-400/40 hover:scale-[1.02] transition-transform"
-          >
-            <div className="text-3xl mb-1">🐉</div>
-            <div className="font-display font-bold text-amber-100 text-sm">病句龙训</div>
-            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">句子重组</div>
-          </Link>
-          <Link
-            to="/chinese/rhetoric-scroll-preview"
-            className="card-glow bg-gradient-to-br from-stone-600/15 to-rose-700/15 border-amber-600/40 hover:scale-[1.02] transition-transform"
-          >
-            <div className="text-3xl mb-1">📜</div>
-            <div className="font-display font-bold text-amber-100 text-sm">修辞画卷</div>
-            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">比喻拟人</div>
-          </Link>
-          <Link
-            to="/chinese/reading-library-preview"
-            className="card-glow bg-gradient-to-br from-red-900/20 to-amber-700/15 border-amber-500/40 hover:scale-[1.02] transition-transform"
-          >
-            <div className="text-3xl mb-1">📖</div>
-            <div className="font-display font-bold text-amber-100 text-sm">阅读图书馆</div>
-            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">短文 + 多问</div>
-          </Link>
+          {[
+            { to: "/chinese/poem-lantern-preview", emoji: "🏮", title: "古诗拍灯笼", desc: "元宵补字", bg: "from-red-500/15 to-amber-500/15", border: "border-red-400/40" },
+            { to: "/chinese/glyph-detective-preview", emoji: "🔍", title: "字形侦探", desc: "偏旁部首", bg: "from-amber-700/15 to-orange-600/15", border: "border-amber-400/40" },
+            { to: "/chinese/sentence-dragon-preview", emoji: "🐉", title: "病句龙训", desc: "句子重组", bg: "from-emerald-600/15 to-amber-500/15", border: "border-emerald-400/40" },
+            { to: "/chinese/rhetoric-scroll-preview", emoji: "📜", title: "修辞画卷", desc: "比喻拟人", bg: "from-stone-600/15 to-rose-700/15", border: "border-amber-600/40" },
+            { to: "/chinese/reading-library-preview", emoji: "📖", title: "阅读图书馆", desc: "短文+多问", bg: "from-red-900/20 to-amber-700/15", border: "border-amber-500/40" },
+          ].map((c) => (
+            <motion.div
+              key={c.to}
+              variants={{
+                hidden: { opacity: 0, y: 24, scale: 0.85 },
+                show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 260, damping: 20 } },
+              }}
+              whileHover={{ y: -4, scale: 1.05, transition: { type: "spring", stiffness: 400, damping: 12 } }}
+              whileTap={{ scale: 0.96 }}
+            >
+              <Link
+                to={c.to}
+                className={`card-glow bg-gradient-to-br ${c.bg} ${c.border} block`}
+              >
+                <motion.div
+                  className="text-3xl mb-1"
+                  whileHover={{ rotate: [0, -8, 8, -4, 0], transition: { duration: 0.5 } }}
+                >
+                  {c.emoji}
+                </motion.div>
+                <div className="font-display font-bold text-amber-100 text-sm">{c.title}</div>
+                <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">{c.desc}</div>
+              </Link>
+            </motion.div>
+          ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* 单元卡 */}
       <div>
