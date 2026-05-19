@@ -7,7 +7,7 @@ import { isMockExamReportV1 } from "../lib/featureFlags";
 import type { DailySession, Question, SessionMode, SessionSummary } from "../core/types";
 import { GameShell, type AttemptResult } from "../components/game/GameShell";
 import { RewardChest } from "../components/game/RewardChest";
-import { TutorPanel } from "../components/tutor/TutorPanel";
+// v0.35.54: TutorPanel 不再直接用 (SummaryReviewTutor 抽到 trainComponents.tsx)
 import { sfx } from "../lib/sfx";
 import { ABILITY_LABELS } from "../core/types";
 import { levelFromXp } from "../core/scoring";
@@ -17,11 +17,13 @@ import { isWriteHeavyQuestion } from "../core/questionCapabilities";
 import { MOCK_EXAM_MIN_SIZE, MOCK_EXAM_MAX_SIZE } from "../config/constants";
 // v0.35.39 Refactor Priority 7: URL routes SSOT
 import { TrainRoute, MockReportRoute } from "../lib/routes";
+// v0.35.54 Refactor Priority 20: 3 个 Train sub-components
+import { StatCard, SummaryReviewTutor, MathAutoGen } from "./trainComponents";
 import { SKILLS } from "../content/skills";
 import { UNITS } from "../content/units";
 import { pushToCloud } from "../db/cloudSync";
 import { UnlockCelebration } from "../components/UnlockCelebration";
-import { AutoGenerateOnEmpty } from "../components/AutoGenerateOnEmpty";
+// v0.35.54: AutoGenerateOnEmpty 不再直接用 (MathAutoGen 抽到 trainComponents.tsx)
 import { triggerBgGenIfLow } from "../lib/bgGen";
 import { TrophyIcon } from "../components/TrophyIcon";
 import { LotteryBoxModal } from "../components/LotteryBoxModal";
@@ -812,109 +814,4 @@ function SummaryView({ summary }: { summary: SessionSummary }) {
   );
 }
 
-/** 包装：拿 studentId 给 SummaryView 的"跟小进总结"按钮用 */
-function SummaryReviewTutor({ onClose }: { onClose: () => void }) {
-  const [studentId, setStudentId] = useState<string | null>(null);
-  useEffect(() => {
-    void (async () => {
-      const ss = await db.students.toArray();
-      setStudentId(ss[0]?.id ?? null);
-    })();
-  }, []);
-  if (!studentId) return null;
-  return (
-    <TutorPanel
-      subjectId="math"
-      context="review_session"
-      studentId={studentId}
-      onClose={onClose}
-    />
-  );
-}
-
-/**
- * MathAutoGen — empty state 的小包装：读 student 拿到 currentTerm + studentId，
- * 然后传给 AutoGenerateOnEmpty 做正确的"按学期出题"。
- */
-function MathAutoGen({
-  reloadSession,
-  preferredSkillId,
-  starved,
-}: {
-  reloadSession: () => void;
-  preferredSkillId: string | undefined;
-  starved: boolean;
-}) {
-  const [studentInfo, setStudentInfo] = useState<{
-    id: string;
-    currentTerm: "上册" | "下册";
-    currentUnitId: string | undefined;
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const students = await db.students.toArray();
-      const s = students[0];
-      if (cancelled || !s) return;
-      setStudentInfo({
-        id: s.id,
-        currentTerm: (s.currentTerm as "上册" | "下册") ?? "下册",
-        currentUnitId: s.currentUnitId,
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return (
-    <AutoGenerateOnEmpty
-      subjectId="math"
-      skills={SKILLS}
-      units={UNITS}
-      seedQuestions={[]}
-      studentId={studentInfo?.id}
-      currentTerm={studentInfo?.currentTerm ?? "下册"}
-      preferredUnitId={studentInfo?.currentUnitId}
-      onGenerated={reloadSession}
-      autoStart={true}
-      headlineText={
-        starved
-          ? "今天的题都被你做光啦！"
-          : "题库还没准备好，让 AI 帮你出几道～"
-      }
-      // v0.27.1：自由练（preferredSkillId 已传）→ 单 skill 8 道；
-      //          每日挑战（无 preferredSkillId）→ 跨 3 个最弱 skill 出 15 道综合题，
-      //          这样首次进首页就拿到丰富多样的练习包，不再"今天只刷工程量/产量合计"。
-      count={preferredSkillId ? 8 : 15}
-      multiSkillCount={preferredSkillId ? 1 : 3}
-      preferredSkillId={preferredSkillId}
-    />
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  tone = "violet",
-  big,
-}: {
-  label: string;
-  value: string;
-  tone?: "violet" | "amber" | "rose" | "emerald";
-  big?: boolean;
-}) {
-  const toneMap = {
-    violet: "from-violet-500/20 to-fuchsia-500/10 border-violet-400/30 text-violet-100",
-    amber: "from-amber-500/20 to-orange-500/10 border-amber-400/30 text-amber-100",
-    rose: "from-rose-500/20 to-pink-500/10 border-rose-400/30 text-rose-100",
-    emerald: "from-emerald-500/20 to-teal-500/10 border-emerald-400/30 text-emerald-100",
-  }[tone];
-  return (
-    <div className={`rounded-2xl border p-3 bg-gradient-to-br ${toneMap} text-center`}>
-      <div className="text-[11px] uppercase tracking-widest opacity-80">{label}</div>
-      <div className={`font-display font-bold ${big ? "text-3xl" : "text-xl"} mt-1`}>{value}</div>
-    </div>
-  );
-}
+// v0.35.54 Refactor: SummaryReviewTutor + MathAutoGen + StatCard 迁到 ./trainComponents.tsx
