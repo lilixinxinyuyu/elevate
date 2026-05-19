@@ -283,4 +283,49 @@ export const SKILLS_CHINESE: Skill[] = [
     priority: "VERY_HIGH",
     examPriority: "MUST_BIG",
   },
+
+  // ============================================================
+  // v0.35.98 (爸爸 2026-05-19) — 仿写句子 skill (P2-3)
+  // 期中考第 16-17 题 "调动颜色描写句子 / 写一个使用拟人比喻的句子". G4B 中难.
+  // ============================================================
+  {
+    id: "C4B_U1_IMITATE",
+    subjectId: "chinese",
+    unitId: "C4B_U1_NATURE",
+    name: "仿写句子（第一单元）",
+    ability: ab("sentence", "expression"),
+    difficultyBase: 4,
+    priority: "HIGH",
+    examPriority: "HIGH_BIG",
+  },
+  {
+    id: "C4B_U2_IMITATE",
+    subjectId: "chinese",
+    unitId: "C4B_U2_SCIENCE",
+    name: "仿写句子（第二单元）",
+    ability: ab("sentence", "expression"),
+    difficultyBase: 4,
+    priority: "HIGH",
+    examPriority: "HIGH_BIG",
+  },
+  {
+    id: "C4B_U3_IMITATE",
+    subjectId: "chinese",
+    unitId: "C4B_U3_POETRY",
+    name: "仿写句子（第三单元）",
+    ability: ab("sentence", "expression"),
+    difficultyBase: 4,
+    priority: "HIGH",
+    examPriority: "HIGH_BIG",
+  },
+  {
+    id: "C4B_U4_IMITATE",
+    subjectId: "chinese",
+    unitId: "C4B_U4_ANIMALS",
+    name: "仿写句子（第四单元）",
+    ability: ab("sentence", "expression"),
+    difficultyBase: 4,
+    priority: "HIGH",
+    examPriority: "HIGH_BIG",
+  },
 ];
