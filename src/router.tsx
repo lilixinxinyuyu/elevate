@@ -55,6 +55,8 @@ const HubScreenV4Page = lazy(() => import("./pages/HubScreenV4").then((m) => ({ 
 const BattlePreviewPage = lazy(() => import("./pages/BattlePreview").then((m) => ({ default: m.BattlePreviewPage })));
 // v0.35.77 Detective Preview — Word Problem Detective cluster (Sprint 6)
 const DetectivePreviewPage = lazy(() => import("./pages/DetectivePreview").then((m) => ({ default: m.DetectivePreviewPage })));
+// v0.35.78 Temple Preview — Equation Temple cluster (Sprint 7, 天平 + 神殿)
+const TemplePreviewPage = lazy(() => import("./pages/TemplePreview").then((m) => ({ default: m.TemplePreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -260,6 +262,8 @@ export const router = createBrowserRouter([
       { path: "battle-preview", element: L(<MathOnlyRoute><BattlePreviewPage /></MathOnlyRoute>) },
       // v0.35.77 Detective Preview (Word Problem Detective cluster)
       { path: "detective-preview", element: L(<MathOnlyRoute><DetectivePreviewPage /></MathOnlyRoute>) },
+      // v0.35.78 Temple Preview (Equation Temple cluster, 天平 + 神殿)
+      { path: "temple-preview", element: L(<MathOnlyRoute><TemplePreviewPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
