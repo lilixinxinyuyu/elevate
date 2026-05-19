@@ -260,6 +260,46 @@ export function ChineseHomePage() {
         )}
       </div>
 
+      {/* v0.36.2 (爸爸 2026-05-19): 新玩法入口 — 4 cluster minigame prototype
+          (Sprint C1-C4). Selena 之前找不到, 这里加入口 */}
+      <div>
+        <div className="text-sm text-slate-400 mb-2">🎮 新玩法 (体验)</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Link
+            to="/chinese/poem-lantern-preview"
+            className="card-glow bg-gradient-to-br from-red-500/15 to-amber-500/15 border-red-400/40 hover:scale-[1.02] transition-transform"
+          >
+            <div className="text-3xl mb-1">🏮</div>
+            <div className="font-display font-bold text-amber-100 text-sm">古诗拍灯笼</div>
+            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">元宵补字</div>
+          </Link>
+          <Link
+            to="/chinese/glyph-detective-preview"
+            className="card-glow bg-gradient-to-br from-amber-700/15 to-orange-600/15 border-amber-400/40 hover:scale-[1.02] transition-transform"
+          >
+            <div className="text-3xl mb-1">🔍</div>
+            <div className="font-display font-bold text-amber-100 text-sm">字形侦探</div>
+            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">偏旁部首</div>
+          </Link>
+          <Link
+            to="/chinese/sentence-dragon-preview"
+            className="card-glow bg-gradient-to-br from-emerald-600/15 to-amber-500/15 border-emerald-400/40 hover:scale-[1.02] transition-transform"
+          >
+            <div className="text-3xl mb-1">🐉</div>
+            <div className="font-display font-bold text-amber-100 text-sm">病句龙训</div>
+            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">句子重组</div>
+          </Link>
+          <Link
+            to="/chinese/rhetoric-scroll-preview"
+            className="card-glow bg-gradient-to-br from-stone-600/15 to-rose-700/15 border-amber-600/40 hover:scale-[1.02] transition-transform"
+          >
+            <div className="text-3xl mb-1">📜</div>
+            <div className="font-display font-bold text-amber-100 text-sm">修辞画卷</div>
+            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">比喻拟人</div>
+          </Link>
+        </div>
+      </div>
+
       {/* 单元卡 */}
       <div>
         <div className="text-sm text-slate-400 mb-2">按单元练习</div>

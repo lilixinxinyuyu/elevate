@@ -22,7 +22,7 @@
  *   7. ScratchInsurance dialog / ScratchPanel 跟 canvas_scratch 模板互斥 (GameShell 已改)
  *   8. UI 加 mode chip 让 Selena 清楚自己在写 / 在擦
  */
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import type { TemplateRenderProps } from "../GameShell";
 import { gradeAttempt } from "../../../core/grading";
 import { logFcCall } from "../../../lib/fcCallLog";
@@ -43,28 +43,20 @@ const ERASER_RADIUS = 18; // canvas units
 export function CanvasScratchPanel(props: TemplateRenderProps) {
   const { question, onFinish, triggerFx, disabled } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  // v0.35.97 (爸爸 P0 bug fix): "写一笔就把上一笔删掉".
-  // 原因: redraw useCallback 依赖 strokes state, 但 setStrokes async — 用户
-  // 在下一笔 onPointerDown 时 state 还没 propagate, redraw closure 拿 stale
-  // strokes=[] (空的上轮 closure), 导致 onPointerMove redraw 时上一笔被擦掉.
-  // 修: 加 strokesRef 同步 mirror, redraw 永远从 ref 读 (无 stale closure).
+  // v0.36.2 (爸爸 P0 3rd report): "现在隔几笔删前面几笔". v0.35.97 ref-sync
+  // 和 v0.36.0 incremental 都不彻底. 改 ABANDON 我的 over-engineering, 抄
+  // chinese HandwriteCanvas 工作模式: 普通 setState + plain function redraw +
+  // useEffect [strokes] 触发. 简单粗暴, 没 closure 陷阱.
   const [strokes, setStrokes] = useState<Stroke[]>([]);
-  const strokesRef = useRef<Stroke[]>([]);
   const drawingRef = useRef(false);
   const currentStrokeRef = useRef<Stroke>([]);
   const [tool, setTool] = useState<Tool>("pen");
   const [value, setValue] = useState("");
   const [locked, setLocked] = useState(false);
 
-  // commit 一条新 stroke (同步 ref + queue state)
-  const commitStrokes = useCallback((next: Stroke[]) => {
-    strokesRef.current = next;
-    setStrokes(next);
-  }, []);
-
-  // 重画 canvas — 永远从 strokesRef.current 读 (不依赖 closure)
-  // deps 空: redraw 是稳定函数, 用 ref 读最新数据
-  const redraw = useCallback(() => {
+  // 重画 canvas — plain function (每 render 新建), 闭包永远拿 latest strokes
+  // 抄 HandwriteCanvas line 50-81 模式: 不 useCallback, 不 ref-sync
+  function redraw() {
     const cv = canvasRef.current;
     if (!cv) return;
     const ctx = cv.getContext("2d");
@@ -74,21 +66,31 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#0f172a";
-    const drawStroke = (s: Stroke) => {
-      if (s.length < 2) return;
+    for (const stroke of strokes) {
+      if (stroke.length < 2) continue;
       ctx.beginPath();
-      ctx.moveTo(s[0]!.x, s[0]!.y);
-      for (let i = 1; i < s.length; i++) ctx.lineTo(s[i]!.x, s[i]!.y);
+      ctx.moveTo(stroke[0]!.x, stroke[0]!.y);
+      for (let i = 1; i < stroke.length; i++) {
+        const p = stroke[i]!;
+        ctx.lineTo(p.x, p.y);
+      }
       ctx.stroke();
-    };
-    for (const s of strokesRef.current) drawStroke(s);
-    if (currentStrokeRef.current.length >= 2) drawStroke(currentStrokeRef.current);
-  }, []);
+    }
+    if (currentStrokeRef.current.length >= 2) {
+      ctx.beginPath();
+      ctx.moveTo(currentStrokeRef.current[0]!.x, currentStrokeRef.current[0]!.y);
+      for (let i = 1; i < currentStrokeRef.current.length; i++) {
+        const p = currentStrokeRef.current[i]!;
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    }
+  }
 
-  // 当 state 真正 commit 后 (用 setStrokes 路径) 再 redraw 一次, 防漏
   useEffect(() => {
     redraw();
-  }, [strokes, redraw]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strokes]);
 
   function exportBase64(): string {
     const cv = canvasRef.current;
@@ -113,46 +115,27 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy };
   }
 
-  // 擦: 用 segment-to-circle 距离判断哪些 stroke 经过 eraser 中心半径内
-  // v0.35.97: 用 ref-sync commitStrokes, 不再 stale closure
+  // v0.36.2: 擦子用 setStrokes functional update (跟 HandwriteCanvas 模式一致)
   function eraseAt(pt: Point) {
-    const filtered = strokesRef.current.filter((stroke) => {
-      for (let i = 0; i < stroke.length; i++) {
-        const p = stroke[i]!;
-        const dx = p.x - pt.x;
-        const dy = p.y - pt.y;
-        if (dx * dx + dy * dy <= ERASER_RADIUS * ERASER_RADIUS) {
-          return false; // 删整条 stroke
+    setStrokes((all) =>
+      all.filter((stroke) => {
+        for (let i = 0; i < stroke.length; i++) {
+          const p = stroke[i]!;
+          const dx = p.x - pt.x;
+          const dy = p.y - pt.y;
+          if (dx * dx + dy * dy <= ERASER_RADIUS * ERASER_RADIUS) {
+            return false; // 删整条 stroke
+          }
         }
-      }
-      return true;
-    });
-    if (filtered.length !== strokesRef.current.length) {
-      commitStrokes(filtered);
-    }
+        return true;
+      }),
+    );
   }
 
-  // v0.36.0 (爸爸 P0 2nd report): 草稿仍丢笔画. v0.35.97 ref-sync 不够 —
-  // 改 INCREMENTAL drawing: pen move 时只画线段, 不 clearRect.
-  // 即使 strokesRef 或 closure 有 race, 已画的笔画 也不会被清掉.
-  // 唯一 clear 时机: useEffect (state commit 后) + 擦子 + clear / undo.
-  function drawSegment(from: Point, to: Point) {
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#0f172a";
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-  }
-
+  // v0.36.2 抄 HandwriteCanvas 简单模式: setStrokes functional, redraw on state change
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (disabled || locked) return;
     // v0.35.27 fix: mouse / pen 必须真按下才画 (hover 不画)
-    // touch 没 button 概念, isPrimary 兜底
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (!e.isPrimary) return;
     e.preventDefault();
@@ -163,11 +146,9 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     } else {
       drawingRef.current = true;
       currentStrokeRef.current = [pt];
-      // 单点画个 dot, 让用户知道笔下了
-      drawSegment(pt, { x: pt.x + 0.1, y: pt.y + 0.1 });
     }
     canvasRef.current?.setPointerCapture(e.pointerId);
-    // 注意: 不再 call redraw() — incremental 模式, 不需要 clear
+    redraw();
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -181,12 +162,10 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     e.preventDefault();
     const pt = getPoint(e);
     if (tool === "eraser") {
-      eraseAt(pt);  // 擦子需要 full redraw — eraseAt → commitStrokes → useEffect redraw
+      eraseAt(pt);
     } else {
-      // v0.36.0 INCREMENTAL: 画线段 from 上一点 to 当前点, 不 clear
-      const last = currentStrokeRef.current[currentStrokeRef.current.length - 1];
-      if (last) drawSegment(last, pt);
       currentStrokeRef.current.push(pt);
+      redraw();
     }
   }
 
@@ -197,12 +176,10 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     if (tool === "pen" && currentStrokeRef.current.length >= 2) {
       const stroke = currentStrokeRef.current;
       currentStrokeRef.current = [];
-      // v0.35.97: 用 commitStrokes 同步 ref+state.
-      // v0.36.0: useEffect 会 redraw, 但 incremental 已经画好, 视觉无闪烁
-      commitStrokes([...strokesRef.current, stroke]);
+      // functional setState — 跟 HandwriteCanvas line 140 一样
+      setStrokes((s) => [...s, stroke]);
     } else {
       currentStrokeRef.current = [];
-      // 短点或擦子单击, 直接 redraw 确保一致 (擦子 in eraseAt 已经 commit 了)
       redraw();
     }
     canvasRef.current?.releasePointerCapture(e.pointerId);
@@ -210,13 +187,13 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
 
   function clearAll() {
     if (locked || disabled) return;
+    setStrokes([]);
     currentStrokeRef.current = [];
-    commitStrokes([]);
   }
 
   function undoLast() {
     if (locked || disabled) return;
-    commitStrokes(strokesRef.current.slice(0, -1));
+    setStrokes((s) => s.slice(0, -1));
   }
 
   // ────────── Vision judge (爸爸 explicit): submit 后 fire-and-forget ──────────

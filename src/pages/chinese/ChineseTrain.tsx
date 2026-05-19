@@ -224,34 +224,48 @@ export function ChineseTrainPage() {
     setLotteryQueue([]);
     setSessionId(createChineseSessionId());
     (async () => {
-      // 合并题源：seedQuestions（静态） + db.questions（AI 生成的动态题，subjectId=chinese）
-      const dbQs = (await db.questions.toArray()).filter(
-        (q) => q.subjectId === "chinese",
-      ) as unknown as Question[];
-      const seenIds = new Set<string>();
-      const mergedPool: Question[] = [];
-      for (const q of [...subject.seedQuestions, ...dbQs]) {
-        if (seenIds.has(q.question_id)) continue;
-        seenIds.add(q.question_id);
-        mergedPool.push(q);
+      const tStart = Date.now();
+      try {
+        // v0.36.2 (爸爸 P0): "语文期中测试一直载入". 用 where filter 加速 (避免
+        // toArray 拉全表) + try/catch 兜底 + log 时延.
+        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+        const tDbDone = Date.now();
+        const seenIds = new Set<string>();
+        const mergedPool: Question[] = [];
+        for (const q of [...subject.seedQuestions, ...dbQs]) {
+          if (seenIds.has(q.question_id)) continue;
+          seenIds.add(q.question_id);
+          mergedPool.push(q);
+        }
+        let qs: Question[] = [];
+        if (mode === "review") {
+          const ids = await getChineseMistakeQuestionIds(student.id, REVIEW_SIZE * 2);
+          const idSet = new Set(ids);
+          qs = mergedPool.filter((q) => idSet.has(q.question_id));
+          qs = shuffle(qs).slice(0, REVIEW_SIZE);
+        } else if (mode === "mock_exam") {
+          qs = buildMockExamQuestions(mergedPool);
+        } else {
+          let pool = mergedPool;
+          if (skillId) pool = pool.filter((q) => q.skill_id === skillId);
+          else if (unitId) pool = pool.filter((q) => q.unit_id === unitId);
+          qs = shuffle(pool).slice(0, PRACTICE_SIZE);
+        }
+        const tEnd = Date.now();
+        console.log(
+          `[ChineseTrain] mode=${mode} dbQs=${dbQs.length} pool=${mergedPool.length} ` +
+          `qs=${qs.length} dbMs=${tDbDone - tStart} totalMs=${tEnd - tStart}`,
+        );
+        if (cancelled) return;
+        setQuestions(qs);
+        setQuestionsLoaded(true);
+      } catch (e) {
+        console.error("[ChineseTrain] 加载题目失败", e);
+        if (cancelled) return;
+        // 出错时 setQuestionsLoaded=true 让 UI 显示错误状态而不是永远 loading
+        setQuestions([]);
+        setQuestionsLoaded(true);
       }
-      let qs: Question[] = [];
-      if (mode === "review") {
-        const ids = await getChineseMistakeQuestionIds(student.id, REVIEW_SIZE * 2);
-        const idSet = new Set(ids);
-        qs = mergedPool.filter((q) => idSet.has(q.question_id));
-        qs = shuffle(qs).slice(0, REVIEW_SIZE);
-      } else if (mode === "mock_exam") {
-        qs = buildMockExamQuestions(mergedPool);
-      } else {
-        let pool = mergedPool;
-        if (skillId) pool = pool.filter((q) => q.skill_id === skillId);
-        else if (unitId) pool = pool.filter((q) => q.unit_id === unitId);
-        qs = shuffle(pool).slice(0, PRACTICE_SIZE);
-      }
-      if (cancelled) return;
-      setQuestions(qs);
-      setQuestionsLoaded(true);
     })();
     return () => {
       cancelled = true;
