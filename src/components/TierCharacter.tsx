@@ -33,7 +33,9 @@ import type { Tier } from "../core/tiers";
  * 上传后无需改代码, 自动加载新立绘.
  */
 const AVAILABLE_AVATARS = new Set<string>([
-  // "school", "district", "city", "province", "country" — 上传 PNG 后加入
+  "school",   // v0.35.88 Lv1 校园学者 (wan2.7-image-pro + CV 抠图)
+  "country",  // v0.35.88 Lv5 国家英雄
+  // "district", "city", "province" — 待生
 ]);
 
 export function TierCharacter({

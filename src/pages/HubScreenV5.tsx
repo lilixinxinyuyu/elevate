@@ -26,7 +26,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { loadDaily, FREEZE_MAX_TOKENS } from "../lib/dailyTarget";
-import { tierFromScore } from "../core/tiers";
+import { tierFromScore, TIERS } from "../core/tiers";
 import { getTotalXp, getFragileSkillsToReview, computeCurrentRating } from "../db/service";
 import { levelFromXp } from "../core/scoring";
 import { TrainRoute } from "../lib/routes";
@@ -89,7 +89,10 @@ export function HubScreenV5Page() {
       .count();
   }, [studentId]) ?? 0;
 
-  const tier = tierFromScore(xp);
+  // v5.5: dev tier-preview override (?tier=country in URL switches tier 让 Bruce 评审)
+  const urlOverrideTier = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tier") : null;
+  const overrideTier = urlOverrideTier ? TIERS.find((t) => t.id === urlOverrideTier) : null;
+  const tier = overrideTier ?? tierFromScore(xp);
   const tierProgress = Math.min(100, Math.max(0, ((xp - tier.range[0]) / (tier.range[1] - tier.range[0])) * 100));
   const level = levelFromXp(xp);
 
@@ -440,9 +443,21 @@ export function HubScreenV5Page() {
         </div>
       </div>
 
-      {/* ─── 评审 footer (左下角小 ghost, 不挡视觉中心) ─── */}
-      <div className="fixed bottom-1 left-2 text-[9px] text-violet-300/30 z-40 pointer-events-auto">
-        v5.1 · <Link className="underline" to="/math">老</Link>·<Link className="underline" to="/math/hub-v3">v3</Link>·<Link className="underline" to="/math/hub-v4">v4</Link>
+      {/* ─── 评审 footer (左下角小 ghost) + tier-preview switcher (Bruce 用) ─── */}
+      <div className="fixed bottom-1 left-2 text-[9px] text-violet-300/40 z-40 pointer-events-auto flex items-center gap-2 flex-wrap">
+        <span className="opacity-50">v5.5 ·</span>
+        <Link className="underline" to="/math">老</Link>
+        <span className="opacity-30">|</span>
+        <span className="opacity-60">立绘:</span>
+        {TIERS.map((t) => (
+          <Link
+            key={t.id}
+            to={`/math/hub-v5?tier=${t.id}`}
+            className={`px-1 rounded hover:bg-white/10 ${tier.id === t.id ? "text-amber-300 font-bold" : ""}`}
+          >
+            {t.badgeIcon}
+          </Link>
+        ))}
       </div>
 
       <style>{`
