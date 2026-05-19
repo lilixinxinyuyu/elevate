@@ -132,6 +132,23 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     }
   }
 
+  // v0.36.0 (爸爸 P0 2nd report): 草稿仍丢笔画. v0.35.97 ref-sync 不够 —
+  // 改 INCREMENTAL drawing: pen move 时只画线段, 不 clearRect.
+  // 即使 strokesRef 或 closure 有 race, 已画的笔画 也不会被清掉.
+  // 唯一 clear 时机: useEffect (state commit 后) + 擦子 + clear / undo.
+  function drawSegment(from: Point, to: Point) {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#0f172a";
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+  }
+
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (disabled || locked) return;
     // v0.35.27 fix: mouse / pen 必须真按下才画 (hover 不画)
@@ -146,9 +163,11 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     } else {
       drawingRef.current = true;
       currentStrokeRef.current = [pt];
+      // 单点画个 dot, 让用户知道笔下了
+      drawSegment(pt, { x: pt.x + 0.1, y: pt.y + 0.1 });
     }
     canvasRef.current?.setPointerCapture(e.pointerId);
-    redraw();
+    // 注意: 不再 call redraw() — incremental 模式, 不需要 clear
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -162,10 +181,12 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     e.preventDefault();
     const pt = getPoint(e);
     if (tool === "eraser") {
-      eraseAt(pt);
+      eraseAt(pt);  // 擦子需要 full redraw — eraseAt → commitStrokes → useEffect redraw
     } else {
+      // v0.36.0 INCREMENTAL: 画线段 from 上一点 to 当前点, 不 clear
+      const last = currentStrokeRef.current[currentStrokeRef.current.length - 1];
+      if (last) drawSegment(last, pt);
       currentStrokeRef.current.push(pt);
-      redraw();
     }
   }
 
@@ -176,10 +197,12 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     if (tool === "pen" && currentStrokeRef.current.length >= 2) {
       const stroke = currentStrokeRef.current;
       currentStrokeRef.current = [];
-      // v0.35.97: 用 commitStrokes 同步 ref+state, 不再 stale closure
+      // v0.35.97: 用 commitStrokes 同步 ref+state.
+      // v0.36.0: useEffect 会 redraw, 但 incremental 已经画好, 视觉无闪烁
       commitStrokes([...strokesRef.current, stroke]);
     } else {
       currentStrokeRef.current = [];
+      // 短点或擦子单击, 直接 redraw 确保一致 (擦子 in eraseAt 已经 commit 了)
       redraw();
     }
     canvasRef.current?.releasePointerCapture(e.pointerId);
