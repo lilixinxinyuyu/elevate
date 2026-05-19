@@ -27,10 +27,11 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db/dexie";
 import { loadDaily, FREEZE_MAX_TOKENS } from "../lib/dailyTarget";
 import { tierFromScore } from "../core/tiers";
-import { getTotalXp, getFragileSkillsToReview } from "../db/service";
+import { getTotalXp, getFragileSkillsToReview, computeCurrentRating } from "../db/service";
 import { levelFromXp } from "../core/scoring";
 import { TrainRoute } from "../lib/routes";
 import { currentExam, daysUntil } from "../core/examDates";
+import { computeAbilityDiagnostic, type AbilityDiagnostic, type RatingResult } from "../core/rating";
 
 export function HubScreenV5Page() {
   const navigate = useNavigate();
@@ -42,6 +43,9 @@ export function HubScreenV5Page() {
   const [todayCount, setTodayCount] = useState(0);
   const [todayTarget, setTodayTarget] = useState(10);
   const [fragileSkills, setFragileSkills] = useState<{ skillId: string; skillName: string }[]>([]);
+  // v5.3: 真数据接通 — rating + ability
+  const [rating, setRating] = useState<RatingResult | null>(null);
+  const [abilityReal, setAbilityReal] = useState<AbilityDiagnostic | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +64,18 @@ export function HubScreenV5Page() {
       setTodayTarget(daily.target ?? 10);
       const fragile = await getFragileSkillsToReview(s.id);
       if (!cancelled) setFragileSkills(fragile.slice(0, 3).map((f) => ({ skillId: f.skillId, skillName: f.skillName })));
+      // v5.3: 真 rating + ability (接通 computeCurrentRating + computeAbilityDiagnostic)
+      try {
+        const r = await computeCurrentRating(s.id, "下册");
+        if (!cancelled) setRating(r);
+        const attempts = await db.attempts.where({ studentId: s.id }).toArray();
+        const mastery = await db.mastery.where({ studentId: s.id }).toArray();
+        const ab = computeAbilityDiagnostic(attempts, mastery, "下册");
+        if (!cancelled) setAbilityReal(ab);
+      } catch (e) {
+        // prototype fallback OK
+        console.warn("[hub-v5] rating/ability compute failed (mock fallback)", e);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -86,13 +102,25 @@ export function HubScreenV5Page() {
   const exam = currentExam(new Date());
   const examDays = exam ? daysUntil(exam.date, new Date()) : null;
 
-  // 能力诊断 4 维 (mock, prototype 用; 真版 hooks computeAbilityDiagnostic)
-  const ability = {
-    accuracy: 0.78,
-    mastery: 0.62,
-    continuity: streak >= 7 ? 0.9 : streak / 7,
-    volume: 0.5,
-  };
+  // v5.3: 真 ability 数据 (fallback to mock 若用户无 attempt 历史)
+  const ability = abilityReal && abilityReal.raw.totalAttempts > 0
+    ? {
+        // raw component / max (per rating.ts: accuracy 250, mastery 400, continuity 200, volume 150)
+        accuracy: Math.min(1, abilityReal.components.accuracy / 250),
+        mastery: Math.min(1, abilityReal.components.mastery / 400),
+        continuity: Math.min(1, abilityReal.components.continuity / 200),
+        volume: Math.min(1, abilityReal.components.volume / 150),
+      }
+    : {
+        // mock fallback (新用户尚无数据)
+        accuracy: 0.78,
+        mastery: 0.62,
+        continuity: streak >= 7 ? 0.9 : streak / 7,
+        volume: 0.5,
+      };
+  const abilityScoreTotal = abilityReal && abilityReal.raw.totalAttempts > 0
+    ? abilityReal.score
+    : Math.round((ability.accuracy + ability.mastery + ability.continuity + ability.volume) * 250);
 
   // SVG 3-ring constants — viewBox 固定 320, 用 CSS clamp() 缩放
   // (peer review v0.35.79 反馈: 写死 320 在 4K 偏小, 在 375 偏大)
@@ -247,24 +275,35 @@ export function HubScreenV5Page() {
         </div>
       </div>
 
-      {/* ─── 左 Mission Panel — 合并段位 + 反复出错 + 期末挑战 (peer P1: 真解决"左一块右一块") ─── */}
+      {/* ─── 左 Mission Panel (v5.3 — 接通真 rating + 段位 sub-rank ornament + 动词化) ─── */}
       <aside className="hidden md:flex absolute left-[2%] top-1/2 -translate-y-1/2 z-10 w-[clamp(200px,20vw,260px)] flex-col gap-3 pointer-events-auto">
         <div className="rounded-3xl bg-black/40 backdrop-blur-md border border-white/15 shadow-2xl overflow-hidden">
-          {/* 段位 section (头部) */}
+          {/* 段位 section (头部) — v5.3 sub-rank ornament */}
           <div className="relative px-4 py-3 bg-gradient-to-br from-amber-500/20 to-orange-600/10 border-b border-white/10">
             <div
               className="absolute -top-4 -right-4 w-20 h-20 rounded-full blur-xl opacity-50 pointer-events-none"
               style={{ background: "radial-gradient(circle, rgba(252,211,77,0.6), transparent 65%)" }}
             />
             <div className="flex items-center gap-3">
-              <div
-                className="relative w-16 h-16 rounded-full flex items-center justify-center text-3xl shadow-xl border-[3px] border-amber-300 bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 shrink-0"
-                style={{ boxShadow: "0 0 25px rgba(252,211,77,0.4), inset 0 2px 6px rgba(255,255,255,0.3)" }}
-              >
-                {tier.badgeIcon}
+              <div className="relative shrink-0">
+                <div
+                  className="relative w-16 h-16 rounded-full flex items-center justify-center text-3xl shadow-xl border-[3px] border-amber-300 bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500"
+                  style={{ boxShadow: "0 0 25px rgba(252,211,77,0.4), inset 0 2px 6px rgba(255,255,255,0.3)" }}
+                >
+                  {tier.badgeIcon}
+                </div>
+                {/* sub-rank ornament emoji (v5.3, 仅 rank ≥2 显示) */}
+                {rating && rating.subRank >= 2 && (
+                  <span
+                    className="absolute -top-1 -right-1 text-base drop-shadow-[0_0_4px_rgba(255,255,255,0.6)]"
+                    title={`${rating.subRankRoman} 段`}
+                  >
+                    {rating.subRank === 5 ? "👑" : rating.subRank === 4 ? "🏅" : rating.subRank === 3 ? "💎" : "✨"}
+                  </span>
+                )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] text-amber-200 uppercase tracking-widest leading-none mb-0.5">段位</div>
+                <div className="text-[10px] text-amber-200 uppercase tracking-widest leading-none mb-0.5">段位 {rating?.subRankRoman ?? ""}</div>
                 <div className="font-display font-bold text-amber-100 text-sm leading-tight truncate">{tier.name}</div>
                 <div className="h-1.5 mt-1.5 rounded-full bg-black/40 overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-orange-400 to-amber-300 transition-all duration-700" style={{ width: `${tierProgress}%` }} />
@@ -274,28 +313,28 @@ export function HubScreenV5Page() {
             </div>
           </div>
 
-          {/* 反复出错 section */}
+          {/* 反复出错 → 待救援 (v5.3 动词化) */}
           {fragileSkills.length > 0 && (
             <Link to="/math/mistakes" className="block px-4 py-2.5 hover:bg-rose-500/10 active:bg-rose-500/20 transition border-b border-white/10">
-              <div className="text-[10px] text-rose-300 uppercase tracking-widest mb-1">🚩 反复出错</div>
+              <div className="text-[10px] text-rose-300 uppercase tracking-widest mb-1">🚩 待救援知识 ({fragileSkills.length})</div>
               {fragileSkills.slice(0, 2).map((s) => (
                 <div key={s.skillId} className="text-xs text-rose-100 truncate leading-tight mb-0.5">• {s.skillName}</div>
               ))}
-              <div className="text-[10px] text-rose-300/70 mt-0.5">→ 找小进讲</div>
+              <div className="text-[10px] text-rose-300/70 mt-0.5">→ 去支援</div>
             </Link>
           )}
 
-          {/* 期末倒计时 section (底) */}
+          {/* 期末挑战 → BOSS 来袭 (v5.3 动词化) */}
           {exam && examDays !== null && examDays >= 0 && (
             <Link to="/math/exam-prep" className="block px-4 py-2.5 hover:bg-violet-500/10 active:bg-violet-500/20 transition">
-              <div className="text-[10px] text-violet-300 uppercase tracking-widest mb-0.5">⏳ {exam.name}挑战</div>
+              <div className="text-[10px] text-violet-300 uppercase tracking-widest mb-0.5">⚔️ {exam.name} BOSS</div>
               <div className="flex items-baseline gap-1.5">
                 <span className="font-display font-black text-xl text-violet-100 leading-none tabular-nums">
                   {examDays === 0 ? "今天!" : `${examDays}`}
                 </span>
-                {examDays > 0 && <span className="text-[11px] text-violet-200">天</span>}
+                {examDays > 0 && <span className="text-[11px] text-violet-200">天后来袭</span>}
               </div>
-              <div className="text-[10px] text-violet-200/80 leading-tight mt-0.5">今天赢 1 ⭐ 就近一步</div>
+              <div className="text-[10px] text-violet-200/80 leading-tight mt-0.5">今天通关 1 关 → 备战 +1</div>
             </Link>
           )}
         </div>
@@ -307,16 +346,20 @@ export function HubScreenV5Page() {
       {/* ─── 右 Stats Panel — 能力诊断 4 维 + 总分 (peer P1) ─── */}
       <aside className="hidden md:flex absolute right-[2%] top-1/2 -translate-y-1/2 z-10 w-[clamp(200px,20vw,260px)] flex-col gap-3 pointer-events-auto">
         <div className="rounded-3xl bg-black/40 backdrop-blur-md border border-white/15 shadow-2xl overflow-hidden">
-          {/* 总分 header */}
+          {/* 总分 header (v5.3 真数据) */}
           <div className="relative px-4 py-3 bg-gradient-to-br from-violet-500/20 to-cyan-600/10 border-b border-white/10">
             <div className="text-[10px] text-violet-200 uppercase tracking-widest mb-0.5">⚡ 能力诊断</div>
             <div className="flex items-baseline gap-1.5">
               <span className="font-display font-black text-2xl text-violet-100 tabular-nums leading-none">
-                {Math.round((ability.accuracy + ability.mastery + ability.continuity + ability.volume) * 250)}
+                {abilityScoreTotal}
               </span>
               <span className="text-[10px] text-violet-200/70">/ 1000</span>
             </div>
-            <div className="text-[10px] text-violet-200/60 mt-0.5">本学期综合分</div>
+            <div className="text-[10px] text-violet-200/60 mt-0.5">
+              {abilityReal && abilityReal.raw.totalAttempts > 0
+                ? `本学期 · 共 ${abilityReal.raw.totalAttempts} 题`
+                : "本学期 · 等首次答题"}
+            </div>
           </div>
 
           {/* 4 维 bar */}
