@@ -25,6 +25,7 @@
  */
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 
 type DetectiveCase = {
   id: string;
@@ -37,51 +38,115 @@ type DetectiveCase = {
   solution: string;
 };
 
+// v0.36.7 (Selena 反馈 "字形侦探太简单, 不适合 G4"):
+// - 原 3 题改难: 干扰项更接近 (不能一眼排除)
+// - 新增 4 难题: 形声字 + 会意字 + 易混偏旁
+// - 难度梯度: 简 → 中 → 难 → 烧脑
 const DEMO_CASES: DetectiveCase[] = [
   {
     id: "g1",
     scrollLabel: "案一 · 蜻蜓之谜",
     hanzi: "蜻",
-    hanziDesc: "出自《宿新市徐公店》— \"飞入菜花无处寻\"",
-    question: "这个字的部首是什么?",
+    hanziDesc: "形声字: 形旁表义 + 声旁表音. 出自《宿新市徐公店》",
+    question: "下面哪个不是 \"蜻\" 字的特点?",
     options: [
-      { text: "虫字旁 (蟲)", emoji: "🐛" },
-      { text: "草字头", emoji: "🌿" },
-      { text: "日字旁", emoji: "🌞" },
-      { text: "月字旁", emoji: "🌙" },
+      { text: "虫字旁表义 (跟虫有关)", emoji: "🐛" },
+      { text: "\"青\" 是声旁 (qīng)", emoji: "🔊" },
+      { text: "\"青\" 是形旁 (跟青色有关)", emoji: "❌" },
+      { text: "形声字结构 左形右声", emoji: "✏️" },
     ],
-    correctIdx: 0,
-    solution: "\"蜻\" 是虫字旁 (跟昆虫有关). 右半 \"青\" 是声旁.",
+    correctIdx: 2,
+    solution: "\"蜻\" 的 \"青\" 只是声旁 (表音), 不是形旁 (跟颜色无关). 蜻蜓不一定青色, 但都是昆虫.",
   },
   {
     id: "g2",
-    scrollLabel: "案二 · 白桦之谜",
+    scrollLabel: "案二 · 桦树家族",
     hanzi: "桦",
-    hanziDesc: "出自《白桦》— 叶赛宁诗 \"白桦树姑娘披着雪白衬衫\"",
-    question: "这个字的部首是什么?",
+    hanziDesc: "形声字: 木字旁 + 华. 出自《白桦》",
+    question: "下面哪一组字都是 \"木字旁\" 表义?",
     options: [
-      { text: "白字头", emoji: "⚪" },
-      { text: "木字旁", emoji: "🌳" },
-      { text: "口字旁", emoji: "👄" },
-      { text: "水字旁", emoji: "💧" },
+      { text: "桦 / 林 / 森 (都跟树有关)", emoji: "🌳" },
+      { text: "桦 / 华 / 哗 (都同声旁)", emoji: "📣" },
+      { text: "桦 / 木 / 本 (字根都是木)", emoji: "🪵" },
+      { text: "桦 / 树 / 枝 (都用木旁)", emoji: "🌲" },
     ],
-    correctIdx: 1,
-    solution: "\"桦\" 是木字旁 (树名, 跟木有关). 右半 \"华\" 是声旁.",
+    correctIdx: 3,
+    solution: "桦/树/枝 左边都是 木字旁 (形旁), 表示与木 / 树有关. \"林/森\" 是会意字 (木×2/×3), 不算形声字偏旁. \"华/哗\" 是声旁同源, 不跟树有关.",
   },
   {
     id: "g3",
     scrollLabel: "案三 · 猫的秘密",
     hanzi: "猫",
-    hanziDesc: "出自老舍《猫》— \"我家的猫真有趣\"",
-    question: "这个字的部首是什么?",
+    hanziDesc: "形声字: 反犬旁 + 苗. 跟反犬旁的字都是动物吗?",
+    question: "下面哪个 \"猫\" 字的偏旁辨认对?",
     options: [
-      { text: "苗字旁", emoji: "🌱" },
-      { text: "草字头", emoji: "🌿" },
-      { text: "反犬旁 (犭)", emoji: "🐕" },
-      { text: "口字旁", emoji: "👄" },
+      { text: "草字头 + 苗 (\"猫\" 跟草有关)", emoji: "🌿" },
+      { text: "反犬旁 (犭) + 苗 (跟动物有关)", emoji: "🐕" },
+      { text: "苗字旁 (跟植物有关)", emoji: "🌱" },
+      { text: "苗 是部首 (字典查 苗)", emoji: "🪴" },
     ],
-    correctIdx: 2,
-    solution: "\"猫\" 是反犬旁 (犭, 跟动物有关). 右半 \"苗\" 是声旁.",
+    correctIdx: 1,
+    solution: "\"猫\" 部首是 反犬旁 (犭), 表义 (动物). \"苗\" 是声旁 (miáo). 跟苗类似偏旁: 狗/狼/狐 都是反犬旁.",
+  },
+  {
+    id: "g4",
+    scrollLabel: "案四 · 饭桌之谜",
+    hanzi: "饭",
+    hanziDesc: "形声字: 饣字旁 + 反. 易跟 \"反\" 字混",
+    question: "\"饭 / 饺 / 饼 / 饿\" 四字共同的偏旁是?",
+    options: [
+      { text: "反字旁 (跟反字相关)", emoji: "❌" },
+      { text: "饣 (食字旁, 跟饮食有关)", emoji: "🍚" },
+      { text: "钅 (金字旁)", emoji: "🥢" },
+      { text: "亻 (单立人旁)", emoji: "👤" },
+    ],
+    correctIdx: 1,
+    solution: "饣 = 食字旁 (简化, 跟饮食). 所有 \"饭/饺/饼/饿\" 都形声字: 饣表义 (食物) + 右半声旁. 期中考第 9 题型核心.",
+  },
+  {
+    id: "g5",
+    scrollLabel: "案五 · 明月之会",
+    hanzi: "明",
+    hanziDesc: "会意字: 由两个独立字 组合表义",
+    question: "\"明\" 字是由什么组成的?",
+    options: [
+      { text: "日 + 月 (太阳和月亮都明亮)", emoji: "🌞" },
+      { text: "日 + 力 (太阳的力量)", emoji: "❌" },
+      { text: "月 + 月 (两个月亮)", emoji: "🌙" },
+      { text: "白 + 月 (月亮发白)", emoji: "⚪" },
+    ],
+    correctIdx: 0,
+    solution: "\"明\" = 日 + 月. 古人把发光的太阳 + 月亮 合在一起表示 \"光亮\". 这是会意字 (跟形声字不同).",
+  },
+  {
+    id: "g6",
+    scrollLabel: "案六 · 森林奥秘",
+    hanzi: "森",
+    hanziDesc: "会意字: 数量决定意义",
+    question: "\"木 / 林 / 森\" 三字分别代表?",
+    options: [
+      { text: "一棵 / 一片 / 很多 (数量递增表 树多)", emoji: "🌲" },
+      { text: "树根 / 树枝 / 树叶", emoji: "🍃" },
+      { text: "都是形声字, 声旁是木", emoji: "🔊" },
+      { text: "都是部首字, 不能拆", emoji: "🪵" },
+    ],
+    correctIdx: 0,
+    solution: "木 (1 棵) → 林 (2 棵, 树丛) → 森 (3 棵, 茂密森林). 这是会意字的数量叠加表义.",
+  },
+  {
+    id: "g7",
+    scrollLabel: "案七 · 烧脑·偏旁陷阱",
+    hanzi: "蓝",
+    hanziDesc: "形近字陷阱: 草字头 vs 竹字头",
+    question: "下面对 \"蓝 / 篮\" 的辨认哪个对?",
+    options: [
+      { text: "都用草字头 (跟植物有关)", emoji: "🌿" },
+      { text: "\"蓝\" 草字头 (蓝色花) / \"篮\" 竹字头 (装球的竹篓)", emoji: "🎋" },
+      { text: "都用竹字头 (古代竹简文化)", emoji: "🎍" },
+      { text: "\"蓝\" 竹字头 / \"篮\" 草字头", emoji: "❌" },
+    ],
+    correctIdx: 1,
+    solution: "\"蓝\" (草字头 艹) 是颜色, 古染料从蓝草提取. \"篮\" (竹字头 ⺮) 是用竹编的装东西的容器, 后来引申 \"篮球\". 期中常错!",
   },
 ];
 
@@ -208,12 +273,30 @@ export function GlyphDetectivePreviewPage() {
           >
             {/* 案件 caption */}
             <div className="text-[10px] text-amber-700 uppercase tracking-widest mb-2 text-center">待鉴定汉字</div>
-            {/* 大汉字 */}
-            <div className="text-[150px] sm:text-[180px] font-display text-amber-900 text-center leading-none select-none" style={{ fontFamily: "'STKaiti', 'KaiTi', 'Songti SC', serif" }}>
-              {cur.hanzi}
-            </div>
+            {/* 大汉字 — v0.36.7 framer-motion: 切换题时大汉字 spring entrance */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={cur.id}
+                initial={{ scale: 0, rotate: -180, opacity: 0 }}
+                animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                exit={{ scale: 0.6, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 180, damping: 16 }}
+                className="text-[150px] sm:text-[180px] font-display text-amber-900 text-center leading-none select-none"
+                style={{ fontFamily: "'STKaiti', 'KaiTi', 'Songti SC', serif" }}
+              >
+                {cur.hanzi}
+              </motion.div>
+            </AnimatePresence>
             {/* 字描述 */}
-            <div className="text-xs text-amber-700/80 mt-2 text-center italic">{cur.hanziDesc}</div>
+            <motion.div
+              key={cur.id + "-desc"}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
+              className="text-xs text-amber-700/80 mt-2 text-center italic"
+            >
+              {cur.hanziDesc}
+            </motion.div>
 
             {/* 放大镜 — 答对时 zoom */}
             {result === "correct" && (
@@ -282,31 +365,46 @@ export function GlyphDetectivePreviewPage() {
           </div>
         </div>
 
-        <div className="px-4 pb-2 grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-3xl mx-auto">
+        {/* v0.36.7 framer-motion: 切换题时 4 选项 stagger 入场 */}
+        <motion.div
+          key={cur.id + "-options"}
+          className="px-4 pb-2 grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-3xl mx-auto"
+          initial="hidden"
+          animate="show"
+          variants={{
+            hidden: {},
+            show: { transition: { staggerChildren: 0.07, delayChildren: 0.2 } },
+          }}
+        >
           {cur.options.map((opt, i) => {
             const isCorrect = result === "correct" && i === cur.correctIdx;
             const isWrong = result === "wrong" && i === selectedIdx;
             const isOther = result !== "idle" && i !== cur.correctIdx && i !== selectedIdx;
             return (
-              <button
+              <motion.button
                 key={i}
                 onClick={() => handleChoice(i)}
                 disabled={result === "correct"}
+                variants={{
+                  hidden: { opacity: 0, y: 16 },
+                  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 260, damping: 18 } },
+                }}
+                whileHover={result === "idle" ? { y: -3, scale: 1.03 } : undefined}
+                whileTap={result === "idle" ? { scale: 0.96 } : undefined}
                 className={`
                   px-3 py-3 rounded-2xl border-2 font-display font-bold text-sm sm:text-base flex items-center justify-center gap-2
-                  transition-all
                   ${isCorrect ? "bg-emerald-400 border-emerald-200 text-emerald-950 scale-105 shadow-lg shadow-emerald-500/50" :
                     isWrong ? "bg-rose-500 border-rose-200 text-rose-950 animate-pulse" :
                     isOther ? "bg-amber-950/40 border-amber-800 text-amber-300/50 opacity-50" :
-                    "bg-amber-900/60 backdrop-blur-md border-amber-300/50 text-amber-100 hover:scale-[1.02] active:scale-95 shadow-lg"}
+                    "bg-amber-900/60 backdrop-blur-md border-amber-300/50 text-amber-100 shadow-lg"}
                 `}
               >
                 {opt.emoji && <span className="text-xl">{opt.emoji}</span>}
                 <span>{opt.text}</span>
-              </button>
+              </motion.button>
             );
           })}
-        </div>
+        </motion.div>
       </div>
 
       {/* footer */}
