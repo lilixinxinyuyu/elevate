@@ -61,6 +61,8 @@ const TemplePreviewPage = lazy(() => import("./pages/TemplePreview").then((m) =>
 const HubScreenV5Page = lazy(() => import("./pages/HubScreenV5").then((m) => ({ default: m.HubScreenV5Page })));
 // v0.35.81 Sprint 8: Lab Preview — 几何实验室 cluster (TriangleJudge/ShapeCourt/CubeViewer)
 const LabPreviewPage = lazy(() => import("./pages/LabPreview").then((m) => ({ default: m.LabPreviewPage })));
+// v0.35.83 Sprint 9: Data Preview — 数据探险 cluster (BarChart/LineChart/PieChart)
+const DataPreviewPage = lazy(() => import("./pages/DataPreview").then((m) => ({ default: m.DataPreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -272,6 +274,8 @@ export const router = createBrowserRouter([
       { path: "hub-v5", element: L(<MathOnlyRoute><HubScreenV5Page /></MathOnlyRoute>) },
       // v0.35.81 Lab Preview (Geometry Lab cluster, Sprint 8)
       { path: "lab-preview", element: L(<MathOnlyRoute><LabPreviewPage /></MathOnlyRoute>) },
+      // v0.35.83 Data Preview (Data Adventure cluster, Sprint 9)
+      { path: "data-preview", element: L(<MathOnlyRoute><DataPreviewPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
