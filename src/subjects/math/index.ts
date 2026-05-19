@@ -53,23 +53,18 @@ const MATH_ABILITIES: SubjectAbilityDef[] = [
 //     原 /free-practice 路由保留并 redirect 到 /skills（老链接兜底）
 function buildMathNavItems(): SubjectNavItem[] {
   const base: SubjectNavItem[] = [];
+  // v0.35.65 (User Flow Review P0-3 step 1, Gemini + GPT 共识):
+  // 前台 mode 入口 9 → 3 (今日练 / 错题补 / 模拟考). 1 个 nav 不放 4+ tab.
+  // 闯关 (big-problems) 仍可通过路由 /math/big-problems 访问 + 今日 tab 卡片入口, 但不占主 nav.
+  // 闪电口算 (fluency) 保留 — 每日 60s 暖身, 跟主练分功能区分.
   if (isPhase2Live()) {
     base.push({ to: "fluency", label: "闪电口算" });
   }
   base.push({ to: "train", label: "今日挑战" });
-  if (isPhase2Live()) {
-    base.push({ to: "big-problems", label: "闯关" });
-  }
   // 技能图 — 桌面 nav 显示；mobile 不显示（首页 CTA 接走）
   base.push({ to: "skills", label: "技能图", desktopOnly: true });
-  // v0.31.91: "错题驯服" → "驯龙营" — Bruce 不想强调"错题"两个字。
-  // 候选讨论过：驯龙营 / 反击战 / 回马枪 / 怪兽训练营 / 救场训练。
-  // 最终选"驯龙营" — 错的题是龙，做对了驯服它（保留"驯服"游戏化叙事 +
-  // 跟闯关怪兽体系呼应；不用"错"字降低被纠错的羞耻感）。
+  // v0.31.91: "错题驯服" → "驯龙营"
   base.push({ to: "mistakes", label: "驯龙营" });
-  // v0.35.26 (爸爸第 2 次反馈): "管理" 从数学 nav 删除, 移到 landing
-  // (SubjectPicker 顶部 ⚙️). 之前数学顶部 2 个"管理" 重复 = 1 个 navItems
-  // 1 个我 v0.35.9 加的 Layout NavLink, 都删干净.
   return base;
 }
 
