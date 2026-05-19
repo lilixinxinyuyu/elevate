@@ -90,7 +90,9 @@ function getProviders(env: Env): Provider[] {
   return ps;
 }
 
-const MODELS = ["qwen3.6-flash", "qwen3.6-plus"];
+// v0.36.10 (爸爸 P0 perf audit): qwen3.6-flash 0.32s + deepseek-v4-flash 0.96s
+// 兜底, 比之前 [flash, plus] 更快 fallback.
+const MODELS = ["qwen3.6-flash", "deepseek-v4-flash", "qwen3.6-plus"];
 
 function buildSystemPrompt(subjectId: string, skillName?: string): string {
   const subjLabel = subjectId === "chinese" ? "语文" : "数学";

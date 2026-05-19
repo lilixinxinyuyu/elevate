@@ -58,12 +58,20 @@ export function getImageProviders(env: Env): AiProvider[] {
 /** Chat 模型链（按 provider 排选） */
 export function getChatModels(p: AiProvider): string[] {
   if (p.label === "token-plan-cn" || p.label === "bailian") {
-    // 国内版主链：qwen3.6 主，deepseek-v4 fallback（推理/复杂任务）
-    return ["qwen3.6-flash", "qwen3.6-plus", "deepseek-v4-pro", "deepseek-v4-flash", "glm-5.1"];
+    // v0.36.10 (爸爸 P0 perf audit) 实测 cn-beijing 直连 latency:
+    //   qwen3.6-flash:     0.32s ✅ 最快
+    //   deepseek-v4-flash: 0.96s ✅ 推理快
+    //   qwen3.6-plus:      1.06s ✅ 兜底
+    //   glm-5.1:           2.35s ✅ 备用
+    //   deepseek-v4-pro:   2.73s ✅ 复杂任务
+    //   ❌ MiniMax-M2.5:   invalid_parameter_error (移除)
+    //   ❌ glm-5:          3.83s (升级到 5.1)
+    // 顺序 = latency 优先, 模型多样 fallback
+    return ["qwen3.6-flash", "deepseek-v4-flash", "qwen3.6-plus", "glm-5.1", "deepseek-v4-pro"];
   }
   // 旧 intl 兜底
   if (p.label === "token-plan-intl") {
-    return ["deepseek-v3.2", "glm-5", "MiniMax-M2.5", "qwen3.6-plus"];
+    return ["deepseek-v3.2", "glm-5.1", "qwen3.6-plus"]; // 删 MiniMax-M2.5 dead
   }
   return ["qwen-plus"];
 }

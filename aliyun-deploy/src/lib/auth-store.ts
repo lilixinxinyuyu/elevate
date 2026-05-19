@@ -77,6 +77,40 @@ async function readOssStore(cfg: OssConfig): Promise<AuthStore | null> {
 }
 
 /**
+ * v0.36.10 (爸爸 P0 perf audit): Module-level cache 30s TTL.
+ *
+ * 起源: 实测 /api/auth/check 每次 1.2-2.2s, 偶尔 spike 11s+ — 全是 OSS GET 时间.
+ * 注释一直说"后续可加内存 cache 30s TTL" 但没加. 现在加.
+ *
+ * 实测预期: 1.2s → ~30ms (cache hit), spike 完全消除.
+ *
+ * Invalidation: changePasswordForUser / 任何写 OSS 后立刻 invalidateAuthCache().
+ * 30s TTL 不严格 (changes 慢同步) — 但加同学/改密码后客户端会重 login 刷.
+ */
+let cachedStore: AuthStore | null = null;
+let cachedStoreAt = 0;
+const AUTH_CACHE_TTL_MS = 30_000;
+
+async function readOssStoreCached(cfg: OssConfig): Promise<AuthStore | null> {
+  const now = Date.now();
+  if (cachedStore && now - cachedStoreAt < AUTH_CACHE_TTL_MS) {
+    return cachedStore;
+  }
+  const fresh = await readOssStore(cfg);
+  if (fresh) {
+    cachedStore = fresh;
+    cachedStoreAt = now;
+  }
+  return fresh;
+}
+
+/** Invalidate cache — call after writeOssStore / changePasswordForUser etc. */
+export function invalidateAuthCache(): void {
+  cachedStore = null;
+  cachedStoreAt = 0;
+}
+
+/**
  * Combined view used by auth resolve.
  *
  * 关键：OSS store 一旦存在就 **完全 shadow** baked env，不 merge。
@@ -88,7 +122,8 @@ export async function readEffectivePasswords(
 ): Promise<Record<string, string>> {
   const cfg = getOssConfig(env);
   if (!cfg) return readBaked(env);
-  const oss = await readOssStore(cfg);
+  // v0.36.10: 用 cached 版本 — 30s TTL, kills 11s spike + 1.2s baseline
+  const oss = await readOssStoreCached(cfg);
   if (!oss) return readBaked(env);
   // OSS exists → ONLY OSS (它的 passwords 在第一次写时已经吃过 baked)
   return { ...oss.passwords };
@@ -179,6 +214,7 @@ export async function resetPasswordForUser(
   if (!put.ok) {
     return { ok: false, error: put.error ?? "oss_put_failed" };
   }
+  invalidateAuthCache(); // v0.36.10: 写完立刻 invalidate
   return { ok: true, newPassword: newPwd, rotated };
 }
 
@@ -219,6 +255,7 @@ export async function addNewStudent(
     contentType: "application/json; charset=utf-8",
   });
   if (!put.ok) return { ok: false, error: put.error ?? "oss_put_failed" };
+  invalidateAuthCache(); // v0.36.10
   return { ok: true, password: newPwd };
 }
 
@@ -301,5 +338,6 @@ export async function changePasswordForUser(
     contentType: "application/json; charset=utf-8",
   });
   if (!put.ok) return { ok: false, error: put.error ?? "oss_put_failed" };
+  invalidateAuthCache(); // v0.36.10
   return { ok: true, rotated };
 }

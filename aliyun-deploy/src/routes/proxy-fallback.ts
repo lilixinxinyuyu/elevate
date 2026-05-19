@@ -84,15 +84,44 @@ proxyFallback.all("*", async (c) => {
     headers.set(k, v);
   });
 
+  // v0.36.10 (爸爸 P0 perf audit): 加 25s AbortController timeout.
+  // 之前没 timeout, CF Pages 30s timeout 后 ESA 等到 60s gateway 504,
+  // 用户体验是 "卡 30s 没反应". 现在 25s 主动 abort, 客户端立刻拿到 502/504.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25_000);
+
   const init: RequestInit = {
     method: c.req.method,
     headers,
+    signal: ctrl.signal,
   };
   if (c.req.method !== "GET" && c.req.method !== "HEAD") {
     init.body = await c.req.raw.arrayBuffer();
   }
 
-  const upstream = await fetch(upstreamUrl, init);
+  let upstream: Response;
+  try {
+    upstream = await fetch(upstreamUrl, init);
+  } catch (e) {
+    clearTimeout(timer);
+    const isAbort = (e as Error)?.name === "AbortError";
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: isAbort ? "upstream_timeout" : "upstream_fetch_error",
+        detail: isAbort ? "proxy-fallback 25s timeout" : (e as Error).message,
+        path: url.pathname,
+      }),
+      {
+        status: isAbort ? 504 : 502,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "X-Proxy-Fallback": "cf-pages-error",
+        },
+      },
+    );
+  }
+  clearTimeout(timer);
 
   // Ep32: bump in-memory counter（按 pathname 聚合，去掉 query 避免 cardinality 爆炸）
   const pathKey = url.pathname;

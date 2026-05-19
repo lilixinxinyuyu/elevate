@@ -143,13 +143,15 @@ export function getImageProviders(env: Env): AiProviderContext[] {
  */
 export function getChatModelsFor(ctx: AiProviderContext): string[] {
   if (ctx.label === "token-plan") {
-    // v0.36.9 (爸爸 P0 model 对比):
-    //   - qwen3.6-flash: 阿里 flash 模型最快, ~3-6s. 第一试 (cn-beijing 新加入).
-    //   - deepseek-v3.2: 推理强但~10-15s
-    //   - qwen3.6-plus: 推理稳定 ~10-20s
-    //   - glm-5: 智谱备选 ~10-15s
-    //   - MiniMax-M2.5: ~18s+ 经常超时, 末位 fallback
-    return ["qwen3.6-flash", "deepseek-v3.2", "qwen3.6-plus", "glm-5", "MiniMax-M2.5"];
+    // v0.36.10 (爸爸 P0 perf audit) 实测 cn-beijing 直连:
+    //   qwen3.6-flash:     0.32s ✅ 最快
+    //   deepseek-v4-flash: 0.96s ✅ 推理快
+    //   qwen3.6-plus:      1.06s ✅ 兜底
+    //   glm-5.1:           2.35s ✅ 备用
+    //   deepseek-v4-pro:   2.73s ✅ 复杂任务
+    //   ❌ MiniMax-M2.5:   invalid_parameter_error (dead, 移除)
+    //   ❌ glm-5:          3.83s (升级到 5.1)
+    return ["qwen3.6-flash", "deepseek-v4-flash", "qwen3.6-plus", "glm-5.1", "deepseek-v4-pro"];
   }
   // dashscope-intl Free Tier 只留 qwen-plus; 其他 AllocationQuota.FreeTierOnly
   return ["qwen-plus"];
