@@ -71,7 +71,7 @@ const FRAGILE_CAP_CEIL = 80;
  * - elo 低的 skill 该打回 45 还是打回（防真虚高）
  * - 上限 80：再高的 elo 错了几题也不能假装"精通"
  */
-function fragileCapByElo(studentElo: number): number {
+export function fragileCapByElo(studentElo: number): number {
   const cap = 45 + (studentElo - 1200) / 20;
   return Math.max(FRAGILE_CAP_FLOOR, Math.min(FRAGILE_CAP_CEIL, cap));
 }

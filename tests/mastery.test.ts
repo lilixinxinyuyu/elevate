@@ -4,6 +4,7 @@ import {
   backfillFromAttempts,
   clampMastery,
   computeMasteryScore,
+  fragileCapByElo,
   questionEloByDifficulty,
   STUDENT_ELO_BASE,
   updateMastery,
@@ -170,7 +171,10 @@ describe("mastery — applyAttempt 增量", () => {
       );
       prior = { ...emptyMastery(), ...r.next };
     }
-    expect(prior!.score).toBeLessThanOrEqual(45); // fragile 上限
+    // v0.31.100: fragile 上限改成 elo-aware soft cap (45..80 range based on studentElo)
+    // v0.31.100 fragile cap is post-rounded (Math.round in computeMasteryScore line 246),
+// so allow +1 tolerance.
+expect(prior!.score).toBeLessThanOrEqual(Math.ceil(fragileCapByElo(prior!.studentElo ?? 1200)));
     expect(prior!.score).toBeLessThan(beforeFragile);
   });
 
@@ -194,7 +198,8 @@ describe("mastery — applyAttempt 增量", () => {
       now: future,
     });
     expect(detail.fragile).toBe(true);
-    expect(detail.score).toBeLessThanOrEqual(45);
+    // v0.31.100: fragile 上限改成 elo-aware soft cap (45..80)
+    expect(detail.score).toBeLessThanOrEqual(Math.ceil(fragileCapByElo(prior!.studentElo ?? 1200)));
   });
 });
 
