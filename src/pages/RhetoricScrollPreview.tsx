@@ -201,10 +201,12 @@ export function RhetoricScrollPreviewPage() {
         <div className="relative">
           {/* 画卷 body */}
           <div
-            className={`relative bg-gradient-to-b from-amber-50 to-amber-100 rounded-2xl border-4 border-amber-800 shadow-2xl px-8 py-8 transition-all duration-300 ${result === "wrong" ? "animate-rhetoric-shake" : ""}`}
+            className={`relative rounded-2xl border-4 border-amber-800 shadow-2xl px-8 py-8 transition-all duration-300 ${result === "wrong" ? "animate-rhetoric-shake" : ""}`}
             style={{
               animation: result === "wrong" ? "rhetoric-shake 0.5s ease-in-out" : undefined,
-              backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 22px, rgba(146,64,14,0.08) 22px, rgba(146,64,14,0.08) 23px)",
+              // v0.36.5: 先 cream 底 (amber-50) + 再叠 repeating lines, 不再透明
+              backgroundColor: "#fef3c7",
+              backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 22px, rgba(146,64,14,0.18) 22px, rgba(146,64,14,0.18) 23px)",
             }}
           >
             {/* 卷轴顶部装饰 */}

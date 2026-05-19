@@ -279,9 +279,13 @@ export function ReadingLibraryPreviewPage() {
           <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4">
             {/* 左书页: 短文 */}
             <div
-              className={`relative px-6 py-5 rounded-2xl bg-gradient-to-b from-amber-50 to-amber-100 border-4 border-amber-700 shadow-2xl transition-all duration-300 ${result === "wrong" ? "animate-library-shake" : ""}`}
+              className={`relative px-6 py-5 rounded-2xl border-4 border-amber-700 shadow-2xl transition-all duration-300 ${result === "wrong" ? "animate-library-shake" : ""}`}
               style={{
-                backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 26px, rgba(146,64,14,0.08) 26px, rgba(146,64,14,0.08) 27px)",
+                // v0.36.5 (Bruce P0): "灰文红 bg 不好识别" — repeating-linear 当 backgroundImage
+                // 覆盖了 Tailwind amber gradient → 卷透明 → 红底显示穿透.
+                // 改 backgroundColor 强制米黄底色, 文字 text-stone-900 在米黄上对比清晰.
+                backgroundColor: "#fef3c7",
+                backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 26px, rgba(146,64,14,0.18) 26px, rgba(146,64,14,0.18) 27px)",
                 animation: result === "wrong" ? "library-shake 0.5s ease-in-out" : undefined,
               }}
             >
