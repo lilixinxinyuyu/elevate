@@ -41,6 +41,8 @@ const AtelierHomePage = lazy(() => import("./pages/atelier/AtelierHomePage").the
 const AtelierRealmPage = lazy(() => import("./pages/atelier/AtelierRealmPage").then((m) => ({ default: m.AtelierRealmPage })));
 // v0.35.69 Sprint A: D2 World Map preview (Bruce 评审, 不替换 home)
 const WorldMapPreviewPage = lazy(() => import("./pages/WorldMapPreview").then((m) => ({ default: m.WorldMapPreviewPage })));
+// v0.35.71 Hub Screen prototype v2 (hamster-game style Mascot 中心 + 单 PLAY)
+const HubScreenPage = lazy(() => import("./pages/HubScreen").then((m) => ({ default: m.HubScreenPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -232,6 +234,8 @@ export const router = createBrowserRouter([
       { path: "atelier/realm/:id", element: L(<MathOnlyRoute><AtelierRealmPage /></MathOnlyRoute>) },
       // v0.35.69 Sprint A: D2 World Map 小样, Bruce 评审用
       { path: "world-preview", element: L(<MathOnlyRoute><WorldMapPreviewPage /></MathOnlyRoute>) },
+      // v0.35.71 Hub Screen 小样 v2 (Mascot 中心 + 单 PLAY, hamster-game style)
+      { path: "hub-preview", element: L(<MathOnlyRoute><HubScreenPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
