@@ -137,6 +137,9 @@ export function ChineseTrainPage() {
   const navigate = useNavigate();
   const unitId = params.get("unitId");
   const skillId = params.get("skillId");
+  // v0.36.4 (P2-5): URL ?ability= filter (e.g., phonics / vocabulary / glyph)
+  // 让 Math hub DailySummaryCard 的 "拼音/词组" link 真过滤到对应能力维度.
+  const ability = params.get("ability");
   const fresh = params.get("fresh");
   const modeParam = (params.get("mode") ?? "practice") as TrainMode;
   const mode: TrainMode =
@@ -249,6 +252,17 @@ export function ChineseTrainPage() {
           let pool = mergedPool;
           if (skillId) pool = pool.filter((q) => q.skill_id === skillId);
           else if (unitId) pool = pool.filter((q) => q.unit_id === unitId);
+          // v0.36.4 (P2-5): ability filter — Question 没 ability 字段, 但
+          // skill_id 链到 Skill.ability. 建 skillId → ability set 索引, 再
+          // 过滤. ability 跟 skill_id / unit_id 互斥, 仅在没指定时生效.
+          if (!skillId && !unitId && ability) {
+            const skillsByAbility = new Set(
+              subject.skills
+                .filter((s) => (s.ability as string[]).includes(ability))
+                .map((s) => s.id),
+            );
+            pool = pool.filter((q) => skillsByAbility.has(q.skill_id));
+          }
           qs = shuffle(pool).slice(0, PRACTICE_SIZE);
         }
         const tEnd = Date.now();
@@ -271,7 +285,7 @@ export function ChineseTrainPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [student?.id, subject.id, unitId, skillId, fresh, mode]);
+  }, [student?.id, subject.id, unitId, skillId, ability, fresh, mode]);
 
   const q = questions[idx];
 
