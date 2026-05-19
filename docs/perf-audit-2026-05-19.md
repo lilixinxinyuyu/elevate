@@ -1,5 +1,38 @@
 # Performance 完整诊断 (2026-05-19)
 
+## 🔥 BREAKING (v0.36.11 调查后): ROOT CAUSE 确定
+
+**11-16s spike 不是我们的 cache 问题, 是 ESA edge IP `43.109.163.133` 死了.**
+
+xiaojin.app DNS 返回 7 个 anycast IP, round-robin 分配请求:
+```
+163.181.78.216  ✅ 1.2s
+43.109.163.133  ❌ 完全 25s timeout (dead!)
+163.181.77.147  ✅ 1.2s
+43.109.96.9     ✅ 1.2-2s
+43.109.162.4    ✅ 1.1-3s
+163.181.77.181  ✅
+163.181.140.x   ✅
+```
+
+每次 client 命中 dead IP → 等 25s timeout (实测显示 11-16s, 可能内部 TCP retry).
+
+**因此 Bruce 看到的"整体运行都很慢"主要是这个**. 跟 OSS / cache / model 都无关.
+
+**这不是我们能修的** — 是 Aliyun ESA 内部 anycast cluster 一个节点 down.
+
+**Action 选项 (Bruce 决定)**:
+A. 联系 Aliyun support 报告 IP 43.109.163.133 dead, 等他们修 (推荐, 最 cleanest)
+B. 临时把 xiaojin.app DNS 切回 selena-elevate.pages.dev (CF Pages 0.7s 稳定, 无 spike)
+C. 加 CDN 中转 (Cloudflare 包 xiaojin.app DNS), 让 CF anycast 自动 failover dead IP
+D. 等待自然修复 (anycast cluster 偶尔会 self-heal)
+
+我建议 A + B 并行: 先切 DNS 让 Selena 立刻不卡, 同时 ticket Aliyun.
+
+---
+
+
+
 > **起源**: 爸爸反馈
 >
 > > "现在刷新还是很慢的, 整体运行都很慢, 按理说迁移到香港在国内用很快, 但实际上速度还不让以前在 Cloudflare pages 快. 模型也是从国际版切换到了国内版的模型, 很多时候都连接不上, 小进也无法讲题, 也无法用 AI 听英语读音."
