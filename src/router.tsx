@@ -45,6 +45,8 @@ const WorldMapPreviewPage = lazy(() => import("./pages/WorldMapPreview").then((m
 const HubScreenPage = lazy(() => import("./pages/HubScreen").then((m) => ({ default: m.HubScreenPage })));
 // v0.35.72 Celebration Screen 评审入口 (Sprint 2, Duolingo Lesson Complete style)
 const CelebrationPreviewPage = lazy(() => import("./pages/CelebrationPreview").then((m) => ({ default: m.CelebrationPreviewPage })));
+// v0.35.73 Hub Screen v3 (Bruce 反馈 "真游戏 1 屏不 scroll", fixed inset overlay)
+const HubScreenV3Page = lazy(() => import("./pages/HubScreenV3").then((m) => ({ default: m.HubScreenV3Page })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -240,6 +242,8 @@ export const router = createBrowserRouter([
       { path: "hub-preview", element: L(<MathOnlyRoute><HubScreenPage /></MathOnlyRoute>) },
       // v0.35.72 Celebration Screen 评审 (3 scenario: high/mid/low)
       { path: "celebration-preview", element: L(<MathOnlyRoute><CelebrationPreviewPage /></MathOnlyRoute>) },
+      // v0.35.73 Hub Screen v3 (锁视口不 scroll, overlay SubjectShell)
+      { path: "hub-v3", element: L(<MathOnlyRoute><HubScreenV3Page /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
