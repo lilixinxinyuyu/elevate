@@ -191,4 +191,50 @@ export const SKILLS_CHINESE: Skill[] = [
     priority: "HIGH",
     examPriority: "HIGH_BIG",
   },
+
+  // ============================================================
+  // v0.35.93 (爸爸 2026-05-19) — 错别字 skill (P2-1)
+  // 期中考第 4 题型 "李强来信 3 处错别字 + 1 处错用标点". G4B 高频考点.
+  // 每 unit (U1-U4) 一个 TYPOS skill, 难度 3, examPriority MUST_BIG.
+  // ============================================================
+  {
+    id: "C4B_U1_TYPOS",
+    subjectId: "chinese",
+    unitId: "C4B_U1_NATURE",
+    name: "错别字辨认（第一单元）",
+    ability: ab("glyph", "vocabulary"),
+    difficultyBase: 3,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
+    id: "C4B_U2_TYPOS",
+    subjectId: "chinese",
+    unitId: "C4B_U2_SCIENCE",
+    name: "错别字辨认（第二单元）",
+    ability: ab("glyph", "vocabulary"),
+    difficultyBase: 3,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
+    id: "C4B_U3_TYPOS",
+    subjectId: "chinese",
+    unitId: "C4B_U3_POETRY",
+    name: "错别字辨认（第三单元）",
+    ability: ab("glyph", "vocabulary"),
+    difficultyBase: 3,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
+    id: "C4B_U4_TYPOS",
+    subjectId: "chinese",
+    unitId: "C4B_U4_ANIMALS",
+    name: "错别字辨认（第四单元）",
+    ability: ab("glyph", "vocabulary"),
+    difficultyBase: 3,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
 ];

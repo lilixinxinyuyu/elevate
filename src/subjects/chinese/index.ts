@@ -17,6 +17,7 @@ import { UNITS_CHINESE } from "./units";
 import { SEED_QUESTIONS_CHINESE } from "./questions";
 import { SEED_QUESTIONS_CHINESE_V2 } from "./questionPack2";
 import { SEED_QUESTIONS_CHINESE_V3 } from "./questionPack3";
+import { SEED_QUESTIONS_CHINESE_TYPOS } from "./typoPack";
 import type {
   Subject,
   SubjectAbilityDef,
@@ -59,6 +60,7 @@ export const chineseSubject: Subject = {
     ...SEED_QUESTIONS_CHINESE,
     ...SEED_QUESTIONS_CHINESE_V2,
     ...SEED_QUESTIONS_CHINESE_V3,
+    ...SEED_QUESTIONS_CHINESE_TYPOS,
   ],
 
   abilities: CHINESE_ABILITIES,
