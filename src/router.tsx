@@ -69,6 +69,8 @@ const CarnivalPreviewPage = lazy(() => import("./pages/CarnivalPreview").then((m
 const CanvasPreviewPage = lazy(() => import("./pages/CanvasPreview").then((m) => ({ default: m.CanvasPreviewPage })));
 // v0.35.89 Character Gallery — 12 base avatar 评审 (6 archetype × 2 gender)
 const CharacterGalleryPage = lazy(() => import("./pages/CharacterGallery").then((m) => ({ default: m.CharacterGalleryPage })));
+// v0.35.92 Sprint C1: Poem Lantern Preview — 古诗拍灯笼 (元宵主题 + 古诗补字)
+const PoemLanternPreviewPage = lazy(() => import("./pages/PoemLanternPreview").then((m) => ({ default: m.PoemLanternPreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -170,6 +172,12 @@ function FreePracticeRoute() {
 function MathOnlyRoute({ children }: { children: React.ReactNode }) {
   const subject = useSubject();
   if (subject.id !== "math") return <ComingSoonPage />;
+  return <>{children}</>;
+}
+
+function ChineseOnlyRoute({ children }: { children: React.ReactNode }) {
+  const subject = useSubject();
+  if (subject.id !== "chinese") return <ComingSoonPage />;
   return <>{children}</>;
 }
 
@@ -288,6 +296,8 @@ export const router = createBrowserRouter([
       { path: "canvas-preview", element: L(<MathOnlyRoute><CanvasPreviewPage /></MathOnlyRoute>) },
       // v0.35.89 Character Gallery (12 base avatar Bruce 评审)
       { path: "character-gallery", element: L(<MathOnlyRoute><CharacterGalleryPage /></MathOnlyRoute>) },
+      // v0.35.92 Sprint C1: Poem Lantern (古诗拍灯笼 Chinese cluster)
+      { path: "poem-lantern-preview", element: L(<ChineseOnlyRoute><PoemLanternPreviewPage /></ChineseOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
