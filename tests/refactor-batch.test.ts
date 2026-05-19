@@ -276,3 +276,55 @@ describe("suppressesExternalScratchTools (P9 renamed)", () => {
     expect(suppressesExternalScratchTools("plain_choice")).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// GAME_TEMPLATE_IDS (P14 satisfies + 补 P2.5 漏的 case)
+// 历史: pickPanel/templateTitle 漏 plain_numeric/dot_grid_draw/balance_lab 几个 case,
+// fallback 到 "挑战" 默认值. P14 GAME_TEMPLATES satisfies + 补 case 修了.
+// 这里 sanity test 防回归: 几个易漏 template 在 GAME_TEMPLATE_IDS 里.
+// ─────────────────────────────────────────────────────────────────────
+
+import { GAME_TEMPLATE_IDS, SESSION_MODE_IDS } from "../src/core/types";
+import { ATELIER_REALM_IDS } from "../src/content/atelier/realms";
+
+describe("GAME_TEMPLATE_IDS const list (P8 + P14)", () => {
+  it("contains 23 templates", () => {
+    expect(GAME_TEMPLATE_IDS.length).toBe(23);
+  });
+
+  it("contains previously missed templates (P2.5 fix)", () => {
+    // 历史 templateTitle 漏 plain_numeric / dot_grid_draw → "挑战" 默认
+    expect(GAME_TEMPLATE_IDS).toContain("plain_numeric");
+    expect(GAME_TEMPLATE_IDS).toContain("dot_grid_draw");
+    expect(GAME_TEMPLATE_IDS).toContain("balance_lab");
+  });
+
+  it("contains write-heavy templates", () => {
+    expect(GAME_TEMPLATE_IDS).toContain("canvas_scratch");
+    expect(GAME_TEMPLATE_IDS).toContain("multi_step_application");
+  });
+});
+
+describe("SESSION_MODE_IDS const list (P13)", () => {
+  it("contains 9 modes", () => {
+    expect(SESSION_MODE_IDS.length).toBe(9);
+  });
+
+  it("contains all SessionMode union members", () => {
+    for (const m of ["normal", "final_sprint", "midterm", "weak_skill", "review", "free", "skill", "mock_exam", "big_problems"]) {
+      expect(SESSION_MODE_IDS).toContain(m);
+    }
+  });
+});
+
+describe("ATELIER_REALM_IDS const list (P13)", () => {
+  it("contains 6 realms", () => {
+    expect(ATELIER_REALM_IDS.length).toBe(6);
+  });
+
+  it("contains all AtelierRealmId union members", () => {
+    for (const r of ["discount-street", "chrono-tower", "gem-grotto", "geo-forge", "equation-hall", "data-vault"]) {
+      expect(ATELIER_REALM_IDS).toContain(r);
+    }
+  });
+});
