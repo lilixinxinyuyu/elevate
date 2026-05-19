@@ -94,7 +94,8 @@ export function HubScreenV5Page() {
     volume: 0.5,
   };
 
-  // SVG 3-ring constants
+  // SVG 3-ring constants — viewBox 固定 320, 用 CSS clamp() 缩放
+  // (peer review v0.35.79 反馈: 写死 320 在 4K 偏小, 在 375 偏大)
   const ringSize = 320;
   const cx = ringSize / 2;
   const cy = ringSize / 2;
@@ -177,11 +178,17 @@ export function HubScreenV5Page() {
         </div>
       </div>
 
-      {/* ─── 中央 hero stage: 3 同心环 + Mascot ─── */}
+      {/* ─── Scene Container (peer review: max-w + clamp 避免 4K 散 / 375 挤) ─── */}
+      <main className="absolute inset-x-0 top-[56px] bottom-[112px] flex items-center justify-center px-4 pointer-events-none">
+        <section className="relative w-full h-full max-w-[1180px] max-h-[720px] min-h-[480px]">
+
+      {/* ─── 中央 hero stage: 3 同心环 + Mascot (clamp 缩放) ─── */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="relative" style={{ width: ringSize, height: ringSize }}>
-          {/* 大圆 SVG: 3 同心环 */}
-          <svg width={ringSize} height={ringSize} className="absolute inset-0">
+        <div
+          className="relative w-[min(78vw,320px)] sm:w-[clamp(260px,38vmin,400px)] aspect-square overflow-visible"
+        >
+          {/* 大圆 SVG: 3 同心环 — viewBox 固定, 渲染尺寸 = 父 div 100% */}
+          <svg viewBox={`0 0 ${ringSize} ${ringSize}`} width="100%" height="100%" className="absolute inset-0">
             <defs>
               {rings.map((r) => (
                 <linearGradient key={r.id} id={`hub5-ring-${r.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -226,23 +233,22 @@ export function HubScreenV5Page() {
             })}
           </svg>
 
-          {/* 中央 Mascot pair — 嵌在环正中 */}
-          <div className="absolute inset-0 flex items-end justify-center pb-2">
-            <div className="flex items-end gap-1">
-              <div className="text-[88px] leading-none animate-float">🐼</div>
-              <div className="text-[52px] leading-none animate-float-slow mb-2">🦊</div>
-            </div>
+          {/* 中央 Mascot pair — overflow-visible 让 fox 可溢出, 不被 ring 下沿 clip
+              (peer review: items-end 导致角色脚部撞底; 改 absolute + translate-y 居中略偏下) */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[38%] flex items-end gap-1 pointer-events-none drop-shadow-[0_12px_24px_rgba(0,0,0,0.4)]">
+            <div className="text-[clamp(68px,11vmin,128px)] leading-none animate-float">🐼</div>
+            <div className="text-[clamp(40px,7vmin,80px)] leading-none animate-float-slow mb-2">🦊</div>
           </div>
 
           {/* 环上 N/3 闭标 */}
-          <div className="absolute top-1 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-amber-300/40">
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-amber-300/40 z-10">
             <span className="font-display font-bold text-amber-300 text-sm tabular-nums">{closedCount} / 3 环已闭</span>
           </div>
         </div>
       </div>
 
-      {/* ─── 左上 浮件: 段位徽章 (大金圆) ─── */}
-      <div className="absolute top-20 left-4 z-10 max-w-[200px] pointer-events-auto">
+      {/* ─── 左上 浮件: 段位徽章 (大金圆) — scene-relative % offset ─── */}
+      <div className="absolute left-[3%] top-[4%] z-10 max-w-[200px] pointer-events-auto">
         <div className="relative">
           {/* badge 光环 */}
           <div
@@ -268,7 +274,7 @@ export function HubScreenV5Page() {
       </div>
 
       {/* ─── 右上 浮件: 能力诊断 4 mini-bar ─── */}
-      <div className="absolute top-20 right-4 z-10 w-48 pointer-events-auto">
+      <div className="absolute right-[3%] top-[4%] z-10 w-[clamp(160px,18vw,220px)] pointer-events-auto">
         <div className="px-3 py-2.5 rounded-2xl bg-black/40 backdrop-blur-md border border-violet-300/30 shadow-lg">
           <div className="text-[10px] text-violet-200 uppercase tracking-widest mb-2">⚡ 能力诊断</div>
           {[
@@ -293,9 +299,9 @@ export function HubScreenV5Page() {
         </div>
       </div>
 
-      {/* ─── 左下 浮件: 反复出错 (red flag) ─── */}
+      {/* ─── 左下 浮件: 反复出错 (red flag) — mobile hidden 防挤 (peer review) ─── */}
       {fragileSkills.length > 0 && (
-        <div className="absolute bottom-32 left-4 z-10 w-52 pointer-events-auto">
+        <div className="hidden md:block absolute bottom-[6%] left-[3%] z-10 w-[clamp(180px,18vw,240px)] pointer-events-auto">
           <Link to="/math/mistakes" className="block px-3 py-2 rounded-2xl bg-rose-500/15 backdrop-blur-md border border-rose-300/40 shadow-lg hover:scale-105 active:scale-95 transition">
             <div className="text-[10px] text-rose-200 uppercase tracking-widest mb-1">🚩 反复出错</div>
             {fragileSkills.slice(0, 2).map((s) => (
@@ -306,41 +312,55 @@ export function HubScreenV5Page() {
         </div>
       )}
 
-      {/* ─── 右下 浮件: 期末倒计时 ─── */}
+      {/* ─── 右下 浮件: 期末倒计时 — mobile hidden + 文案改可行动 (peer review) ─── */}
       {exam && examDays !== null && examDays >= 0 && (
-        <div className="absolute bottom-32 right-4 z-10 w-44 pointer-events-auto">
+        <div className="hidden md:block absolute bottom-[6%] right-[3%] z-10 w-[clamp(150px,15vw,200px)] pointer-events-auto">
           <Link to="/math/exam-prep" className="block px-3 py-2 rounded-2xl bg-violet-700/25 backdrop-blur-md border border-violet-300/40 shadow-lg hover:scale-105 active:scale-95 transition">
-            <div className="text-[10px] text-violet-200 uppercase tracking-widest mb-1">⏳ 距 {exam.name}</div>
+            <div className="text-[10px] text-violet-200 uppercase tracking-widest mb-1">⏳ {exam.name}挑战</div>
             <div className="font-display font-black text-2xl text-violet-100 leading-none tabular-nums">
               {examDays === 0 ? "今天!" : `${examDays} 天`}
             </div>
-            <div className="text-[10px] text-violet-200/70 mt-1 underline">→ 备考中心</div>
+            <div className="text-[10px] text-violet-200/80 mt-1 leading-tight">今天赢 1 ⭐ 就近一步</div>
           </Link>
         </div>
       )}
 
-      {/* ─── 巨大 PLAY 按钮 sticky bottom-center ─── */}
-      <div className="absolute bottom-12 left-0 right-0 flex justify-center z-30 pointer-events-none">
-        <button
-          onClick={() => navigate(TrainRoute.build({ fresh: Date.now() }))}
-          className="pointer-events-auto px-12 py-5 rounded-3xl bg-gradient-to-r from-amber-300 via-orange-400 to-pink-400 text-slate-900 font-display font-black text-3xl shadow-2xl shadow-orange-500/60 border-4 border-amber-200 hover:scale-105 active:scale-95 transition-transform animate-pulse-glow"
-        >
-          ▶ 开始战斗
-        </button>
+        </section>
+      </main>
+
+      {/* ─── 底部 action bar: PLAY + chips (peer review: 整体一个 action bar 而非分别 absolute) ─── */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 pb-[max(8px,env(safe-area-inset-bottom))] pt-3 bg-gradient-to-t from-[#050315] via-[#050315]/85 to-transparent pointer-events-none">
+        {/* PLAY 加任务化副标题 (peer review: 单 "PLAY" 太抽象, 改主+副) */}
+        <div className="flex justify-center mb-2 px-4">
+          <button
+            onClick={() => navigate(TrainRoute.build({ fresh: Date.now() }))}
+            className="pointer-events-auto px-8 sm:px-10 py-3 rounded-3xl bg-gradient-to-r from-amber-300 via-orange-400 to-pink-400 text-slate-900 font-display font-black shadow-2xl shadow-orange-500/60 border-4 border-amber-200 hover:scale-105 active:scale-95 transition-transform animate-pulse-glow flex items-center gap-3"
+          >
+            <span className="text-3xl">▶</span>
+            <span className="text-left leading-tight">
+              <span className="block text-xl sm:text-2xl">开始今日挑战</span>
+              <span className="block text-[10px] sm:text-xs font-bold opacity-80">
+                {todayCount < todayTarget ? `还差 ${todayTarget - todayCount} 题 · 赢 ⭐` : `今日已达标 · 加练得 ⭐`}
+              </span>
+            </span>
+          </button>
+        </div>
+
+        {/* chip 横向 scroll on mobile (peer review: justify-center 在 375 挤爆) */}
+        <div className="overflow-x-auto px-4 pb-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] pointer-events-auto">
+          <div className="mx-auto flex w-max gap-2 justify-center">
+            <ChipLink to="/math/fluency" emoji="⚡" label="闪电口算" color="cyan" />
+            <ChipLink to="/math/mistakes" emoji="⚔️" label="错题营" color="rose" />
+            <ChipLink to="/math/exam-prep" emoji="📝" label="模拟卷" color="violet" />
+            <ChipLink to="/math/skills" emoji="🏆" label="技能图" color="amber" />
+            <ChipLink to="/math/atelier" emoji="🎨" label="工坊" color="fuchsia" />
+          </div>
+        </div>
       </div>
 
-      {/* ─── 底部快捷 chip 横排 (5 个 unified pill) ─── */}
-      <div className="absolute bottom-2 left-0 right-0 px-4 flex justify-center gap-2 z-10">
-        <ChipLink to="/math/fluency" emoji="⚡" label="闪电口算" color="cyan" />
-        <ChipLink to="/math/mistakes" emoji="⚔️" label="错题营" color="rose" />
-        <ChipLink to="/math/exam-prep" emoji="📝" label="模拟卷" color="violet" />
-        <ChipLink to="/math/skills" emoji="🏆" label="技能图" color="amber" />
-        <ChipLink to="/math/atelier" emoji="🎨" label="工坊" color="fuchsia" />
-      </div>
-
-      {/* ─── 评审 footer ─── */}
-      <div className="absolute bottom-0 left-0 right-0 text-center text-[10px] text-violet-300/40 py-0.5 z-10">
-        Hub v5 prototype · <Link className="underline" to="/math">老首页</Link> · <Link className="underline" to="/math/hub-v3">v3</Link> · <Link className="underline" to="/math/hub-v4">v4</Link>
+      {/* ─── 评审 footer (左下角小 ghost, 不挡视觉中心) ─── */}
+      <div className="fixed bottom-1 left-2 text-[9px] text-violet-300/30 z-40 pointer-events-auto">
+        v5.1 · <Link className="underline" to="/math">老</Link>·<Link className="underline" to="/math/hub-v3">v3</Link>·<Link className="underline" to="/math/hub-v4">v4</Link>
       </div>
 
       <style>{`
