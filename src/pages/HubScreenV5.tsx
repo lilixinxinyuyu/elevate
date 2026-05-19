@@ -32,6 +32,7 @@ import { levelFromXp } from "../core/scoring";
 import { TrainRoute } from "../lib/routes";
 import { currentExam, daysUntil } from "../core/examDates";
 import { computeAbilityDiagnostic, type AbilityDiagnostic, type RatingResult } from "../core/rating";
+import { TierCharacter } from "../components/TierCharacter";
 
 export function HubScreenV5Page() {
   const navigate = useNavigate();
@@ -278,33 +279,26 @@ export function HubScreenV5Page() {
       {/* ─── 左 Mission Panel (v5.3 — 接通真 rating + 段位 sub-rank ornament + 动词化) ─── */}
       <aside className="hidden md:flex absolute left-[2%] top-1/2 -translate-y-1/2 z-10 w-[clamp(200px,20vw,260px)] flex-col gap-3 pointer-events-auto">
         <div className="rounded-3xl bg-black/40 backdrop-blur-md border border-white/15 shadow-2xl overflow-hidden">
-          {/* 段位 section (头部) — v5.3 sub-rank ornament */}
+          {/* 段位 section (v5.4 character growth Phase 1 — 立绘 portrait 替换 emoji 圆) */}
           <div className="relative px-4 py-3 bg-gradient-to-br from-amber-500/20 to-orange-600/10 border-b border-white/10">
             <div
               className="absolute -top-4 -right-4 w-20 h-20 rounded-full blur-xl opacity-50 pointer-events-none"
               style={{ background: "radial-gradient(circle, rgba(252,211,77,0.6), transparent 65%)" }}
             />
-            <div className="flex items-center gap-3">
-              <div className="relative shrink-0">
-                <div
-                  className="relative w-16 h-16 rounded-full flex items-center justify-center text-3xl shadow-xl border-[3px] border-amber-300 bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500"
-                  style={{ boxShadow: "0 0 25px rgba(252,211,77,0.4), inset 0 2px 6px rgba(255,255,255,0.3)" }}
-                >
-                  {tier.badgeIcon}
-                </div>
-                {/* sub-rank ornament emoji (v5.3, 仅 rank ≥2 显示) */}
-                {rating && rating.subRank >= 2 && (
-                  <span
-                    className="absolute -top-1 -right-1 text-base drop-shadow-[0_0_4px_rgba(255,255,255,0.6)]"
-                    title={`${rating.subRankRoman} 段`}
-                  >
-                    {rating.subRank === 5 ? "👑" : rating.subRank === 4 ? "🏅" : rating.subRank === 3 ? "💎" : "✨"}
-                  </span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-3">
+              {/* v5.4: TierCharacter 立绘 (220x280 portrait, fallback to emoji 圆) */}
+              <TierCharacter
+                tier={tier}
+                subRank={rating?.subRank ?? 1}
+                subRankRoman={rating?.subRankRoman ?? "I"}
+                size="md"
+              />
+              <div className="min-w-0 flex-1 pt-1">
                 <div className="text-[10px] text-amber-200 uppercase tracking-widest leading-none mb-0.5">段位 {rating?.subRankRoman ?? ""}</div>
                 <div className="font-display font-bold text-amber-100 text-sm leading-tight truncate">{tier.name}</div>
+                {rating?.subTierLabel && (
+                  <div className="text-[10px] text-amber-100/80 leading-tight truncate">{rating.subTierLabel}</div>
+                )}
                 <div className="h-1.5 mt-1.5 rounded-full bg-black/40 overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-orange-400 to-amber-300 transition-all duration-700" style={{ width: `${tierProgress}%` }} />
                 </div>
