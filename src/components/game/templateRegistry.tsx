@@ -37,8 +37,9 @@ import { CoinComboPanel } from "./templates/CoinCombo";
 import { TimeHeistPanel } from "./templates/TimeHeist";
 import { NumberHuntPanel } from "./templates/NumberHunt";
 
-// type-only import 避免运行时 circular (GameShell 也 import 自这里)
-import type { TemplateRenderProps } from "./GameShell";
+// v0.35.53 Refactor: TemplateRenderProps 真正 source 是 templates/types.ts
+// (之前从 ./GameShell type-only import, 现在直接 SSOT)
+import type { TemplateRenderProps } from "./templates/types";
 
 type TemplateDef = {
   readonly title: string;

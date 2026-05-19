@@ -16,6 +16,8 @@ import { TutorPanel } from "../tutor/TutorPanel";
 import { requestRetryQuestion, requestHarderQuestion } from "../../lib/sessionAdaptive";
 import { buildFeedbackLabels } from "./feedbackLabels";
 import type { Question } from "../../core/types";
+// (FeedbackPanelProps 自包含, 不需 import AttemptResult)
+
 
 export interface FeedbackPanelProps {
   feedback: {

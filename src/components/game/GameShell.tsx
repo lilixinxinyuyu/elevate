@@ -47,69 +47,12 @@ import type { GameTemplate } from "../../core/types";
 // v0.35.36 Refactor Priority 4: ErrorBoundary 兜底 unknown templateId
 import { GameErrorBoundary } from "../common/GameErrorBoundary";
 
-export interface AttemptResult {
-  answer: unknown;
-  isCorrect: boolean;
-  partialCorrect: boolean;
-  matchedErrorTags: string[];
-  hintsOpened: number;
-  elapsedSeconds: number;
-  correctAnswerDisplay: string;
-  /**
-   * v0.35.1 iter 35 P0-3: MultiStepApplication 模板专用 — 4 phase 结果 payload.
-   * 由 MultiStepApplicationPanel onFinish 时透传. GameShell handleFinish 把 earnedXp
-   * 累加到 finalPoints, 把整个 payload 透传给 Train → service → attempt.metadata.
-   */
-  multiStep?: {
-    phasePass: boolean[];
-    earnedXp: number;
-    userKnown: string[];
-    userQuestion: string;
-    userEquation: string;
-    userAnswer: number;
-    userUnit: string;
-  };
-  /**
-   * v0.30.7: 这次答题前是否打开过"小进讲题"。仅 retry 后的 2nd 提交可能为 true。
-   * 1st 提交永远 false（讲题入口在 1st 错答之后才出现）。
-   */
-  usedTutor?: boolean;
-  /**
-   * v0.30.7: 同一道题的第几次提交（1=直接 / 2=1st 错答之后的重做）。
-   * 决定 combo / 速度奖励 / mistake stage / mastery Elo 倍率。
-   */
-  attemptOrdinal?: 1 | 2;
-  /**
-   * v0.34.99 (iter 33 P0-1): EstimationGate 完成 payload. Train.tsx 转给
-   * submitAttempt → 落库到 attempt.metadata.estimationGate.
-   */
-  estimationGate?: {
-    earnedXp: number;
-    userRounds: number[];
-    userEstimate: number;
-    userMagnitude: string;
-    actualMagnitude: string;
-    magnitudeMismatch: boolean;
-    elapsedMsByPhase: { round: number; computeAndMagnitude: number };
-  };
-  /** v0.35.0 iter 34 P0-2: ScratchInsurance payload (Train → service → attempt.metadata) */
-  scratch?: {
-    tool: "scratch" | "mental_calc" | "direct_bypass";
-    charCount: number;
-    insured: boolean;
-    mentalOverrideUsed: boolean;
-  };
-  /**
-   * v0.35.10 iter 41 (爸爸反馈): canvas_scratch 模板 payload.
-   * imageBase64 是手写 PNG (列算式区), 落 attempt.metadata.canvasScratch.
-   * mistake 复盘时可还原 Selena 当时怎么列的式子.
-   */
-  canvasScratch?: {
-    imageBase64: string;
-    strokeCount: number;
-    hasWork: boolean;
-  };
-}
+// v0.35.53 Refactor Priority 19: AttemptResult / TemplateRenderProps / TriggerFx
+// 迁到 ./templates/types.ts (SSOT). GameShell re-export 保持 24 个 template
+// 文件 + 上游 Train.tsx import "./GameShell" 完全兼容.
+// 注: 同时再 import 一遍 (作为 value namespace 名字), 让 GameShell 内部 typed 引用有效.
+import type { AttemptResult, TemplateRenderProps, TriggerFx } from "./templates/types";
+export type { AttemptResult, TemplateRenderProps, TriggerFx };
 
 export interface GameShellProps {
   question: Question;
@@ -169,24 +112,8 @@ export interface GameShellProps {
   onInjectQuestion?: (q: Question) => void;
 }
 
-/** 每个子模板实现这个接口 */
-export interface TemplateRenderProps {
-  question: Question;
-  hintsOpened: number;
-  openHint: () => void;
-  onFinish: (r: Omit<AttemptResult, "hintsOpened" | "elapsedSeconds" | "correctAnswerDisplay">) => void;
-  triggerFx: TriggerFx;
-  onPickFeedback: (kind: "correct" | "wrong") => void;
-  disabled: boolean;
-}
-
-export interface TriggerFx {
-  correctAt: (x: number, y: number, text?: string) => void;
-  wrongAt: (x: number, y: number) => void;
-  hintPenaltyAt: (x: number, y: number, amount: number) => void;
-  /** v0.31.93: 答对时的"放射 burst" — 5 个新玩法用，emoji 随玩法主题对齐 */
-  burstAt: (x: number, y: number, emojis: string[], count?: number) => void;
-}
+// v0.35.53 Refactor: TemplateRenderProps + TriggerFx 迁到 ./templates/types.ts
+// (re-export 在文件头部, 跟 AttemptResult 一起).
 
 export function GameShell(props: GameShellProps) {
   const { question, index, total, xp, combo, onSubmit, onNext, showStarter, countdownEnabled, examMode, noRetry, onRequestVariant, onInjectQuestion } = props;
