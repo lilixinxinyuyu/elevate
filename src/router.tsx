@@ -71,6 +71,8 @@ const CanvasPreviewPage = lazy(() => import("./pages/CanvasPreview").then((m) =>
 const CharacterGalleryPage = lazy(() => import("./pages/CharacterGallery").then((m) => ({ default: m.CharacterGalleryPage })));
 // v0.35.92 Sprint C1: Poem Lantern Preview — 古诗拍灯笼 (元宵主题 + 古诗补字)
 const PoemLanternPreviewPage = lazy(() => import("./pages/PoemLanternPreview").then((m) => ({ default: m.PoemLanternPreviewPage })));
+// v0.35.94 Sprint C2: Glyph Detective Preview — 字形侦探 (民国侦探 + 偏旁部首)
+const GlyphDetectivePreviewPage = lazy(() => import("./pages/GlyphDetectivePreview").then((m) => ({ default: m.GlyphDetectivePreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -298,6 +300,8 @@ export const router = createBrowserRouter([
       { path: "character-gallery", element: L(<MathOnlyRoute><CharacterGalleryPage /></MathOnlyRoute>) },
       // v0.35.92 Sprint C1: Poem Lantern (古诗拍灯笼 Chinese cluster)
       { path: "poem-lantern-preview", element: L(<ChineseOnlyRoute><PoemLanternPreviewPage /></ChineseOnlyRoute>) },
+      // v0.35.94 Sprint C2: Glyph Detective (字形侦探 Chinese cluster)
+      { path: "glyph-detective-preview", element: L(<ChineseOnlyRoute><GlyphDetectivePreviewPage /></ChineseOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
