@@ -65,6 +65,8 @@ const LabPreviewPage = lazy(() => import("./pages/LabPreview").then((m) => ({ de
 const DataPreviewPage = lazy(() => import("./pages/DataPreview").then((m) => ({ default: m.DataPreviewPage })));
 // v0.35.86 Sprint 10a: Carnival Preview — 金钱时间游乐场 (Money/Clock/TimeArith)
 const CarnivalPreviewPage = lazy(() => import("./pages/CarnivalPreview").then((m) => ({ default: m.CarnivalPreviewPage })));
+// v0.35.87 Sprint 10b: Canvas Preview — 符文绘制 (HandDrawRune/TraceShape/DotConnect/DigitWrite)
+const CanvasPreviewPage = lazy(() => import("./pages/CanvasPreview").then((m) => ({ default: m.CanvasPreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -280,6 +282,8 @@ export const router = createBrowserRouter([
       { path: "data-preview", element: L(<MathOnlyRoute><DataPreviewPage /></MathOnlyRoute>) },
       // v0.35.86 Carnival Preview (Money/Time cluster, Sprint 10a)
       { path: "carnival-preview", element: L(<MathOnlyRoute><CarnivalPreviewPage /></MathOnlyRoute>) },
+      // v0.35.87 Canvas Preview (Rune Drawing cluster, Sprint 10b — final 7/7)
+      { path: "canvas-preview", element: L(<MathOnlyRoute><CanvasPreviewPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
