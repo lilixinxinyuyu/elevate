@@ -570,27 +570,55 @@ function buildMidterm(input: InternalInput): DailySessionPlan {
 function buildFinalSprint(input: InternalInput): DailySessionPlan {
   const forbid = new Set<string>();
   const questions: Question[] = [];
-  const breakdown: { bucket: string; count: number }[] = [];
+  const breakdown = new Map<string, number>();
 
-  for (const item of FINAL_SPRINT_G4B) {
-    const target = Math.max(
-      item.minQuestionsPerSession,
-      Math.round(item.weight * input.targetCount),
-    );
+  // v0.35.59 (fix scheduler test "final_sprint 包含 average_*"):
+  // FINAL_SPRINT_G4B 有 7 个 item, minQuestionsPerSession 总和 ≥ 17 (4+3+3+3+2+1+1).
+  // 但 input.targetCount = 13 (FINAL_SPRINT_TARGET). 之前是 sequential per-item
+  // 填满后 slice → 高 rank (rank 5+ average / triangle / data_bar) 永远被切掉.
+  // 修法: 2 phase 分配
+  //   Phase 1: 每个 item 保证 1 道 (guarantee 每 rank 有代表) — 7 道
+  //   Phase 2: 剩下 (targetCount - 7) 按 weight 比例分给 rank 1-4 (高优先)
+  function addFromItem(item: typeof FINAL_SPRINT_G4B[number], n: number): number {
+    if (n <= 0) return 0;
     let added = 0;
     for (const skillId of item.skillIds) {
-      if (added >= target) break;
+      if (added >= n) break;
       const skill = SKILL_BY_ID.get(skillId);
       if (!skill) continue;
-      const pick = pickQuestionsForSkill(skill, input, target - added, forbid);
+      const pick = pickQuestionsForSkill(skill, input, n - added, forbid);
       for (const q of pick) {
-        if (added >= target) break;
+        if (added >= n) break;
         questions.push(q);
         forbid.add(q.question_id);
         added += 1;
       }
     }
-    breakdown.push({ bucket: item.name, count: added });
+    breakdown.set(item.name, (breakdown.get(item.name) ?? 0) + added);
+    return added;
+  }
+
+  // Phase 1: 每 rank 保证 1 道 (避免低权重 item 被切掉)
+  for (const item of FINAL_SPRINT_G4B) {
+    if (questions.length >= input.targetCount) break;
+    addFromItem(item, 1);
+  }
+
+  // Phase 2: 剩下按 weight 分给前 4 个 rank (高优先), 弥补 minQuestionsPerSession 期望
+  const remaining = input.targetCount - questions.length;
+  if (remaining > 0) {
+    const top4Weight = FINAL_SPRINT_G4B.slice(0, 4).reduce((s, it) => s + it.weight, 0);
+    for (const item of FINAL_SPRINT_G4B.slice(0, 4)) {
+      if (questions.length >= input.targetCount) break;
+      // 按本 item 在 top 4 中的相对权重分剩余 slot
+      const share = Math.round((item.weight / top4Weight) * remaining);
+      addFromItem(item, share);
+    }
+    // 若还差就贪心填 rank 1-2
+    for (const item of FINAL_SPRINT_G4B.slice(0, 2)) {
+      if (questions.length >= input.targetCount) break;
+      addFromItem(item, input.targetCount - questions.length);
+    }
   }
 
   // 错题变式 10-15%
@@ -606,11 +634,9 @@ function buildFinalSprint(input: InternalInput): DailySessionPlan {
       addedM += 1;
     }
   }
-  breakdown.push({ bucket: "错题复活", count: addedM });
+  breakdown.set("错题复活", addedM);
 
-  // v0.35.30 (爸爸第 5 次反馈: Selena 看到 17 题): 之前 buildFinalSprint **没 slice cap**,
-  // 加完 items (各 weight × 13) + 错题变式 + dueMistakes 累积可达 17+. cap 到 baseTarget (13)
-  // 让 final_sprint 体验跟 normal (10) 接近, 不让 Selena 一打开就被 17 道吓到.
+  // v0.35.30 (爸爸第 5 次反馈): cap 到 input.targetCount (13)
   const finalList = diversifyOrder(questions.slice(0, input.targetCount), input.rng);
   return {
     mode: "final_sprint",
@@ -618,7 +644,7 @@ function buildFinalSprint(input: InternalInput): DailySessionPlan {
     plannedMinutes: input.targetMinutes,
     questionIds: finalList.map((q) => q.question_id),
     focusSkills: Array.from(new Set(questions.map((q) => q.skill_id))),
-    breakdown,
+    breakdown: Array.from(breakdown.entries()).map(([bucket, count]) => ({ bucket, count })),
   };
 }
 
