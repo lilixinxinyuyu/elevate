@@ -44,7 +44,22 @@ Refactor batch (v0.35.32 → 61, 30 iters) 已 stable. 主文件拆分 -45%, 3 b
 - mistake review 的间隔曲线 (FSRS) 真符合记忆规律? 还是简单 fixed schedule?
 - Auto-generate 出题质量 (AI 出的 vs 题库 seed 题 vs 爸爸录入的 mistake) 区分度?
 
-### 5. 用户体验 (UX)
+### 5. 用户心理反馈 + Stickyness (Psychological + Retention)
+> "Selena 真愿意每天打开 app 吗? 是不是父母逼着用?"
+
+要 review:
+- 进 app 第一屏 hook — 4 年级孩子 3 秒内被什么吸引?
+- Daily streak / 今日打卡 0/3 ring 系统对孩子是动力还是压力?
+- 错答时的情绪曲线 — "再仔细读一遍" → 是关心还是说教感?
+- 速度档位 "⚡⚡⚡ 闪电" 强 reinforce, 但 v0.34.98 "Accuracy-First" 改成"深思+5" — 现在哪个 dominate? Selena 大脑学到什么?
+- Trophy / 段位升档 reveal 的"惊喜值" — 第 N 次还是惊喜吗?
+- 工坊灵感 + 段位徽章 + 闯关星章 + 勋章 4 套奖励, Selena 心里有清晰的"集卡"目标吗?
+- Mascot 小进 + 红熊猫 — 4 年级孩子真的会跟 AI character emotional bond?
+- 用 7 天后会怎样 (novelty 退潮后还有什么 hook)?
+- 父母数据 (今日快报截图) → 是 dopamine 还是 surveillance?
+- 跟 Duolingo / Math Academy / Khan Academy / Prodigy 等 stickiness 经验比较
+
+### 6. 用户体验 (UX)
 要 review:
 - Home page 信息密度 — Selena 4 年级一打开 app 看到啥?
 - Train 题间过渡是否流畅 (delays, animations 节奏)
