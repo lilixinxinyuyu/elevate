@@ -29,7 +29,8 @@ import type { Question, StudentProfile } from "../core/types";
 // v0.35.93 加 chinese typoPack (50 题错别字) + 4 个 TYPOS skill → bump 27.
 // v0.35.95 加 chinese badSentPack (50 题病句修改) + 4 个 BADSENT skill → bump 28.
 // v0.35.98 加 chinese imitatePack (50 题仿写) + 4 个 IMITATE skill → bump 29.
-const SEED_VERSION = 29;
+// v0.36.1 加 chinese readingPack (15 题阅读理解 multi-step) + 3 个 READING skill → bump 30.
+const SEED_VERSION = 30;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

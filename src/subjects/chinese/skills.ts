@@ -328,4 +328,40 @@ export const SKILLS_CHINESE: Skill[] = [
     priority: "HIGH",
     examPriority: "HIGH_BIG",
   },
+
+  // ============================================================
+  // v0.36.1 (爸爸 2026-05-19) — 阅读理解 multi-step skill (P2-4)
+  // 期中考第 10-11 题型 "短文 + 多问" — G4B 必考 + 失分大头.
+  // 短文长度: 150-250 字. 每短文 5 题 (主旨 / 概括 / 选词 / 推理 / 仿写).
+  // ============================================================
+  {
+    id: "C4B_U1_READING",
+    subjectId: "chinese",
+    unitId: "C4B_U1_NATURE",
+    name: "阅读理解（第一单元短文）",
+    ability: ab("reading", "expression"),
+    difficultyBase: 4,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
+    id: "C4B_U2_READING",
+    subjectId: "chinese",
+    unitId: "C4B_U2_SCIENCE",
+    name: "阅读理解（第二单元短文）",
+    ability: ab("reading", "expression"),
+    difficultyBase: 4,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
+    id: "C4B_U3_READING",
+    subjectId: "chinese",
+    unitId: "C4B_U3_POETRY",
+    name: "阅读理解（第三单元短文）",
+    ability: ab("reading", "expression"),
+    difficultyBase: 4,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
 ];
