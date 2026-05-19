@@ -53,6 +53,8 @@ const StreakPreviewPage = lazy(() => import("./pages/StreakPreview").then((m) =>
 const HubScreenV4Page = lazy(() => import("./pages/HubScreenV4").then((m) => ({ default: m.HubScreenV4Page })));
 // v0.35.76 Battle Preview — Number Arena minigame prototype (Bruce 要看 minigame 具体设计)
 const BattlePreviewPage = lazy(() => import("./pages/BattlePreview").then((m) => ({ default: m.BattlePreviewPage })));
+// v0.35.77 Detective Preview — Word Problem Detective cluster (Sprint 6)
+const DetectivePreviewPage = lazy(() => import("./pages/DetectivePreview").then((m) => ({ default: m.DetectivePreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -256,6 +258,8 @@ export const router = createBrowserRouter([
       { path: "hub-v4", element: L(<MathOnlyRoute><HubScreenV4Page /></MathOnlyRoute>) },
       // v0.35.76 Battle Preview (Number Arena minigame prototype)
       { path: "battle-preview", element: L(<MathOnlyRoute><BattlePreviewPage /></MathOnlyRoute>) },
+      // v0.35.77 Detective Preview (Word Problem Detective cluster)
+      { path: "detective-preview", element: L(<MathOnlyRoute><DetectivePreviewPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
