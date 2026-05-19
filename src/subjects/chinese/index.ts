@@ -18,6 +18,7 @@ import { SEED_QUESTIONS_CHINESE } from "./questions";
 import { SEED_QUESTIONS_CHINESE_V2 } from "./questionPack2";
 import { SEED_QUESTIONS_CHINESE_V3 } from "./questionPack3";
 import { SEED_QUESTIONS_CHINESE_TYPOS } from "./typoPack";
+import { SEED_QUESTIONS_CHINESE_BADSENT } from "./badSentPack";
 import type {
   Subject,
   SubjectAbilityDef,
@@ -61,6 +62,7 @@ export const chineseSubject: Subject = {
     ...SEED_QUESTIONS_CHINESE_V2,
     ...SEED_QUESTIONS_CHINESE_V3,
     ...SEED_QUESTIONS_CHINESE_TYPOS,
+    ...SEED_QUESTIONS_CHINESE_BADSENT,
   ],
 
   abilities: CHINESE_ABILITIES,

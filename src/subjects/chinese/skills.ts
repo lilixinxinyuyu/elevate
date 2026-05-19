@@ -237,4 +237,50 @@ export const SKILLS_CHINESE: Skill[] = [
     priority: "VERY_HIGH",
     examPriority: "MUST_BIG",
   },
+
+  // ============================================================
+  // v0.35.95 (爸爸 2026-05-19) — 病句修改 skill (P2-2)
+  // 期中考第 5 题型 "找 1 处语序颠倒句子, 用修改符号修改". G4B 高频考点.
+  // 涉及: 语序颠倒 / 成分残缺 / 搭配不当 / 重复啰嗦 / 前后矛盾.
+  // ============================================================
+  {
+    id: "C4B_U1_BADSENT",
+    subjectId: "chinese",
+    unitId: "C4B_U1_NATURE",
+    name: "病句修改（第一单元）",
+    ability: ab("sentence", "expression"),
+    difficultyBase: 4,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
+    id: "C4B_U2_BADSENT",
+    subjectId: "chinese",
+    unitId: "C4B_U2_SCIENCE",
+    name: "病句修改（第二单元）",
+    ability: ab("sentence", "expression"),
+    difficultyBase: 4,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
+    id: "C4B_U3_BADSENT",
+    subjectId: "chinese",
+    unitId: "C4B_U3_POETRY",
+    name: "病句修改（第三单元）",
+    ability: ab("sentence", "expression"),
+    difficultyBase: 4,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
+    id: "C4B_U4_BADSENT",
+    subjectId: "chinese",
+    unitId: "C4B_U4_ANIMALS",
+    name: "病句修改（第四单元）",
+    ability: ab("sentence", "expression"),
+    difficultyBase: 4,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
 ];

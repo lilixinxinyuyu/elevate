@@ -27,7 +27,8 @@ import type { Question, StudentProfile } from "../core/types";
 // v0.35.30 改 scheduler 不改 questions data → 不需要 bump SEED.
 // 老 user cached today session 仍是旧 plan, 但 ?fresh=Date.now() URL 立即拿新 cap.
 // v0.35.93 加 chinese typoPack (50 题错别字) + 4 个 TYPOS skill → bump 27.
-const SEED_VERSION = 27;
+// v0.35.95 加 chinese badSentPack (50 题病句修改) + 4 个 BADSENT skill → bump 28.
+const SEED_VERSION = 28;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
