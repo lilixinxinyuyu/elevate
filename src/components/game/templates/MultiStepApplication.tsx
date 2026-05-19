@@ -70,6 +70,10 @@ export function MultiStepApplicationPanel(props: TemplateRenderProps) {
   const [equation, setEquation] = useState("");
   const [phase3Err, setPhase3Err] = useState("");
   const [equationOk, setEquationOk] = useState(false);
+  // v0.36.13 (爸爸 P0 数学闯关死锁): phase 3 验证失败 N 次后给 escape hatch.
+  // 之前 phase 3 必须写对算式才能 advance → boss 模式 Selena 写不出就永远卡住,
+  // 到不了 phase 4 onFinish → "没下一题/没跳转/血量不变" (爸爸 5-18 反馈).
+  const [phase3Attempts, setPhase3Attempts] = useState(0);
 
   // Phase 4
   const [finalAnswer, setFinalAnswer] = useState("");
@@ -134,12 +138,19 @@ export function MultiStepApplicationPanel(props: TemplateRenderProps) {
     }
     const v = validateEquation(cleaned, expectedAnswer);
     if (!v.ok) {
+      const attempts = phase3Attempts + 1;
+      setPhase3Attempts(attempts);
       const hint = v.reason === "wrong_value"
         ? `算的不太对, 你算出了 ${v.computed}, 但跟答案差距大. 检查一下数字和运算符`
         : v.reason === "result_mismatch"
           ? "算式两边不相等. 检查 = 后面写的数 (用下面按钮改)"
           : "格式不对 (用数字 + 运算符 + 等号, 例: 5 × 12 = 60)";
-      setPhase3Err(hint);
+      // v0.36.13: 第 2 次失败起, 提示有"先跳过这步"escape (JSX 渲染按钮)
+      setPhase3Err(
+        attempts >= 2
+          ? `${hint}。还是写不出来? 可以先跳过这步, 直接填答案。`
+          : hint,
+      );
       // peer review D: 失败时不锁 button — 用户可改 input 再点 (button disabled 仅 props.disabled)
       return;
     }
@@ -468,14 +479,32 @@ export function MultiStepApplicationPanel(props: TemplateRenderProps) {
             </p>
           )}
 
-          <button
-            type="button"
-            onClick={onPhase3Submit}
-            disabled={disabled || !equation.trim()}
-            className="px-3 py-1.5 rounded-lg bg-cyan-500 text-white text-sm font-semibold hover:bg-cyan-400 disabled:opacity-40"
-          >
-            算完了 →
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={onPhase3Submit}
+              disabled={disabled || !equation.trim()}
+              className="px-3 py-1.5 rounded-lg bg-cyan-500 text-white text-sm font-semibold hover:bg-cyan-400 disabled:opacity-40"
+            >
+              算完了 →
+            </button>
+            {/* v0.36.13 (爸爸 P0 死锁修复): 试 2 次还不会 → escape, 进 phase 4 直接答.
+                不再卡死在 phase 3, onFinish 最终能触发, boss 正常推进 + 扣血. */}
+            {phase3Attempts >= 2 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPhase3Err("");
+                  setEquationOk(false); // 没列对算式, equationOk 保持 false (过程险只给 phase 4 部分分)
+                  setPhase(4);
+                }}
+                disabled={disabled}
+                className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-200 text-sm font-semibold hover:bg-slate-600 disabled:opacity-40"
+              >
+                先跳过这步, 直接填答案 →
+              </button>
+            )}
+          </div>
         </div>
       )}
 
