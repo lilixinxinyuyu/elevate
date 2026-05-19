@@ -20,6 +20,15 @@ export interface Env {
    */
   TOKEN_PLAN_API_KEY?: string;
   /**
+   * v0.36.9 (爸爸明确): cn-beijing 国内订阅 key (sk-sp-...).
+   * 这是主路径 — Bruce 已付费, quota 充裕. ap-southeast (TOKEN_PLAN_API_KEY)
+   * quota 已耗尽, 只作旧 fallback.
+   *
+   * 配置: wrangler pages secret put TOKEN_PLAN_CN_API_KEY --project-name=selena-elevate
+   * 见 docs/ai-models-registry.md §1.1.
+   */
+  TOKEN_PLAN_CN_API_KEY?: string;
+  /**
    * v0.33.59 (Ep132 OSS sync): 阿里云 OSS 配置（多租户云同步主路径）
    * 都设了 → OSS 启用；任一没设 → fallback D1
    */
@@ -61,11 +70,13 @@ export interface AiProviderContext {
  */
 export function getChatProviders(env: Env): AiProviderContext[] {
   const providers: AiProviderContext[] = [];
-  if (env.DASHSCOPE_API_KEY) {
+  // v0.36.9 (爸爸明确铁律): token-plan cn-beijing 是主路径 (月订阅, quota 2.71% 已用),
+  // ap-southeast 是历史 fallback (quota 已耗尽). DashScope intl Free Tier 兜底.
+  if (env.TOKEN_PLAN_CN_API_KEY) {
     providers.push({
-      baseUrl: "https://dashscope-intl.aliyuncs.com",
-      apiKey: env.DASHSCOPE_API_KEY,
-      label: "dashscope-intl",
+      baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com",
+      apiKey: env.TOKEN_PLAN_CN_API_KEY,
+      label: "token-plan",
     });
   }
   if (env.TOKEN_PLAN_API_KEY) {
@@ -73,6 +84,13 @@ export function getChatProviders(env: Env): AiProviderContext[] {
       baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com",
       apiKey: env.TOKEN_PLAN_API_KEY,
       label: "token-plan",
+    });
+  }
+  if (env.DASHSCOPE_API_KEY) {
+    providers.push({
+      baseUrl: "https://dashscope-intl.aliyuncs.com",
+      apiKey: env.DASHSCOPE_API_KEY,
+      label: "dashscope-intl",
     });
   }
   return providers;
@@ -89,6 +107,14 @@ export function getChatProviders(env: Env): AiProviderContext[] {
  */
 export function getImageProviders(env: Env): AiProviderContext[] {
   const providers: AiProviderContext[] = [];
+  // v0.36.9: cn-beijing 主路径
+  if (env.TOKEN_PLAN_CN_API_KEY) {
+    providers.push({
+      baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com",
+      apiKey: env.TOKEN_PLAN_CN_API_KEY,
+      label: "token-plan",
+    });
+  }
   if (env.TOKEN_PLAN_API_KEY) {
     providers.push({
       baseUrl: "https://token-plan.ap-southeast-1.maas.aliyuncs.com",
@@ -117,9 +143,15 @@ export function getImageProviders(env: Env): AiProviderContext[] {
  */
 export function getChatModelsFor(ctx: AiProviderContext): string[] {
   if (ctx.label === "token-plan") {
-    return ["deepseek-v3.2", "glm-5", "MiniMax-M2.5", "qwen3.6-plus"];
+    // v0.36.9 (爸爸 P0 model 对比):
+    //   - qwen3.6-flash: 阿里 flash 模型最快, ~3-6s. 第一试 (cn-beijing 新加入).
+    //   - deepseek-v3.2: 推理强但~10-15s
+    //   - qwen3.6-plus: 推理稳定 ~10-20s
+    //   - glm-5: 智谱备选 ~10-15s
+    //   - MiniMax-M2.5: ~18s+ 经常超时, 末位 fallback
+    return ["qwen3.6-flash", "deepseek-v3.2", "qwen3.6-plus", "glm-5", "MiniMax-M2.5"];
   }
-  // 只留 qwen-plus；其他都被 Free Tier 限了反而浪费 budget
+  // dashscope-intl Free Tier 只留 qwen-plus; 其他 AllocationQuota.FreeTierOnly
   return ["qwen-plus"];
 }
 
