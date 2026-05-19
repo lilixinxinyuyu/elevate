@@ -165,7 +165,10 @@ async function callQwenChat(
     temperature: 0.7,
     // Round 6.9: 1500 → 2500. 实测 2 题 + 全字段 JSON ~1500-2200 token，
     // 1500 容易截断导致 json_parse_failed。2500 给安全边际。
-    max_tokens: 2500,
+    // v0.36.12 (Bruce P0): 2500 不够 2 道 multi_step 题 (~1500-2200 tokens/题 + 含
+    // subquestions/word_problem_steps/hints/solution_steps/common_errors).
+    // 改 4000 给安全边际, 同时不极端 (qwen3.6-flash max 8192).
+    max_tokens: 4000,
   };
   // qwen3.x 系列是 reasoning 模型，关掉 thinking 不浪费 token；
   // 其他模型（MiniMax / deepseek / glm）会拒收 enable_thinking=false
