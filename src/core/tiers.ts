@@ -80,7 +80,7 @@ export const TIERS: Tier[] = [
     range: [10000, 22000],
     badgeName: "锦江徽章",
     badgeIcon: "🏛️",
-    badgeDesc: "锦江区四年级里你已经站到前列了。",
+    badgeDesc: "锦江区里你的练习成果很扎实。",
     theme: {
       fromColor: "from-emerald-500/25",
       toColor: "to-teal-500/15",
@@ -97,7 +97,7 @@ export const TIERS: Tier[] = [
     range: [22000, 32000],
     badgeName: "蓉城勋章",
     badgeIcon: "🌆",
-    badgeDesc: "蓉城小达人，整个成都市都看得到你的努力。",
+    badgeDesc: "蓉城小达人，一点一点积累出来的。",
     theme: {
       fromColor: "from-violet-500/25",
       toColor: "to-fuchsia-500/15",
@@ -105,7 +105,7 @@ export const TIERS: Tier[] = [
       textColor: "text-violet-100",
       subTextColor: "text-violet-200/80",
     },
-    unlockSlogan: "🎊 锦江已征服！成都市赛道开启！",
+    unlockSlogan: "🎊 锦江区的题都熟练了！成都市新挑战在前面。",
   },
   {
     id: "province",
@@ -114,7 +114,7 @@ export const TIERS: Tier[] = [
     range: [32000, 40000],
     badgeName: "天府之星",
     badgeIcon: "🐼",
-    badgeDesc: "天府小神童，全省四年级里你已经名列前茅！",
+    badgeDesc: "天府小达人，全省练习水平已经很厚实。",
     theme: {
       fromColor: "from-amber-500/25",
       toColor: "to-orange-500/15",
@@ -122,16 +122,16 @@ export const TIERS: Tier[] = [
       textColor: "text-amber-100",
       subTextColor: "text-amber-200/80",
     },
-    unlockSlogan: "🌟 成都已通关！四川省赛道开启！",
+    unlockSlogan: "🌟 成都市的题都熟练了！四川省的新挑战在前面。",
   },
   {
     id: "country",
     name: "全国",
     // 40k+：4 月 perfect / 无上限。range[1] 用大数表示"无穷"
     range: [40000, 999999],
-    badgeName: "中华小数神",
+    badgeName: "中华小达人",
     badgeIcon: "🇨🇳",
-    badgeDesc: "全国四年级数学小神童，传说级。",
+    badgeDesc: "全国数学小达人 — 一路走过来真不容易。",
     theme: {
       fromColor: "from-rose-500/30",
       toColor: "to-red-500/20",
@@ -139,7 +139,7 @@ export const TIERS: Tier[] = [
       textColor: "text-rose-100",
       subTextColor: "text-rose-200/80",
     },
-    unlockSlogan: "🏆 四川已统治！全国赛道开启！",
+    unlockSlogan: "🏆 四川省的题也都熟练了！全国的新挑战在前面。",
   },
 ];
 
