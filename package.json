@@ -1,7 +1,7 @@
 {
   "name": "heping-math-trainer",
   "private": true,
-  "version": "0.35.56",
+  "version": "0.35.57",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
     "check:content-schema": "node scripts/check-content-schema.mjs",
     "check:db-schema": "node scripts/check-db-schema.mjs",
     "update:db-schema-hash": "node scripts/check-db-schema.mjs -- --update",
+    "check:all": "npm run check:seed-bump && npm run check:content-schema && npm run check:db-schema",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
