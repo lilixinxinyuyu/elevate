@@ -83,11 +83,11 @@ describe("scoring", () => {
 
   it("v0.34.98 post-review: 简单 speed-eligible 题 (stem 'test', difficulty=1) 走老 speedBonus 路径", () => {
     // 简单 speed-eligible 题保留老 +5/+3/+2 — 爸爸明示 "简单速算还是要奖".
-    // 这里验证: difficulty=1 + stem 简单 → isSpeedEligible=true → 用老 speedBonus → ratio=2.0 → -1 slow
+    // v0.35.64 (User Flow Review P0-4): 删 ⏰超时 / 🐢拖拉 负反馈.
+    // 之前 ratio=2.0 > 1.5 → -1 (slow). 现在 → 0 (on_time tier, 不扣 XP 不显示 sad chip).
     const easyQ = { ...baseQ, difficulty: 1 as const };
     const easySlow = scoreAttempt({ question: easyQ, isCorrect: true, hintsOpened: 0, elapsedSeconds: 120, isReview: false, comboAfter: 1 });
-    // 老 speedBonus: ratio=2.0 > 1.5 → -1 (slow)
-    expect(easySlow.timeBonus).toBe(-1);
+    expect(easySlow.timeBonus).toBe(0); // 不再扣 -1
     expect(easySlow.slowThink).toBe(false);
   });
 

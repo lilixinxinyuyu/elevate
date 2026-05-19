@@ -48,11 +48,14 @@ export function buildFeedbackLabels(input: FeedbackLabelInput): string[] {
     labels.push("⏱️ 刚才很快, 下次试试先估一估");
   } else if (countdownEnabled) {
     // 老阶梯速度奖励 (accuracy_first 关闭时, 且 countdown 启用时显示)
+    // v0.35.64 (User Flow Review P0-4, Gemini + GPT 共识 cross-validated):
+    // 删 "⏰ 超时" / "🐢 拖拉 -1" — 10 岁孩子 negative labeling 严重抹杀成就感.
+    // 只保留正向 (闪电/迅速/及时), 慢答不显示 sad chip + scoring 不扣 XP.
     if (isCorrect && speedTier === "lightning") labels.push("⚡⚡⚡ 闪电 +5");
     else if (isCorrect && speedTier === "quick") labels.push("⚡⚡ 迅速 +3");
     else if (isCorrect && speedTier === "on_time") labels.push("⚡ 及时 +2");
-    else if (isCorrect && speedTier === "overdue") labels.push("⏰ 超时");
-    else if (isCorrect && speedTier === "slow") labels.push("🐢 拖拉 -1");
+    // overdue / slow tiers 不再返 (scoring.ts 改成统一返 on_time + 0 XP),
+    // 但保留 case 容错: 若上游传旧 tier 值进来, 不显示 chip (防回归).
   }
 
   // 2. 重做衰减

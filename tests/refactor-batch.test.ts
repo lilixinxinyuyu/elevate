@@ -33,6 +33,19 @@ describe("buildFeedbackLabels (P15)", () => {
     }
   });
 
+  it("v0.35.64 P0-4: 删 overdue / slow 负反馈 (不显示 sad chip)", () => {
+    const overdue = buildFeedbackLabels({ isCorrect: true, speedTier: "overdue", countdownEnabled: true });
+    expect(overdue.find((l) => l.includes("⏰") || l.includes("超时"))).toBeUndefined();
+    const slow = buildFeedbackLabels({ isCorrect: true, speedTier: "slow", countdownEnabled: true });
+    expect(slow.find((l) => l.includes("🐢") || l.includes("拖拉"))).toBeUndefined();
+  });
+
+  it("v0.35.64 P0-4: 正向 lightning / quick / on_time 仍显示", () => {
+    expect(buildFeedbackLabels({ isCorrect: true, speedTier: "lightning", countdownEnabled: true })).toContain("⚡⚡⚡ 闪电 +5");
+    expect(buildFeedbackLabels({ isCorrect: true, speedTier: "quick", countdownEnabled: true })).toContain("⚡⚡ 迅速 +3");
+    expect(buildFeedbackLabels({ isCorrect: true, speedTier: "on_time", countdownEnabled: true })).toContain("⚡ 及时 +2");
+  });
+
   it("slowThink 优先于老 speedTier", () => {
     const labels = buildFeedbackLabels({ isCorrect: true, slowThink: true, speedTier: "lightning", countdownEnabled: true });
     expect(labels).toContain("🧠 深思 +5");

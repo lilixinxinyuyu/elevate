@@ -120,16 +120,19 @@ export function siblingDecayMultiplier(skillCorrectCount: number): number {
 }
 
 /**
- * 阶梯速度奖励（v0.28.1）— 像 iOS Elevate 那样"越快分越多"。
+ * 阶梯速度奖励（v0.28.1, v0.35.64 删负反馈）— 答快有奖, 答慢不罚.
  *
- *   < 50% 估算时间  →  +5 XP "⚡⚡ 闪电"
- *   < 80%           →  +3 XP "⚡ 迅速"
- *   ≤ 100%          →  +2 XP "✓ 及时"  (老版本只有这一档)
- *   ≤ 150%          →   0    "⏰ 超时"  (题主动答对仍计正确，但不给奖励)
- *   > 150%          →  -1 XP "🐢 拖拉" (超时太多减一分，提醒注意速度)
+ *   < 50% 估算时间  →  +5 XP "⚡⚡⚡ 闪电"
+ *   < 80%           →  +3 XP "⚡⚡ 迅速"
+ *   ≤ 100%          →  +2 XP "⚡ 及时"  (老版本只有这一档)
+ *   > 100%          →   0    "on_time" (不显示负面 label)
  *
- * 注意：超时 150% 后 GameShell 已经 auto-submit；这里只是兜底。
- * 仅 isCorrect=true 时计算，错答不奖也不罚速度。
+ * v0.35.64 (User Flow Review P0-4, Gemini + GPT 共识):
+ *   删 "⏰ 超时" / "🐢 拖拉 -1" — 对 10 岁女孩是 negative labeling, 抹杀
+ *   成就感引发逆反 (Selena 43% → 心理避风港优先).
+ *   速度只给正向 (闪电/迅速/及时), 慢答 0 XP 但**不显示 sad label, 不扣 XP**.
+ *
+ * 仅 isCorrect=true 时计算, 错答不奖也不罚速度.
  */
 export function speedBonus(elapsedSeconds: number, estimatedSeconds: number, isCorrect: boolean): {
   bonus: number;
@@ -140,8 +143,9 @@ export function speedBonus(elapsedSeconds: number, estimatedSeconds: number, isC
   if (ratio < 0.5) return { bonus: 5, tier: "lightning" };
   if (ratio < 0.8) return { bonus: 3, tier: "quick" };
   if (ratio <= 1.0) return { bonus: 2, tier: "on_time" };
-  if (ratio <= 1.5) return { bonus: 0, tier: "overdue" };
-  return { bonus: -1, tier: "slow" };
+  // v0.35.64: 之前 overdue (1.0-1.5×) / slow (>1.5×) 返 0 / -1 XP + 负 label.
+  // 现在统一返 on_time tier (0 XP), buildFeedbackLabels 看到 on_time + 慢 ratio 不显示 chip.
+  return { bonus: 0, tier: "on_time" };
 }
 
 /**
