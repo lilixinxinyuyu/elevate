@@ -67,6 +67,8 @@ const DataPreviewPage = lazy(() => import("./pages/DataPreview").then((m) => ({ 
 const CarnivalPreviewPage = lazy(() => import("./pages/CarnivalPreview").then((m) => ({ default: m.CarnivalPreviewPage })));
 // v0.35.87 Sprint 10b: Canvas Preview — 符文绘制 (HandDrawRune/TraceShape/DotConnect/DigitWrite)
 const CanvasPreviewPage = lazy(() => import("./pages/CanvasPreview").then((m) => ({ default: m.CanvasPreviewPage })));
+// v0.35.89 Character Gallery — 12 base avatar 评审 (6 archetype × 2 gender)
+const CharacterGalleryPage = lazy(() => import("./pages/CharacterGallery").then((m) => ({ default: m.CharacterGalleryPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -284,6 +286,8 @@ export const router = createBrowserRouter([
       { path: "carnival-preview", element: L(<MathOnlyRoute><CarnivalPreviewPage /></MathOnlyRoute>) },
       // v0.35.87 Canvas Preview (Rune Drawing cluster, Sprint 10b — final 7/7)
       { path: "canvas-preview", element: L(<MathOnlyRoute><CanvasPreviewPage /></MathOnlyRoute>) },
+      // v0.35.89 Character Gallery (12 base avatar Bruce 评审)
+      { path: "character-gallery", element: L(<MathOnlyRoute><CharacterGalleryPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
