@@ -112,22 +112,38 @@ cron `2ba238c2` 每 30 min 一个 iter. 标准 workflow:
 | P15 | v0.35.48 | 抽 feedbackLabels.ts (GameShell -38) | +92 −46 |
 | P16 | v0.35.49 | 抽 answerDescribe.ts (GameShell -30) | +51 −34 |
 | P17 | v0.35.50 | 抽 RetryHintPanel.tsx (GameShell -71) | +91 −75 |
+| - | v0.35.51 | refactor 进度 doc 整理 | +44 −1 |
+| P18 | v0.35.52 | 抽 FeedbackPanel.tsx (GameShell -244, 最大单步) | +269 −248 |
+| P19 | v0.35.53 | 抽 templates/types.ts (TemplateRenderProps + TriggerFx + AttemptResult SSOT) | +108 −84 |
+| P20 | v0.35.54 | 抽 trainComponents.tsx (StatCard / SummaryReviewTutor / MathAutoGen) | +132 −109 |
+| P21 | v0.35.55 | 抽 SummaryView.tsx (Train -335, 最大单步) | +366 −342 |
 
-**GameShell.tsx 1207 → 985 行 (−18%, 4 步).**
+**GameShell.tsx 1207 → 666 行 (−541, **−45%**, 6 步拆分: registry / labels / answerDescribe / RetryHintPanel / FeedbackPanel / types SSOT).**
+
+**Train.tsx 920 → 482 行 (−438, **−48%**, 2 步拆分: trainComponents / SummaryView).**
 
 **3 build gate**: check-seed-bump / check-content-schema / check-db-schema — 形成 CI 第一防线.
 
 **5 const list satisfies enforce**: GAME_TEMPLATE_IDS / SESSION_MODE_IDS / ATELIER_REALM_IDS / GAME_TEMPLATES (registry) / 各 capability table.
 
-**SSOT 文件**: config/constants.ts / config/storage.ts / lib/routes.ts / lib/exhaustive.ts / lib/featureFlags.ts (defineFlag factory) / core/templateCapabilities + questionCapabilities.
+**SSOT 文件**: config/constants.ts / config/storage.ts / lib/routes.ts / lib/exhaustive.ts / lib/featureFlags.ts (defineFlag factory) / core/templateCapabilities + questionCapabilities / components/game/templates/types.ts.
 
 **ErrorBoundary + 软 fallback**: GameErrorBoundary 包 panel render + exhaustiveOr 替代 assertUnreachable 在 render path.
 
+**新文件汇总 (21 priority 共 14 个新文件)**:
+- src/config/{constants,storage}.ts
+- src/core/{templateCapabilities,questionCapabilities}.ts (P10 从 src/games/ 迁过来)
+- src/lib/{exhaustive,routes}.ts
+- src/components/common/GameErrorBoundary.tsx
+- src/components/game/{templateRegistry,feedbackLabels,answerDescribe,RetryHintPanel,FeedbackPanel}.tsx
+- src/components/game/templates/types.ts
+- src/pages/{trainComponents,SummaryView}.tsx
+- scripts/{check-seed-bump,check-content-schema,check-db-schema}.mjs
+
 ## 后续 deferred (low priority)
 
-- FeedbackPanel 子组件抽出 (~200 行, 但 props 多, risky)
+- TemplateRenderProps + TriggerFx → templates/types.ts (24 file imports 改, 机械工作; P19 半解决了 — 已 SSOT, re-export 兼容)
 - useScratchInsuranceState hook (state 深度 woven, 提取净值不高)
 - useEstimationGate hook (同上)
-- TemplateRenderProps + TriggerFx → templates/types.ts (24 file imports 改, 机械工作)
 - SuperAdmin.tsx 拆分 (2500+ 行, 但属内部工具)
-- Train.tsx 拆 (1000+ 行, 跟 GameShell 类似 pattern)
+- Train.tsx TrainPage 内部 hooks 拆分 (state 深度 woven 跟 GameShell 一样)
