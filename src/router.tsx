@@ -39,6 +39,8 @@ const Mascot3DTestPage = lazy(() => import("./pages/Mascot3DTest").then((m) => (
 const ParadisePage = lazy(() => import("./pages/paradise/ParadisePage").then((m) => ({ default: m.ParadisePage })));
 const AtelierHomePage = lazy(() => import("./pages/atelier/AtelierHomePage").then((m) => ({ default: m.AtelierHomePage })));
 const AtelierRealmPage = lazy(() => import("./pages/atelier/AtelierRealmPage").then((m) => ({ default: m.AtelierRealmPage })));
+// v0.35.69 Sprint A: D2 World Map preview (Bruce 评审, 不替换 home)
+const WorldMapPreviewPage = lazy(() => import("./pages/WorldMapPreview").then((m) => ({ default: m.WorldMapPreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -228,6 +230,8 @@ export const router = createBrowserRouter([
       { path: "mascot-compare", element: L(<MathOnlyRoute><MascotComparePage /></MathOnlyRoute>) },
       { path: "atelier", element: L(<MathOnlyRoute><AtelierHomePage /></MathOnlyRoute>) },
       { path: "atelier/realm/:id", element: L(<MathOnlyRoute><AtelierRealmPage /></MathOnlyRoute>) },
+      // v0.35.69 Sprint A: D2 World Map 小样, Bruce 评审用
+      { path: "world-preview", element: L(<MathOnlyRoute><WorldMapPreviewPage /></MathOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
