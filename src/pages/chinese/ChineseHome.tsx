@@ -264,7 +264,7 @@ export function ChineseHomePage() {
           (Sprint C1-C4). Selena 之前找不到, 这里加入口 */}
       <div>
         <div className="text-sm text-slate-400 mb-2">🎮 新玩法 (体验)</div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <Link
             to="/chinese/poem-lantern-preview"
             className="card-glow bg-gradient-to-br from-red-500/15 to-amber-500/15 border-red-400/40 hover:scale-[1.02] transition-transform"
@@ -296,6 +296,14 @@ export function ChineseHomePage() {
             <div className="text-3xl mb-1">📜</div>
             <div className="font-display font-bold text-amber-100 text-sm">修辞画卷</div>
             <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">比喻拟人</div>
+          </Link>
+          <Link
+            to="/chinese/reading-library-preview"
+            className="card-glow bg-gradient-to-br from-red-900/20 to-amber-700/15 border-amber-500/40 hover:scale-[1.02] transition-transform"
+          >
+            <div className="text-3xl mb-1">📖</div>
+            <div className="font-display font-bold text-amber-100 text-sm">阅读图书馆</div>
+            <div className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">短文 + 多问</div>
           </Link>
         </div>
       </div>
