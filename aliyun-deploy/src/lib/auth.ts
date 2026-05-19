@@ -120,7 +120,33 @@ export function isReservedUserId(userId: string): boolean {
  * OSS 优先就支持了 super-admin 在线重置密码（不用 redeploy）。
  */
 export async function passwordToUserId(pwd: string, env: Env): Promise<string | null> {
-  // 1. OSS 动态 store + baked merge
+  // v0.36.10 (爸爸 P0 perf audit): 先 check baked (0ms), 再 fallback OSS (1-2s).
+  // 99% traffic 是 Selena 用 APP_PASSWORD, 直接命中 baked, 永远不 hit OSS.
+  // 只有其他同学 (super-admin 加的) 走 OSS 查. cold start 11s spike 大幅减少.
+
+  // 1a. Baked APP_PASSWORD (legacy Selena)
+  if (env.APP_PASSWORD && safeEq(pwd, env.APP_PASSWORD)) {
+    return "selena";
+  }
+  // 1b. Baked APP_USERS map (静态多租户)
+  if (env.APP_USERS) {
+    try {
+      const map = JSON.parse(env.APP_USERS) as Record<string, string>;
+      for (const [k, v] of Object.entries(map)) {
+        if (safeEq(pwd, k)) {
+          if (!isValidUserId(v)) {
+            console.error(`[auth] invalid userId in APP_USERS: ${v}`);
+            return null;
+          }
+          return v;
+        }
+      }
+    } catch (e) {
+      console.error("[auth] APP_USERS parse failed:", (e as Error).message);
+    }
+  }
+
+  // 2. OSS 动态 store (super-admin 加的同学 / 用户自改密码)
   try {
     const map = await readEffectivePasswords(env);
     for (const [k, v] of Object.entries(map)) {
