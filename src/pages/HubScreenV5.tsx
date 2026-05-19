@@ -33,6 +33,8 @@ import { TrainRoute } from "../lib/routes";
 import { currentExam, daysUntil } from "../core/examDates";
 import { computeAbilityDiagnostic, type AbilityDiagnostic, type RatingResult } from "../core/rating";
 import { TierCharacter } from "../components/TierCharacter";
+import { CharacterOnboardingModal } from "../components/CharacterOnboardingModal";
+import { getCharacterChoice, type CharacterChoice } from "../lib/characterChoice";
 
 export function HubScreenV5Page() {
   const navigate = useNavigate();
@@ -47,6 +49,10 @@ export function HubScreenV5Page() {
   // v5.3: 真数据接通 — rating + ability
   const [rating, setRating] = useState<RatingResult | null>(null);
   const [abilityReal, setAbilityReal] = useState<AbilityDiagnostic | null>(null);
+  // v5.6: character choice (archetype + gender) — onboarding modal 决定
+  const [characterChoice, setCharacterChoice] = useState<CharacterChoice | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +71,14 @@ export function HubScreenV5Page() {
       setTodayTarget(daily.target ?? 10);
       const fragile = await getFragileSkillsToReview(s.id);
       if (!cancelled) setFragileSkills(fragile.slice(0, 3).map((f) => ({ skillId: f.skillId, skillName: f.skillName })));
+      // v5.6: 加载 character choice (onboarding 之后)
+      const choice = await getCharacterChoice(s.id);
+      if (!cancelled) {
+        setCharacterChoice(choice);
+        setOnboardingChecked(true);
+        // 没 choice → 自动弹 modal (新用户 onboarding)
+        if (!choice) setShowOnboarding(true);
+      }
       // v5.3: 真 rating + ability (接通 computeCurrentRating + computeAbilityDiagnostic)
       try {
         const r = await computeCurrentRating(s.id, "下册");
@@ -295,6 +309,7 @@ export function HubScreenV5Page() {
                 subRank={rating?.subRank ?? 1}
                 subRankRoman={rating?.subRankRoman ?? "I"}
                 size="md"
+                characterChoice={characterChoice}
               />
               <div className="min-w-0 flex-1 pt-1">
                 <div className="text-[10px] text-amber-200 uppercase tracking-widest leading-none mb-0.5">段位 {rating?.subRankRoman ?? ""}</div>
@@ -459,6 +474,29 @@ export function HubScreenV5Page() {
           </Link>
         ))}
       </div>
+
+      {/* v5.6: Onboarding modal (新用户 character choice) */}
+      {showOnboarding && studentId && (
+        <CharacterOnboardingModal
+          studentId={studentId}
+          onComplete={async () => {
+            const refreshed = await getCharacterChoice(studentId);
+            setCharacterChoice(refreshed);
+            setShowOnboarding(false);
+          }}
+        />
+      )}
+
+      {/* dev re-trigger onboarding (footer 添加 button) */}
+      {onboardingChecked && characterChoice && (
+        <button
+          onClick={() => setShowOnboarding(true)}
+          className="fixed bottom-1 right-2 text-[9px] text-violet-300/40 hover:text-violet-300 z-40 px-2 py-0.5 rounded backdrop-blur-md"
+          title="重新选 character"
+        >
+          🎭 重选
+        </button>
+      )}
 
       <style>{`
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }

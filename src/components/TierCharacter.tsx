@@ -26,31 +26,23 @@
  * - 升级白光爆开动画 + character bible 网页 (Bruce 评审)
  */
 import type { Tier } from "../core/tiers";
-
-/**
- * Avatar PNG 上传后放 public/character/tier-<id>-v1.png.
- * Empty list (current state) → 全 fallback emoji 圆.
- * 上传后无需改代码, 自动加载新立绘.
- */
-const AVAILABLE_AVATARS = new Set<string>([
-  "school",   // v0.35.88 Lv1 校园学者 (wan2.7-image-pro + CV 抠图)
-  "country",  // v0.35.88 Lv5 国家英雄
-  // "district", "city", "province" — 待生
-]);
+import { characterAvatarUrl, type CharacterChoice } from "../lib/characterChoice";
 
 export function TierCharacter({
   tier,
   subRank,
   subRankRoman,
   size = "md",
+  characterChoice = null,
 }: {
   tier: Tier;
   subRank: number;
   subRankRoman: string;
   size?: "sm" | "md" | "lg";
+  /** v5.6: 学生 onboarding 后的 archetype + gender 选择. 用来 pick base-<arc>-<g>-school PNG */
+  characterChoice?: CharacterChoice | null;
 }) {
-  const hasAvatar = AVAILABLE_AVATARS.has(tier.id);
-  const avatarUrl = hasAvatar ? `/character/tier-${tier.id}-v1.png` : null;
+  const avatarUrl = characterAvatarUrl(tier.id, characterChoice);
 
   // 尺寸 token (Mission Panel 用 md, 庆祝页用 lg, 紧凑 chip 用 sm)
   const dims = {
