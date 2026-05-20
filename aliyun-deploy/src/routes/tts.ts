@@ -73,8 +73,8 @@ function syncAudioStrategy(model: string, voice?: string): TtsStrategy {
 // realtime 语音对话声音一致 (之前 Cherry vs Tina 不一致). cosyvoice fallback
 // 保留 longxiaochun (cosyvoice 不一定支持 Serena, 它只是最后兜底).
 const DEFAULT_STRATEGIES: TtsStrategy[] = [
-  qwenTtsStrategy("qwen3-tts-instruct-flash", "Serena"),
-  qwenTtsStrategy("qwen3.5-omni-flash", "Serena"),
+  qwenTtsStrategy("qwen3-tts-instruct-flash", "Maia"),
+  qwenTtsStrategy("qwen3.5-omni-flash", "Maia"),
   syncAudioStrategy("cosyvoice-v3-plus", "longxiaochun"),
   qwenTtsStrategy("cosyvoice-v3-plus", "longxiaochun"),
 ];
@@ -106,7 +106,7 @@ tts.post("/generate", async (c) => {
 
   const strategies = body.model
     ? [
-        qwenTtsStrategy(body.model, body.voice ?? "Serena"),
+        qwenTtsStrategy(body.model, body.voice ?? "Maia"),
         syncAudioStrategy(body.model, body.voice),
       ]
     : DEFAULT_STRATEGIES;

@@ -25,6 +25,8 @@
 import { useState, useEffect } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
+import type { Question } from "../core/types";
+import { SEED_QUESTIONS_CHINESE_READING } from "../subjects/chinese/readingPack";
 
 type ReadingPassage = {
   id: string;
@@ -37,6 +39,39 @@ type ReadingPassage = {
     solution: string;
   }[];
 };
+
+// v0.36.32 (爸爸: cluster 接真题库): readingPack 真题 (15 题, 每题 stem=短文\n\n🔹第N题:Q,
+// 同短文多题共享). adapter group by passage → ReadingPassage[]. chinese 题没 seed db, 直接 import.
+function adaptReadingPack(qs: Question[]): ReadingPassage[] {
+  const byPassage = new Map<string, ReadingPassage>();
+  let order = 0;
+  for (const q of qs) {
+    const opts = q.options ?? [];
+    if (opts.length < 2) continue;
+    const correctVal = q.answer?.type === "choice" ? q.answer.value : undefined;
+    const correctIdx = opts.findIndex((o) => o.id === correctVal);
+    if (correctIdx < 0) continue;
+    // stem = 短文 \n\n 🔹 第N题: 问题
+    const parts = q.stem.split(/\n\n🔹[^:：]*[:：]/);
+    const passage = (parts[0] || "").trim();
+    const question = (parts[1] || q.stem).trim();
+    if (!passage) continue;
+    let p = byPassage.get(passage);
+    if (!p) {
+      order += 1;
+      const cn = ["一", "二", "三", "四", "五", "六", "七", "八"][order - 1] ?? String(order);
+      p = { id: `read-${order}`, title: `📖 卷${cn}·真题`, passage, questions: [] };
+      byPassage.set(passage, p);
+    }
+    p.questions.push({
+      q: question,
+      options: opts.map((o) => o.text),
+      correctIdx,
+      solution: Array.isArray(q.solution_steps) ? q.solution_steps.join(" ") : "",
+    });
+  }
+  return Array.from(byPassage.values()).filter((p) => p.questions.length >= 2);
+}
 
 // 复用 readingPack 短文 1 数据 (春天的乡下, 5 题)
 const PASSAGE_1: ReadingPassage = {
@@ -170,7 +205,9 @@ const PASSAGE_3: ReadingPassage = {
   ],
 };
 
-const PASSAGES: ReadingPassage[] = [PASSAGE_1, PASSAGE_2, PASSAGE_3];
+// v0.36.32: readingPack 真题 group → passages; 真题 ≥2 篇用真题, 否则 demo 3 篇.
+const REAL_PASSAGES = adaptReadingPack(SEED_QUESTIONS_CHINESE_READING);
+const PASSAGES: ReadingPassage[] = REAL_PASSAGES.length >= 2 ? REAL_PASSAGES : [PASSAGE_1, PASSAGE_2, PASSAGE_3];
 
 const ENCOURAGE_PHRASES = [
   "再读细一些, 答案藏在字里",
