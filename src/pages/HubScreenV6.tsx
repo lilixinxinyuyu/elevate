@@ -338,8 +338,13 @@ export function HubScreenV6Page() {
           {/* ─── Step 5: 细 stats bar — 段位 · 学校 · 4 维 · 综合/1000 ─── */}
           <div className="flex items-center justify-center gap-x-2.5 gap-y-1 flex-wrap px-3 py-1.5 rounded-2xl bg-black/45 backdrop-blur-md border border-white/10 text-[10px] leading-none">
             <span className="font-display font-bold text-amber-200 truncate max-w-[34vw]">{tierName}</span>
-            <span className="text-white/25">·</span>
-            <span className="text-white/55">和平街小学</span>
+            {/* 段位名在低段就是校名(和平街小学), 相同时不重复显示 */}
+            {tierName !== "和平街小学" && (
+              <>
+                <span className="text-white/25">·</span>
+                <span className="text-white/55">和平街小学</span>
+              </>
+            )}
             <span className="text-white/25">·</span>
             {statVals.map((s) => (
               <span key={s.label} className="flex items-center gap-1 tabular-nums">
