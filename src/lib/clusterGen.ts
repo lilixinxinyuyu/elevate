@@ -23,12 +23,46 @@ import { generateAiQuestions } from "./tutor";
 /**
  * 客户端轻量校验: 拦截垃圾题入库 (跟 lib/bgGen.ts isValidQuestionRow 同款双保险).
  * 网络中间环节可能 mangle JSON, server 已校验但这里再拦一道.
+ *
+ * v0.36.45: cluster 互动玩法 (poem_cloze / sentence_shuffle) 的答案藏在 game_data,
+ * options 是空的 —— 老逻辑 (options.length >= 2) 会误杀这些题, 让 C1/C3 的 cover-fire
+ * 落不了库. 凡带已知 interactive kind 的 game_data 行, 改成校验 game_data 本身,
+ * 不再强求 options. 不带 game_data 的纯选择题 (plain_choice) 仍走 options/answer 老校验.
  */
+function isValidGameData(o: Record<string, unknown>): boolean {
+  const gd = o.game_data;
+  if (!gd || typeof gd !== "object") return false;
+  const g = gd as Record<string, unknown>;
+  switch (g.kind) {
+    case "poem_cloze":
+      // 模板 (非空 string) + blanks (非空数组) + pool (数组)
+      return (
+        typeof g.template === "string" &&
+        g.template.trim().length > 0 &&
+        Array.isArray(g.blanks) &&
+        g.blanks.length > 0 &&
+        Array.isArray(g.pool)
+      );
+    case "sentence_shuffle":
+      // tokens (数组, >= 2 个词块)
+      return Array.isArray(g.tokens) && g.tokens.length >= 2;
+    default:
+      // glyph_detective / pair_match 等仍由调用方走 options/answer 老校验, 这里不接管
+      return false;
+  }
+}
+
 function isValidQuestionRow(q: unknown): boolean {
   if (!q || typeof q !== "object") return false;
   const o = q as Record<string, unknown>;
   if (typeof o.question_id !== "string" || !o.question_id.trim()) return false;
   if (typeof o.stem !== "string" || !o.stem.trim()) return false;
+  // game_data 互动题 (答案在 game_data, options 可空): 校验 game_data, 不要求 options.
+  const gd = o.game_data as { kind?: string } | undefined;
+  if (gd && (gd.kind === "poem_cloze" || gd.kind === "sentence_shuffle")) {
+    return isValidGameData(o);
+  }
+  // glyph_detective / pair_match / plain_choice: 沿用 options[>=2] + answer 老校验.
   if (!Array.isArray(o.options) || o.options.length < 2) return false;
   if (!o.answer || typeof o.answer !== "object") return false;
   const ans = o.answer as { type?: string; value?: unknown };

@@ -25,7 +25,7 @@
  *
  * 入口: `/chinese/sentence-dragon-preview`
  */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
 import { awardMascotXp } from "../lib/mascotProgress";
@@ -40,6 +40,7 @@ import {
   buildCandidates,
   type ClusterSessionState,
 } from "../lib/clusterSelect";
+import { generateClusterQuestions } from "../lib/clusterGen";
 import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
 type DragonCase = {
@@ -181,24 +182,24 @@ export function SentenceDragonPreviewPage() {
     return () => { cancelled = true; };
   }, [student?.id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
-        const adapted = dbQs
-          .filter((q) => q.game_type === "sentence_shuffle" && !STATIC_DRAGON_IDS.has(q.question_id))
-          .map(adaptShuffle)
-          .filter((c): c is DragonCase => c !== null);
-        if (!cancelled) setDbCases(adapted);
-      } catch (e) {
-        console.error("[SentenceDragon] 加载 db 题失败", e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  // 可复用的 db 题加载器: 查 chinese sentence_shuffle 题 → 过掉静态已有 → adapt → setDbCases.
+  // mount 时跑一次; 后台补题 (cover-fire) 落库后再跑一次把新题折进 CASES.
+  const loadDbCases = useCallback(async () => {
+    try {
+      const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+      const adapted = dbQs
+        .filter((q) => q.game_type === "sentence_shuffle" && !STATIC_DRAGON_IDS.has(q.question_id))
+        .map(adaptShuffle)
+        .filter((c): c is DragonCase => c !== null);
+      setDbCases(adapted);
+    } catch (e) {
+      console.error("[SentenceDragon] 加载 db 题失败", e);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDbCases();
+  }, [loadDbCases]);
 
   // 静态真题 + db AI 题合并去重; 不足 4 道回退 DEMO (DEMO 是病句语序题, showAsError 默认开)
   const CASES = useMemo<DragonCase[]>(() => {
@@ -242,6 +243,21 @@ export function SentenceDragonPreviewPage() {
       reviewEveryN: 4,
     });
     lastPickWasReviewRef.current = pick.reason === "review";
+    // 题库见底 (starved) → 后台 fire-and-forget 补题 (cover-fire): 玩家继续做下面这道
+    // 已有题, AI 生成在后台跑 ~10-15s, 落库后 reload 把新题折进 CASES. 全程不阻塞 UI.
+    // in-flight guard 在 clusterGen 里, 不会重复打。
+    if (pick.starved && student?.id) {
+      const sourceSq = cur.sourceQuestion;
+      void generateClusterQuestions({
+        gameType: "sentence_shuffle",
+        skillId: sourceSq?.skill_id || "C4B_U5_ORDER",
+        unitId: sourceSq?.unit_id || "C4B_U5_REVIEW",
+        term: "下册",
+        difficulty: pick.targetDifficulty,
+      }).then((generated) => {
+        if (generated > 0) void loadDbCases();
+      });
+    }
     setCaseIdx(pick.index);
   }
 
