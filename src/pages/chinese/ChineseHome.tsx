@@ -34,6 +34,17 @@ import { loadDaily, type DailyState } from "../../lib/dailyTarget";
 import { loadCharProgress, calcOldStyleStats as charCalcOldStyleStats } from "../../lib/chineseCharProgress";
 import { G4A_CHARS, G4B_CHARS } from "../../subjects/chinese/charLibrary";
 
+// v0.36.39 (P2-5): 能力 id → emoji (按能力专练 chip 用)
+const ABILITY_EMOJI: Record<string, string> = {
+  phonics: "🔊",
+  glyph: "🖌️",
+  vocabulary: "📖",
+  sentence: "🧩",
+  reading: "📚",
+  expression: "✍️",
+  accumulation: "🌱",
+};
+
 export function ChineseHomePage() {
   const subject = useSubject();
   const totalQuestions = subject.seedQuestions.length;
@@ -205,6 +216,22 @@ export function ChineseHomePage() {
           loaded: charDaily !== null,
         })}
       />
+
+      {/* v0.36.39 (P2-5): 按能力专练 — link 带 ?ability= 让 ChineseTrain 按 skill.ability 过滤 */}
+      <div className="card">
+        <div className="text-xs text-slate-400 mb-2">🎯 按能力专练</div>
+        <div className="flex flex-wrap gap-2">
+          {subject.abilities.map((ab) => (
+            <Link
+              key={ab.id}
+              to={`/chinese/train?ability=${ab.id}&fresh=${Date.now()}`}
+              className="px-3 py-1.5 rounded-xl bg-ink-700/50 border border-slate-600/50 text-sm text-slate-200 hover:bg-violet-500/20 hover:border-violet-400/50 transition-colors"
+            >
+              {ABILITY_EMOJI[ab.id] ?? "📘"} {ab.label}
+            </Link>
+          ))}
+        </div>
+      </div>
 
       {/* v0.31.42：字词大冒险（手写 + 辨字 + 打字 三模式） */}
       <Link
