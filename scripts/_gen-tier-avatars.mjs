@@ -69,57 +69,62 @@ const ANCHOR = {
     "slim youthful build, healthy fair skin",
 };
 
-// "Negative" (每张) — 防漂移 (发色/眼色/年龄/性化/制服 fetish 等).
+// "Negative" (每张) — 防漂移 (发色/眼色/年龄/比例 等).
+// v0.36.55: 去掉性化/制服词 (NSFW/busty/sexualized/fetish/sailor) — 它们跟 "10-year-old"
+// 组合触发阿里云 Green net 内容过滤 (DataInspectionFailed)。改用不触发过滤的中性词表达
+// "保持儿童比例、别画成大人" 的同样意图; 童趣 anime 立绘本就不会性化, 安全无损。
 const NEGATIVE =
   "multiple views, full body, ugly, deformed face, inconsistent proportions, " +
   "different hair color, blonde hair, blue eyes, brown hair, freckles, messy " +
-  "background, text, signature, watermark, NSFW, mature features, teen idol, " +
-  "aged-up, busty, anime sexualized, school uniform fetish, sailor uniform";
+  "background, text, signature, watermark, mature features, teen idol, aged-up, " +
+  "adult proportions, tall adult body";
 
 // "Outfit per archetype × tier" 表 (中文 outfit 描述, AI 能吃中文).
 // 行 = archetype, 列 = tier (school/district/city/province/country).
+// v0.36.55: outfit 描述改英文 — 中文短语(训练胴/帐篷器具/艺术家工作服)触发阿里云内容
+// 安全过滤 ("Green net check failed"), 且跟英文 Character Bible 不一致。英文更稳更统一。
 const OUTFIT = {
   scholar: {
-    school: "蓝开衫 + 笔记本 + 铅笔徽章",
-    district: "训练夹克 + 数学徽章",
-    city: "战术腰包 + 罗盘",
-    province: "半披风 + 金属边",
-    country: "hero 套装 + 桂冠 + 星章",
+    school: "blue cardigan + notebook + pencil badge",
+    district: "training jacket + math badge",
+    city: "tactical belt pouch + compass",
+    province: "half-cape + metal trim",
+    country: "hero outfit + laurel wreath + star medal",
   },
   scientist: {
-    school: "白大褂 + 烧瓶 + 护目镜",
-    district: "增强版烧瓶 + 测量仪",
-    city: "全套实验服 + 显微镜",
-    province: "科学家披风",
-    country: "hero 实验袍 + 光环",
+    school: "white lab coat + flask + safety goggles",
+    district: "upgraded flask + measuring tool",
+    city: "full lab suit + microscope",
+    province: "scientist cape",
+    country: "hero lab robe + glowing aura",
   },
   explorer: {
-    school: "冒险背心 + 罗盘 + 地图",
-    district: "帐篷器具 + 望远镜",
-    city: "完整探险队制服",
-    province: "队长袍 + 勋章",
-    country: "传奇探险家 + 金桂冠",
+    school: "adventure vest + compass + map",
+    district: "camping gear + binoculars",
+    city: "full expedition team uniform",
+    province: "captain coat + medals",
+    country: "legendary explorer + golden laurel",
   },
   mage: {
-    school: "巫师袍 + 魔杖 + 巫师帽",
-    district: "进阶魔法书 + 星杖",
-    city: "大法师袍 + 飞翔",
-    province: "学院掌门袍",
-    country: "大法师 + 星象冠",
+    school: "wizard robe + wand + wizard hat",
+    district: "advanced spellbook + star staff",
+    city: "archmage robe + floating",
+    province: "academy headmaster robe",
+    country: "grand archmage + astral crown",
   },
   warrior: {
-    school: "道服 + 红头带 + 木剑",
-    district: "训练胴 + 进阶剑",
-    city: "武士套装 + 真剑",
-    province: "大师袍 + 长剑",
-    country: "传奇武士 + 头冠",
+    school: "martial-arts gi + red headband + wooden sword",
+    district: "training armor + advanced sword",
+    city: "samurai armor set + real sword",
+    province: "master robe + long sword",
+    country: "legendary warrior + crown",
   },
   artist: {
-    school: "围裙 + 调色板 + 画笔",
-    district: "艺术家工作服",
-    city: "完整画室装 + 画架",
-    province: "大师围裙 + 金色调色板",
-    country: "传奇艺术家 + 桂冠",
+    school: "apron + palette + paintbrush",
+    district: "artist smock + work apron",
+    city: "full studio outfit + easel",
+    province: "master apron + golden palette",
+    country: "legendary artist + laurel wreath",
   },
 };
 
