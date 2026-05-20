@@ -73,7 +73,9 @@ export async function setPersonalization(
  * 等以后批量生成并 ship district/city/province/country 的 PNG, 把对应 tier id
  * 加进这个 Set 即可 — resolver 的 walk-down 会自动开始用它们, 不用改别的代码.
  */
-export const AVAILABLE_AVATAR_TIERS = new Set<string>(["school"]);
+// v0.36.56: district 全 12 张已生成 (6 archetype × 2 gender) → 接通。
+// city/province/country 各 12 张生成补齐后再依次加入。
+export const AVAILABLE_AVATAR_TIERS = new Set<string>(["school", "district"]);
 
 /**
  * Build avatar URL for current tier + character choice.
