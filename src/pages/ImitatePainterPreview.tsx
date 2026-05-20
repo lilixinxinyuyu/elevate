@@ -19,9 +19,10 @@
  *
  * 入口: `/chinese/imitate-painter-preview`
  */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
+import { generateClusterQuestions } from "../lib/clusterGen";
 import { awardMascotXp } from "../lib/mascotProgress";
 import { submitChineseAttempt, getChineseMistakeQuestionIds } from "../subjects/chinese/service";
 import { Link } from "react-router-dom";
@@ -164,24 +165,24 @@ export function ImitatePainterPreviewPage() {
   // AI 补题: 从 db.questions 拉 chinese 仿写题 (skill_id 含 _IMITATE), 过掉静态已有的, adapt 后 merge
   const [dbCases, setDbCases] = useState<ImitateCase[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
-        const adapted = dbQs
-          .filter((q) => q.skill_id?.endsWith("_IMITATE") && !STATIC_IMITATE_IDS.has(q.question_id))
-          .map(adaptImitate)
-          .filter((c): c is ImitateCase => c !== null);
-        if (!cancelled) setDbCases(adapted);
-      } catch (e) {
-        console.error("[ImitatePainter] 加载 db 题失败", e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  // 可复用的 db 题加载器: 查 chinese 仿写题 (skill_id 含 _IMITATE) → 过掉静态已有 → adapt
+  // → setDbCases. mount 时跑一次; 后台补题 (cover-fire) 落库后再跑一次折进 cases.
+  const loadDbCases = useCallback(async () => {
+    try {
+      const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+      const adapted = dbQs
+        .filter((q) => q.skill_id?.endsWith("_IMITATE") && !STATIC_IMITATE_IDS.has(q.question_id))
+        .map(adaptImitate)
+        .filter((c): c is ImitateCase => c !== null);
+      setDbCases(adapted);
+    } catch (e) {
+      console.error("[ImitatePainter] 加载 db 题失败", e);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDbCases();
+  }, [loadDbCases]);
 
   // 静态真题 + db AI 题合并去重; 不足 3 道回退 DEMO
   const cases = useMemo<ImitateCase[]>(() => {
@@ -252,6 +253,20 @@ export function ImitatePainterPreviewPage() {
       reviewEveryN: 4,
     });
     lastPickWasReviewRef.current = pick.reason === "review";
+    // 题库见底 (starved) → 后台 fire-and-forget 补题 (cover-fire), 镜像 C2/C4。
+    // gameType=plain_choice: C5 仿写临摹是 4 选 1 形态, adaptImitate 吃 options; sq 在 fn 顶已取。
+    if (pick.starved && student?.id) {
+      void generateClusterQuestions({
+        gameType: "plain_choice",
+        skillId: sq?.skill_id || "C4B_U1_IMITATE",
+        skillName: "仿写",
+        unitId: sq?.unit_id || "C4B_U1_NATURE",
+        term: "下册",
+        difficulty: pick.targetDifficulty,
+      }).then((generated) => {
+        if (generated > 0) void loadDbCases();
+      });
+    }
     setCaseIdx(pick.index);
   }
 
