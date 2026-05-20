@@ -26,6 +26,9 @@
 import { useState, useEffect } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
+import type { Question } from "../core/types";
+import { SEED_QUESTIONS_CHINESE_V2 } from "../subjects/chinese/questionPack2";
+import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
 type RhetoricCase = {
   id: string;
@@ -153,18 +156,53 @@ const ENCOURAGE_PHRASES = [
   "墨香深远, 不急",
 ];
 
+// v0.36.33 (爸爸: cluster 接真题库): questionPack2/3 修辞题 (C4B_U3_RHETORIC,
+// "X 用了什么修辞?" 4选1) → RhetoricCase. chinese 题没 seed db, 直接 import.
+const RHET_EMOJI: Record<string, string> = {
+  比喻: "🎀", 拟人: "🎵", 排比: "📜", 夸张: "😱", 反问: "❓", 对偶: "⚖️", 设问: "❔", 反复: "🔁",
+};
+function rhetEmoji(text: string): string {
+  for (const [k, e] of Object.entries(RHET_EMOJI)) if (text.includes(k)) return e;
+  return "📝";
+}
+function adaptRhetoric(q: Question): RhetoricCase | null {
+  const opts = q.options ?? [];
+  if (opts.length < 2) return null;
+  const correctVal = q.answer?.type === "choice" ? q.answer.value : undefined;
+  const correctIdx = opts.findIndex((o) => o.id === correctVal);
+  if (correctIdx < 0) return null;
+  const poemMatch = q.stem.match(/[""「]([^""」]+)[""」]/);
+  const poem = (poemMatch?.[1] || q.stem.replace(/用了?什么修辞.*$/, "").trim());
+  return {
+    id: q.question_id,
+    scrollLabel: "真题卷",
+    poem,
+    poemSource: "题库真题 · 修辞辨认",
+    question: "上面句子用了哪种修辞?",
+    options: opts.map((o) => ({ text: o.text, emoji: rhetEmoji(o.text) })),
+    correctIdx,
+    solution: Array.isArray(q.solution_steps) ? q.solution_steps.join(" ") : "",
+  };
+}
+// 真题 ≥3 道用真题, 否则 DEMO_CASES
+const REAL_RHET_CASES: RhetoricCase[] = [...SEED_QUESTIONS_CHINESE_V2, ...SEED_QUESTIONS_CHINESE_V3]
+  .filter((q) => q.skill_id === "C4B_U3_RHETORIC")
+  .map(adaptRhetoric)
+  .filter((c): c is RhetoricCase => c !== null);
+const CASES: RhetoricCase[] = REAL_RHET_CASES.length >= 3 ? REAL_RHET_CASES : DEMO_CASES;
+
 export function RhetoricScrollPreviewPage() {
   const [caseIdx, setCaseIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
 
-  const cur = DEMO_CASES[caseIdx]!;
+  const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
-        setCaseIdx((i) => (i + 1) % DEMO_CASES.length);
+        setCaseIdx((i) => (i + 1) % CASES.length);
         setSelectedIdx(null);
         setResult("idle");
         setEncouragePhrase(null);
@@ -253,7 +291,7 @@ export function RhetoricScrollPreviewPage() {
           <div className="text-sm font-display font-bold text-amber-100">{cur.scrollLabel}</div>
         </div>
         <div className="px-3 py-1.5 rounded-xl bg-stone-800/85 backdrop-blur-md border border-amber-600/50 text-xs font-bold text-amber-100 tabular-nums">
-          {caseIdx + 1} / {DEMO_CASES.length}
+          {caseIdx + 1} / {CASES.length}
         </div>
       </div>
 
