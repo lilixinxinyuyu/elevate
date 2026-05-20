@@ -14,3 +14,15 @@ import type { Env } from "./env";
 declare const __BAKED_ENV__: Env;
 
 export const BAKED_ENV: Env = __BAKED_ENV__;
+
+/**
+ * v0.36.18 (爸爸深度优化 #1): build 时烤进的 OSS `_auth/users.json`.
+ * auth/check 0 runtime OSS hit. null = build 时 OSS 没读到, 回落 runtime OSS.
+ */
+export interface BakedAuthStore {
+  passwords: Record<string, string>;
+  updatedAt?: number;
+  [k: string]: unknown;
+}
+declare const __BAKED_AUTH_STORE__: BakedAuthStore | null;
+export const BAKED_AUTH_STORE: BakedAuthStore | null = __BAKED_AUTH_STORE__;

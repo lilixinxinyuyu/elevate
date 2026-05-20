@@ -28,6 +28,7 @@
 import type { Env } from "./env";
 import { getOssConfig, ossGet, ossPut, type OssConfig } from "./oss";
 import { isReservedUserId } from "./auth";
+import { BAKED_AUTH_STORE } from "./baked-env";
 
 const AUTH_KEY = "_auth/users.json";
 
@@ -120,12 +121,17 @@ export function invalidateAuthCache(): void {
 export async function readEffectivePasswords(
   env: Env,
 ): Promise<Record<string, string>> {
+  // v0.36.18 (爸爸深度优化 #1): build 时烤进的 OSS auth store 优先 — 完全 0 runtime
+  // OSS hit. 改密码/加同学后 super-admin 写 OSS, 需 redeploy 刷新 baked (可接受).
+  if (BAKED_AUTH_STORE && BAKED_AUTH_STORE.passwords && Object.keys(BAKED_AUTH_STORE.passwords).length > 0) {
+    return { ...BAKED_AUTH_STORE.passwords };
+  }
+  // Fallback: runtime OSS (build 时 OSS 没读到 / 老 bundle)
   const cfg = getOssConfig(env);
   if (!cfg) return readBaked(env);
-  // v0.36.10: 用 cached 版本 — 30s TTL, kills 11s spike + 1.2s baseline
+  // v0.36.10: cached 版本 — 30s TTL
   const oss = await readOssStoreCached(cfg);
   if (!oss) return readBaked(env);
-  // OSS exists → ONLY OSS (它的 passwords 在第一次写时已经吃过 baked)
   return { ...oss.passwords };
 }
 
