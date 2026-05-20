@@ -19,7 +19,7 @@ import type { Env } from "../lib/env";
 
 const proxyFallback = new Hono<{ Bindings: Env }>();
 
-const OLD_BACKEND = "https://selena-elevate.pages.dev";
+// v0.36.17: CF Pages (OLD_BACKEND) 已退役删除. 不再有 fallback 后端.
 
 /**
  * In-memory hit counter — Map<path, {count, lastTs, lastStatus}>。
@@ -71,79 +71,35 @@ export function getProxyFallbackStats(): {
   };
 }
 
+// v0.36.17 (爸爸决策: 彻底删 CF Pages, 单一 ESA):
+// 不再转发到 CF Pages (已退役). 所有 endpoint 已 native ESA. 这个兜底只在
+// 极罕见的未匹配路径触发, 直接返 501 (而不是转一个不存在的后端).
+// 保留 HITS 计数 + getProxyFallbackStats (super-admin 监控哪些路径漏 native).
 proxyFallback.all("*", async (c) => {
   const url = new URL(c.req.url);
-  const upstreamUrl = OLD_BACKEND + url.pathname + url.search;
-
-  // 透传 method / headers / body
-  const headers = new Headers();
-  c.req.raw.headers.forEach((v, k) => {
-    const lk = k.toLowerCase();
-    // 不传 host / referer 给 origin（避免 CORS / referer 校验问题）
-    if (["host", "referer", "cf-connecting-ip", "x-forwarded-for"].includes(lk)) return;
-    headers.set(k, v);
-  });
-
-  // v0.36.10 (爸爸 P0 perf audit): 加 25s AbortController timeout.
-  // 之前没 timeout, CF Pages 30s timeout 后 ESA 等到 60s gateway 504,
-  // 用户体验是 "卡 30s 没反应". 现在 25s 主动 abort, 客户端立刻拿到 502/504.
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 25_000);
-
-  const init: RequestInit = {
-    method: c.req.method,
-    headers,
-    signal: ctrl.signal,
-  };
-  if (c.req.method !== "GET" && c.req.method !== "HEAD") {
-    init.body = await c.req.raw.arrayBuffer();
-  }
-
-  let upstream: Response;
-  try {
-    upstream = await fetch(upstreamUrl, init);
-  } catch (e) {
-    clearTimeout(timer);
-    const isAbort = (e as Error)?.name === "AbortError";
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: isAbort ? "upstream_timeout" : "upstream_fetch_error",
-        detail: isAbort ? "proxy-fallback 25s timeout" : (e as Error).message,
-        path: url.pathname,
-      }),
-      {
-        status: isAbort ? 504 : 502,
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          "X-Proxy-Fallback": "cf-pages-error",
-        },
-      },
-    );
-  }
-  clearTimeout(timer);
-
-  // Ep32: bump in-memory counter（按 pathname 聚合，去掉 query 避免 cardinality 爆炸）
   const pathKey = url.pathname;
   const cur = HITS.get(pathKey) ?? { count: 0, lastTs: 0, lastStatus: 0, methods: {} };
   cur.count += 1;
   cur.lastTs = Date.now();
-  cur.lastStatus = upstream.status;
+  cur.lastStatus = 501;
   cur.methods[c.req.method] = (cur.methods[c.req.method] ?? 0) + 1;
   HITS.set(pathKey, cur);
-
-  const respHeaders = new Headers();
-  upstream.headers.forEach((v, k) => {
-    const lk = k.toLowerCase();
-    if (["transfer-encoding", "content-encoding", "set-cookie"].includes(lk)) return;
-    respHeaders.set(k, v);
-  });
-  respHeaders.set("X-Proxy-Fallback", "cf-pages");
-
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: respHeaders,
-  });
+  console.warn(`[proxy-fallback] 501 未 native 的路径: ${c.req.method} ${pathKey} (CF Pages 已删, 无 fallback)`);
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      error: "not_implemented",
+      detail: `endpoint ${pathKey} 未在 ESA native 实现 (CF Pages 已退役)`,
+      path: pathKey,
+    }),
+    {
+      status: 501,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Proxy-Fallback": "removed-cf-retired",
+      },
+    },
+  );
 });
 
 export default proxyFallback;

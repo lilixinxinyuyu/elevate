@@ -1,7 +1,7 @@
 {
   "name": "heping-math-trainer",
   "private": true,
-  "version": "0.36.16",
+  "version": "0.36.17",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,7 +16,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.functions.json --noEmit",
+    "typecheck": "tsc --noEmit",
     "audit:questions": "node scripts/audit-questions.mjs",
     "smoke:train": "node scripts/_e2e-train-state-smoke.mjs",
     "smoke:iter-audit": "node scripts/_session-iter-audit.mjs"

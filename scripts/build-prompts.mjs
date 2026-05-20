@@ -250,12 +250,12 @@ const body = `export const PROMPTS = ${JSON.stringify(data, null, 2)} as const;\
 
 const out = banner + body;
 
-// v0.36.15 (爸爸 P0 context engineering): 写三份 — 加 ESA (aliyun-deploy).
-// 之前 ESA 出题用简化 prompt (无 scope/rubric/keywords), 用户实际走 ESA → 出题质量差.
-// 现在 ESA 也能用同一份 PROMPTS + composeQuestionUserPrompt. 唯一源头: prompts/*.json,
-// 唯一生成器: 本脚本, 唯一组装逻辑: _promptComposer. (peer review GPT+Gemini 共识)
+// v0.36.17 (爸爸决策: 彻底删 CF Pages, 单一 ESA): 只输出两份 —
+//   - src/lib/ (前端浏览器端: mascot.ts 等用 PROMPTS)
+//   - aliyun-deploy/src/generated/ (ESA 后端)
+// 不再输出 functions/ (CF Pages 已退役). 唯一后端 = ESA, composer 源在
+// aliyun-deploy/src/lib/promptComposer.ts.
 const targets = [
-  join(PROJECT_ROOT, "functions", "_prompts.generated.ts"),
   join(PROJECT_ROOT, "src", "lib", "_prompts.generated.ts"),
   join(PROJECT_ROOT, "aliyun-deploy", "src", "generated", "_prompts.generated.ts"),
 ];
@@ -270,14 +270,5 @@ console.log(
   `  ${Object.keys(questionsSchemas).length} game-type schemas, ${Object.keys(data.skillKeywords).length} skill keyword sets, ${Object.keys(difficultyRubrics).length} difficulty rubrics, ${Object.keys(formatRubrics).length} format rubrics, ${Object.keys(data.skillScope).length} skill scopes`,
 );
 
-// v0.36.15 (爸爸 P0 context engineering): 把 _promptComposer.ts 同步 copy 给 ESA.
-// 唯一源 = functions/_promptComposer.ts. ESA 用 copy (import path 同目录, 不改).
-// 改 composer 时只改 functions 版, build-prompts 自动同步到 ESA. 不再两套 prompt.
-const composerSrc = join(PROJECT_ROOT, "functions", "_promptComposer.ts");
-const composerDst = join(PROJECT_ROOT, "aliyun-deploy", "src", "generated", "promptComposer.ts");
-const composerBanner =
-  "// ⚠️ AUTO-COPIED from functions/_promptComposer.ts by scripts/build-prompts.mjs.\n" +
-  "// 不要手改这个文件! 改 functions/_promptComposer.ts 然后跑 npm run build:prompts.\n\n";
-mkdirSync(dirname(composerDst), { recursive: true });
-writeFileSync(composerDst, composerBanner + readFileSync(composerSrc, "utf8"), "utf8");
-console.log(`✓ copied composer → ${composerDst.replace(PROJECT_ROOT, ".")}`);
+// v0.36.17 (爸爸决策: 单一 ESA): composer 源现在直接是 aliyun-deploy/src/lib/
+// promptComposer.ts (ESA 唯一后端), 不再 build-copy. CF Pages 已删.

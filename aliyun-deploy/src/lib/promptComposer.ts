@@ -21,7 +21,7 @@
  *   4. existing stems 截断（避免 prompt 爆长）
  */
 
-import { PROMPTS } from "./_prompts.generated";
+import { PROMPTS } from "../generated/_prompts.generated";
 
 export interface SkillScope {
   name: string;

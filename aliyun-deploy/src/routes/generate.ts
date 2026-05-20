@@ -35,7 +35,9 @@ import {
   cognitiveLevelFor,
   estimatedTimeFor,
   questionFormatFor,
-} from "../generated/promptComposer";
+} from "../lib/promptComposer";
+// v0.36.17: 权重抽样 game-type (一个 skill 分布到多种玩法, 防 plain_choice 占 78% 同质化)
+import { pickGameType } from "../lib/gameTypePicker";
 
 const generate = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -579,17 +581,11 @@ function parseDifficultyEsa(raw: string | number | undefined): 1 | 2 | 3 | 4 | 5
   return 3;
 }
 
-/** game-type lookup: body.gameType > gameTypeBySkill 池第一个 > plain_choice */
+/** game-type: body.gameType 显式 > pickGameType 权重抽样 > plain_choice */
 function pickGameTypeEsa(skillId: string | undefined, explicit?: string): string {
   if (explicit) return explicit;
   if (!skillId) return "plain_choice";
-  const raw = (PROMPTS.gameTypeBySkill as unknown as Record<string, unknown>)[skillId];
-  if (typeof raw === "string") return raw;
-  if (Array.isArray(raw) && raw.length > 0) {
-    const first = raw[0];
-    return typeof first === "string" ? first : ((first as { type?: string })?.type ?? "plain_choice");
-  }
-  return "plain_choice";
+  return pickGameType(skillId); // 权重抽样 (题型多样化)
 }
 
 // v0.36.15: 改用 composeQuestionUserPrompt (完整 scope + difficulty rubric + format

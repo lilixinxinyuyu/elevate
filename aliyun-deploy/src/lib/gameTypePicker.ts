@@ -10,7 +10,7 @@
  * 这个 helper 让一个 skill 的题目分布到多种玩法，避免 plain_choice 占 78% 的失衡。
  */
 
-import { PROMPTS } from "./_prompts.generated";
+import { PROMPTS } from "../generated/_prompts.generated";
 
 export type GameTypeEntry =
   | string

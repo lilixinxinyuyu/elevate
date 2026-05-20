@@ -59,7 +59,7 @@ process.stderr.write(`▶ ${skillId}: SEED ${seedStems.length} + D1 AI ${aiStems
 
 // 2. build composer + prompts.generated
 await build({
-  entryPoints: [join(PROJECT_ROOT, "functions/_promptComposer.ts")],
+  entryPoints: [join(PROJECT_ROOT, "aliyun-deploy/src/lib/promptComposer.ts")],
   bundle: true, format: "esm", platform: "node", outfile: tmpFile, logLevel: "error",
 });
 const {
@@ -72,14 +72,14 @@ const {
 
 const tmpFile2 = join(tmpdir(), `dumpprompt2-${Date.now()}.mjs`);
 await build({
-  entryPoints: [join(PROJECT_ROOT, "functions/_prompts.generated.ts")],
+  entryPoints: [join(PROJECT_ROOT, "aliyun-deploy/src/generated/_prompts.generated.ts")],
   bundle: true, format: "esm", platform: "node", outfile: tmpFile2, logLevel: "error",
 });
 const { PROMPTS } = await import(tmpFile2);
 
 const tmpFile3 = join(tmpdir(), `dumpprompt3-${Date.now()}.mjs`);
 await build({
-  entryPoints: [join(PROJECT_ROOT, "functions/_gameTypePicker.ts")],
+  entryPoints: [join(PROJECT_ROOT, "aliyun-deploy/src/lib/gameTypePicker.ts")],
   bundle: true, format: "esm", platform: "node", outfile: tmpFile3, logLevel: "error",
 });
 const { pickGameType } = await import(tmpFile3);
@@ -143,7 +143,7 @@ console.log(`-`.repeat(74));
 console.log(sysPrompt);
 console.log(`-`.repeat(74));
 console.log();
-console.log(`# ▼ user message (由 functions/_promptComposer.ts 拼装)`);
+console.log(`# ▼ user message (由 aliyun-deploy/src/lib/promptComposer.ts 拼装)`);
 console.log(`# ▼ 字符数：${userPrompt.length}`);
 console.log(`# ▼ 来源段：`);
 console.log(`#   1. 任务声明 — 从参数生成`);

@@ -64,14 +64,14 @@ const PER_CALL_TIMEOUT_MS = 240_000;  // 4 分钟（直连 alibaba，没 Cloudfl
 // ============================================================
 const t1 = join(tmpdir(), `fbv5pc-${Date.now()}.mjs`);
 await build({
-  entryPoints: [join(PROJECT_ROOT, "functions/_promptComposer.ts")],
+  entryPoints: [join(PROJECT_ROOT, "aliyun-deploy/src/lib/promptComposer.ts")],
   bundle: true, format: "esm", platform: "node", outfile: t1, logLevel: "error",
 });
 const { composeQuestionUserPrompt, estimatedTimeFor, questionFormatFor, cognitiveLevelFor } = await import(t1);
 
 const t2 = join(tmpdir(), `fbv5pg-${Date.now()}.mjs`);
 await build({
-  entryPoints: [join(PROJECT_ROOT, "functions/_prompts.generated.ts")],
+  entryPoints: [join(PROJECT_ROOT, "aliyun-deploy/src/generated/_prompts.generated.ts")],
   bundle: true, format: "esm", platform: "node", outfile: t2, logLevel: "error",
 });
 const { PROMPTS } = await import(t2);
@@ -79,7 +79,7 @@ const { PROMPTS } = await import(t2);
 // v0.31.86: 按权重抽 game_type 的 helper（mapping 是 [{type,weight}]）
 const t2b = join(tmpdir(), `fbv5gp-${Date.now()}.mjs`);
 await build({
-  entryPoints: [join(PROJECT_ROOT, "functions/_gameTypePicker.ts")],
+  entryPoints: [join(PROJECT_ROOT, "aliyun-deploy/src/lib/gameTypePicker.ts")],
   bundle: true, format: "esm", platform: "node", outfile: t2b, logLevel: "error",
 });
 const { pickGameType } = await import(t2b);
