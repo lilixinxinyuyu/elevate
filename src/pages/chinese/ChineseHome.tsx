@@ -16,7 +16,7 @@ import { motion } from "framer-motion";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../db/dexie";
 import { useSubject } from "../../subjects/context";
-import { MIDTERM, daysUntil } from "../../core/examDates";
+import { currentExam, daysUntil } from "../../core/examDates";
 import {
   chineseLevelInfo,
   countChineseUnresolvedMistakes,
@@ -83,7 +83,12 @@ export function ChineseHomePage() {
   const subject = useSubject();
   const totalQuestions = subject.seedQuestions.length;
   const totalSkills = subject.skills.length;
-  const days = daysUntil(MIDTERM.date);
+  // v0.36.63: 之前 hardcode MIDTERM (期中 2026-05-06 已过 → 倒计时常隐藏但 banner 仍喊"期中
+  // 冲刺", stale)。改用 currentExam() (跟数学 home 同一逻辑): 期中前喊期中, 期中后自动切期末。
+  // 现在 (2026-05) 期中已过 → exam=期末 (2026-06-29), 倒计时 ~39 天正常显示。
+  const exam = currentExam();
+  const examShort = exam.name.replace("考试", ""); // "期末考试" → "期末"
+  const days = daysUntil(exam.date);
 
   const student = useLiveQuery(async () => (await db.students.toArray())[0]);
   const [totalXp, setTotalXp] = useState<number>(0);
@@ -161,9 +166,9 @@ export function ChineseHomePage() {
             语
           </motion.div>
           <div className="flex-1">
-            <div className="font-display font-bold text-xl">期中冲刺</div>
+            <div className="font-display font-bold text-xl">{examShort}冲刺</div>
             <div className="text-xs text-slate-300 mt-0.5">
-              人教版四下 1-4 单元 · 字音字形 / 古诗 / 词语 / 修辞 / 听写
+              人教版四下 1-5 单元 · 字音字形 / 古诗 / 词语 / 修辞 / 听写
             </div>
           </div>
           {days >= 0 && (
@@ -173,7 +178,7 @@ export function ChineseHomePage() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
             >
-              <div className="text-xs text-slate-400">距期中</div>
+              <div className="text-xs text-slate-400">距{examShort}</div>
               <div className="text-2xl font-display font-bold text-rose-300">
                 {days} <span className="text-sm">天</span>
               </div>
@@ -327,9 +332,9 @@ export function ChineseHomePage() {
             <div className="flex items-center gap-3">
               <div className="text-3xl">📝</div>
               <div className="flex-1">
-                <div className="font-display font-bold text-violet-100">期中模拟测试</div>
+                <div className="font-display font-bold text-violet-100">综合模拟测试</div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  跨 4 单元 20 题 · 难度梯度 D1-D4 · 一周一次
+                  跨 5 单元 20 题 · 难度梯度 D1-D4 · 一周一次
                 </div>
               </div>
               <div className="text-violet-300 text-2xl">→</div>
@@ -340,7 +345,7 @@ export function ChineseHomePage() {
             <div className="flex items-center gap-3">
               <div className="text-2xl grayscale">📝</div>
               <div className="flex-1">
-                <div className="font-semibold">期中模拟测试</div>
+                <div className="font-semibold">综合模拟测试</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">
                   下次开放还要 {mockCooldown.daysUntilNext} 天（每周一次）
                 </div>

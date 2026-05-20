@@ -51,7 +51,7 @@ export const chineseSubject: Subject = {
   id: "chinese",
   label: "语文",
   shortLabel: "语",
-  homeTagline: "人教版四年级下册 · 期中冲刺",
+  homeTagline: "人教版四年级下册 · 期末备考",
   themeColor: "from-amber-400 to-rose-400",
   status: {
     // Phase 2 MVP：上线
