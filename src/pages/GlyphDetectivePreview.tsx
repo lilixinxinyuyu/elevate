@@ -23,12 +23,15 @@
  *
  * 入口: `/chinese/glyph-detective-preview`
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
+import { awardMascotXp } from "../lib/mascotProgress";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
+import { submitChineseAttempt } from "../subjects/chinese/service";
 import { SEED_QUESTIONS_CHINESE_GLYPH } from "../subjects/chinese/glyphPack";
 
 type DetectiveCase = {
@@ -40,6 +43,7 @@ type DetectiveCase = {
   options: { text: string; emoji?: string }[];
   correctIdx: number;
   solution: string;
+  sourceQuestion?: Question; // 真题/db题携带原始 Question, 用于记录学习数据 (DEMO 不带)
 };
 
 // v0.36.7 (Selena 反馈 "字形侦探太简单, 不适合 G4"):
@@ -180,6 +184,7 @@ function adaptGlyph(q: Question): DetectiveCase | null {
     options: opts.map((o, i) => ({ text: o.text, emoji: gd.optionEmojis?.[i] })),
     correctIdx,
     solution: (Array.isArray(q.solution_steps) && q.solution_steps.length > 0 ? q.solution_steps.join(" ") : q.feedback_correct) || "",
+    sourceQuestion: q,
   };
 }
 const REAL_GLYPH_CASES: DetectiveCase[] = SEED_QUESTIONS_CHINESE_GLYPH
@@ -195,6 +200,11 @@ export function GlyphDetectivePreviewPage() {
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
   // AI 补题: 从 db.questions 拉 chinese glyph_detective 题, 过掉静态已有的, adapt 后 merge
   const [dbCases, setDbCases] = useState<DetectiveCase[]>([]);
+  // ── 学习数据记录 (统一走 submitChineseAttempt, 跟 ChineseTrain 一致) ──
+  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const [sessionId] = useState(() => "cluster-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  const [comboBefore, setComboBefore] = useState(0);
+  const questionStartRef = useRef(Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -229,6 +239,11 @@ export function GlyphDetectivePreviewPage() {
 
   const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 
+  // 切题时重置答题计时
+  useEffect(() => {
+    questionStartRef.current = Date.now();
+  }, [caseIdx]);
+
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
@@ -241,16 +256,44 @@ export function GlyphDetectivePreviewPage() {
     }
   }, [result]);
 
-  function handleChoice(idx: number) {
+  async function handleChoice(idx: number) {
     if (result === "correct") return;
     setSelectedIdx(idx);
-    if (idx === cur.correctIdx) {
-      setResult("correct"); void awardClusterXp(1);
+    const isCorrect = idx === cur.correctIdx;
+    if (isCorrect) {
+      setResult("correct");
       setEncouragePhrase(null);
     } else {
       setResult("wrong");
       setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);
       setTimeout(() => setResult("idle"), 700);
+    }
+    // 记录学习数据 (对/错都记). 真题/db题走 submitChineseAttempt; DEMO 回退老 XP path.
+    await recordAttempt(isCorrect);
+  }
+
+  // 统一作答记录: 真题携带 sourceQuestion → submitChineseAttempt (attempts/mistakes/mastery);
+  // DEMO/fallback 无 Question → 保留老 awardClusterXp path. 对/错都调用.
+  async function recordAttempt(isCorrect: boolean) {
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - questionStartRef.current) / 1000));
+    if (cur.sourceQuestion && student?.id) {
+      try {
+        const r = await submitChineseAttempt({
+          studentId: student.id,
+          sessionId,
+          question: cur.sourceQuestion,
+          isCorrect,
+          chosenOptionId: isCorrect ? "__game_correct__" : "__game_wrong__",
+          elapsedSeconds,
+          comboBefore,
+        });
+        setComboBefore(r.comboAfter);
+        if (isCorrect) void awardMascotXp(student.id, "session_complete").catch(() => {});
+      } catch (e) {
+        console.error("[cluster submit]", e);
+      }
+    } else if (isCorrect) {
+      void awardClusterXp(1); // DEMO/fallback case (no real Question) keeps old path
     }
   }
 

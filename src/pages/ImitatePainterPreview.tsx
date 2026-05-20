@@ -19,8 +19,11 @@
  *
  * 入口: `/chinese/imitate-painter-preview`
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
+import { awardMascotXp } from "../lib/mascotProgress";
+import { submitChineseAttempt } from "../subjects/chinese/service";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { explainQuestion } from "../lib/tutor";
@@ -37,6 +40,8 @@ type ImitateCase = {
   options: { text: string; emoji?: string }[];
   correctIdx: number;
   solution: string;
+  /** Phase1: 真题/db 来源 Question (临摹模式用于记录学习数据; DEMO 留空) */
+  sourceQuestion?: Question;
 };
 
 const DEMO_CASES: ImitateCase[] = [
@@ -134,6 +139,7 @@ function adaptImitate(q: Question): ImitateCase | null {
     options: opts.map((o) => ({ text: o.text })),
     correctIdx,
     solution: sol || "仿写要学例句的结构 + 修辞, 换新内容.",
+    sourceQuestion: q,
   };
 }
 
@@ -187,6 +193,11 @@ export function ImitatePainterPreviewPage() {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encourage, setEncourage] = useState<string | null>(null);
+  // Phase1: 记录学习数据 (临摹模式 4 选 1 是 judged; 创作模式开放写作不记). 不改题序.
+  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const [sessionId] = useState(() => "cluster-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  const [comboBefore, setComboBefore] = useState(0);
+  const questionStartRef = useRef(Date.now());
   // 创作模式 state
   const [freeIdx, setFreeIdx] = useState(0);
   const [draft, setDraft] = useState("");
@@ -196,6 +207,11 @@ export function ImitatePainterPreviewPage() {
 
   const cur = cases[caseIdx] ?? DEMO_CASES[0]!;
   const free = FREE_PROMPTS[freeIdx]!;
+
+  // Phase1: 题目/模式切换时重置计时
+  useEffect(() => {
+    questionStartRef.current = Date.now();
+  }, [caseIdx, cur.id, mode]);
 
   useEffect(() => {
     if (result === "correct") {
@@ -209,18 +225,37 @@ export function ImitatePainterPreviewPage() {
     }
   }, [result]);
 
-  function handleChoice(idx: number) {
+  async function handleChoice(idx: number) {
     if (result === "correct") return;
     setSelectedIdx(idx);
-    if (idx === cur.correctIdx) {
-      setResult("correct"); void awardClusterXp(1);
+    const isCorrect = idx === cur.correctIdx;
+    if (isCorrect) {
+      setResult("correct");
       setEncourage(null);
     } else {
       setResult("wrong");
       setEncourage(ENCOURAGE[Math.floor(Math.random() * ENCOURAGE.length)] ?? null);
       setTimeout(() => setResult("idle"), 700);
     }
+    // Phase1: 临摹模式是 judged 4 选 1 — 对 & 错都记录学习数据. 不改题序.
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - questionStartRef.current) / 1000));
+    const srcQ = cur.sourceQuestion;
+    if (srcQ && student?.id) {
+      try {
+        const r = await submitChineseAttempt({
+          studentId: student.id, sessionId, question: srcQ,
+          isCorrect, chosenOptionId: isCorrect ? "__game_correct__" : "__game_wrong__",
+          elapsedSeconds, comboBefore,
+        });
+        setComboBefore(r.comboAfter);
+        if (isCorrect) void awardMascotXp(student.id, "session_complete").catch(() => {});
+      } catch (e) { console.error("[cluster submit]", e); }
+    } else if (isCorrect) {
+      void awardClusterXp(1);
+    }
   }
+  // Phase1: 创作模式 (handleJudge) 是开放写作, AI 点评是定性反馈而非 binary 对/错信号,
+  // 无明确 judged correct/wrong → 不调 submitChineseAttempt, 保持原样.
 
   async function handleJudge() {
     const text = draft.trim();

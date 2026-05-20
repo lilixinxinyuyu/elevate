@@ -22,8 +22,11 @@
  *
  * 入口: `/chinese/reading-library-preview`
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
+import { awardMascotXp } from "../lib/mascotProgress";
+import { submitChineseAttempt } from "../subjects/chinese/service";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
@@ -38,6 +41,8 @@ type ReadingPassage = {
     options: string[];
     correctIdx: number;
     solution: string;
+    /** Phase1: 该小题来源 Question (真题/db 携带; DEMO 留空) — 每答一题记一条 */
+    sourceQuestion?: Question;
   }[];
 };
 
@@ -69,6 +74,7 @@ function adaptReadingPack(qs: Question[]): ReadingPassage[] {
       options: opts.map((o) => o.text),
       correctIdx,
       solution: Array.isArray(q.solution_steps) ? q.solution_steps.join(" ") : "",
+      sourceQuestion: q,
     });
   }
   return Array.from(byPassage.values()).filter((p) => p.questions.length >= 2);
@@ -225,6 +231,11 @@ export function ReadingLibraryPreviewPage() {
   const [allDone, setAllDone] = useState(false);
   // AI 补题: 从 db.questions 拉 chinese 阅读题 (skill_id 含 _READING), 过掉静态已有的, 跟静态题合并后一起 group
   const [dbQs, setDbQs] = useState<Question[]>([]);
+  // Phase1: 每答一道小题记一条学习数据; comboBefore 跨小题串联. 不改题序.
+  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const [sessionId] = useState(() => "cluster-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  const [comboBefore, setComboBefore] = useState(0);
+  const questionStartRef = useRef(Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -254,6 +265,11 @@ export function ReadingLibraryPreviewPage() {
   const curPassage = PASSAGES[passageIdx]!;
   const cur = curPassage.questions[qIdx]!;
 
+  // Phase1: 小题/篇章切换时重置计时
+  useEffect(() => {
+    questionStartRef.current = Date.now();
+  }, [qIdx, passageIdx]);
+
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
@@ -279,16 +295,33 @@ export function ReadingLibraryPreviewPage() {
     }
   }, [result, qIdx, passageIdx, curPassage.questions.length]);
 
-  function handleChoice(idx: number) {
+  async function handleChoice(idx: number) {
     if (result === "correct") return;
     setSelectedIdx(idx);
-    if (idx === cur.correctIdx) {
-      setResult("correct"); void awardClusterXp(1);
+    const isCorrect = idx === cur.correctIdx;
+    if (isCorrect) {
+      setResult("correct");
       setEncouragePhrase(null);
     } else {
       setResult("wrong");
       setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);
       setTimeout(() => setResult("idle"), 700);
+    }
+    // Phase1: 每道小题记一条 (对 & 错都记). comboBefore 跨小题串联. 不改题序.
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - questionStartRef.current) / 1000));
+    const srcQ = cur.sourceQuestion;
+    if (srcQ && student?.id) {
+      try {
+        const r = await submitChineseAttempt({
+          studentId: student.id, sessionId, question: srcQ,
+          isCorrect, chosenOptionId: isCorrect ? "__game_correct__" : "__game_wrong__",
+          elapsedSeconds, comboBefore,
+        });
+        setComboBefore(r.comboAfter);
+        if (isCorrect) void awardMascotXp(student.id, "session_complete").catch(() => {});
+      } catch (e) { console.error("[cluster submit]", e); }
+    } else if (isCorrect) {
+      void awardClusterXp(1);
     }
   }
 

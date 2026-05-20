@@ -22,11 +22,14 @@
  *
  * 入口: `/chinese/poem-lantern-preview`
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
+import { awardMascotXp } from "../lib/mascotProgress";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
+import { submitChineseAttempt } from "../subjects/chinese/service";
 import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
 type PoemCase = {
@@ -37,6 +40,7 @@ type PoemCase = {
   lines: string[]; // 用 ___ 表示空, 多个空依次对应 blanks
   blanks: string[]; // 正确答案 (按顺序)
   pool: string[]; // 候选字池 (含答案 + 干扰)
+  sourceQuestion?: Question; // 真题/db题携带原始 Question, 用于记录学习数据 (DEMO 不带)
 };
 
 const DEMO_CASES: PoemCase[] = [
@@ -169,6 +173,7 @@ function adaptPoemCloze(q: Question): PoemCase | null {
     lines: template.split("\n"),
     blanks,
     pool,
+    sourceQuestion: q,
   };
 }
 const REAL_POEM_CASES: PoemCase[] = SEED_QUESTIONS_CHINESE_V3
@@ -185,6 +190,11 @@ export function PoemLanternPreviewPage() {
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
   // AI 补题: 从 db.questions 拉 chinese poem_cloze 题, 过掉静态已有的, adapt 后 merge
   const [dbCases, setDbCases] = useState<PoemCase[]>([]);
+  // ── 学习数据记录 (统一走 submitChineseAttempt, 跟 ChineseTrain 一致) ──
+  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const [sessionId] = useState(() => "cluster-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  const [comboBefore, setComboBefore] = useState(0);
+  const questionStartRef = useRef(Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -224,6 +234,7 @@ export function PoemLanternPreviewPage() {
     setFilled(Array.from({ length: cur.blanks.length }, () => null));
     setResult("idle");
     setEncouragePhrase(null);
+    questionStartRef.current = Date.now(); // 重置答题计时
   }, [caseIdx, cur.blanks.length]);
 
   useEffect(() => {
@@ -238,7 +249,7 @@ export function PoemLanternPreviewPage() {
   // 已填入 chip 的 pool index (避免重复选)
   const usedPoolChars = new Set(filled.filter((x): x is string => x !== null));
 
-  function handlePoolClick(char: string) {
+  async function handlePoolClick(char: string) {
     if (result === "correct") return;
     // 找第一个空格填入
     const firstEmpty = filled.findIndex((f) => f === null);
@@ -249,9 +260,9 @@ export function PoemLanternPreviewPage() {
     // Auto-judge 当 filled 全部填好时
     if (newFilled.every((f) => f !== null)) {
       // judge
-      const allCorrect = newFilled.every((f, i) => f === cur.blanks[i]);
-      if (allCorrect) {
-        setResult("correct"); void awardClusterXp(1);
+      const isCorrect = newFilled.every((f, i) => f === cur.blanks[i]);
+      if (isCorrect) {
+        setResult("correct");
       } else {
         setResult("wrong");
         setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);
@@ -260,6 +271,33 @@ export function PoemLanternPreviewPage() {
           setResult("idle");
         }, 1200);
       }
+      // 记录学习数据 (对/错都记). 真题/db题走 submitChineseAttempt; DEMO 回退老 XP path.
+      await recordAttempt(isCorrect);
+    }
+  }
+
+  // 统一作答记录: 真题携带 sourceQuestion → submitChineseAttempt (attempts/mistakes/mastery);
+  // DEMO/fallback 无 Question → 保留老 awardClusterXp path. 对/错都调用.
+  async function recordAttempt(isCorrect: boolean) {
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - questionStartRef.current) / 1000));
+    if (cur.sourceQuestion && student?.id) {
+      try {
+        const r = await submitChineseAttempt({
+          studentId: student.id,
+          sessionId,
+          question: cur.sourceQuestion,
+          isCorrect,
+          chosenOptionId: isCorrect ? "__game_correct__" : "__game_wrong__",
+          elapsedSeconds,
+          comboBefore,
+        });
+        setComboBefore(r.comboAfter);
+        if (isCorrect) void awardMascotXp(student.id, "session_complete").catch(() => {});
+      } catch (e) {
+        console.error("[cluster submit]", e);
+      }
+    } else if (isCorrect) {
+      void awardClusterXp(1); // DEMO/fallback case (no real Question) keeps old path
     }
   }
 

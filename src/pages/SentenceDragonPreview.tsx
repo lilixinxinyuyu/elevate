@@ -25,11 +25,14 @@
  *
  * 入口: `/chinese/sentence-dragon-preview`
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
+import { awardMascotXp } from "../lib/mascotProgress";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
+import { submitChineseAttempt } from "../subjects/chinese/service";
 import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
 type DragonCase = {
@@ -41,6 +44,7 @@ type DragonCase = {
   correctOrder: string[]; // 正确顺序
   /** false → 中性"龙师出题"卷轴样式 (真题排序/组句); 其余 → 红色病句 line-through 样式 (DEMO 病句) */
   showAsError?: boolean;
+  sourceQuestion?: Question; // 真题/db题携带原始 Question, 用于记录学习数据 (DEMO 不带)
 };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -133,6 +137,7 @@ function adaptShuffle(q: Question): DragonCase | null {
     tokens: order,
     correctOrder: order,
     showAsError: false, // 真题是"排正确顺序", 用中性卷轴样式 (非病句 line-through)
+    sourceQuestion: q,
   };
 }
 const REAL_DRAGON_CASES: DragonCase[] = SEED_QUESTIONS_CHINESE_V3
@@ -150,6 +155,11 @@ export function SentenceDragonPreviewPage() {
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
   // AI 补题: 从 db.questions 拉 chinese sentence_shuffle 题, 过掉静态已有的, adapt 后 merge
   const [dbCases, setDbCases] = useState<DragonCase[]>([]);
+  // ── 学习数据记录 (统一走 submitChineseAttempt, 跟 ChineseTrain 一致) ──
+  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const [sessionId] = useState(() => "cluster-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  const [comboBefore, setComboBefore] = useState(0);
+  const questionStartRef = useRef(Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +200,7 @@ export function SentenceDragonPreviewPage() {
     setFilled(Array.from({ length: cur.correctOrder.length }, () => null));
     setResult("idle");
     setEncouragePhrase(null);
+    questionStartRef.current = Date.now(); // 重置答题计时
   }, [caseIdx, cur.tokens, cur.correctOrder.length]);
 
   useEffect(() => {
@@ -201,7 +212,7 @@ export function SentenceDragonPreviewPage() {
     }
   }, [result]);
 
-  function handlePoolClick(token: string, poolIdx: number) {
+  async function handlePoolClick(token: string, poolIdx: number) {
     if (result === "correct") return;
     const firstEmpty = filled.findIndex((f) => f === null);
     if (firstEmpty === -1) return;
@@ -214,9 +225,9 @@ export function SentenceDragonPreviewPage() {
 
     // Auto-judge 当 filled 全部填好时
     if (newFilled.every((f) => f !== null)) {
-      const allCorrect = newFilled.every((f, i) => f === cur.correctOrder[i]);
-      if (allCorrect) {
-        setResult("correct"); void awardClusterXp(1);
+      const isCorrect = newFilled.every((f, i) => f === cur.correctOrder[i]);
+      if (isCorrect) {
+        setResult("correct");
       } else {
         setResult("wrong");
         // 真题(showAsError===false)的 diagnosis 来自 feedback_wrong, 平时藏起 (有的会剧透答案),
@@ -232,6 +243,33 @@ export function SentenceDragonPreviewPage() {
           setResult("idle");
         }, 1500);
       }
+      // 记录学习数据 (对/错都记). 真题/db题走 submitChineseAttempt; DEMO 回退老 XP path.
+      await recordAttempt(isCorrect);
+    }
+  }
+
+  // 统一作答记录: 真题携带 sourceQuestion → submitChineseAttempt (attempts/mistakes/mastery);
+  // DEMO/fallback 无 Question → 保留老 awardClusterXp path. 对/错都调用.
+  async function recordAttempt(isCorrect: boolean) {
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - questionStartRef.current) / 1000));
+    if (cur.sourceQuestion && student?.id) {
+      try {
+        const r = await submitChineseAttempt({
+          studentId: student.id,
+          sessionId,
+          question: cur.sourceQuestion,
+          isCorrect,
+          chosenOptionId: isCorrect ? "__game_correct__" : "__game_wrong__",
+          elapsedSeconds,
+          comboBefore,
+        });
+        setComboBefore(r.comboAfter);
+        if (isCorrect) void awardMascotXp(student.id, "session_complete").catch(() => {});
+      } catch (e) {
+        console.error("[cluster submit]", e);
+      }
+    } else if (isCorrect) {
+      void awardClusterXp(1); // DEMO/fallback case (no real Question) keeps old path
     }
   }
 

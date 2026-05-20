@@ -23,8 +23,11 @@
  *
  * 入口: `/chinese/rhetoric-scroll-preview`
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
+import { awardMascotXp } from "../lib/mascotProgress";
+import { submitChineseAttempt } from "../subjects/chinese/service";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
@@ -40,6 +43,8 @@ type RhetoricCase = {
   options: { text: string; emoji?: string }[];
   correctIdx: number;
   solution: string;
+  /** Phase1: 真题/db 来源 Question，用于记录学习数据 (DEMO 留空) */
+  sourceQuestion?: Question;
 };
 
 const DEMO_CASES: RhetoricCase[] = [
@@ -183,6 +188,7 @@ function adaptRhetoric(q: Question): RhetoricCase | null {
     options: opts.map((o) => ({ text: o.text, emoji: rhetEmoji(o.text) })),
     correctIdx,
     solution: Array.isArray(q.solution_steps) ? q.solution_steps.join(" ") : "",
+    sourceQuestion: q,
   };
 }
 const REAL_RHET_CASES: RhetoricCase[] = [...SEED_QUESTIONS_CHINESE_V2, ...SEED_QUESTIONS_CHINESE_V3]
@@ -199,6 +205,11 @@ export function RhetoricScrollPreviewPage() {
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
   // AI 补题: 从 db.questions 拉 chinese 修辞题 (skill_id=C4B_U3_RHETORIC), 过掉静态已有的, adapt 后 merge
   const [dbCases, setDbCases] = useState<RhetoricCase[]>([]);
+  // Phase1: 记录学习数据 (attempts/mistakes/mastery) — 不改题序, 只走 submitChineseAttempt
+  const student = useLiveQuery(async () => (await db.students.toArray())[0]);
+  const [sessionId] = useState(() => "cluster-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  const [comboBefore, setComboBefore] = useState(0);
+  const questionStartRef = useRef(Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +244,11 @@ export function RhetoricScrollPreviewPage() {
 
   const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 
+  // Phase1: 题目切换时重置计时
+  useEffect(() => {
+    questionStartRef.current = Date.now();
+  }, [caseIdx, cur.id]);
+
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
@@ -245,16 +261,33 @@ export function RhetoricScrollPreviewPage() {
     }
   }, [result]);
 
-  function handleChoice(idx: number) {
+  async function handleChoice(idx: number) {
     if (result === "correct") return;
     setSelectedIdx(idx);
-    if (idx === cur.correctIdx) {
-      setResult("correct"); void awardClusterXp(1);
+    const isCorrect = idx === cur.correctIdx;
+    if (isCorrect) {
+      setResult("correct");
       setEncouragePhrase(null);
     } else {
       setResult("wrong");
       setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);
       setTimeout(() => setResult("idle"), 700);
+    }
+    // Phase1: 记录学习数据 (对 & 错都记). 不改题序.
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - questionStartRef.current) / 1000));
+    const srcQ = cur.sourceQuestion;
+    if (srcQ && student?.id) {
+      try {
+        const r = await submitChineseAttempt({
+          studentId: student.id, sessionId, question: srcQ,
+          isCorrect, chosenOptionId: isCorrect ? "__game_correct__" : "__game_wrong__",
+          elapsedSeconds, comboBefore,
+        });
+        setComboBefore(r.comboAfter);
+        if (isCorrect) void awardMascotXp(student.id, "session_complete").catch(() => {});
+      } catch (e) { console.error("[cluster submit]", e); }
+    } else if (isCorrect) {
+      void awardClusterXp(1);
     }
   }
 
