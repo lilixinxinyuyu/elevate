@@ -101,8 +101,16 @@ export async function setLastSeenTier(studentId: string, tierId: string): Promis
  */
 // v0.36.56: district 全 12 张已生成 (6 archetype × 2 gender) → 接通。
 // v0.36.57: city 全 12 张生成 + QA 通过 (银发跨 tier 一致) → 接通。
-// province/country 各 12 张生成补齐后再依次加入。
-export const AVAILABLE_AVATAR_TIERS = new Set<string>(["school", "district", "city"]);
+// v0.36.58: province + country 全 24 张生成 + QA 通过 (女银发 / 男黑发, 各自跨 tier
+//   一致; outfit 递进至斗篷/桂冠/王冠) → 全 5 段 60 张齐。walk-down resolver 此后
+//   恒命中本段 (不再回退), 但保留 (防御 + 未来新段)。
+export const AVAILABLE_AVATAR_TIERS = new Set<string>([
+  "school",
+  "district",
+  "city",
+  "province",
+  "country",
+]);
 
 /**
  * Build avatar URL for current tier + character choice.
