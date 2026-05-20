@@ -1,7 +1,7 @@
 {
   "name": "heping-math-trainer",
   "private": true,
-  "version": "0.36.27",
+  "version": "0.36.28",
   "type": "module",
   "scripts": {
     "dev": "vite",

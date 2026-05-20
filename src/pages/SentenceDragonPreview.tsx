@@ -71,6 +71,38 @@ const DEMO_CASES: DragonCase[] = [
     tokens: ["小猫", "蹑手蹑脚地", "朝", "鸟笼", "走过去。"],
     correctOrder: ["小猫", "蹑手蹑脚地", "朝", "鸟笼", "走过去。"],
   },
+  {
+    id: "d4",
+    scrollLabel: "案四 · 状语归位",
+    badSentence: "快乐地同学们在操场上做游戏。",
+    diagnosis: "状语'快乐地'应紧挨动词'做'",
+    tokens: ["同学们", "在操场上", "快乐地", "做", "游戏。"],
+    correctOrder: ["同学们", "在操场上", "快乐地", "做", "游戏。"],
+  },
+  {
+    id: "d5",
+    scrollLabel: "案五 · 把字句",
+    badSentence: "干干净净我把房间打扫得。",
+    diagnosis: "'把'字句结构: 谁 + 把 + 什么 + 怎么样",
+    tokens: ["我", "把", "房间", "打扫得", "干干净净。"],
+    correctOrder: ["我", "把", "房间", "打扫得", "干干净净。"],
+  },
+  {
+    id: "d6",
+    scrollLabel: "案六 · 关联词序",
+    badSentence: "他努力因为, 所以取得了好成绩。",
+    diagnosis: "'因为'应在第一个分句开头",
+    tokens: ["因为", "他努力,", "所以", "取得了", "好成绩。"],
+    correctOrder: ["因为", "他努力,", "所以", "取得了", "好成绩。"],
+  },
+  {
+    id: "d7",
+    scrollLabel: "案七 · 被字句",
+    badSentence: "小树苗被风吹得摇摇晃晃地。",
+    diagnosis: "'摇摇晃晃地'是状语, 应在动词'吹'前",
+    tokens: ["小树苗", "被风", "摇摇晃晃地", "吹得", "弯下了腰。"],
+    correctOrder: ["小树苗", "被风", "摇摇晃晃地", "吹得", "弯下了腰。"],
+  },
 ];
 
 const ENCOURAGE_PHRASES = [

@@ -95,6 +95,82 @@ const PASSAGE_1: ReadingPassage = {
   ],
 };
 
+// v0.36.28 (爸爸: 加难度) 第二篇 — 说明文《翠鸟》(4 年级课文型)
+const PASSAGE_2: ReadingPassage = {
+  id: "p2",
+  title: "📖 卷二·翠鸟",
+  passage: `翠鸟喜欢停在水边的苇秆上, 一双红色的小爪子紧紧抓住苇秆. 它的颜色非常鲜艳: 头上的羽毛像橄榄色的头巾, 绣满了翠绿色的花纹; 背上的羽毛像浅绿色的外衣; 腹部的羽毛像赤褐色的衬衫.
+
+翠鸟鸣声清脆, 爱贴着水面疾飞. 一眨眼, 又轻轻地停在苇秆上了.
+
+它的眼睛尖, 当小鱼悄悄探出头来吹了个小泡泡, 翠鸟蹬开苇秆, 像箭一样飞过去, 叼起小鱼, 贴着水面往远处飞走了.`,
+  questions: [
+    {
+      q: "翠鸟的羽毛有哪几种颜色?",
+      options: ["翠绿 / 浅绿 / 赤褐", "红 / 黄 / 蓝", "黑 / 白 / 灰", "金 / 银 / 紫"],
+      correctIdx: 0,
+      solution: "头(翠绿花纹) + 背(浅绿) + 腹(赤褐), 短文第一段逐一描写.",
+    },
+    {
+      q: "\"像箭一样飞过去\" 说明翠鸟捕鱼时怎样?",
+      options: ["速度非常快", "飞得很高", "声音很响", "颜色很美"],
+      correctIdx: 0,
+      solution: "比喻'像箭'突出翠鸟扑向小鱼的速度极快.",
+    },
+    {
+      q: "短文按什么顺序写翠鸟?",
+      options: ["先外形, 再活动 (鸣叫/捕鱼)", "先捕鱼, 再外形", "只写颜色", "只写捕鱼"],
+      correctIdx: 0,
+      solution: "第一段写外形颜色, 后面写鸣声疾飞 + 捕鱼, 是'外形→活动'顺序.",
+    },
+    {
+      q: "从'眼睛尖''蹬开''叼起'能看出翠鸟?",
+      options: ["机灵敏捷", "懒惰贪睡", "胆小怕人", "笨拙迟钝"],
+      correctIdx: 0,
+      solution: "一连串动词写出翠鸟捕鱼的机警敏捷.",
+    },
+  ],
+};
+
+// 第三篇 — 记叙文 (看图写话型, 写事)
+const PASSAGE_3: ReadingPassage = {
+  id: "p3",
+  title: "📖 卷三·雨中的伞",
+  passage: `放学了, 天突然下起了大雨. 小明没带伞, 正着急地站在校门口.
+
+这时, 同班的小红撑着一把蓝色的雨伞走过来. 她看见小明, 就把伞往小明那边移了移, 笑着说: "我们一起走吧!"
+
+两个人挤在一把小伞下, 雨水打湿了他们的半边衣服, 可是他们的心里却暖暖的. 小明心想: 有这样的好朋友, 真幸福.`,
+  questions: [
+    {
+      q: "这件事发生在什么时候?",
+      options: ["放学后下大雨时", "上学的早晨", "中午吃饭时", "周末在家"],
+      correctIdx: 0,
+      solution: "第一句'放学了, 天突然下起了大雨'交代时间.",
+    },
+    {
+      q: "小红是怎么做的?",
+      options: ["把伞移向小明, 两人一起走", "自己先走了", "去叫老师", "回教室躲雨"],
+      correctIdx: 0,
+      solution: "第二段'把伞往小明那边移''我们一起走吧'.",
+    },
+    {
+      q: "\"半边衣服湿了, 心里却暖暖的\" 说明什么?",
+      options: ["友谊让人温暖", "雨下得不大", "伞很大", "衣服不怕湿"],
+      correctIdx: 0,
+      solution: "身体淋湿(冷) vs 心里暖, 对比突出友谊的温暖.",
+    },
+    {
+      q: "短文想告诉我们?",
+      options: ["朋友间互相帮助很幸福", "下雨要带伞", "蓝伞最好看", "上学别迟到"],
+      correctIdx: 0,
+      solution: "末句'有这样的好朋友, 真幸福'点明中心: 友爱互助.",
+    },
+  ],
+};
+
+const PASSAGES: ReadingPassage[] = [PASSAGE_1, PASSAGE_2, PASSAGE_3];
+
 const ENCOURAGE_PHRASES = [
   "再读细一些, 答案藏在字里",
   "Owl 慢慢看, 不急",
@@ -103,19 +179,31 @@ const ENCOURAGE_PHRASES = [
 ];
 
 export function ReadingLibraryPreviewPage() {
+  const [passageIdx, setPassageIdx] = useState(0);
   const [qIdx, setQIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
   const [allDone, setAllDone] = useState(false);
 
-  const cur = PASSAGE_1.questions[qIdx]!;
+  // v0.36.28 (爸爸: 加难度): 3 篇短文轮流, 一篇做完进下一篇
+  const curPassage = PASSAGES[passageIdx]!;
+  const cur = curPassage.questions[qIdx]!;
 
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
-        if (qIdx + 1 >= PASSAGE_1.questions.length) {
-          setAllDone(true);
+        if (qIdx + 1 >= curPassage.questions.length) {
+          // 这篇做完 → 下一篇; 全部 3 篇做完 → allDone
+          if (passageIdx + 1 >= PASSAGES.length) {
+            setAllDone(true);
+          } else {
+            setPassageIdx((i) => i + 1);
+            setQIdx(0);
+            setSelectedIdx(null);
+            setResult("idle");
+            setEncouragePhrase(null);
+          }
         } else {
           setQIdx((i) => i + 1);
           setSelectedIdx(null);
@@ -125,7 +213,7 @@ export function ReadingLibraryPreviewPage() {
       }, 1800);
       return () => clearTimeout(t);
     }
-  }, [result, qIdx]);
+  }, [result, qIdx, passageIdx, curPassage.questions.length]);
 
   function handleChoice(idx: number) {
     if (result === "correct") return;
@@ -266,10 +354,10 @@ export function ReadingLibraryPreviewPage() {
         </Link>
         <div className="px-4 py-1.5 rounded-xl bg-red-950/85 backdrop-blur-md border border-amber-500/50 text-center">
           <div className="text-[10px] text-amber-300 uppercase tracking-widest">📖 翰林书院</div>
-          <div className="text-sm font-display font-bold text-amber-100">{PASSAGE_1.title}</div>
+          <div className="text-sm font-display font-bold text-amber-100">{curPassage.title}</div>
         </div>
         <div className="px-3 py-1.5 rounded-xl bg-red-950/85 backdrop-blur-md border border-amber-500/50 text-xs font-bold text-amber-100 tabular-nums">
-          {qIdx + 1} / {PASSAGE_1.questions.length}
+          {qIdx + 1} / {curPassage.questions.length}
         </div>
       </div>
 
@@ -291,7 +379,7 @@ export function ReadingLibraryPreviewPage() {
             >
               <div className="text-[10px] text-red-800 uppercase tracking-widest text-center mb-2">📖 卷宗</div>
               <div className="text-stone-900 leading-relaxed text-sm sm:text-base font-display whitespace-pre-line" style={{ fontFamily: "'Songti SC', 'STSong', serif" }}>
-                {PASSAGE_1.passage}
+                {curPassage.passage}
               </div>
             </div>
 
