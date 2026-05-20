@@ -45,6 +45,40 @@ const ABILITY_EMOJI: Record<string, string> = {
   accumulation: "🌱",
 };
 
+// v0.36.49 (爸爸: 每日三环重配, 对齐期末 + cluster 游戏; 8787+8788 双 peer review):
+// 三环 = 基础字词 / 今日考点闯关 / 温故知新。第 2 环每天轮播一个期末题型 cluster 游戏
+// (一周覆盖 7 大题型), 进度按"今日闯关题数"算 (重深度不重刷量)。模拟测试退出每日环
+// (改周末/考前, 仍在下方入口), 因为它低频高耗、放每日会摧毁打卡连续性 (双评一致)。
+const CLUSTER_ROTATION = [
+  { name: "古诗拍灯笼", to: "/chinese/poem-lantern-preview" },
+  { name: "字形侦探", to: "/chinese/glyph-detective-preview" },
+  { name: "病句龙训", to: "/chinese/sentence-dragon-preview" },
+  { name: "修辞画卷", to: "/chinese/rhetoric-scroll-preview" },
+  { name: "仿写画师", to: "/chinese/imitate-painter-preview" },
+  { name: "阅读图书馆", to: "/chinese/reading-library-preview" },
+  { name: "自由作文", to: "/chinese/essay-inkstone-preview" },
+];
+const CLUSTER_DAILY_TARGET = 8;
+
+/** 今日 cluster 闯关答题数 (cluster session 写的 chinese attempts, 当天本地日历日)。 */
+async function countTodayClusterAttempts(studentId: string): Promise<number> {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const ts = start.getTime();
+  try {
+    const attempts = await db.attempts.where("studentId").equals(studentId).toArray();
+    return attempts.filter(
+      (a) =>
+        (a.subjectId ?? "math") === "chinese" &&
+        a.createdAt >= ts &&
+        typeof a.sessionId === "string" &&
+        a.sessionId.startsWith("cluster-"),
+    ).length;
+  } catch {
+    return 0;
+  }
+}
+
 export function ChineseHomePage() {
   const subject = useSubject();
   const totalQuestions = subject.seedQuestions.length;
@@ -66,6 +100,7 @@ export function ChineseHomePage() {
   const [currentTerm, setCurrentTerm] = useState<Term>("下册");
   const [charDaily, setCharDaily] = useState<DailyState | null>(null);
   const [charWrongCount, setCharWrongCount] = useState(0);
+  const [clusterToday, setClusterToday] = useState(0);
 
   useEffect(() => {
     if (!student?.id) return;
@@ -73,7 +108,7 @@ export function ChineseHomePage() {
     (async () => {
       await ensureDefaultTerm();
       setCurrentTerm((student.currentTerm as Term) ?? "下册");
-      const [xp, trophies, m, mistakeCount, mock, charProg, charDailyState] = await Promise.all([
+      const [xp, trophies, m, mistakeCount, mock, charProg, charDailyState, clusterCount] = await Promise.all([
         getChineseTotalXp(student.id),
         getChineseTrophies(student.id),
         getChineseSkillMastery(student.id),
@@ -81,8 +116,10 @@ export function ChineseHomePage() {
         getChineseMockExamCooldown(student.id),
         loadCharProgress(student.id),
         loadDaily("chinese_chars", student.id, 20),
+        countTodayClusterAttempts(student.id),
       ]);
       if (cancelled) return;
+      setClusterToday(clusterCount);
       setTotalXp(xp);
       setTrophyState({ defsById: trophies.defsById, ownedCounts: trophies.ownedCounts });
       setMastery(m);
@@ -205,13 +242,12 @@ export function ChineseHomePage() {
       {/* v0.31.42：学期切换（赛季制 — 写 student.currentTerm，与数学一致） */}
       <TermSwitcher currentTerm={currentTerm} onChange={(t) => setCurrentTerm(t)} />
 
-      {/* v0.31.42：今日 3 环（字词大冒险 / 错题复活 / 模拟测试） */}
+      {/* v0.36.49：今日 3 环（基础字词 / 今日考点闯关 / 温故知新）— 对齐期末 + cluster 游戏 */}
       <SubjectTodayRings
         rings={buildChineseRings({
           charDaily,
           openMistakes,
-          mockAvailable: mockCooldown.available,
-          mockDaysUntilNext: mockCooldown.daysUntilNext,
+          clusterToday,
           // v0.31.48: 加载完才传 true，让初次环 progress 从 0 填到实际值
           loaded: charDaily !== null,
         })}
@@ -326,7 +362,7 @@ export function ChineseHomePage() {
           show: { transition: { staggerChildren: 0.08 } },
         }}
       >
-        <div className="text-sm text-slate-400 mb-2">🎮 趣味闯关 · 语文小游戏</div>
+        <div className="text-sm text-slate-400 mb-2">🎮 今日考点闯关 · 7 大期末题型 (每天轮播练一个)</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
             { to: "/chinese/poem-lantern-preview", emoji: "🏮", title: "古诗拍灯笼", desc: "元宵灯笼 · 古诗补字", bg: "from-red-500/15 to-amber-500/15", border: "border-red-400/40" },
@@ -483,8 +519,7 @@ export function ChineseHomePage() {
 function buildChineseRings(args: {
   charDaily: DailyState | null;
   openMistakes: number;
-  mockAvailable: boolean;
-  mockDaysUntilNext: number;
+  clusterToday: number;
   loaded: boolean;
 }): RingSpec[] {
   const amberA = "#fcd34d";
@@ -494,13 +529,23 @@ function buildChineseRings(args: {
   const cyanA = "#22d3ee";
   const cyanB = "#0891b2";
 
-  // v0.31.48: 数据加载完之前所有环 progress=0/done=false，加载完才填充。
-  // 让 stroke-dashoffset transition 跟数学一样顺畅播出"填充"动画，且 sparkle 能正常 trigger。
+  // v0.31.48: 数据加载完之前所有环 progress=0/done=false，加载完才填充（动画 + sparkle）。
+
+  // 环 1 · 基础字词关 (期末最大基础盘: 字音字形 + 词语, 每天必练)
   const targetCount = args.charDaily?.target ?? 20;
   const todayCount = args.charDaily?.todayCount ?? 0;
   const charProg = !args.loaded ? 0 : Math.min(1, todayCount / Math.max(1, targetCount));
   const charDone = args.loaded && todayCount >= targetCount;
 
+  // 环 2 · 今日考点闯关 (每天轮播一个期末题型 cluster 游戏, 一周覆盖 7 大题型)
+  const doy = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86_400_000,
+  );
+  const todayCluster = CLUSTER_ROTATION[doy % CLUSTER_ROTATION.length]!;
+  const clusterProg = !args.loaded ? 0 : Math.min(1, args.clusterToday / CLUSTER_DAILY_TARGET);
+  const clusterDone = args.loaded && args.clusterToday >= CLUSTER_DAILY_TARGET;
+
+  // 环 3 · 温故知新 (到期错题间隔重现, 现在跨 cluster 统一; 无错题=惊喜满环)
   const mistakeProg = !args.loaded
     ? 0
     : args.openMistakes === 0
@@ -510,9 +555,9 @@ function buildChineseRings(args: {
 
   return [
     {
-      id: "char_quest",
+      id: "char_base",
       icon: "🗡️",
-      shortLabel: "字词大冒险",
+      shortLabel: "基础字词",
       progress: charProg,
       statusText: charDone ? `今日完成 ✓` : `${todayCount} / ${targetCount} 字次`,
       to: "/chinese/char-practice",
@@ -521,30 +566,28 @@ function buildChineseRings(args: {
       done: charDone,
     },
     {
-      id: "mistakes",
-      icon: "🪄",
-      shortLabel: "错题复活",
-      progress: mistakeProg,
-      statusText: mistakeDone ? "无未消化错题" : `${args.openMistakes} 道待练`,
-      to: "/chinese/train?mode=review",
+      id: "exam_quest",
+      icon: "🎮",
+      shortLabel: "今日考点",
+      progress: clusterProg,
+      statusText: clusterDone
+        ? `今日闯关完成 ✓`
+        : `${args.clusterToday} / ${CLUSTER_DAILY_TARGET} 题 · ${todayCluster.name}`,
+      to: todayCluster.to,
       hue: violetA,
       hue2: violetB,
-      done: mistakeDone,
+      done: clusterDone,
     },
     {
-      id: "mock",
-      icon: "📝",
-      shortLabel: "模拟测试",
-      progress: !args.loaded ? 0 : args.mockAvailable ? 0.05 : 1,
-      statusText: !args.loaded
-        ? "—"
-        : args.mockAvailable
-          ? "本周已开放 · 跨单元 20 题"
-          : `${args.mockDaysUntilNext} 天后再开`,
-      to: args.mockAvailable ? "/chinese/train?mode=mock_exam" : "/chinese",
+      id: "review",
+      icon: "🪄",
+      shortLabel: "温故知新",
+      progress: mistakeProg,
+      statusText: mistakeDone ? "已清空 ✓" : `${args.openMistakes} 道待复习`,
+      to: "/chinese/train?mode=review",
       hue: cyanA,
       hue2: cyanB,
-      done: args.loaded && !args.mockAvailable,
+      done: mistakeDone,
     },
   ];
 }
