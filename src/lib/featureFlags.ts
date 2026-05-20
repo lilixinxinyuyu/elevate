@@ -172,3 +172,14 @@ export const isSteadyAimV1 = defineFlag({
 export const isMockExamReportV1 = defineFlag({
   lsKey: "mock_exam_report_v1",
 });
+
+/**
+ * Phase B Hub v6: character-led math lobby (新首页候选, 角色立绘居中).
+ * OFF by default — 仅 /math/hub-v6 路由可见, 不动 live 首页.
+ * Step 6 (later) 才 wire into HomeRoute.
+ */
+export const isHubV6Default = defineFlag({
+  lsKey: "hub_v6_default",
+  urlParam: "hubv6",
+  defaultOn: false,
+});

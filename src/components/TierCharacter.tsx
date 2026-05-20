@@ -38,7 +38,7 @@ export function TierCharacter({
   tier: Tier;
   subRank: number;
   subRankRoman: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   /** v5.6: 学生 onboarding 后的 archetype + gender 选择. 用来 pick base-<arc>-<g>-school PNG */
   characterChoice?: CharacterChoice | null;
 }) {
@@ -49,6 +49,8 @@ export function TierCharacter({
     sm: { w: "w-12", h: "h-16", emojiSize: "text-2xl", ornament: "text-xs" },
     md: { w: "w-20", h: "h-28", emojiSize: "text-4xl", ornament: "text-base" },
     lg: { w: "w-32", h: "h-44", emojiSize: "text-6xl", ornament: "text-xl" },
+    // xl: HubV6 centerpiece — 大全身立绘 (角色当主角, 不是头像角标)
+    xl: { w: "w-56", h: "h-80", emojiSize: "text-8xl", ornament: "text-3xl" },
   }[size];
 
   // sub-rank ornament emoji (rank ≥2 显示)

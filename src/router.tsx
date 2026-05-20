@@ -59,6 +59,8 @@ const DetectivePreviewPage = lazy(() => import("./pages/DetectivePreview").then(
 const TemplePreviewPage = lazy(() => import("./pages/TemplePreview").then((m) => ({ default: m.TemplePreviewPage })));
 // v0.35.79 Hub Screen v5 (Bruce 反馈 v4 整体感弱 / 老 3 环段位能力诊断扔了 → 全数捡回)
 const HubScreenV5Page = lazy(() => import("./pages/HubScreenV5").then((m) => ({ default: m.HubScreenV5Page })));
+// Phase B Hub Screen v6 (角色立绘居中 lobby, OFF-by-default flag isHubV6Default; live 首页不变)
+const HubScreenV6Page = lazy(() => import("./pages/HubScreenV6").then((m) => ({ default: m.HubScreenV6Page })));
 // v0.35.81 Sprint 8: Lab Preview — 几何实验室 cluster (TriangleJudge/ShapeCourt/CubeViewer)
 const LabPreviewPage = lazy(() => import("./pages/LabPreview").then((m) => ({ default: m.LabPreviewPage })));
 // v0.35.83 Sprint 9: Data Preview — 数据探险 cluster (BarChart/LineChart/PieChart)
@@ -298,6 +300,8 @@ export const router = createBrowserRouter([
       { path: "temple-preview", element: L(<MathOnlyRoute><TemplePreviewPage /></MathOnlyRoute>) },
       // v0.35.79 Hub Screen v5 (统一 hero scene, 3 环 + 段位徽章 + 能力诊断 全回归)
       { path: "hub-v5", element: L(<MathOnlyRoute><HubScreenV5Page /></MathOnlyRoute>) },
+      // Phase B Hub Screen v6 (角色立绘居中 lobby; flag OFF-by-default, 仅此路由可见)
+      { path: "hub-v6", element: L(<MathOnlyRoute><HubScreenV6Page /></MathOnlyRoute>) },
       // v0.35.81 Lab Preview (Geometry Lab cluster, Sprint 8)
       { path: "lab-preview", element: L(<MathOnlyRoute><LabPreviewPage /></MathOnlyRoute>) },
       // v0.35.83 Data Preview (Data Adventure cluster, Sprint 9)
