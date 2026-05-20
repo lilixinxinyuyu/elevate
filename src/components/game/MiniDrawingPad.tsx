@@ -42,14 +42,23 @@ interface Props {
 export function MiniDrawingPad({ disabled, onStrokeCountChange, resetKey }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
+  // v0.36.46 (爸爸第 5 次反馈 + 8787/8788 双 peer review): strokesRef 做 redraw 真相源,
+  // 躲开 GameShell 倒计时高频 re-render 下 redraw() 闭包 strokes 的 stale 时序窗口
+  // (写下一笔删上一笔的真因)。所有改动同步 ref。
+  const strokesRef = useRef<Stroke[]>([]);
+  function commitStrokes(next: Stroke[]) {
+    strokesRef.current = next;
+    setStrokes(next);
+  }
   const drawingRef = useRef(false);
   const currentStrokeRef = useRef<Stroke>([]);
   const [tool, setTool] = useState<Tool>("pen");
 
   // Reset on resetKey change (题切换)
   useEffect(() => {
-    setStrokes([]);
     currentStrokeRef.current = [];
+    commitStrokes([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
   // 通知 parent
@@ -69,7 +78,8 @@ export function MiniDrawingPad({ disabled, onStrokeCountChange, resetKey }: Prop
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#0f172a";
-    for (const stroke of strokes) {
+    // 从 ref 读 (不读 state 闭包) — 永远最新已提交笔画, 躲 stale closure
+    for (const stroke of strokesRef.current) {
       if (stroke.length < 2) continue;
       ctx.beginPath();
       ctx.moveTo(stroke[0]!.x, stroke[0]!.y);
@@ -105,19 +115,18 @@ export function MiniDrawingPad({ disabled, onStrokeCountChange, resetKey }: Prop
   }
 
   function eraseAt(pt: Point) {
-    setStrokes((all) =>
-      all.filter((stroke) => {
-        for (let i = 0; i < stroke.length; i++) {
-          const p = stroke[i]!;
-          const dx = p.x - pt.x;
-          const dy = p.y - pt.y;
-          if (dx * dx + dy * dy <= ERASER_RADIUS * ERASER_RADIUS) {
-            return false;
-          }
+    const next = strokesRef.current.filter((stroke) => {
+      for (let i = 0; i < stroke.length; i++) {
+        const p = stroke[i]!;
+        const dx = p.x - pt.x;
+        const dy = p.y - pt.y;
+        if (dx * dx + dy * dy <= ERASER_RADIUS * ERASER_RADIUS) {
+          return false;
         }
-        return true;
-      }),
-    );
+      }
+      return true;
+    });
+    commitStrokes(next);
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -161,7 +170,7 @@ export function MiniDrawingPad({ disabled, onStrokeCountChange, resetKey }: Prop
     if (tool === "pen" && currentStrokeRef.current.length >= 2) {
       const stroke = currentStrokeRef.current;
       currentStrokeRef.current = [];
-      setStrokes((s) => [...s, stroke]);
+      commitStrokes([...strokesRef.current, stroke]);
     } else {
       currentStrokeRef.current = [];
       redraw();
@@ -171,13 +180,13 @@ export function MiniDrawingPad({ disabled, onStrokeCountChange, resetKey }: Prop
 
   function clearAll() {
     if (disabled) return;
-    setStrokes([]);
     currentStrokeRef.current = [];
+    commitStrokes([]);
   }
 
   function undoLast() {
     if (disabled) return;
-    setStrokes((s) => s.slice(0, -1));
+    commitStrokes(strokesRef.current.slice(0, -1));
   }
 
   return (

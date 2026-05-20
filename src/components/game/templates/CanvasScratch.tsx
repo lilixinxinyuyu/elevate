@@ -48,6 +48,17 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
   // chinese HandwriteCanvas 工作模式: 普通 setState + plain function redraw +
   // useEffect [strokes] 触发. 简单粗暴, 没 closure 陷阱.
   const [strokes, setStrokes] = useState<Stroke[]>([]);
+  // v0.36.46 (爸爸第 5 次反馈, 8787+8788 双 peer review): 写下一笔删上一笔的真因 —
+  // GameShell 有每秒倒计时, 父组件高频 re-render, redraw() 闭包里的 strokes 在
+  // "提交笔画 setState → React flush" 之间是 stale 的 (语文 HandwriteCanvas 在静态页
+  // 主线程空闲, flush 瞬间完成所以正常; 数学在繁忙主线程下 stale 窗口被放大)。
+  // 修法: strokesRef 做 redraw 的唯一真相源, 所有改动同步更新 ref, 彻底躲开闭包时序。
+  const strokesRef = useRef<Stroke[]>([]);
+  /** 同步更新 ref(给 redraw 用) + state(给 UI/笔数显示用), 然后立刻重画。 */
+  function commitStrokes(next: Stroke[]) {
+    strokesRef.current = next;
+    setStrokes(next);
+  }
   const drawingRef = useRef(false);
   const currentStrokeRef = useRef<Stroke>([]);
   const [tool, setTool] = useState<Tool>("pen");
@@ -66,7 +77,8 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#0f172a";
-    for (const stroke of strokes) {
+    // 从 ref 读 (不读 state 闭包) — 永远是最新已提交笔画, 躲开 stale closure
+    for (const stroke of strokesRef.current) {
       if (stroke.length < 2) continue;
       ctx.beginPath();
       ctx.moveTo(stroke[0]!.x, stroke[0]!.y);
@@ -117,19 +129,18 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
 
   // v0.36.2: 擦子用 setStrokes functional update (跟 HandwriteCanvas 模式一致)
   function eraseAt(pt: Point) {
-    setStrokes((all) =>
-      all.filter((stroke) => {
-        for (let i = 0; i < stroke.length; i++) {
-          const p = stroke[i]!;
-          const dx = p.x - pt.x;
-          const dy = p.y - pt.y;
-          if (dx * dx + dy * dy <= ERASER_RADIUS * ERASER_RADIUS) {
-            return false; // 删整条 stroke
-          }
+    const next = strokesRef.current.filter((stroke) => {
+      for (let i = 0; i < stroke.length; i++) {
+        const p = stroke[i]!;
+        const dx = p.x - pt.x;
+        const dy = p.y - pt.y;
+        if (dx * dx + dy * dy <= ERASER_RADIUS * ERASER_RADIUS) {
+          return false; // 删整条 stroke
         }
-        return true;
-      }),
-    );
+      }
+      return true;
+    });
+    commitStrokes(next);
   }
 
   // v0.36.2 抄 HandwriteCanvas 简单模式: setStrokes functional, redraw on state change
@@ -176,8 +187,8 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     if (tool === "pen" && currentStrokeRef.current.length >= 2) {
       const stroke = currentStrokeRef.current;
       currentStrokeRef.current = [];
-      // functional setState — 跟 HandwriteCanvas line 140 一样
-      setStrokes((s) => [...s, stroke]);
+      // ref 同步追加 — 立刻成为 redraw 真相源, 不等 React flush (躲 stale closure)
+      commitStrokes([...strokesRef.current, stroke]);
     } else {
       currentStrokeRef.current = [];
       redraw();
@@ -187,13 +198,13 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
 
   function clearAll() {
     if (locked || disabled) return;
-    setStrokes([]);
     currentStrokeRef.current = [];
+    commitStrokes([]);
   }
 
   function undoLast() {
     if (locked || disabled) return;
-    setStrokes((s) => s.slice(0, -1));
+    commitStrokes(strokesRef.current.slice(0, -1));
   }
 
   // ────────── Vision judge (爸爸 explicit): submit 后 fire-and-forget ──────────
