@@ -25,6 +25,8 @@
 import { useState, useEffect } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
+import type { Question } from "../core/types";
+import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
 type PoemCase = {
   id: string;
@@ -132,13 +134,55 @@ const ENCOURAGE_PHRASES = [
 
 const PLACEHOLDER = "___";
 
+// ── 真题库接入: questionPack3 的 poem_cloze 题 (古诗补字) ──
+// game_data.template/blanks/pool 直接映射 PoemCase, 复用统一题库不另造 poemPack.
+// 诗名 → 朝代·作者 (有的 stem 没带作者, 统一补全, 展示跟 DEMO 一样精致)
+const POET_BY_TITLE: Record<string, string> = {
+  宿新市徐公店: "宋 · 杨万里",
+  四时田园杂兴: "宋 · 范成大",
+  "清平乐·村居": "宋 · 辛弃疾",
+  清明: "唐 · 杜牧",
+  江南春: "唐 · 杜牧",
+  惠崇春江晚景: "宋 · 苏轼",
+  滁州西涧: "唐 · 韦应物",
+  忆江南: "唐 · 白居易",
+  独坐敬亭山: "唐 · 李白",
+  望洞庭: "唐 · 刘禹锡",
+  海上日出: "现代 · 巴金",
+};
+function adaptPoemCloze(q: Question): PoemCase | null {
+  const gd = q.game_data;
+  if (!gd || gd.kind !== "poem_cloze") return null;
+  const { template, blanks, pool } = gd;
+  if (!template || !Array.isArray(blanks) || !Array.isArray(pool) || blanks.length < 1) return null;
+  // stem 形如 "把字塞进范成大《四时田园杂兴》的空格里：" → 提取诗名
+  const m = q.stem.match(/把字塞进\s*(.*?)《(.+?)》/);
+  const parsedPoet = (m?.[1] ?? "").trim();
+  const title = m?.[2] ?? "课内古诗";
+  const poet = POET_BY_TITLE[title] ?? (parsedPoet || "课内古诗");
+  return {
+    id: q.question_id,
+    scrollLabel: `真题 · ${title}`,
+    poemTitle: title,
+    poet,
+    lines: template.split("\n"),
+    blanks,
+    pool,
+  };
+}
+const REAL_POEM_CASES: PoemCase[] = SEED_QUESTIONS_CHINESE_V3
+  .filter((q) => q.game_type === "poem_cloze")
+  .map(adaptPoemCloze)
+  .filter((c): c is PoemCase => c !== null);
+const CASES: PoemCase[] = REAL_POEM_CASES.length >= 4 ? REAL_POEM_CASES : DEMO_CASES;
+
 export function PoemLanternPreviewPage() {
   const [caseIdx, setCaseIdx] = useState(0);
   const [filled, setFilled] = useState<(string | null)[]>([]);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
 
-  const cur = DEMO_CASES[caseIdx]!;
+  const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 
   useEffect(() => {
     // 切换题目时重置
@@ -150,7 +194,7 @@ export function PoemLanternPreviewPage() {
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
-        setCaseIdx((i) => (i + 1) % DEMO_CASES.length);
+        setCaseIdx((i) => (i + 1) % CASES.length);
       }, 2000);
       return () => clearTimeout(t);
     }
@@ -313,7 +357,7 @@ export function PoemLanternPreviewPage() {
           <div className="text-sm font-display font-bold text-amber-100">{cur.scrollLabel}</div>
         </div>
         <div className="px-3 py-1.5 rounded-xl bg-red-900/85 backdrop-blur-md border border-amber-400/40 text-xs font-bold text-amber-100 tabular-nums">
-          {caseIdx + 1} / {DEMO_CASES.length}
+          {caseIdx + 1} / {CASES.length}
         </div>
       </div>
 
