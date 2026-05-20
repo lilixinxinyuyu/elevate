@@ -1,10 +1,32 @@
-# Character Growth Roadmap — 暂停存档
+# Character Growth Roadmap — Phase B/C/D 已完成 (2026-05-21 更新)
 
-**暂停日期**: 2026-05-19
-**暂停原因**: Bruce pivot 到中文模块开启 (语文拼音 + 词组)
-**最后 ship version**: v0.35.90
+**原暂停日期**: 2026-05-19 (Bruce pivot 到语文模块) — 已于 **2026-05-21 恢复并完成 B/C/D**。
+**当前 ship version**: v0.36.61
+**状态**: 角色成长线核心 (Hub v6 character-led lobby + 全 5 段 60 张立绘 + 升段仪式动画) 全部
+ship + 真验证。唯一剩余 = Hub v6 设默认 (gated on Selena 多日试用, 见文末 task #22)。
 
-恢复时直接接 Phase B (Hub v6 character-led lobby 重做).
+> ⚠️ 下方 "🛑 暂停在哪里" 等章节是 2026-05-19 的历史规划, **已全部落地**; 当前真相见紧接的
+> "## ✅ 恢复后完成 (2026-05-21)" 章节。Character Bible / assets 清单 / Bruce 决策表 仍是有效参考。
+
+---
+
+## ✅ 恢复后完成 (2026-05-21, v0.36.54 → v0.36.61)
+
+| Phase | Version | 内容 | 验证 |
+|---|---|---|---|
+| **B** Hub v6 lobby | v0.36.x (step 3-5) | 角色立绘 centerpiece + 段位 chevron 头顶 + 3 环 halo + 任务栈 (红牌救援/期末BOSS/能力诊断) + 底部 stats bar + 🐼 sidekick + 主 CTA 开始今日挑战。`/math/hub-v6`, OFF-flag (`?hubv6=on` 预览)。 | preview 实跑各段渲染 ✅ |
+| **C** 全 5 段立绘 | v0.36.54→58 | 6 archetype × 2 gender × 5 tier = **60 张** 预生成静态立绘 `base-<arch>-<gender>-<tier>-v1.png`。token-plan wan2.7-image-pro 生成 + CV 透明。`AVAILABLE_AVATAR_TIERS` 全接通; `characterAvatarUrl` walk-down resolver 恒命中本段。 | 全 60 张视觉 QA: 女银发/男黑发各自跨 tier 一致, outfit 逐段升级 (便装→斗篷→桂冠/王冠), 无畸形, 无需 reroll ✅ |
+| **D** 升段仪式 | v0.36.55 | `CharacterTierUpModal` 4 段 framer-motion (旧立绘 fade→白光→新立绘→庆祝卡 "形象进化! 解锁 X")。HubScreenV6 load 时比 `rating.tier.id` vs db.meta `lastSeenTier`, 跨段前进弹窗 (advance-only, 首进静默, onClose 才推进 lastSeen)。 | preview 注入 attempts 实测: 首进静默✅ / 真跨段(school→district & school→country 多段跳)弹窗+正确立绘✅ / 关闭推进 lastSeen✅ / 重载不重弹(幂等)✅ |
+
+**关键设计落点 (与原规划的差异)**:
+- Phase C 原计划 "Lv2-5 中间立绘 per-student async gen"; 实际经双 peer review 改为 **per-(archetype×gender×tier) 预生成静态资产** (非 per-student) — 更可靠、零等待、无运行时 gen 成本。升段时无需 async gen。
+- 立绘发色: prompt anchor 写 "black bob" 但 wan 风格把女生渲成银/白发、男生黑发; 跨 tier 各自一致, 已接受为 de-facto 风格 (非 bug)。
+
+**唯一剩余 (task #22, ⚠️ 人工 gated)**: Hub v6 设默认。roadmap 明确 "Selena 用 ?hubv6=on 试几天 OK 后" 才把 `isHubV6Default` 接进 router HomeRoute, 默认 OFF 先 ship 再 flip。**别提前做** — 等爸爸/Selena 试用拍板。
+
+**同期顺带完成的跨学科收尾** (非本 roadmap 但相关):
+- 统一选题 Phase 4 (v0.36.59): 双 peer review 定 Option B, 抽 `core/rng.ts` (hashSeed/seededRng/shuffle) 跨学科共享; 全量 "选题 core+adapter" (Option C) peer review 明确**不做** (3 学科过度设计)。
+- 语文 cover-fire 推广 (v0.36.60-61): C4 修辞 + C5 仿写 接缺题掩护生成 (此前仅 C1/C2/C3); 现 C1-C5 全接 (5/6)。C6 阅读暂缓 (passage 分组对 AI-gen 脆弱, 需先 cost-test, task #26)。
 
 ---
 
@@ -144,7 +166,7 @@ background, text, signature, watermark, NSFW, mature features, teen idol,
 aged-up, busty, anime sexualized, school uniform fetish, sailor uniform
 ```
 
-**Outfit per archetype × tier** (Lv1 done, Lv2-5 待生):
+**Outfit per archetype × tier** (✅ 全 5 段 60 张已生成 + ship, 2026-05-21; 下表是生成时的 outfit 设计参考):
 
 | Archetype | Lv1 (done) | Lv2 (district) | Lv3 (city) | Lv4 (province) | Lv5 (country) |
 |---|---|---|---|---|---|
