@@ -649,16 +649,18 @@ export async function getTotalXp(studentId: string): Promise<number> {
 }
 
 /**
- * v0.36.29 (爸爸: cluster 接总 XP): 给当前学科 totalXp 加一笔 bonus.
- * cluster 游戏 (preview, 不走 submitAttempt) 玩对题加分用. 加到当前 SUBJECT_NAMESPACE
- * 的 totalXp (chinese cluster → chinese 总 XP). 返回新总 XP.
+ * v0.36.29 (爸爸: cluster 接总 XP): 给指定学科 totalXp 加一笔 bonus.
+ * cluster 游戏 (preview, 不走 submitAttempt) 玩对题加分用. 显式传 subject
+ * (chinese cluster → "chinese"), 不靠 module 级 SUBJECT_NAMESPACE (cluster 没切
+ * context, 默认 math 会加错学科). 返回新总 XP.
  */
-export async function addBonusXp(studentId: string, delta: number): Promise<number> {
-  if (!studentId || delta <= 0) return getTotalXp(studentId);
-  const xpMeta = await db.meta.get(studentKey("totalXp", studentId));
+export async function addBonusXp(studentId: string, delta: number, subject: string): Promise<number> {
+  if (!studentId || delta <= 0) return 0;
+  const key = `totalXp::${subject}::${studentId}`;
+  const xpMeta = await db.meta.get(key);
   const prevXp = typeof xpMeta?.value === "number" ? (xpMeta.value as number) : 0;
   const next = prevXp + delta;
-  await db.meta.put({ key: studentKey("totalXp", studentId), value: next });
+  await db.meta.put({ key, value: next });
   return next;
 }
 

@@ -23,16 +23,17 @@ export interface ClusterXpResult {
 /**
  * cluster 答对题加 XP. 自动找 studentId (db.students[0]).
  * @param correctCount 这次答对几题 (默认 1)
+ * @param subject 加到哪个学科总 XP (默认 chinese — 现在 7 个都是语文 cluster)
  * @returns 加了多少 XP + 新总 XP; 没 student 返 null
  */
-export async function awardClusterXp(correctCount = 1): Promise<ClusterXpResult | null> {
+export async function awardClusterXp(correctCount = 1, subject = "chinese"): Promise<ClusterXpResult | null> {
   if (correctCount <= 0) return null;
   try {
     const students = await db.students.toArray();
     const sid = students[0]?.id;
     if (!sid) return null;
     const xpAdded = correctCount * CLUSTER_XP_PER_CORRECT;
-    const totalXp = await addBonusXp(sid, xpAdded);
+    const totalXp = await addBonusXp(sid, xpAdded, subject);
     // mascot 跟着成长一点 (玩游戏 = 跟小进互动). 节流交给 awardMascotXp.
     void awardMascotXp(sid, "session_complete").catch(() => { /* noop */ });
     return { xpAdded, totalXp };
