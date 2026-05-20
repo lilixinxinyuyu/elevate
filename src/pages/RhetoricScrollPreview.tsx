@@ -23,10 +23,11 @@
  *
  * 入口: `/chinese/rhetoric-scroll-preview`
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
+import { db } from "../db/dexie";
 import { SEED_QUESTIONS_CHINESE_V2 } from "../subjects/chinese/questionPack2";
 import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
@@ -184,18 +185,51 @@ function adaptRhetoric(q: Question): RhetoricCase | null {
     solution: Array.isArray(q.solution_steps) ? q.solution_steps.join(" ") : "",
   };
 }
-// 真题 ≥3 道用真题, 否则 DEMO_CASES
 const REAL_RHET_CASES: RhetoricCase[] = [...SEED_QUESTIONS_CHINESE_V2, ...SEED_QUESTIONS_CHINESE_V3]
   .filter((q) => q.skill_id === "C4B_U3_RHETORIC")
   .map(adaptRhetoric)
   .filter((c): c is RhetoricCase => c !== null);
-const CASES: RhetoricCase[] = REAL_RHET_CASES.length >= 3 ? REAL_RHET_CASES : DEMO_CASES;
+// 静态 pack 已有的 question_id，用于 db 去重（pack 也可能被 seed 进 db）
+const STATIC_RHET_IDS = new Set(REAL_RHET_CASES.map((c) => c.id));
 
 export function RhetoricScrollPreviewPage() {
   const [caseIdx, setCaseIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
+  // AI 补题: 从 db.questions 拉 chinese 修辞题 (skill_id=C4B_U3_RHETORIC), 过掉静态已有的, adapt 后 merge
+  const [dbCases, setDbCases] = useState<RhetoricCase[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+        const adapted = dbQs
+          .filter((q) => q.skill_id === "C4B_U3_RHETORIC" && !STATIC_RHET_IDS.has(q.question_id))
+          .map(adaptRhetoric)
+          .filter((c): c is RhetoricCase => c !== null);
+        if (!cancelled) setDbCases(adapted);
+      } catch (e) {
+        console.error("[RhetoricScroll] 加载 db 题失败", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 静态真题 + db AI 题合并去重; 不足 3 道回退 DEMO
+  const CASES = useMemo<RhetoricCase[]>(() => {
+    const seen = new Set<string>();
+    const merged: RhetoricCase[] = [];
+    for (const c of [...REAL_RHET_CASES, ...dbCases]) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      merged.push(c);
+    }
+    return merged.length >= 3 ? merged : DEMO_CASES;
+  }, [dbCases]);
 
   const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 

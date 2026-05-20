@@ -19,12 +19,13 @@
  *
  * 入口: `/chinese/imitate-painter-preview`
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { explainQuestion } from "../lib/tutor";
 import type { Question } from "../core/types";
+import { db } from "../db/dexie";
 import { SEED_QUESTIONS_CHINESE_IMITATE } from "../subjects/chinese/imitatePack";
 
 type ImitateCase = {
@@ -139,15 +140,48 @@ function adaptImitate(q: Question): ImitateCase | null {
 type Mode = "trace" | "create";
 
 // v0.36.31: imitatePack 真题 → ImitateCase (module-level, 内存 pack 直接 adapt).
-// 真题 ≥3 道用真题, 否则 fallback DEMO_CASES.
 const REAL_CASES: ImitateCase[] = SEED_QUESTIONS_CHINESE_IMITATE
   .map(adaptImitate)
   .filter((c): c is ImitateCase => c !== null);
-const CASES: ImitateCase[] = REAL_CASES.length >= 3 ? REAL_CASES : DEMO_CASES;
+// 静态 pack 已有的 question_id，用于 db 去重（pack 也可能被 seed 进 db）
+const STATIC_IMITATE_IDS = new Set(REAL_CASES.map((c) => c.id));
 
 export function ImitatePainterPreviewPage() {
   const [mode, setMode] = useState<Mode>("trace");
-  const cases = CASES;
+  // AI 补题: 从 db.questions 拉 chinese 仿写题 (skill_id 含 _IMITATE), 过掉静态已有的, adapt 后 merge
+  const [dbCases, setDbCases] = useState<ImitateCase[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+        const adapted = dbQs
+          .filter((q) => q.skill_id?.endsWith("_IMITATE") && !STATIC_IMITATE_IDS.has(q.question_id))
+          .map(adaptImitate)
+          .filter((c): c is ImitateCase => c !== null);
+        if (!cancelled) setDbCases(adapted);
+      } catch (e) {
+        console.error("[ImitatePainter] 加载 db 题失败", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 静态真题 + db AI 题合并去重; 不足 3 道回退 DEMO
+  const cases = useMemo<ImitateCase[]>(() => {
+    const seen = new Set<string>();
+    const merged: ImitateCase[] = [];
+    for (const c of [...REAL_CASES, ...dbCases]) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      merged.push(c);
+    }
+    return merged.length >= 3 ? merged : DEMO_CASES;
+  }, [dbCases]);
+
   // 临摹模式 state
   const [caseIdx, setCaseIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);

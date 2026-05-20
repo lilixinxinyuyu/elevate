@@ -23,11 +23,12 @@
  *
  * 入口: `/chinese/glyph-detective-preview`
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Question } from "../core/types";
+import { db } from "../db/dexie";
 import { SEED_QUESTIONS_CHINESE_GLYPH } from "../subjects/chinese/glyphPack";
 
 type DetectiveCase = {
@@ -184,13 +185,47 @@ function adaptGlyph(q: Question): DetectiveCase | null {
 const REAL_GLYPH_CASES: DetectiveCase[] = SEED_QUESTIONS_CHINESE_GLYPH
   .map(adaptGlyph)
   .filter((c): c is DetectiveCase => c !== null);
-const CASES: DetectiveCase[] = REAL_GLYPH_CASES.length >= 4 ? REAL_GLYPH_CASES : DEMO_CASES;
+// 静态 pack 已有的 question_id，用于 db 去重（pack 也可能被 seed 进 db）
+const STATIC_GLYPH_IDS = new Set(REAL_GLYPH_CASES.map((c) => c.id));
 
 export function GlyphDetectivePreviewPage() {
   const [caseIdx, setCaseIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
+  // AI 补题: 从 db.questions 拉 chinese glyph_detective 题, 过掉静态已有的, adapt 后 merge
+  const [dbCases, setDbCases] = useState<DetectiveCase[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+        const adapted = dbQs
+          .filter((q) => q.game_type === "glyph_detective" && !STATIC_GLYPH_IDS.has(q.question_id))
+          .map(adaptGlyph)
+          .filter((c): c is DetectiveCase => c !== null);
+        if (!cancelled) setDbCases(adapted);
+      } catch (e) {
+        console.error("[GlyphDetective] 加载 db 题失败", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 静态真题 + db AI 题合并去重; 不足 4 道回退 DEMO
+  const CASES = useMemo<DetectiveCase[]>(() => {
+    const seen = new Set<string>();
+    const merged: DetectiveCase[] = [];
+    for (const c of [...REAL_GLYPH_CASES, ...dbCases]) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      merged.push(c);
+    }
+    return merged.length >= 4 ? merged : DEMO_CASES;
+  }, [dbCases]);
 
   const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 

@@ -22,10 +22,11 @@
  *
  * 入口: `/chinese/reading-library-preview`
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
+import { db } from "../db/dexie";
 import { SEED_QUESTIONS_CHINESE_READING } from "../subjects/chinese/readingPack";
 
 type ReadingPassage = {
@@ -205,9 +206,8 @@ const PASSAGE_3: ReadingPassage = {
   ],
 };
 
-// v0.36.32: readingPack 真题 group → passages; 真题 ≥2 篇用真题, 否则 demo 3 篇.
-const REAL_PASSAGES = adaptReadingPack(SEED_QUESTIONS_CHINESE_READING);
-const PASSAGES: ReadingPassage[] = REAL_PASSAGES.length >= 2 ? REAL_PASSAGES : [PASSAGE_1, PASSAGE_2, PASSAGE_3];
+// 静态 pack 已有的 question_id，用于 db 去重（pack 也可能被 seed 进 db）
+const STATIC_READING_IDS = new Set(SEED_QUESTIONS_CHINESE_READING.map((q) => q.question_id));
 
 const ENCOURAGE_PHRASES = [
   "再读细一些, 答案藏在字里",
@@ -223,6 +223,32 @@ export function ReadingLibraryPreviewPage() {
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
   const [allDone, setAllDone] = useState(false);
+  // AI 补题: 从 db.questions 拉 chinese 阅读题 (skill_id 含 _READING), 过掉静态已有的, 跟静态题合并后一起 group
+  const [dbQs, setDbQs] = useState<Question[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const all = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+        const reading = all.filter(
+          (q) => q.skill_id?.endsWith("_READING") && !STATIC_READING_IDS.has(q.question_id),
+        );
+        if (!cancelled) setDbQs(reading);
+      } catch (e) {
+        console.error("[ReadingLibrary] 加载 db 题失败", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 静态真题 + db AI 题合并 (question 级去重) 后一起 group → passages; ≥2 篇用真题, 否则 demo 3 篇
+  const PASSAGES = useMemo<ReadingPassage[]>(() => {
+    const merged = adaptReadingPack([...SEED_QUESTIONS_CHINESE_READING, ...dbQs]);
+    return merged.length >= 2 ? merged : [PASSAGE_1, PASSAGE_2, PASSAGE_3];
+  }, [dbQs]);
 
   // v0.36.28 (爸爸: 加难度): 3 篇短文轮流, 一篇做完进下一篇
   const curPassage = PASSAGES[passageIdx]!;

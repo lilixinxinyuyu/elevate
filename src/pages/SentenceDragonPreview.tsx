@@ -25,10 +25,11 @@
  *
  * 入口: `/chinese/sentence-dragon-preview`
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
+import { db } from "../db/dexie";
 import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
 type DragonCase = {
@@ -138,8 +139,8 @@ const REAL_DRAGON_CASES: DragonCase[] = SEED_QUESTIONS_CHINESE_V3
   .filter((q) => q.game_type === "sentence_shuffle")
   .map(adaptShuffle)
   .filter((c): c is DragonCase => c !== null);
-// 真题 >= 4 用真题库, 否则回退 DEMO (DEMO 是病句语序题, showAsError 默认开)
-const CASES: DragonCase[] = REAL_DRAGON_CASES.length >= 4 ? REAL_DRAGON_CASES : DEMO_CASES;
+// 静态 pack 已有的 question_id，用于 db 去重（pack 也可能被 seed 进 db）
+const STATIC_DRAGON_IDS = new Set(REAL_DRAGON_CASES.map((c) => c.id));
 
 export function SentenceDragonPreviewPage() {
   const [caseIdx, setCaseIdx] = useState(0);
@@ -147,6 +148,39 @@ export function SentenceDragonPreviewPage() {
   const [filled, setFilled] = useState<(string | null)[]>([]);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
+  // AI 补题: 从 db.questions 拉 chinese sentence_shuffle 题, 过掉静态已有的, adapt 后 merge
+  const [dbCases, setDbCases] = useState<DragonCase[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+        const adapted = dbQs
+          .filter((q) => q.game_type === "sentence_shuffle" && !STATIC_DRAGON_IDS.has(q.question_id))
+          .map(adaptShuffle)
+          .filter((c): c is DragonCase => c !== null);
+        if (!cancelled) setDbCases(adapted);
+      } catch (e) {
+        console.error("[SentenceDragon] 加载 db 题失败", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 静态真题 + db AI 题合并去重; 不足 4 道回退 DEMO (DEMO 是病句语序题, showAsError 默认开)
+  const CASES = useMemo<DragonCase[]>(() => {
+    const seen = new Set<string>();
+    const merged: DragonCase[] = [];
+    for (const c of [...REAL_DRAGON_CASES, ...dbCases]) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      merged.push(c);
+    }
+    return merged.length >= 4 ? merged : DEMO_CASES;
+  }, [dbCases]);
 
   const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 

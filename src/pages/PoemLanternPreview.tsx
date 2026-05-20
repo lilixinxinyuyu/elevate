@@ -22,10 +22,11 @@
  *
  * 入口: `/chinese/poem-lantern-preview`
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
+import { db } from "../db/dexie";
 import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
 type PoemCase = {
@@ -174,13 +175,47 @@ const REAL_POEM_CASES: PoemCase[] = SEED_QUESTIONS_CHINESE_V3
   .filter((q) => q.game_type === "poem_cloze")
   .map(adaptPoemCloze)
   .filter((c): c is PoemCase => c !== null);
-const CASES: PoemCase[] = REAL_POEM_CASES.length >= 4 ? REAL_POEM_CASES : DEMO_CASES;
+// 静态 pack 已有的 question_id，用于 db 去重（pack 也可能被 seed 进 db）
+const STATIC_POEM_IDS = new Set(REAL_POEM_CASES.map((c) => c.id));
 
 export function PoemLanternPreviewPage() {
   const [caseIdx, setCaseIdx] = useState(0);
   const [filled, setFilled] = useState<(string | null)[]>([]);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
+  // AI 补题: 从 db.questions 拉 chinese poem_cloze 题, 过掉静态已有的, adapt 后 merge
+  const [dbCases, setDbCases] = useState<PoemCase[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+        const adapted = dbQs
+          .filter((q) => q.game_type === "poem_cloze" && !STATIC_POEM_IDS.has(q.question_id))
+          .map(adaptPoemCloze)
+          .filter((c): c is PoemCase => c !== null);
+        if (!cancelled) setDbCases(adapted);
+      } catch (e) {
+        console.error("[PoemLantern] 加载 db 题失败", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 静态真题 + db AI 题合并去重; 不足 4 道回退 DEMO
+  const CASES = useMemo<PoemCase[]>(() => {
+    const seen = new Set<string>();
+    const merged: PoemCase[] = [];
+    for (const c of [...REAL_POEM_CASES, ...dbCases]) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      merged.push(c);
+    }
+    return merged.length >= 4 ? merged : DEMO_CASES;
+  }, [dbCases]);
 
   const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 

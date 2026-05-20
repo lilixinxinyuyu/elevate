@@ -323,6 +323,8 @@ function AIQuestionGeneratorPanel() {
   );
   const [count, setCount] = useState(5);
   const [difficulty, setDifficulty] = useState("2-4");
+  // v0.36.x: 显式指定 game_type 强制 AI 出某种玩法；"auto" → undefined（后端按技能权重表抽样）
+  const [gameType, setGameType] = useState<string>("auto");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<null | {
     generated: Question[];
@@ -359,6 +361,7 @@ function AIQuestionGeneratorPanel() {
         count,
         difficulty,
         existingStems,
+        gameType: gameType === "auto" ? undefined : gameType,
       });
 
       // 用 chinese-specific 校验（core/validateQuestion 只认 math 的 unit/skill）
@@ -436,6 +439,25 @@ function AIQuestionGeneratorPanel() {
           </select>
         </label>
       </div>
+
+      <label className="block">
+        <span className="text-xs text-slate-500">题型（game_type）</span>
+        <select
+          value={gameType}
+          onChange={(e) => setGameType(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-slate-600 bg-ink-800 text-slate-200 px-2 py-1.5"
+        >
+          <option value="auto">自动（按技能）</option>
+          <option value="poem_cloze">古诗补字（poem_cloze）</option>
+          <option value="sentence_shuffle">句子重排（sentence_shuffle）</option>
+          <option value="glyph_detective">字形侦探（glyph_detective）</option>
+          <option value="pair_match">配对（pair_match）</option>
+          <option value="plain_choice">普通选择（plain_choice）</option>
+          <option value="word_problem_lab">阅读多步（word_problem_lab）</option>
+          <option value="fill_blank">仿写填空（fill_blank）</option>
+          <option value="sort_ladder">排序（sort_ladder）</option>
+        </select>
+      </label>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block">

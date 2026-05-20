@@ -284,4 +284,102 @@ export const SEED_QUESTIONS_CHINESE_GLYPH: Question[] = [
     solution_steps: ["竖心旁(忄)和心字底(心)的字多跟心情/心理有关: 情/快/怕/愉/想/念/思。'青'+忄=情(心情)。"],
     game_data: { kind: "glyph_detective", hanzi: "情", hanziDesc: "忄(竖心旁): 跟心情/想法有关", optionEmojis: ["💗", "🏃", "🌦️", "🎨"] },
   }),
+
+  // ── 形声字结构 (续) ──
+  g({
+    question_id: "C4B_GLYPH_016",
+    unit_id: G_U4,
+    difficulty: 3,
+    stem: '"鹅 / 鸡 / 鸭 / 鸥" 四字共同的偏旁是?',
+    options: [
+      { id: "a", text: "鸟字旁 (跟鸟类有关)" },
+      { id: "b", text: "我字旁 (跟我有关)" },
+      { id: "c", text: "马字旁 (跟马有关)" },
+      { id: "d", text: "几字旁 (跟数字有关)" },
+    ],
+    answer: { type: "choice", value: "a" },
+    solution_steps: ["鹅/鸡/鸭/鸥都是形声字: 鸟(形旁)表义(鸟类) + 左半声旁(我/又/甲/区)。出自《白鹅》。别把'鹅'左边的'我'当部首。"],
+    game_data: { kind: "glyph_detective", hanzi: "鹅", hanziDesc: "形声字: 我 + 鸟字旁 · 出自《白鹅》", optionEmojis: ["🐦", "🙋", "🐴", "🔢"] },
+  }),
+  g({
+    question_id: "C4B_GLYPH_017",
+    unit_id: G_U4,
+    difficulty: 3,
+    stem: '"跑 / 抱 / 泡" 都带声旁"包", 偏旁配字义哪个对?',
+    options: [
+      { id: "a", text: "跑(足·用脚) / 抱(扌·用手) / 泡(氵·用水)" },
+      { id: "b", text: "跑(扌) / 抱(足) / 泡(氵)" },
+      { id: "c", text: "三个字偏旁一样, 只是读音不同" },
+      { id: "d", text: "都用包字旁, 跟包有关" },
+    ],
+    answer: { type: "choice", value: "a" },
+    solution_steps: ["同声旁'包'(bāo)表音, 不同形旁定字义: 足→跑(用脚)、扌→抱(用手)、氵→泡(在水里)。形旁就是破案的证据。"],
+    game_data: { kind: "glyph_detective", hanzi: "抱", hanziDesc: "包声旁家族: 形旁不同, 字义不同", optionEmojis: ["🦵", "✋", "💧", "🎁"] },
+  }),
+
+  // ── 会意字 (续) ──
+  g({
+    question_id: "C4B_GLYPH_018",
+    unit_id: G_U1,
+    difficulty: 3,
+    stem: '"休" 字是由什么组成的, 表示什么?',
+    options: [
+      { id: "a", text: "亻(人) + 木(树): 人靠在树边休息" },
+      { id: "b", text: "形声字: 木是声旁(mù)" },
+      { id: "c", text: "亻(人) + 木: 人在砍树" },
+      { id: "d", text: "两个独体字, 不能拆开理解" },
+    ],
+    answer: { type: "choice", value: "a" },
+    solution_steps: ["'休' = 亻(人) + 木(树)。古人造字: 一个人靠在树旁歇息, 表示'休息'。这是会意字(用两部分的意思合起来), 不是形声字。"],
+    game_data: { kind: "glyph_detective", hanzi: "休", hanziDesc: "会意字: 人 + 木, 靠树而息", optionEmojis: ["🌳", "🔊", "🪓", "❌"] },
+  }),
+
+  // ── 同偏旁归类 (续) ──
+  g({
+    question_id: "C4B_GLYPH_019",
+    unit_id: G_U2,
+    difficulty: 3,
+    stem: '"钅"(金字旁) 的字大多跟什么有关?',
+    options: [
+      { id: "a", text: "金属 (钢 / 铁 / 银 / 钉)" },
+      { id: "b", text: "说话 (说 / 话 / 语)" },
+      { id: "c", text: "水流 (河 / 湖 / 海)" },
+      { id: "d", text: "花草 (花 / 草 / 苗)" },
+    ],
+    answer: { type: "choice", value: "a" },
+    solution_steps: ["金字旁(钅)的字多跟金属有关: 钢/铁/银/铜/钉/锅。言字旁(讠)才跟说话有关, 别混。"],
+    game_data: { kind: "glyph_detective", hanzi: "铁", hanziDesc: "钅(金字旁): 跟金属有关", optionEmojis: ["🔩", "💬", "💧", "🌱"] },
+  }),
+
+  // ── 形近字陷阱 (续) ──
+  g({
+    question_id: "C4B_GLYPH_020",
+    unit_id: G_U2,
+    difficulty: 4,
+    stem: '"辨 / 辩 / 辫" 中间偏旁不同, 哪个配对对?',
+    options: [
+      { id: "a", text: "辨(中间丶刂·分清) / 辩(中间讠·争论) / 辫(中间纟·发辫)" },
+      { id: "b", text: "辨(讠) / 辩(纟) / 辫(刂)" },
+      { id: "c", text: "三个字一样, 只是写法随意" },
+      { id: "d", text: "中间都是言字旁, 跟说话有关" },
+    ],
+    answer: { type: "choice", value: "a" },
+    solution_steps: ["看中间: 辨(中间是两点和一竖, 与刀分清有关→辨别)、辩(中间言字旁讠→辩论用嘴)、辫(中间绞丝旁纟→发辫用线编)。中间偏旁定字义, 期中超易错!"],
+    game_data: { kind: "glyph_detective", hanzi: "辩", hanziDesc: "形近字陷阱: 辨(刂) / 辩(讠) / 辫(纟)", optionEmojis: ["🔪", "💬", "🧵", "❌"] },
+  }),
+  g({
+    question_id: "C4B_GLYPH_021",
+    unit_id: G_U2,
+    difficulty: 4,
+    stem: '"冰 / 冷 / 冻" 用的是 "冫"(两点水), 它跟什么有关?',
+    options: [
+      { id: "a", text: "冰/寒冷 (冫两点水 ≠ 氵三点水)" },
+      { id: "b", text: "流水 (跟三点水一样)" },
+      { id: "c", text: "火/加热" },
+      { id: "d", text: "只是少写一点的三点水, 意思相同" },
+    ],
+    answer: { type: "choice", value: "a" },
+    solution_steps: ["两点水(冫)跟冰/寒冷有关: 冰/冷/冻/凉/凌。三点水(氵)才跟流水有关: 河/湖/海。两者一点之差, 意义不同, 别写混!"],
+    game_data: { kind: "glyph_detective", hanzi: "冻", hanziDesc: "冫(两点水): 跟冰/寒冷有关 (≠ 氵三点水)", optionEmojis: ["🧊", "💧", "🔥", "❌"] },
+  }),
 ];
