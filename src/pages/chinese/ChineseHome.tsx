@@ -326,16 +326,16 @@ export function ChineseHomePage() {
           show: { transition: { staggerChildren: 0.08 } },
         }}
       >
-        <div className="text-sm text-slate-400 mb-2">🎮 新玩法 (体验)</div>
+        <div className="text-sm text-slate-400 mb-2">🎮 趣味闯关 · 语文小游戏</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
-            { to: "/chinese/poem-lantern-preview", emoji: "🏮", title: "古诗拍灯笼", desc: "元宵补字", bg: "from-red-500/15 to-amber-500/15", border: "border-red-400/40" },
-            { to: "/chinese/glyph-detective-preview", emoji: "🔍", title: "字形侦探", desc: "偏旁部首", bg: "from-amber-700/15 to-orange-600/15", border: "border-amber-400/40" },
-            { to: "/chinese/sentence-dragon-preview", emoji: "🐉", title: "病句龙训", desc: "句子重组", bg: "from-emerald-600/15 to-amber-500/15", border: "border-emerald-400/40" },
-            { to: "/chinese/rhetoric-scroll-preview", emoji: "📜", title: "修辞画卷", desc: "比喻拟人", bg: "from-stone-600/15 to-rose-700/15", border: "border-amber-600/40" },
-            { to: "/chinese/reading-library-preview", emoji: "📖", title: "阅读图书馆", desc: "短文+多问", bg: "from-red-900/20 to-amber-700/15", border: "border-amber-500/40" },
-            { to: "/chinese/imitate-painter-preview", emoji: "🎨", title: "仿写画师", desc: "临摹+AI点评", bg: "from-indigo-600/15 to-amber-600/15", border: "border-indigo-400/40" },
-            { to: "/chinese/essay-inkstone-preview", emoji: "✏️", title: "自由作文", desc: "砚台+AI点评", bg: "from-stone-700/20 to-amber-900/15", border: "border-amber-700/40" },
+            { to: "/chinese/poem-lantern-preview", emoji: "🏮", title: "古诗拍灯笼", desc: "元宵灯笼 · 古诗补字", bg: "from-red-500/15 to-amber-500/15", border: "border-red-400/40" },
+            { to: "/chinese/glyph-detective-preview", emoji: "🔍", title: "字形侦探", desc: "民国探案 · 偏旁部首", bg: "from-amber-700/15 to-orange-600/15", border: "border-amber-400/40" },
+            { to: "/chinese/sentence-dragon-preview", emoji: "🐉", title: "病句龙训", desc: "中国龙 · 句子重排", bg: "from-emerald-600/15 to-amber-500/15", border: "border-emerald-400/40" },
+            { to: "/chinese/rhetoric-scroll-preview", emoji: "📜", title: "修辞画卷", desc: "山水画卷 · 修辞辨认", bg: "from-stone-600/15 to-rose-700/15", border: "border-amber-600/40" },
+            { to: "/chinese/reading-library-preview", emoji: "📖", title: "阅读图书馆", desc: "古风书阁 · 阅读理解", bg: "from-red-900/20 to-amber-700/15", border: "border-amber-500/40" },
+            { to: "/chinese/imitate-painter-preview", emoji: "🎨", title: "仿写画师", desc: "美术馆 · 仿写临摹", bg: "from-indigo-600/15 to-amber-600/15", border: "border-indigo-400/40" },
+            { to: "/chinese/essay-inkstone-preview", emoji: "✏️", title: "自由作文", desc: "书房砚台 · 作文+AI点评", bg: "from-stone-700/20 to-amber-900/15", border: "border-amber-700/40" },
           ].map((c) => (
             <motion.div
               key={c.to}
