@@ -1,0 +1,12 @@
+{
+  "name": "xiaojinapp-fc-generate-questions",
+  "version": "0.36.19",
+  "description": "Aliyun FC 出题服务 via TOKEN_PLAN_CN (脱离 ESA 9-30s timeout, FC 60s)",
+  "type": "module",
+  "main": "index.mjs",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {}
+}

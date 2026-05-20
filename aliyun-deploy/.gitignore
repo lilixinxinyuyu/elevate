@@ -3,3 +3,5 @@ dist/
 .esa/
 *.log
 src/lib/baked-env.generated.ts
+fc-generate-questions/index.mjs
+fc-generate-questions/node_modules/

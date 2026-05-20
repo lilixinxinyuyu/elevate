@@ -1,0 +1,36 @@
+# Serverless Devs (s.yaml) — Aliyun FC 3.0 — 出题服务
+# v0.36.19 (爸爸深度优化 #2): 出题完全脱离 ESA. ESA 9-30s timeout 跟 LLM 完整
+# prompt 出题 (10-15s) 冲突经常 504. FC timeout 60s 没这限制 + 可 cascade 多 model.
+# index.mjs 已 esbuild bundle (含 composer/prompts/normalize, env baked), 无 npm deps.
+
+edition: 3.0.0
+name: xiaojinapp-fc-generate-questions
+access: default
+
+vars:
+  region: cn-hongkong
+
+resources:
+  xiaojinappGenQuestions:
+    component: fc3
+    props:
+      region: ${vars.region}
+      functionName: xiaojinapp-generate-questions
+      runtime: nodejs20
+      handler: index.handler
+      memorySize: 512
+      # 完整 prompt LLM call 10-15s, cascade 3 model 兜底, ≤ 50s
+      timeout: 60
+      cpu: 0.35
+      diskSize: 512
+      code: ./
+      internetAccess: true
+      triggers:
+        - triggerName: http
+          triggerType: http
+          triggerConfig:
+            authType: anonymous
+            disableURLInternet: false
+            methods:
+              - POST
+              - OPTIONS

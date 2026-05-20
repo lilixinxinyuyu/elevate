@@ -175,6 +175,10 @@ export async function generateAiQuestions(
 async function doGenerateAiQuestions(
   args: GenerateQuestionsArgs,
 ): Promise<GenerateQuestionsResult> {
+  // v0.36.19 (深度优化 #2): 出题走 FC (脱离 ESA 30s timeout).
+  // 1. POST ESA /api/generate/questions → 即时返 { fcUrl, provider:"fc-bypass" }
+  // 2. client 用同 auth+body 直调 FC URL (FC 60s 容纳完整 prompt 出题, 无 504)
+  // FC 没配时 ESA 回落 native, 返 questions 直接用 (兼容).
   const r = await fetch("/api/generate/questions", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -189,13 +193,29 @@ async function doGenerateAiQuestions(
     }
     throw new TutorError(parsed?.error ?? "request_failed", r.status, parsed?.detail);
   }
-  const j = (await r.json()) as {
+  let j = (await r.json()) as {
     ok?: boolean;
     questions?: Question[];
     model?: string;
     generatedCount?: number;
     requestedCount?: number;
+    provider?: string;
+    fcUrl?: string;
   };
+  // fc-bypass: ESA 返了 FC URL → client 直调 FC 出题
+  if (j.provider === "fc-bypass" && typeof j.fcUrl === "string") {
+    const fcR = await fetch(j.fcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader() },
+      body: JSON.stringify(args),
+    });
+    if (!fcR.ok) {
+      let parsed: { error?: string; detail?: string } | null = null;
+      try { parsed = await fcR.json(); } catch { /* */ }
+      throw new TutorError(parsed?.error ?? "fc_request_failed", fcR.status, parsed?.detail);
+    }
+    j = (await fcR.json()) as typeof j;
+  }
   if (!j.ok || !Array.isArray(j.questions)) {
     throw new TutorError("empty_response", r.status, "no questions in body");
   }

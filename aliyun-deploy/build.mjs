@@ -44,6 +44,7 @@ const BAKED_KEYS = [
   "BACKUP_TOKEN",
   "FC_IMAGE_GEN_URL",
   "FC_PAPER_OCR_URL",
+  "FC_GENERATE_QUESTIONS_URL",
 ];
 const bakedEnv = {};
 for (const k of BAKED_KEYS) {

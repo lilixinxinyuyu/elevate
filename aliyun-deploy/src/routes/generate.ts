@@ -658,6 +658,18 @@ function extractJsonObj(text: string): unknown {
 }
 
 generate.post("/questions", async (c) => {
+  // v0.36.19 (深度优化 #2): 优先走 FC (脱离 ESA 30s timeout, FC 60s 容纳完整 prompt
+  // 出题 + count≤4 + cascade). 返 fcUrl, client 用同 auth+body 直调 FC.
+  // 跟 image gen fc-bypass 同模式. FC URL 没配时回落 ESA native (下方逻辑).
+  const fcUrl = (c.env as { FC_GENERATE_QUESTIONS_URL?: string }).FC_GENERATE_QUESTIONS_URL;
+  if (fcUrl) {
+    return c.json({
+      ok: true,
+      fcUrl,
+      provider: "fc-bypass",
+      note: "client should POST fcUrl with same Authorization + body (ESA 30s timeout < 完整 prompt 出题, FC 60s 没限制)",
+    });
+  }
   const providers = getChatProvidersLib(c.env);
   if (providers.length === 0) {
     return c.json({ ok: false, error: "generator_not_configured" }, 503);

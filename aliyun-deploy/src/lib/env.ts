@@ -54,4 +54,9 @@ export interface Env {
    * 部署见 aliyun-deploy/fc-paper-ocr/. 当前: https://xiaojinaper-ocr-cszpewbgfj.cn-hongkong.fcapp.run
    */
   FC_PAPER_OCR_URL?: string;
+  /**
+   * v0.36.19 (深度优化 #2): FC 出题服务 URL. 出题脱离 ESA 30s timeout (走 FC 60s).
+   * 部署见 aliyun-deploy/fc-generate-questions/.
+   */
+  FC_GENERATE_QUESTIONS_URL?: string;
 }
