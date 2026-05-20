@@ -27,7 +27,14 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
 import { awardMascotXp } from "../lib/mascotProgress";
-import { submitChineseAttempt } from "../subjects/chinese/service";
+import { submitChineseAttempt, getChineseMistakeQuestionIds } from "../subjects/chinese/service";
+import {
+  pickNextClusterIndex,
+  advanceClusterSession,
+  emptyClusterSession,
+  buildCandidates,
+  type ClusterSessionState,
+} from "../lib/clusterSelect";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
@@ -210,6 +217,19 @@ export function RhetoricScrollPreviewPage() {
   const [sessionId] = useState(() => "cluster-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
   const [comboBefore, setComboBefore] = useState(0);
   const questionStartRef = useRef(Date.now());
+  // ── Phase 2 流式选题: 局内 session 状态 + 到期错题 id + 首答是否错 (难度爬升信号) ──
+  const sessionRef = useRef<ClusterSessionState>(emptyClusterSession(2));
+  const wrongThisCaseRef = useRef(false);
+  const lastPickWasReviewRef = useRef(false);
+  const [dueIds, setDueIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!student?.id) return;
+    let cancelled = false;
+    getChineseMistakeQuestionIds(student.id)
+      .then((ids) => { if (!cancelled) setDueIds(new Set(ids)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [student?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,21 +264,58 @@ export function RhetoricScrollPreviewPage() {
 
   const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 
-  // Phase1: 题目切换时重置计时
+  // Phase1: 题目切换时重置计时 + 本题首答错标记
   useEffect(() => {
     questionStartRef.current = Date.now();
+    wrongThisCaseRef.current = false;
   }, [caseIdx, cur.id]);
+
+  // Phase 2: 选下一题 (流式自适应 — 局内去重 + 难度爬升 + 错题插入), 取代 (i+1)%len
+  function advanceToNext() {
+    const sq = cur.sourceQuestion;
+    const qid = sq?.question_id ?? cur.id;
+    const diff = typeof sq?.difficulty === "number" ? sq.difficulty : 2;
+    // 首答对(没出过错)= true → 连对加难; 出过错 = false → 难度不升
+    sessionRef.current = advanceClusterSession(sessionRef.current, {
+      questionId: qid,
+      isCorrect: !wrongThisCaseRef.current,
+      difficulty: diff,
+      wasReview: lastPickWasReviewRef.current,
+    });
+    const pick = pickNextClusterIndex(buildCandidates(CASES), sessionRef.current, {
+      baseDifficulty: 2,
+      dueMistakeIds: dueIds,
+      reviewEveryN: 4,
+    });
+    lastPickWasReviewRef.current = pick.reason === "review";
+    setCaseIdx(pick.index);
+  }
+
+  // 首题也自适应挑 (不再永远 case 0)
+  const didInitRef = useRef(false);
+  useEffect(() => {
+    if (didInitRef.current || CASES.length === 0) return;
+    didInitRef.current = true;
+    const pick = pickNextClusterIndex(buildCandidates(CASES), sessionRef.current, {
+      baseDifficulty: 2,
+      dueMistakeIds: dueIds,
+      reviewEveryN: 4,
+    });
+    lastPickWasReviewRef.current = pick.reason === "review";
+    setCaseIdx(pick.index);
+  }, [CASES, dueIds]);
 
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
-        setCaseIdx((i) => (i + 1) % CASES.length);
+        advanceToNext();
         setSelectedIdx(null);
         setResult("idle");
         setEncouragePhrase(null);
       }, 2200);
       return () => clearTimeout(t);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
   async function handleChoice(idx: number) {
@@ -269,6 +326,7 @@ export function RhetoricScrollPreviewPage() {
       setResult("correct");
       setEncouragePhrase(null);
     } else {
+      wrongThisCaseRef.current = true; // 本题出过错 → 难度不升
       setResult("wrong");
       setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);
       setTimeout(() => setResult("idle"), 700);
