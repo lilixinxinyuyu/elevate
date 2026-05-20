@@ -307,6 +307,7 @@ export function ChineseHomePage() {
             { to: "/chinese/sentence-dragon-preview", emoji: "🐉", title: "病句龙训", desc: "句子重组", bg: "from-emerald-600/15 to-amber-500/15", border: "border-emerald-400/40" },
             { to: "/chinese/rhetoric-scroll-preview", emoji: "📜", title: "修辞画卷", desc: "比喻拟人", bg: "from-stone-600/15 to-rose-700/15", border: "border-amber-600/40" },
             { to: "/chinese/reading-library-preview", emoji: "📖", title: "阅读图书馆", desc: "短文+多问", bg: "from-red-900/20 to-amber-700/15", border: "border-amber-500/40" },
+            { to: "/chinese/imitate-painter-preview", emoji: "🎨", title: "仿写画师", desc: "临摹+AI点评", bg: "from-indigo-600/15 to-amber-600/15", border: "border-indigo-400/40" },
           ].map((c) => (
             <motion.div
               key={c.to}

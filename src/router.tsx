@@ -79,6 +79,8 @@ const SentenceDragonPreviewPage = lazy(() => import("./pages/SentenceDragonPrevi
 const RhetoricScrollPreviewPage = lazy(() => import("./pages/RhetoricScrollPreview").then((m) => ({ default: m.RhetoricScrollPreviewPage })));
 // v0.36.3 Sprint C6: Reading Library Preview — 阅读图书馆 (古风书院 + 长篇阅读 multi-step)
 const ReadingLibraryPreviewPage = lazy(() => import("./pages/ReadingLibraryPreview").then((m) => ({ default: m.ReadingLibraryPreviewPage })));
+// v0.36.21 Sprint C5: Imitate Painter Preview — 仿写画师 (美术馆 + 4选1临摹 + 自由仿写 AI 点评)
+const ImitatePainterPreviewPage = lazy(() => import("./pages/ImitatePainterPreview").then((m) => ({ default: m.ImitatePainterPreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -314,6 +316,8 @@ export const router = createBrowserRouter([
       { path: "rhetoric-scroll-preview", element: L(<ChineseOnlyRoute><RhetoricScrollPreviewPage /></ChineseOnlyRoute>) },
       // v0.36.3 Sprint C6: Reading Library (阅读图书馆 Chinese cluster)
       { path: "reading-library-preview", element: L(<ChineseOnlyRoute><ReadingLibraryPreviewPage /></ChineseOnlyRoute>) },
+      // v0.36.21 Sprint C5: Imitate Painter (仿写画师 Chinese cluster — 4选1临摹 + 自由仿写 AI 点评)
+      { path: "imitate-painter-preview", element: L(<ChineseOnlyRoute><ImitatePainterPreviewPage /></ChineseOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
