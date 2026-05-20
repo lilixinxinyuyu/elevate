@@ -24,11 +24,13 @@ import { sfx } from "../../lib/sfx";
 import {
   createChineseSessionId,
   getChineseMistakeQuestionIds,
+  getChineseSkillMastery,
   recordChineseMockExamCompleted,
   recordChineseSessionFinish,
   submitChineseAttempt,
   type ChineseAttemptResult,
 } from "../../subjects/chinese/service";
+import { buildChinesePracticeQuestions } from "../../subjects/chinese/practiceSelect";
 import { CHINESE_TROPHIES } from "../../subjects/chinese/trophies";
 import { TrophyIcon } from "../../components/TrophyIcon";
 import { LotteryBoxModal } from "../../components/LotteryBoxModal";
@@ -263,7 +265,32 @@ export function ChineseTrainPage() {
             );
             pool = pool.filter((q) => skillsByAbility.has(q.skill_id));
           }
-          qs = shuffle(pool).slice(0, PRACTICE_SIZE);
+          // v0.36.50 (Phase 3, Option A, 8787+8788 双 peer review): practice 智能选题
+          // 取代纯 shuffle — due 错题注入(≤3) + 难度配比(按 mastery) + 近 3 天做对 SOFT
+          // 去重 + diversify。pool 已经过上面 URL 过滤; review/mock/过滤逻辑均不动。
+          const [practiceMastery, dueIdList, allAttempts] = await Promise.all([
+            getChineseSkillMastery(student.id),
+            getChineseMistakeQuestionIds(student.id, 30, { onlyDue: true }),
+            db.attempts.where("studentId").equals(student.id).toArray(),
+          ]);
+          const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+          const recentCorrectIds = new Set(
+            allAttempts
+              .filter(
+                (a) =>
+                  (a.subjectId ?? "math") === "chinese" &&
+                  a.isCorrect &&
+                  a.createdAt >= threeDaysAgo,
+              )
+              .map((a) => a.questionId),
+          );
+          qs = buildChinesePracticeQuestions({
+            pool,
+            mastery: practiceMastery,
+            dueIds: new Set(dueIdList),
+            recentCorrectIds,
+            size: PRACTICE_SIZE,
+          });
         }
         const tEnd = Date.now();
         console.log(
