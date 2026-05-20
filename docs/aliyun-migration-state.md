@@ -264,3 +264,27 @@ docs/aliyun-migration-state.md          — 本文档
 7. 给爸爸 CNAME 值
 8. 推 Selena 8.2MB backup 到 OSS
 9. 验证 xiaojin.app 端到端
+
+---
+
+## ✅ 迁移收尾完成 (2026-05-20, v0.36.17)
+
+**CF Pages 彻底删除, 单一 ESA 后端**:
+- 删 `functions/` 整个目录 (28 文件) + `tsconfig.functions.json` + `wrangler.toml`
+- composer 源 `functions/_promptComposer.ts` → `aliyun-deploy/src/lib/promptComposer.ts`
+- `_gameTypePicker.ts` (权重抽样) → `aliyun-deploy/src/lib/gameTypePicker.ts`, ESA generate 用它
+- `build-prompts.mjs` 只输出 `src/lib/` (前端) + `aliyun-deploy/src/generated/` (ESA)
+- `proxy-fallback` 不再转 CF, 未 native 路径返 501
+
+**验证**: 前端 build OK, ESA typecheck clean, 登录/讲题在 ESA 单独 work, voice 废弃路径 501.
+
+**部署流程 (单一)**:
+- 后端: `cd aliyun-deploy && npm run build && ./node_modules/.bin/esa deploy dist/worker.js`
+- 前端: `npm run build && cd aliyun-deploy && npm run deploy:frontend` (OSS web/)
+- **不再 `wrangler pages deploy`** (CF Pages 已退役)
+
+**遗留 (爸爸可在 CF 控制台操作)**: selena-elevate.pages.dev 项目本身还在 CF 账号 (代码删了,
+项目可手动删). 不影响 xiaojin.app (走 ESA).
+
+**未解决**: ESA 出题 latency (完整 prompt 504) + dead IP 43.109.163.133 — 不再有 CF 兜底
+掩盖, 必须在 ESA 解决. 见 docs/perf-audit-2026-05-19.md.
