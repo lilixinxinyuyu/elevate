@@ -24,6 +24,8 @@ import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { explainQuestion } from "../lib/tutor";
+import type { Question } from "../core/types";
+import { SEED_QUESTIONS_CHINESE_IMITATE } from "../subjects/chinese/imitatePack";
 
 type ImitateCase = {
   id: string;
@@ -107,10 +109,45 @@ const FREE_PROMPTS = [
 
 const ENCOURAGE = ["再看大师笔法: 结构换内容", "色彩还能更鲜活!", "鹦鹉提示: 修辞对不对?", "画师慢慢来, 临摹要细"];
 
+// v0.36.31 (爸爸: cluster 接真题库): imitatePack 真题 (SEED_QUESTIONS_CHINESE_IMITATE,
+// 50 题内存 pack, 不经 db — chinese 题没 seed 到 db). adapter parse stem 出 example/rhetoric.
+function adaptImitate(q: Question): ImitateCase | null {
+  const opts = q.options ?? [];
+  if (opts.length < 2) return null;
+  const correctVal = q.answer?.type === "choice" ? q.answer.value : undefined;
+  const correctIdx = opts.findIndex((o) => o.id === correctVal);
+  if (correctIdx < 0) return null;
+  // parse stem: 例句 (拟人): "春风..." \n\n 下面哪句...?
+  const m = q.stem.match(/例句\s*[(（]?\s*([^)）:：]*?)\s*[)）]?\s*[:：]\s*["「"']?([^"」"'\n]+)/);
+  const rhetoric = (m?.[1] || "").trim() || "仿写";
+  const example = (m?.[2] || "").trim() || q.stem.split(/\n/)[0]!.replace(/^例句.*?[:：]/, "").trim();
+  const parts = q.stem.split(/\n\n|\n/).filter(Boolean);
+  const question = parts.length > 1 ? parts[parts.length - 1]! : "下面哪句是合格仿写?";
+  const sol = Array.isArray(q.solution_steps) ? q.solution_steps.join(" ") : "";
+  return {
+    id: q.question_id,
+    frameLabel: rhetoric,
+    example,
+    rhetoric,
+    question,
+    options: opts.map((o) => ({ text: o.text })),
+    correctIdx,
+    solution: sol || "仿写要学例句的结构 + 修辞, 换新内容.",
+  };
+}
+
 type Mode = "trace" | "create";
+
+// v0.36.31: imitatePack 真题 → ImitateCase (module-level, 内存 pack 直接 adapt).
+// 真题 ≥3 道用真题, 否则 fallback DEMO_CASES.
+const REAL_CASES: ImitateCase[] = SEED_QUESTIONS_CHINESE_IMITATE
+  .map(adaptImitate)
+  .filter((c): c is ImitateCase => c !== null);
+const CASES: ImitateCase[] = REAL_CASES.length >= 3 ? REAL_CASES : DEMO_CASES;
 
 export function ImitatePainterPreviewPage() {
   const [mode, setMode] = useState<Mode>("trace");
+  const cases = CASES;
   // 临摹模式 state
   const [caseIdx, setCaseIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -123,13 +160,13 @@ export function ImitatePainterPreviewPage() {
   const [critique, setCritique] = useState<string | null>(null);
   const [judgeErr, setJudgeErr] = useState<string | null>(null);
 
-  const cur = DEMO_CASES[caseIdx]!;
+  const cur = cases[caseIdx] ?? DEMO_CASES[0]!;
   const free = FREE_PROMPTS[freeIdx]!;
 
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
-        setCaseIdx((i) => (i + 1) % DEMO_CASES.length);
+        setCaseIdx((i) => (i + 1) % cases.length);
         setSelectedIdx(null);
         setResult("idle");
         setEncourage(null);
@@ -224,7 +261,7 @@ export function ImitatePainterPreviewPage() {
           </div>
         </div>
         <div className="px-3 py-1.5 rounded-xl bg-stone-800/85 backdrop-blur-md border border-amber-500/50 text-xs font-bold text-amber-100 tabular-nums">
-          {mode === "trace" ? `${caseIdx + 1} / ${DEMO_CASES.length}` : "✨"}
+          {mode === "trace" ? `${caseIdx + 1} / ${cases.length}` : "✨"}
         </div>
       </div>
 
