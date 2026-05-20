@@ -508,7 +508,13 @@ export function GameShell(props: GameShellProps) {
           </span>
           <span>难度 {question.difficulty}</span>
           {(question.tags ?? [])
+            // 1) 隐藏几何/布局类内部 tag (带冒号的渲染参数)
             .filter((t) => !/^(start|factor|sticks|eq|pair|vert|op|result|hl|bars|step|solid|grid-front|grid-top|grid-left|opt-solid|opt-solid-[A-Z]|opt-grid-[A-Z]|tri-angles|tri-sides|tri-iso|tri-mark):/.test(t))
+            // 2) v0.36.62: 隐藏内部来源/调度/单元 tag — 这些是给 scheduler 看的, 不该给学生看
+            //    (from_test/wrong_origin 真题来源标记, ai_generated 出处, uN 单元码)。
+            //    之前它们排在 tags 数组前面 → slice(0,2) 只显示这些噪音, 还把有用的内容 tag
+            //    (购物/路程/小数乘法 等) 挤掉。过滤后 slice 会落到真正的内容 tag 上。
+            .filter((t) => !/^(from_test|wrong_origin|ai_generated)$/.test(t) && !/^u\d+$/i.test(t))
             .slice(0, 2)
             .map((t) => (
               <span key={t} className="chip bg-white/5 text-slate-300 border border-white/10">
