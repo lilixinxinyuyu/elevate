@@ -32,6 +32,7 @@ import {
   type MicRecorder,
 } from "../../lib/tutor";
 import { speakText } from "../../lib/tts";
+import { upsertTutorSession, buildPromptMeta } from "../../lib/tutorSessionStore";
 import { db } from "../../db/dexie";
 import type { TutorMessage, TutorSession } from "../../core/types";
 import { RealtimeTutor, type RealtimeState } from "../../lib/realtimeTutor";
@@ -247,57 +248,48 @@ export function TutorPanel(props: TutorPanelProps) {
    *
    * studentId 没传就从 db.students 查（默认 selena 那 1 行）。
    */
+  // v0.36.25 (爸爸 review): 改用统一 upsertTutorSession helper, 存全 scenario/mode/promptMeta.
   const persistTutorSession = async (msgs: ChatMsg[]) => {
     if (msgs.length === 0) return;
-    try {
-      let studentId = props.studentId;
-      if (!studentId) {
-        const students = await db.students.toArray();
-        studentId = students[0]?.id;
-      }
-      if (!studentId) return;
-      const now = Date.now();
-      let id = tutorSessionIdRef.current;
-      if (!id) {
-        id = `tutor-${props.attemptId ?? "free"}-${now}-${Math.random().toString(36).slice(2, 8)}`;
-        tutorSessionIdRef.current = id;
-        const row: TutorSession = {
-          id,
-          studentId,
-          subjectId: props.subjectId,
-          attemptId: props.attemptId,
-          questionId: props.questionId,
-          skillId: props.skillId,
-          skillName: props.skillName,
-          questionStem: props.stem,
-          correctAnswer: props.correctAnswer,
-          studentInitialAnswer: props.studentAnswer,
-          messages: msgs.map<TutorMessage>((m) => ({
-            role: m.role,
-            content: m.content,
-            via: m.via,
-            ts: m.ts,
-          })),
-          startedAt: now,
-          updatedAt: now,
-        };
-        await db.tutorSessions.put(row);
-      } else {
-        const existing = await db.tutorSessions.get(id);
-        if (existing) {
-          existing.messages = msgs.map<TutorMessage>((m) => ({
-            role: m.role,
-            content: m.content,
-            via: m.via,
-            ts: m.ts,
-          }));
-          existing.updatedAt = now;
-          await db.tutorSessions.put(existing);
-        }
-      }
-    } catch (e) {
-      console.warn("[tutor] persistTutorSession failed", e);
+    let studentId = props.studentId;
+    if (!studentId) {
+      const students = await db.students.toArray();
+      studentId = students[0]?.id;
     }
+    if (!studentId) return;
+    const scenario = props.context ?? "wrong_retry";
+    // mode: realtime 连上用 realtime; 否则看有没有语音消息 → voice, 纯文字 → explain
+    const mode: "realtime" | "explain" | "voice" = realtimeMode
+      ? "realtime"
+      : msgs.some((m) => m.via === "voice")
+        ? "voice"
+        : "explain";
+    // promptMeta 配方: 所有路径都注入 baseSys + snapshot(学情) + scenario; realtime 额外 talent
+    const blocks = ["baseSys", "snapshot", `scenario:${scenario}`];
+    if (mode === "realtime") blocks.push("talent");
+    if (props.stem) blocks.push("questionCtx");
+    const newId = await upsertTutorSession({
+      sessionId: tutorSessionIdRef.current,
+      studentId,
+      subjectId: props.subjectId,
+      scenario,
+      mode,
+      promptMeta: buildPromptMeta(scenario, mode, blocks, props.subjectId),
+      attemptId: props.attemptId,
+      questionId: props.questionId,
+      skillId: props.skillId,
+      skillName: props.skillName,
+      questionStem: props.stem,
+      correctAnswer: props.correctAnswer,
+      studentInitialAnswer: props.studentAnswer,
+      messages: msgs.map<TutorMessage>((m) => ({
+        role: m.role,
+        content: m.content,
+        via: m.via,
+        ts: m.ts,
+      })),
+    });
+    tutorSessionIdRef.current = newId;
   };
 
   // TTS 单声源管控

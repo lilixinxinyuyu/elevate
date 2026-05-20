@@ -29,6 +29,8 @@ import {
   speakEnglish,
 } from "../../lib/englishVocabProgress";
 import { speakText } from "../../lib/tts";
+import { db } from "../../db/dexie";
+import { upsertTutorSession, buildPromptMeta } from "../../lib/tutorSessionStore";
 
 const REALTIME_URL =
   (import.meta as unknown as { env: { VITE_REALTIME_URL?: string } }).env
@@ -227,6 +229,29 @@ export function SpeakWordPanel({
               setResult(parsed);
               setPhase("result");
               onScore(parsed.score, parsed.transcript, parsed.feedback);
+              // v0.36.25 (爸爸 review): 英语听读音对话之前不存 db, 现在统一存
+              void (async () => {
+                try {
+                  const ss = await db.students.toArray();
+                  const sid = ss[0]?.id;
+                  if (!sid) return;
+                  const skillLabel = `英语${mode === "sentence" ? "句子" : "单词"}朗读`;
+                  await upsertTutorSession({
+                    sessionId: null,
+                    studentId: sid,
+                    subjectId: "english",
+                    scenario: "english_speak",
+                    mode: "realtime",
+                    promptMeta: buildPromptMeta("english_speak", "realtime", ["englishScoring", `target:${mode ?? "word"}`], "english"),
+                    skillName: skillLabel,
+                    questionStem: target,
+                    messages: [
+                      { role: "user", content: `🎤 朗读「${target}」`, via: "voice", ts: Date.now() },
+                      { role: "assistant", content: `评分 ${parsed.score}/100｜转写: ${parsed.transcript}｜${parsed.feedback}`, ts: Date.now() },
+                    ],
+                  });
+                } catch { /* 容错: 存失败不影响评分 */ }
+              })();
               // v0.31.109：HTTP /api/tts/generate 朗读反馈 + 单词×3（Qwen3-TTS Cherry，自然女声）
               if (parsed.feedback && isTtsOn()) {
                 speakFeedbackAndTarget(parsed.feedback, target).catch(() => {

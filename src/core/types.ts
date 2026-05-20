@@ -794,6 +794,20 @@ export interface TutorMessage {
   ts: number;
 }
 
+/**
+ * v0.36.25 (爸爸 review): prompt 组装配方 (prompt ID only — 存配方/ID, 不存全文).
+ * 记录这次对话组装了哪些 prompt 部件, 便于事后审计"小进当时看到了什么上下文".
+ */
+export interface TutorPromptMeta {
+  /** 唤醒场景: wrong_retry / skill_help / review_session / free_chat / english_speak */
+  scenario: string;
+  /** 走哪条路: realtime(wss) / explain(HTTP文字) / voice(HTTP语音) */
+  mode: "realtime" | "explain" | "voice";
+  subjectId?: string;
+  /** 组装用了哪些 prompt 部件 (baseSys/talent/snapshot/scenario:X/questionCtx) */
+  blocks: string[];
+}
+
 export interface TutorSession {
   /** primary key */
   id: string;
@@ -809,6 +823,12 @@ export interface TutorSession {
   /** 触发面板时 Selena 的答案（错题才会有） */
   studentInitialAnswer?: string;
   messages: TutorMessage[];
+  /** v0.36.25: 什么情况唤醒的 (wrong_retry/skill_help/review_session/free_chat/english_speak) */
+  scenario?: string;
+  /** v0.36.25: 对话走哪条路 (realtime/explain/voice) */
+  mode?: "realtime" | "explain" | "voice";
+  /** v0.36.25: prompt 组装配方 (ID only, 不存全文) — 审计小进当时上下文 */
+  promptMeta?: TutorPromptMeta;
   startedAt: number;
   updatedAt: number;
 }
