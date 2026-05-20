@@ -13,7 +13,7 @@
  *
  * 修复:
  *   1. mouse hover 不画: onPointerDown 加 button check (e.button === 0 主键)
- *   2. 撤回/清空 button 任何时候都能点 (不再被 strokes.length === 0 disable)
+ *   2. 撤回/清空 button 任何时候都能点 (不再被 strokeCount === 0 disable)
  *   3. **加擦子工具** (tool toggle: "✍️ 笔" / "🧽 擦子"), 划过的 stroke 删掉
  *   4. canvas_scratch 模板 = 草稿默认已用 (GameShell 跳过 ScratchInsurance dialog)
  *   5. 提交时 canvasScratch.insured = strokes >= 2 自动 (写了就算用了草稿)
@@ -47,23 +47,35 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
   // 和 v0.36.0 incremental 都不彻底. 改 ABANDON 我的 over-engineering, 抄
   // chinese HandwriteCanvas 工作模式: 普通 setState + plain function redraw +
   // useEffect [strokes] 触发. 简单粗暴, 没 closure 陷阱.
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
-  // v0.36.46 (爸爸第 5 次反馈, 8787+8788 双 peer review): 写下一笔删上一笔的真因 —
-  // GameShell 有每秒倒计时, 父组件高频 re-render, redraw() 闭包里的 strokes 在
-  // "提交笔画 setState → React flush" 之间是 stale 的 (语文 HandwriteCanvas 在静态页
-  // 主线程空闲, flush 瞬间完成所以正常; 数学在繁忙主线程下 stale 窗口被放大)。
-  // 修法: strokesRef 做 redraw 的唯一真相源, 所有改动同步更新 ref, 彻底躲开闭包时序。
+  // v0.36.47 (爸爸第 6 次反馈 + GPT-5.5 逐帧 peer review 定位真因):
+  // 前 4 次修法 (stale closure / incremental / 抄 HandwriteCanvas / strokesRef 真相源)
+  // 都在改"重画", 但真因在"提交": 笔画已画进 canvas bitmap, 但 pointerUp/cancel/
+  // lostpointercapture 在繁忙主线程(GameShell 每秒倒计时 re-render)下没打到 React
+  // handler → 这一笔从没 commit 进 strokesRef → 下一次 pointerDown 用 [pt] 覆盖它
+  // + clearRect 重画(只画 strokesRef, 没这笔) → 上一笔视觉消失。修法见 finalizePendingStroke。
+  // 笔画真相源只用 ref; React state 只存笔数给 UI (不驱动重画, 躲开 re-render 时序)。
   const strokesRef = useRef<Stroke[]>([]);
-  /** 同步更新 ref(给 redraw 用) + state(给 UI/笔数显示用), 然后立刻重画。 */
-  function commitStrokes(next: Stroke[]) {
-    strokesRef.current = next;
-    setStrokes(next);
-  }
-  const drawingRef = useRef(false);
   const currentStrokeRef = useRef<Stroke>([]);
+  const drawingRef = useRef(false);
+  const activePointerIdRef = useRef<number | null>(null);
   const [tool, setTool] = useState<Tool>("pen");
+  const toolRef = useRef<Tool>("pen");
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
+  const [strokeCount, setStrokeCount] = useState(0);
   const [value, setValue] = useState("");
   const [locked, setLocked] = useState(false);
+
+  function syncCount() {
+    setStrokeCount(strokesRef.current.length);
+  }
+  /** 改笔画 = 写 ref(redraw 真相源) + 同步笔数 + 立刻重画。 */
+  function commitStrokes(next: Stroke[]) {
+    strokesRef.current = next;
+    syncCount();
+    redraw();
+  }
 
   // 重画 canvas — plain function (每 render 新建), 闭包永远拿 latest strokes
   // 抄 HandwriteCanvas line 50-81 模式: 不 useCallback, 不 ref-sync
@@ -99,10 +111,54 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     }
   }
 
+  // mount 画一次; 之后全靠手动 redraw (不挂 [strokes] effect, 躲开 re-render 时序)
   useEffect(() => {
     redraw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strokes]);
+  }, []);
+
+  /**
+   * 结束当前笔: 把 currentStrokeRef 提交进 strokesRef (pen + >=2 点), 重置 drawing 状态。
+   * 所有"笔结束"路径都走它 — pointerUp/cancel/lostcapture/window 兜底/新 pointerDown 前抢救。
+   * **这是真正的修复点**: 即使 pointerUp 丢了, 下一个事件也能把已画的笔补提交, 不丢笔。
+   */
+  function finalizePendingStroke() {
+    const pending = currentStrokeRef.current;
+    if (!drawingRef.current && pending.length === 0) return;
+    drawingRef.current = false;
+    activePointerIdRef.current = null;
+    currentStrokeRef.current = [];
+    if (toolRef.current === "pen" && pending.length >= 2) {
+      strokesRef.current = [...strokesRef.current, pending];
+      syncCount();
+    }
+    redraw();
+  }
+
+  // window 级兜底: capture 丢了 canvas 的 React handler 可能收不到 up/cancel, 这里补提交
+  useEffect(() => {
+    const onUp = (ev: PointerEvent) => {
+      if (activePointerIdRef.current === ev.pointerId) finalizePendingStroke();
+    };
+    const onCancel = (ev: PointerEvent) => {
+      if (activePointerIdRef.current === ev.pointerId) finalizePendingStroke();
+    };
+    const onBlur = () => finalizePendingStroke();
+    const onVis = () => {
+      if (document.visibilityState !== "visible") finalizePendingStroke();
+    };
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onCancel, true);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onCancel, true);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function exportBase64(): string {
     const cv = canvasRef.current;
@@ -143,67 +199,96 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
     commitStrokes(next);
   }
 
-  // v0.36.2 抄 HandwriteCanvas 简单模式: setStrokes functional, redraw on state change
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (disabled || locked) return;
     // v0.35.27 fix: mouse / pen 必须真按下才画 (hover 不画)
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (!e.isPrimary) return;
     e.preventDefault();
+    // **关键修复**: 开新笔前先抢救提交上一笔 (它的 pointerUp 可能在繁忙主线程下丢了没 commit)
+    finalizePendingStroke();
     const pt = getPoint(e);
-    if (tool === "eraser") {
-      drawingRef.current = true;
+    activePointerIdRef.current = e.pointerId;
+    drawingRef.current = true;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* capture 可能失败, 有 window 兜底 */
+    }
+    if (toolRef.current === "eraser") {
       eraseAt(pt);
     } else {
-      drawingRef.current = true;
       currentStrokeRef.current = [pt];
+      redraw();
     }
-    canvasRef.current?.setPointerCapture(e.pointerId);
-    redraw();
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!drawingRef.current || disabled || locked) return;
+    if (activePointerIdRef.current !== e.pointerId) return;
     if (e.pointerType === "mouse" && e.buttons === 0) {
-      // mouse 在 capture 中但没按住 (e.g., 鼠标按一下松开后还在 capture)
-      drawingRef.current = false;
-      currentStrokeRef.current = [];
+      // mouse 在 capture 中但没按住 → 当作抬笔, 提交已画的
+      finalizePendingStroke();
       return;
     }
     e.preventDefault();
-    const pt = getPoint(e);
-    if (tool === "eraser") {
-      eraseAt(pt);
-    } else {
-      currentStrokeRef.current.push(pt);
-      redraw();
+    const cv = canvasRef.current;
+    if (!cv) return;
+    if (toolRef.current === "eraser") {
+      eraseAt(getPoint(e));
+      return;
     }
+    // 吃掉 coalesced points (繁忙主线程下高速书写不丢点)。
+    // 注意: 合成事件 / 部分浏览器 getCoalescedEvents() 返回空数组 → 必须回退到事件本身,
+    // 否则一个点都 push 不进 (笔画永远 <2 点被丢弃)。
+    const native = e.nativeEvent as PointerEvent;
+    let evs: PointerEvent[] = [native];
+    if (typeof native.getCoalescedEvents === "function") {
+      const coalesced = native.getCoalescedEvents();
+      if (coalesced && coalesced.length > 0) evs = coalesced;
+    }
+    const rect = cv.getBoundingClientRect();
+    const sx = cv.width / rect.width;
+    const sy = cv.height / rect.height;
+    for (const pe of evs) {
+      currentStrokeRef.current.push({ x: (pe.clientX - rect.left) * sx, y: (pe.clientY - rect.top) * sy });
+    }
+    redraw();
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (!drawingRef.current) return;
+    if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return;
     e.preventDefault();
-    drawingRef.current = false;
-    if (tool === "pen" && currentStrokeRef.current.length >= 2) {
-      const stroke = currentStrokeRef.current;
-      currentStrokeRef.current = [];
-      // ref 同步追加 — 立刻成为 redraw 真相源, 不等 React flush (躲 stale closure)
-      commitStrokes([...strokesRef.current, stroke]);
-    } else {
-      currentStrokeRef.current = [];
-      redraw();
+    finalizePendingStroke();
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* noop */
     }
-    canvasRef.current?.releasePointerCapture(e.pointerId);
+  }
+
+  function onPointerCancel(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) return;
+    e.preventDefault();
+    finalizePendingStroke(); // cancel 也提交: 已画出来的笔应保留
+  }
+
+  function onLostPointerCapture() {
+    // **关键补洞**: capture 丢失(繁忙主线程下常见)时提交 pending, 否则下一笔 pointerDown 会覆盖它
+    finalizePendingStroke();
   }
 
   function clearAll() {
     if (locked || disabled) return;
+    drawingRef.current = false;
+    activePointerIdRef.current = null;
     currentStrokeRef.current = [];
     commitStrokes([]);
   }
 
   function undoLast() {
     if (locked || disabled) return;
+    finalizePendingStroke(); // 先把在画的笔提交, 再撤最后一笔 (语义一致)
     commitStrokes(strokesRef.current.slice(0, -1));
   }
 
@@ -284,13 +369,15 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
 
   function submit(ev: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLInputElement>) {
     if (disabled || locked || !value.trim()) return;
+    finalizePendingStroke(); // 把还在画的最后一笔也提交进去再算
     const result = gradeAttempt(question, value);
     const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
     if (result.isCorrect) triggerFx.correctAt(rect.left + rect.width / 2, rect.top, "✓");
     else triggerFx.wrongAt(rect.left + rect.width / 2, rect.top);
     setLocked(true);
-    const imageBase64 = strokes.length > 0 ? exportBase64() : "";
-    const hasWork = strokes.length >= 2; // 2 笔+ 算"列了式"
+    const count = strokesRef.current.length;
+    const imageBase64 = count > 0 ? exportBase64() : "";
+    const hasWork = count >= 2; // 2 笔+ 算"列了式"
     onFinish({
       answer: value,
       isCorrect: result.isCorrect,
@@ -298,13 +385,13 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
       matchedErrorTags: result.matchedErrorTags,
       canvasScratch: {
         imageBase64,
-        strokeCount: strokes.length,
+        strokeCount: strokeCount,
         hasWork,
       },
       // v0.35.27 (爸爸): 写了草稿 = 自动 insured (跟 ScratchInsurance 体系兼容,
       // 答错不扣 XP/mastery, 因为她是认真列了式)
       scratch: hasWork
-        ? { tool: "scratch", charCount: strokes.length, insured: true, mentalOverrideUsed: false }
+        ? { tool: "scratch", charCount: strokeCount, insured: true, mentalOverrideUsed: false }
         : undefined,
     });
     // 自动 vision judge — 没 work 就不调 (省 token)
@@ -321,7 +408,7 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs text-slate-300">
           <span>✍️ 列算式区 (像在纸上一样写)</span>
-          <span className="text-slate-400">{strokes.length} 笔</span>
+          <span className="text-slate-400">{strokeCount} 笔</span>
         </div>
 
         {/* 工具选择 chip 在 canvas 上方, 明确当前 mode */}
@@ -402,7 +489,8 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
+            onPointerCancel={onPointerCancel}
+            onLostPointerCapture={onLostPointerCapture}
             className={`block w-full h-full touch-none ${tool === "eraser" ? "cursor-cell" : "cursor-crosshair"}`}
             style={{ touchAction: "none" }}
           />
@@ -433,14 +521,14 @@ export function CanvasScratchPanel(props: TemplateRenderProps) {
             确定
           </button>
         </div>
-        {strokes.length === 0 && !locked && (
+        {strokeCount === 0 && !locked && (
           <div className="text-[10px] text-amber-300/80">
             提示: 先在白板上列一下式子, 写了草稿就不会扣分 ✍️
           </div>
         )}
-        {strokes.length >= 2 && !locked && (
+        {strokeCount >= 2 && !locked && (
           <div className="text-[10px] text-emerald-300/80">
-            ✅ 已写 {strokes.length} 笔, 即使答错也不扣 (写草稿就保护了)
+            ✅ 已写 {strokeCount} 笔, 即使答错也不扣 (写草稿就保护了)
           </div>
         )}
       </div>
