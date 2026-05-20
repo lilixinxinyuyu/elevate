@@ -29,12 +29,14 @@ export class TutorError extends Error {
 // ============================================================
 
 export interface ExplainArgs {
-  subjectId: "math" | "chinese";
+  subjectId: "math" | "chinese" | "english";
   stem: string;
   correctAnswer: string;
   studentAnswer: string;
   skillName?: string;
   hint?: string;
+  /** v0.36.23: Selena 学情 (弱项 + 当前 skill mastery), 让讲题更针对薄弱处 */
+  studentContext?: string;
   /** 多轮对话：上一轮 AI 说 + 用户追问 */
   conversation?: { role: "assistant" | "user"; content: string }[];
 }

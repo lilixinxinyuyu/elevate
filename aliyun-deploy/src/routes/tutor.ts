@@ -56,12 +56,14 @@ const TUTOR_TEXT_SYSTEM = `你是 Selena（4 年级女生）的 AI 引导老师"
 口语，亲切，像比 Selena 大几岁的姐姐。读起来要像聊天，不像讲座。`;
 
 interface TutorRequest {
-  subjectId?: "math" | "chinese";
+  subjectId?: "math" | "chinese" | "english";
   stem?: string;
   correctAnswer?: string;
   studentAnswer?: string;
   skillName?: string;
   hint?: string;
+  /** v0.36.23: Selena 学情 (弱项 + 当前 skill mastery), 客户端 gatherSnapshot 拼好传 */
+  studentContext?: string;
   conversation?: { role: "assistant" | "user"; content: string }[];
 }
 
@@ -94,10 +96,13 @@ function getProviders(env: Env): Provider[] {
 // 兜底, 比之前 [flash, plus] 更快 fallback.
 const MODELS = ["qwen3.6-flash", "deepseek-v4-flash", "qwen3.6-plus"];
 
-function buildSystemPrompt(subjectId: string, skillName?: string): string {
-  const subjLabel = subjectId === "chinese" ? "语文" : "数学";
+// v0.36.23 (爸爸 prompt review): 加英语学科 + Selena 学情注入.
+function buildSystemPrompt(subjectId: string, skillName?: string, studentContext?: string): string {
+  const subjLabel = subjectId === "chinese" ? "语文" : subjectId === "english" ? "英语" : "数学";
   const skillLine = skillName ? `\n\n这道题考的是「${skillName}」。` : "";
-  return `${TUTOR_TEXT_SYSTEM}\n\n你正在引导 Selena 思考${subjLabel}题。${skillLine}`;
+  // 学情注入: 客户端拉的弱项 + 当前 skill mastery (让讲题更针对她薄弱处)
+  const ctxLine = studentContext ? `\n\n${studentContext}` : "";
+  return `${TUTOR_TEXT_SYSTEM}\n\n你正在引导 Selena 思考${subjLabel}题。${skillLine}${ctxLine}`;
 }
 
 function buildUserMessage(args: TutorRequest): string {
@@ -177,7 +182,7 @@ tutor.post("/explain", async (c) => {
     return c.json({ ok: false, error: "missing_stem_or_answer" }, 400);
   }
 
-  const systemPrompt = buildSystemPrompt(body.subjectId ?? "math", body.skillName);
+  const systemPrompt = buildSystemPrompt(body.subjectId ?? "math", body.skillName, body.studentContext);
   const messages: { role: string; content: string }[] = [{ role: "system", content: systemPrompt }];
   if (Array.isArray(body.conversation) && body.conversation.length > 0) {
     for (const m of body.conversation) {

@@ -421,12 +421,25 @@ export function TutorPanel(props: TutorPanelProps) {
       if (!props.stem) return;
       setLoading("explain");
       try {
+        // v0.36.23 (爸爸 prompt review): 文字讲题也注入 Selena 学情 (弱项 + 错题),
+        // 跟 realtime 一致 — 让小进讲题时知道她哪里薄弱, 更针对性引导.
+        let studentContext: string | undefined;
+        try {
+          let sid = props.studentId;
+          if (!sid) { const ss = await db.students.toArray(); sid = ss[0]?.id; }
+          if (sid) {
+            const stu = await db.students.get(sid);
+            const snap = await gatherSnapshot(sid, stu?.name ?? "Selena");
+            studentContext = snapshotToInstructions(snap);
+          }
+        } catch { /* 容错: 没学情就不注入 */ }
         const r = await explainQuestion({
           subjectId: props.subjectId,
           stem: props.stem,
           correctAnswer: props.correctAnswer ?? "",
           studentAnswer: props.studentAnswer ?? "",
           skillName: props.skillName,
+          studentContext,
         });
         if (cancelled) return;
         renderTextResult(r.explanation);
