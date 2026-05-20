@@ -27,6 +27,8 @@ import { useState, useEffect } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import type { Question } from "../core/types";
+import { SEED_QUESTIONS_CHINESE_GLYPH } from "../subjects/chinese/glyphPack";
 
 type DetectiveCase = {
   id: string;
@@ -158,18 +160,44 @@ const ENCOURAGE_PHRASES = [
   "形声字的形旁告诉你字义",
 ];
 
+// ── 真题库接入: glyphPack 的 glyph_detective 题 (偏旁/形声/会意) ──
+// game_data 带 hanzi/hanziDesc/optionEmojis, 选项/答案/解析走标准 Question 字段.
+function adaptGlyph(q: Question): DetectiveCase | null {
+  const gd = q.game_data;
+  if (!gd || gd.kind !== "glyph_detective") return null;
+  const opts = q.options ?? [];
+  if (opts.length < 2) return null;
+  const correctVal = q.answer?.type === "choice" ? q.answer.value : undefined;
+  const correctIdx = opts.findIndex((o) => o.id === correctVal);
+  if (correctIdx < 0) return null;
+  return {
+    id: q.question_id,
+    scrollLabel: gd.hanzi ? `真题 · ${gd.hanzi} 字之谜` : "真题卷",
+    hanzi: gd.hanzi,
+    hanziDesc: gd.hanziDesc,
+    question: q.stem,
+    options: opts.map((o, i) => ({ text: o.text, emoji: gd.optionEmojis?.[i] })),
+    correctIdx,
+    solution: (Array.isArray(q.solution_steps) && q.solution_steps.length > 0 ? q.solution_steps.join(" ") : q.feedback_correct) || "",
+  };
+}
+const REAL_GLYPH_CASES: DetectiveCase[] = SEED_QUESTIONS_CHINESE_GLYPH
+  .map(adaptGlyph)
+  .filter((c): c is DetectiveCase => c !== null);
+const CASES: DetectiveCase[] = REAL_GLYPH_CASES.length >= 4 ? REAL_GLYPH_CASES : DEMO_CASES;
+
 export function GlyphDetectivePreviewPage() {
   const [caseIdx, setCaseIdx] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
 
-  const cur = DEMO_CASES[caseIdx]!;
+  const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
-        setCaseIdx((i) => (i + 1) % DEMO_CASES.length);
+        setCaseIdx((i) => (i + 1) % CASES.length);
         setSelectedIdx(null);
         setResult("idle");
         setEncouragePhrase(null);
@@ -257,7 +285,7 @@ export function GlyphDetectivePreviewPage() {
           <div className="text-sm font-display font-bold text-amber-100">{cur.scrollLabel}</div>
         </div>
         <div className="px-3 py-1.5 rounded-xl bg-amber-900/85 backdrop-blur-md border border-amber-400/40 text-xs font-bold text-amber-100 tabular-nums">
-          {caseIdx + 1} / {DEMO_CASES.length}
+          {caseIdx + 1} / {CASES.length}
         </div>
       </div>
 

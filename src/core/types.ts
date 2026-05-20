@@ -343,7 +343,11 @@ export interface Question {
    *
    * 数学侧不读这些字段，零影响。
    */
-  game_data?: ChinesePairMatchData | ChineseSentenceShuffleData | ChinesePoemClozeData;
+  game_data?:
+    | ChinesePairMatchData
+    | ChineseSentenceShuffleData
+    | ChinesePoemClozeData
+    | ChineseGlyphDetectiveData;
 
   /**
    * v0.34.98 (iter 32 P0-0b): SpeedMatch 白名单. 见 src/core/speedMatchPolicy.ts.
@@ -502,6 +506,17 @@ export interface ChinesePoemClozeData {
   blanks: string[];
   /** 用户可拖/点的字池（包含答案 + 干扰项） */
   pool: string[];
+}
+
+/** 字形侦探：展示大汉字 + 4 选 1 偏旁/形声/会意辨认（C2 cluster） */
+export interface ChineseGlyphDetectiveData {
+  kind: "glyph_detective";
+  /** 待鉴定的大汉字（主显） */
+  hanzi: string;
+  /** 字的来源 / 结构描述（形声字 左形右声 等） */
+  hanziDesc: string;
+  /** 每个选项的 emoji（与 options 同序，可选装饰） */
+  optionEmojis?: string[];
 }
 
 export interface StudentProfile {
