@@ -81,6 +81,8 @@ const RhetoricScrollPreviewPage = lazy(() => import("./pages/RhetoricScrollPrevi
 const ReadingLibraryPreviewPage = lazy(() => import("./pages/ReadingLibraryPreview").then((m) => ({ default: m.ReadingLibraryPreviewPage })));
 // v0.36.21 Sprint C5: Imitate Painter Preview — 仿写画师 (美术馆 + 4选1临摹 + 自由仿写 AI 点评)
 const ImitatePainterPreviewPage = lazy(() => import("./pages/ImitatePainterPreview").then((m) => ({ default: m.ImitatePainterPreviewPage })));
+// v0.36.27 Sprint C7: Essay Inkstone Preview — 自由作文 (书房砚台 + 片段/成篇 + 作文 AI 点评) — 7/7 完成
+const EssayInkstonePreviewPage = lazy(() => import("./pages/EssayInkstonePreview").then((m) => ({ default: m.EssayInkstonePreviewPage })));
 const TownHomePage = lazy(() => import("./pages/town/TownHomePage").then((m) => ({ default: m.TownHomePage })));
 const BankPage = lazy(() => import("./pages/town/BankPage").then((m) => ({ default: m.BankPage })));
 const BuildingStubPage = lazy(() => import("./pages/town/BuildingStubPage").then((m) => ({ default: m.BuildingStubPage })));
@@ -318,6 +320,8 @@ export const router = createBrowserRouter([
       { path: "reading-library-preview", element: L(<ChineseOnlyRoute><ReadingLibraryPreviewPage /></ChineseOnlyRoute>) },
       // v0.36.21 Sprint C5: Imitate Painter (仿写画师 Chinese cluster — 4选1临摹 + 自由仿写 AI 点评)
       { path: "imitate-painter-preview", element: L(<ChineseOnlyRoute><ImitatePainterPreviewPage /></ChineseOnlyRoute>) },
+      // v0.36.27 Sprint C7: Essay Inkstone (自由作文 Chinese cluster — 书房砚台 + 作文 AI 点评) — 7/7
+      { path: "essay-inkstone-preview", element: L(<ChineseOnlyRoute><EssayInkstonePreviewPage /></ChineseOnlyRoute>) },
       { path: "town", element: L(<MathOnlyRoute><TownHomePage /></MathOnlyRoute>) },
       { path: "town/bank", element: L(<MathOnlyRoute><BankPage /></MathOnlyRoute>) },
       { path: "town/bus-stop", element: L(<MathOnlyRoute><BuildingStubPage /></MathOnlyRoute>) },
