@@ -17,7 +17,10 @@ const DEFAULT_MODELS = [
   "wan2.7-image-pro",
   "qwen-image-2.0-pro",
 ];
-const SINGLE_MODEL_TIMEOUT_MS = 28_000;
+// v0.36.56: 28s→50s. token-plan image 后端过载时 wan gen 要 30-45s, 28s 被过早 abort
+// (avatar 批量大面积 "operation aborted")。FC function timeout 60s, 给单模型 50s + ~8s
+// 余量返回。gen 脚本只 pin 1 个 model(wan2.7-image-pro), 所以单模型预算可以放大。
+const SINGLE_MODEL_TIMEOUT_MS = 50_000;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
