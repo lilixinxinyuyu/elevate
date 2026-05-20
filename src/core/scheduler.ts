@@ -1,6 +1,10 @@
 import { FINAL_SPRINT_G4B } from "../content/examPriorities";
 import { SKILLS } from "../content/skills";
 import type { Attempt, MasteryScore, MistakeReview, Question, SessionMode, Skill } from "./types";
+// v0.36.59 统一选题重构 Phase 4 (Option B): 纯 RNG 原语移到跨学科 ./rng。
+// 内部用 + re-export 保持既有 public API (hashSeed/seededRng 原是本文件 export)。
+import { hashSeed, seededRng } from "./rng";
+export { hashSeed, seededRng };
 // v0.35.33 Refactor Priority 2: SSOT 常量
 import {
   DAILY_CHALLENGE_TARGET,
@@ -63,22 +67,7 @@ const EXAM_PRIORITY_WEIGHT: Record<string, number> = {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-export function hashSeed(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-export function seededRng(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 2 ** 32;
-  };
-}
+// hashSeed / seededRng → 移到 ./rng (v0.36.59), 见顶部 import+re-export。
 
 export function buildDailySession(input: BuildSessionInput): DailySessionPlan {
   const now = input.now ?? Date.now();

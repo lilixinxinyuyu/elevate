@@ -17,6 +17,8 @@
  */
 
 import type { Question, MasteryScore } from "../../core/types";
+// v0.36.59 Phase 4 (Option B): shuffle 用跨学科共享 ./core/rng (逐字同实现, 行为不变)。
+import { shuffle } from "../../core/rng";
 
 const EXAM_WEIGHT: Record<string, number> = {
   MUST_BIG: 3,
@@ -35,15 +37,6 @@ function difficultyBands(avgMastery: number): Record<number, number> {
   if (avgMastery < 70) return { 1: 0.15, 2: 0.35, 3: 0.35, 4: 0.15, 5: 0 };
   if (avgMastery < 85) return { 1: 0.05, 2: 0.2, 3: 0.35, 4: 0.3, 5: 0.1 };
   return { 1: 0.05, 2: 0.1, 3: 0.25, 4: 0.35, 5: 0.25 };
-}
-
-function shuffle<T>(arr: readonly T[], rng: () => number): T[] {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [out[i]!, out[j]!] = [out[j]!, out[i]!];
-  }
-  return out;
 }
 
 /** 按 exam_priority 权重无放回抽 n 个。 */
