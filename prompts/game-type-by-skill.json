@@ -264,5 +264,16 @@
   "average_inverse_missing": [
     { "type": "word_problem_lab", "weight": 3 },
     { "type": "clue_finder", "weight": 2 }
-  ]
+  ],
+
+  "_chinese_below": "===== 语文 G4B (v0.36.15): READING→word_problem_lab(短文多问 multi_step), IMITATE→fill_blank(仿写填空), ORDER→sort_ladder(句子排序). 其他语文题型(TYPOS/VOCAB/PINYIN/DICTATION/RHETORIC)走默认 plain_choice =====",
+
+  "C4B_U1_READING": [{ "type": "word_problem_lab", "weight": 3 }],
+  "C4B_U2_READING": [{ "type": "word_problem_lab", "weight": 3 }],
+  "C4B_U3_READING": [{ "type": "word_problem_lab", "weight": 3 }],
+  "C4B_U1_IMITATE": [{ "type": "fill_blank", "weight": 3 }],
+  "C4B_U2_IMITATE": [{ "type": "fill_blank", "weight": 3 }],
+  "C4B_U3_IMITATE": [{ "type": "fill_blank", "weight": 3 }],
+  "C4B_U4_IMITATE": [{ "type": "fill_blank", "weight": 3 }],
+  "C4B_U5_ORDER": [{ "type": "sort_ladder", "weight": 3 }]
 }
