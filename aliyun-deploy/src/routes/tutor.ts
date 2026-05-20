@@ -121,6 +121,7 @@ async function callChat(
   p: Provider,
   model: string,
   messages: { role: string; content: string }[],
+  opts?: { temperature?: number; maxTokens?: number },
 ): Promise<{ ok: true; text: string } | { ok: false; status: number; code: string; message: string }> {
   try {
     const ctrl = new AbortController();
@@ -134,8 +135,8 @@ async function callChat(
       body: JSON.stringify({
         model,
         messages,
-        temperature: 0.6,
-        max_tokens: 350,
+        temperature: opts?.temperature ?? 0.6,
+        max_tokens: opts?.maxTokens ?? 350,
         enable_thinking: false,
       }),
       signal: ctrl.signal,
@@ -221,6 +222,58 @@ tutor.post("/explain", async (c) => {
     },
     502,
   );
+});
+
+/**
+ * POST /api/tutor/essay-prompt — 生成一道小学作文练习题 (C7 自由作文 cluster).
+ *
+ * 跟 /explain 区别: explain 是苏格拉底式"引导错题", system prompt 框死了导师人格,
+ * 拿来出题会被当成"学生答错"来引导 (实测返回引导语而非题目). 这里用纯出题 system
+ * prompt, temperature 0.9 求变化, 严格 "题目｜提示｜难度" 三段格式让客户端好解析.
+ */
+tutor.post("/essay-prompt", async (c) => {
+  const providers = getProviders(c.env);
+  if (providers.length === 0) {
+    return c.json({ ok: false, error: "tutor_not_configured" }, 503);
+  }
+  let body: { grade?: number; theme?: string } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    /* 允许空 body */
+  }
+  const grade = body.grade ?? 4;
+  const theme = (body.theme ?? "").trim();
+
+  const sys =
+    `你是小学语文老师，专门给${grade}年级学生出作文练习题。只输出一道题，` +
+    `严格用这个格式（全角竖线｜分隔三段，不要任何多余文字、解释、引号或换行）：\n` +
+    `题目｜写作提示｜难度\n` +
+    `要求：题目贴近${grade}年级学生生活（写人/写事/写景/状物/想象/看图写话/续写 任选一种）；` +
+    `写作提示在25字内给出具体写作方法；难度只能填「片段」或「成篇」（片段=2~3句，成篇=50字以上）。\n` +
+    `示例：描写一场夏天的雷雨｜先写天色变化再写声音，用上比喻｜片段`;
+  const userMsg = theme
+    ? `请围绕主题「${theme}」出一道作文题。`
+    : "请出一道新颖、不落俗套的作文题。";
+
+  const messages = [
+    { role: "system", content: sys },
+    { role: "user", content: userMsg },
+  ];
+
+  const tried: Array<{ provider: string; model: string; code: string }> = [];
+  for (const p of providers) {
+    for (const m of MODELS) {
+      const r = await callChat(p, m, messages, { temperature: 0.9, maxTokens: 120 });
+      if (r.ok) {
+        return c.json({ ok: true, prompt: r.text, model: m, provider: p.label });
+      }
+      tried.push({ provider: p.label, model: m, code: r.code });
+      if (r.code === "InvalidApiKey" || r.code === "AccessDenied") break;
+    }
+  }
+  console.error("[tutor/essay-prompt] all failed", tried);
+  return c.json({ ok: false, error: "no_model_worked", tried }, 502);
 });
 
 /**

@@ -21,52 +21,30 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { explainQuestion } from "../lib/tutor";
+import { explainQuestion, generateEssayPrompt } from "../lib/tutor";
 import { awardClusterXp } from "../lib/clusterXp";
+import { ESSAY_PROMPTS, type EssayPrompt, type EssayTier } from "../subjects/chinese/essayPrompts";
 
-type EssayPrompt = {
-  id: string;
-  label: string;
-  title: string;
-  guide: string;
-  minChars: number;
-  tier: "片段" | "成篇";
-};
+const PROMPTS = ESSAY_PROMPTS;
 
-const PROMPTS: EssayPrompt[] = [
-  {
-    id: "e1",
-    label: "片段 · 写景",
-    title: "用 2-3 句话描写「春天的校园」",
-    guide: "调动颜色 + 一个比喻或拟人。例：操场边的柳树抽出嫩芽，像小姑娘的辫子在风里轻轻摆。",
-    minChars: 20,
-    tier: "片段",
-  },
-  {
-    id: "e2",
-    label: "片段 · 写物",
-    title: "用 2-3 句话描写你最喜欢的一样东西",
-    guide: "写它的样子 + 你为什么喜欢。用上一个修辞。",
-    minChars: 20,
-    tier: "片段",
-  },
-  {
-    id: "e3",
-    label: "成篇 · 看图写话",
-    title: "看图写话：一个小朋友在雨中给老奶奶撑伞",
-    guide: "写清楚：什么时间、谁、做了什么、结果怎样。50-100 字，有头有尾。",
-    minChars: 50,
-    tier: "成篇",
-  },
-  {
-    id: "e4",
-    label: "成篇 · 题目作文",
-    title: "题目作文：《一件难忘的事》开头一段",
-    guide: "用一句话点题 + 交代事情背景。开头要吸引人。50 字以上。",
-    minChars: 50,
-    tier: "成篇",
-  },
-];
+/** 把 AI 返回的 "题目｜提示｜难度" 解析成 EssayPrompt (容错: 全角/半角竖线 + 去标签) */
+function parseAiPrompt(raw: string): EssayPrompt | null {
+  const cleaned = raw.replace(/[|│]/g, "｜").trim();
+  const parts = cleaned.split("｜").map((s) => s.replace(/^(题目|提示|写作提示|难度)[:：]?\s*/, "").trim());
+  const title = parts[0];
+  if (!title || title.length < 3) return null;
+  const guide = parts[1] || "大胆下笔，写清楚你想表达的意思。";
+  const tier: EssayTier = (parts[2] || "").includes("成篇") ? "成篇" : "片段";
+  return {
+    id: `ai-${Date.now()}`,
+    label: tier === "成篇" ? "成篇 · 小进出题" : "片段 · 小进出题",
+    title,
+    guide,
+    minChars: tier === "成篇" ? 50 : 20,
+    tier,
+    category: "小进AI出题",
+  };
+}
 
 export function EssayInkstonePreviewPage() {
   const [promptIdx, setPromptIdx] = useState(0);
@@ -74,8 +52,11 @@ export function EssayInkstonePreviewPage() {
   const [judging, setJudging] = useState(false);
   const [critique, setCritique] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // AI 即时出题: 非 null 时覆盖题库当前题
+  const [aiPrompt, setAiPrompt] = useState<EssayPrompt | null>(null);
+  const [genLoading, setGenLoading] = useState(false);
 
-  const cur = PROMPTS[promptIdx]!;
+  const cur = aiPrompt ?? PROMPTS[promptIdx]!;
   const charCount = draft.trim().length;
   const enough = charCount >= cur.minChars;
 
@@ -104,10 +85,40 @@ export function EssayInkstonePreviewPage() {
   }
 
   function nextPrompt() {
+    setAiPrompt(null); // 回到题库
     setPromptIdx((i) => (i + 1) % PROMPTS.length);
     setDraft("");
     setCritique(null);
     setErr(null);
+  }
+
+  // AI 即时出题 — 复用 tutor explain 端点, 让小进出一道新作文题
+  async function handleGeneratePrompt() {
+    if (genLoading) return;
+    setGenLoading(true);
+    setErr(null);
+    try {
+      // 随机给个写作角度, 逼模型分散题材 (否则 temperature 高也老往同一主题跑)
+      const ANGLES = [
+        "写人(同学/家人/老师)", "写一件难忘的事", "写景(季节/天气/地点)",
+        "状物(植物/物品/美食)", "写小动物", "想象作文", "看图写话",
+        "续写故事", "我的爱好", "校园生活", "一次有趣的活动", "成长的瞬间",
+      ];
+      const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)];
+      const r = await generateEssayPrompt({ grade: 4, theme: angle });
+      const p = parseAiPrompt(r.prompt);
+      if (!p) {
+        setErr("小进出的题没看懂, 再点一次试试");
+        return;
+      }
+      setAiPrompt(p);
+      setDraft("");
+      setCritique(null);
+    } catch (e) {
+      setErr((e as Error).message || "出题失败, 小进可能在研墨");
+    } finally {
+      setGenLoading(false);
+    }
   }
 
   return (
@@ -149,7 +160,7 @@ export function EssayInkstonePreviewPage() {
           <div className="text-sm font-display font-bold text-amber-100">{cur.label}</div>
         </div>
         <div className="px-3 py-1.5 rounded-xl bg-stone-800/85 backdrop-blur-md border border-amber-700/50 text-xs font-bold text-amber-100 tabular-nums">
-          {promptIdx + 1} / {PROMPTS.length}
+          {aiPrompt ? "✨ AI 题" : `${promptIdx + 1} / ${PROMPTS.length}`}
         </div>
       </div>
 
@@ -186,9 +197,16 @@ export function EssayInkstonePreviewPage() {
                 <span className={`text-xs ${enough ? "text-emerald-600" : "text-stone-400"}`}>
                   {charCount} 字 {enough ? "✓" : `(至少 ${cur.minChars})`}
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 justify-end">
                   <button onClick={nextPrompt} className="px-3 py-1.5 rounded-lg bg-stone-200 text-stone-700 text-sm hover:bg-stone-300 transition">
                     换一题 →
+                  </button>
+                  <button
+                    onClick={handleGeneratePrompt}
+                    disabled={genLoading}
+                    className="px-3 py-1.5 rounded-lg bg-rose-800 text-white text-sm font-bold disabled:opacity-40 hover:bg-rose-700 transition"
+                  >
+                    {genLoading ? "🖌️ 研墨中..." : "🎲 小进出新题"}
                   </button>
                   <button
                     onClick={handleJudge}

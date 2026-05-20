@@ -68,6 +68,36 @@ export async function explainQuestion(args: ExplainArgs): Promise<ExplainResult>
   return { explanation: j.explanation, model: j.model ?? "unknown" };
 }
 
+/**
+ * v0.36.37: 生成一道作文练习题 (C7 自由作文 cluster). 走专用 /essay-prompt 端点
+ * (纯出题 system prompt, 不是 explain 的苏格拉底导师人格). 返回 "题目｜提示｜难度"
+ * 原始文本, 由调用方解析.
+ */
+export async function generateEssayPrompt(args?: {
+  grade?: number;
+  theme?: string;
+}): Promise<{ prompt: string; model: string }> {
+  const r = await fetch("/api/tutor/essay-prompt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify(args ?? {}),
+  });
+  if (!r.ok) {
+    let parsed: { error?: string; detail?: string } | null = null;
+    try {
+      parsed = await r.json();
+    } catch {
+      /* 上游可能不是 JSON */
+    }
+    throw new TutorError(parsed?.error ?? "request_failed", r.status, parsed?.detail);
+  }
+  const j = (await r.json()) as { ok?: boolean; prompt?: string; model?: string };
+  if (!j.ok || !j.prompt) {
+    throw new TutorError("empty_response", r.status, "no prompt in body");
+  }
+  return { prompt: j.prompt, model: j.model ?? "unknown" };
+}
+
 // ============================================================
 //  2. 语音问答（push-to-talk）
 // ============================================================
