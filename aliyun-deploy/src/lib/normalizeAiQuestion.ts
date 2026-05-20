@@ -93,6 +93,36 @@ export function normalizeAiQuestion(
   // R5: number answer with multi_step format → 不动 spec，但 R2 已经清了 subquestions
   // multi_step format 不出现在 numeric answer 时是 R1 范畴
 
+  // R6 (v0.36.26 爸爸: 数学出题 version Required / grade Invalid): backfill 必填
+  // metadata. AI 经常漏 version / 给 grade 字符串 / status 缺. schema 这 3 个必填,
+  // 漏了客户端 validateQuestion 直接拒. server 写回前兜底.
+  if (typeof q.version !== "number" || !Number.isInteger(q.version) || (q.version as number) <= 0) {
+    q.version = 1;
+    report.changed = true;
+    report.rules.push("R6.version");
+  }
+  const VALID_STATUS = ["draft", "validated", "approved", "active", "retired", "needs_review", "rejected"];
+  if (typeof q.status !== "string" || !VALID_STATUS.includes(q.status as string)) {
+    q.status = "approved";
+    report.changed = true;
+    report.rules.push("R6.status");
+  }
+  // grade: number 1-6. AI 可能给 "4"(string) / 漏
+  if (typeof q.grade === "string") {
+    const n = Number(q.grade);
+    if (n >= 1 && n <= 6) q.grade = n;
+  }
+  if (typeof q.grade !== "number" || ![1, 2, 3, 4, 5, 6].includes(q.grade as number)) {
+    q.grade = 4;
+    report.changed = true;
+    report.rules.push("R6.grade");
+  }
+  // difficulty: number 1-5. coerce string
+  if (typeof q.difficulty === "string") {
+    const n = Number(q.difficulty);
+    if (n >= 1 && n <= 5) q.difficulty = n;
+  }
+
   if (report.changed) {
     const existingTags = Array.isArray(q.tags) ? (q.tags as string[]) : [];
     const tagSet = new Set([...existingTags, "normalized_ai", ...report.rules.map((r) => `norm:${r}`)]);

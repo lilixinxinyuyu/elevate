@@ -166,6 +166,12 @@ export const GameTemplateSchema = z.enum([
   "multi_step_application",
   // v0.35.10 iter 41 (爸爸反馈): canvas 列算式 + 数字答, 见 src/components/game/templates/CanvasScratch.tsx
   "canvas_scratch",
+  // v0.36.26 (爸爸: 数学出题 play_as discount_drift 报 invalid enum): schema 之前漏了
+  // 这 4 个新玩法 (types.ts GAME_TEMPLATE_IDS 有, schema 没同步). pickGameType 会抽到它们.
+  "discount_drift",
+  "coin_combo",
+  "time_heist",
+  "number_hunt",
 ]);
 
 export const QuestionSchema = z.object({
