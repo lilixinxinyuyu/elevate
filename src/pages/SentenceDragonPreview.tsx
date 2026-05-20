@@ -28,14 +28,18 @@
 import { useState, useEffect } from "react";
 import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
+import type { Question } from "../core/types";
+import { SEED_QUESTIONS_CHINESE_V3 } from "../subjects/chinese/questionPack3";
 
 type DragonCase = {
   id: string;
   scrollLabel: string;
-  badSentence: string; // 病句原文 (read-only)
-  diagnosis: string; // 病因提示
+  badSentence: string; // 病句原文 (read-only) 或 排序指令
+  diagnosis: string; // 病因提示 / 结构提示
   tokens: string[]; // 字词块 (shuffle后给用户)
   correctOrder: string[]; // 正确顺序
+  /** false → 中性"龙师出题"卷轴样式 (真题排序/组句); 其余 → 红色病句 line-through 样式 (DEMO 病句) */
+  showAsError?: boolean;
 };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -113,6 +117,30 @@ const ENCOURAGE_PHRASES = [
   "主谓宾, 一气呵成",
 ];
 
+// ── 真题库接入: questionPack3 的 sentence_shuffle 题 (古诗排序/句子重排/关联词组句) ──
+// 机制上 = 龙训重组 (把打乱词块拼成正确顺序), 直接复用统一题库, 无需另造 pack.
+function adaptShuffle(q: Question): DragonCase | null {
+  const gd = q.game_data;
+  if (!gd || gd.kind !== "sentence_shuffle") return null;
+  const order = gd.tokens;
+  if (!Array.isArray(order) || order.length < 3) return null;
+  return {
+    id: q.question_id,
+    scrollLabel: q.skill_name || "句子重排",
+    badSentence: q.stem.replace(/[:：]\s*$/, ""), // 排序指令做题面
+    diagnosis: q.feedback_wrong || "按 主语 + 状语 + 谓语 + 宾语 顺序拼一拼",
+    tokens: order,
+    correctOrder: order,
+    showAsError: false, // 真题是"排正确顺序", 用中性卷轴样式 (非病句 line-through)
+  };
+}
+const REAL_DRAGON_CASES: DragonCase[] = SEED_QUESTIONS_CHINESE_V3
+  .filter((q) => q.game_type === "sentence_shuffle")
+  .map(adaptShuffle)
+  .filter((c): c is DragonCase => c !== null);
+// 真题 >= 4 用真题库, 否则回退 DEMO (DEMO 是病句语序题, showAsError 默认开)
+const CASES: DragonCase[] = REAL_DRAGON_CASES.length >= 4 ? REAL_DRAGON_CASES : DEMO_CASES;
+
 export function SentenceDragonPreviewPage() {
   const [caseIdx, setCaseIdx] = useState(0);
   const [pool, setPool] = useState<string[]>([]);
@@ -120,7 +148,7 @@ export function SentenceDragonPreviewPage() {
   const [result, setResult] = useState<"idle" | "correct" | "wrong">("idle");
   const [encouragePhrase, setEncouragePhrase] = useState<string | null>(null);
 
-  const cur = DEMO_CASES[caseIdx]!;
+  const cur = CASES[caseIdx] ?? DEMO_CASES[0]!;
 
   // 重置 case
   useEffect(() => {
@@ -133,7 +161,7 @@ export function SentenceDragonPreviewPage() {
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
-        setCaseIdx((i) => (i + 1) % DEMO_CASES.length);
+        setCaseIdx((i) => (i + 1) % CASES.length);
       }, 2200);
       return () => clearTimeout(t);
     }
@@ -157,7 +185,13 @@ export function SentenceDragonPreviewPage() {
         setResult("correct"); void awardClusterXp(1);
       } else {
         setResult("wrong");
-        setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);
+        // 真题(showAsError===false)的 diagnosis 来自 feedback_wrong, 平时藏起 (有的会剧透答案),
+        // 答错时才给出当提示; DEMO 病句用随机鼓励语.
+        setEncouragePhrase(
+          cur.showAsError === false && cur.diagnosis
+            ? cur.diagnosis
+            : (ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null),
+        );
         setTimeout(() => {
           setPool(shuffle(cur.tokens));
           setFilled(Array.from({ length: cur.correctOrder.length }, () => null));
@@ -264,19 +298,33 @@ export function SentenceDragonPreviewPage() {
           <div className="text-sm font-display font-bold text-amber-100">{cur.scrollLabel}</div>
         </div>
         <div className="px-3 py-1.5 rounded-xl bg-emerald-900/85 backdrop-blur-md border border-amber-400/40 text-xs font-bold text-amber-100 tabular-nums">
-          {caseIdx + 1} / {DEMO_CASES.length}
+          {caseIdx + 1} / {CASES.length}
         </div>
       </div>
 
       {/* ─── 中央 病句 + 重组 slot ─── */}
       <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 z-10 w-full max-w-3xl px-4">
-        {/* 病句原文 (read-only) */}
+        {/* 题面: 病句原文 (DEMO) 或 排序指令 (真题) */}
         <div className="text-center mb-3">
-          <div className="text-[10px] text-amber-300 uppercase tracking-widest">⚠️ 龙鳞乱了, 病句</div>
-          <div className="mt-1 px-4 py-2 bg-rose-950/60 backdrop-blur-md rounded-xl border border-rose-400/40 text-rose-100 text-base sm:text-lg font-display line-through opacity-80 inline-block">
-            {cur.badSentence}
-          </div>
-          <div className="text-[10px] text-amber-200/80 mt-1 italic">{cur.diagnosis}</div>
+          {cur.showAsError === false ? (
+            <>
+              <div className="text-[10px] text-amber-300 uppercase tracking-widest">📜 龙师出题 · 排好龙鳞</div>
+              <div className="mt-1 px-4 py-2 bg-emerald-950/60 backdrop-blur-md rounded-xl border border-amber-300/40 text-amber-50 text-base sm:text-lg font-display inline-block">
+                {cur.badSentence}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[10px] text-amber-300 uppercase tracking-widest">⚠️ 龙鳞乱了, 病句</div>
+              <div className="mt-1 px-4 py-2 bg-rose-950/60 backdrop-blur-md rounded-xl border border-rose-400/40 text-rose-100 text-base sm:text-lg font-display line-through opacity-80 inline-block">
+                {cur.badSentence}
+              </div>
+            </>
+          )}
+          {/* 病句(DEMO)的 diagnosis 是结构提示, 持续显示; 真题排序的 diagnosis 可能剧透, 仅答错时弹 */}
+          {cur.showAsError !== false && (
+            <div className="text-[10px] text-amber-200/80 mt-1 italic">{cur.diagnosis}</div>
+          )}
         </div>
 
         {/* 重组 slot 顺序栏 */}
