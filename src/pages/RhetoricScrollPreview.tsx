@@ -23,9 +23,10 @@
  *
  * 入口: `/chinese/rhetoric-scroll-preview`
  */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
+import { generateClusterQuestions } from "../lib/clusterGen";
 import { awardMascotXp } from "../lib/mascotProgress";
 import { submitChineseAttempt, getChineseMistakeQuestionIds } from "../subjects/chinese/service";
 import {
@@ -231,24 +232,24 @@ export function RhetoricScrollPreviewPage() {
     return () => { cancelled = true; };
   }, [student?.id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
-        const adapted = dbQs
-          .filter((q) => q.skill_id === "C4B_U3_RHETORIC" && !STATIC_RHET_IDS.has(q.question_id))
-          .map(adaptRhetoric)
-          .filter((c): c is RhetoricCase => c !== null);
-        if (!cancelled) setDbCases(adapted);
-      } catch (e) {
-        console.error("[RhetoricScroll] 加载 db 题失败", e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  // 可复用的 db 题加载器: 查 chinese 修辞题 (skill_id=C4B_U3_RHETORIC) → 过掉静态已有
+  // → adapt → setDbCases. mount 时跑一次; 后台补题 (cover-fire) 落库后再跑一次折进 CASES.
+  const loadDbCases = useCallback(async () => {
+    try {
+      const dbQs = (await db.questions.where("subjectId").equals("chinese").toArray()) as unknown as Question[];
+      const adapted = dbQs
+        .filter((q) => q.skill_id === "C4B_U3_RHETORIC" && !STATIC_RHET_IDS.has(q.question_id))
+        .map(adaptRhetoric)
+        .filter((c): c is RhetoricCase => c !== null);
+      setDbCases(adapted);
+    } catch (e) {
+      console.error("[RhetoricScroll] 加载 db 题失败", e);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDbCases();
+  }, [loadDbCases]);
 
   // 静态真题 + db AI 题合并去重; 不足 3 道回退 DEMO
   const CASES = useMemo<RhetoricCase[]>(() => {
@@ -288,6 +289,22 @@ export function RhetoricScrollPreviewPage() {
       reviewEveryN: 4,
     });
     lastPickWasReviewRef.current = pick.reason === "review";
+    // 题库见底 (starved) → 后台 fire-and-forget 补题 (cover-fire), 镜像 C1/C2/C3。
+    // 玩家继续做 pick.index 这道已有题; AI 后台 ~10-15s 落库后 reload 折进 CASES。
+    // gameType=plain_choice: C4 修辞是选择题形态, adaptRhetoric 吃 options; 后端确有该 schema。
+    if (pick.starved && student?.id) {
+      const sq = cur.sourceQuestion;
+      void generateClusterQuestions({
+        gameType: "plain_choice",
+        skillId: sq?.skill_id || "C4B_U3_RHETORIC",
+        skillName: "修辞手法",
+        unitId: sq?.unit_id || "C4B_U3_POETRY",
+        term: "下册",
+        difficulty: pick.targetDifficulty,
+      }).then((generated) => {
+        if (generated > 0) void loadDbCases();
+      });
+    }
     setCaseIdx(pick.index);
   }
 
