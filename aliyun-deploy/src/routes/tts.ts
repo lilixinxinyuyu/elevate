@@ -68,12 +68,15 @@ function syncAudioStrategy(model: string, voice?: string): TtsStrategy {
   };
 }
 
+// v0.36.22 (爸爸: 统一小进声音 Serena): TTS 主声 Cherry → Serena.
+// Serena 是 qwen3-tts + qwen3.5-omni 唯一都支持的女声, 让 TTS 朗读跟 omni
+// realtime 语音对话声音一致 (之前 Cherry vs Tina 不一致). cosyvoice fallback
+// 保留 longxiaochun (cosyvoice 不一定支持 Serena, 它只是最后兜底).
 const DEFAULT_STRATEGIES: TtsStrategy[] = [
-  qwenTtsStrategy("qwen3-tts-instruct-flash", "Cherry"),
+  qwenTtsStrategy("qwen3-tts-instruct-flash", "Serena"),
+  qwenTtsStrategy("qwen3.5-omni-flash", "Serena"),
   syncAudioStrategy("cosyvoice-v3-plus", "longxiaochun"),
   qwenTtsStrategy("cosyvoice-v3-plus", "longxiaochun"),
-  qwenTtsStrategy("qwen3.5-omni-flash-2026-03-15", "Cherry"),
-  qwenTtsStrategy("qwen3.5-omni-flash", "Cherry"),
 ];
 
 // GET 健康检查
@@ -103,7 +106,7 @@ tts.post("/generate", async (c) => {
 
   const strategies = body.model
     ? [
-        qwenTtsStrategy(body.model, body.voice ?? "Cherry"),
+        qwenTtsStrategy(body.model, body.voice ?? "Serena"),
         syncAudioStrategy(body.model, body.voice),
       ]
     : DEFAULT_STRATEGIES;

@@ -7,7 +7,7 @@
  * XP 持久化：db.meta key = `mascotXp::math::<studentId>`，跨设备 sync。
  *
  * 等级表（thresholds 可调；理论上 Selena 用 1-2 个月达到 Lv 8 解锁唱歌）：
- *   Lv 1   0 XP   实习老师小进 — 默认 Tina
+ *   Lv 1   0 XP   实习老师小进 — 默认 Serena (v0.36.22 跟 TTS 统一, 原 Tina 挪到 Lv8)
  *   Lv 3  60      校园老师 — 解锁 Cindy（甜软）
  *   Lv 5  150     数学小老师 — 解锁 Sunny（活泼）
  *   Lv 8  320     数学高手 — 解锁 Serena + 唱乘法口诀技能
@@ -81,14 +81,14 @@ export interface MascotLevel {
 // 7 级整条都是中国真实职称，孩子能直观感受到等级跃迁。校长正好落 Lv 20 顶点。
 // 视觉层换名，不动 XP 阈值 / 解锁逻辑。
 export const MASCOT_LEVELS: MascotLevel[] = [
-  { level: 1, threshold: 0, title: "实习老师小进", unlocks: { voices: ["Tina"] } },
+  { level: 1, threshold: 0, title: "实习老师小进", unlocks: { voices: ["Serena"] } },
   { level: 3, threshold: 60, title: "助教小进", unlocks: { voices: ["Cindy"] } },
   { level: 5, threshold: 150, title: "讲师小进", unlocks: { voices: ["Sunny"], skins: ["graduation"] } },
   {
     level: 8,
     threshold: 320,
     title: "副教授小进",
-    unlocks: { voices: ["Serena"], talents: ["sing_multiplication"] },
+    unlocks: { voices: ["Tina"], talents: ["sing_multiplication"] },
   },
   {
     level: 12,
@@ -248,14 +248,14 @@ export async function awardMascotXp(
   };
 }
 
-/** 当前佩戴的音色（默认 Tina；切到没解锁的会被忽略） */
+/** 当前佩戴的音色（v0.36.22 默认 Serena — 跟 TTS 统一；切到没解锁的会被忽略） */
 export async function getEquippedVoice(studentId: string): Promise<string> {
   const row = await db.meta.get(equippedVoiceKey(studentId));
   const v = typeof row?.value === "string" ? row.value : null;
-  if (!v) return "Tina";
+  if (!v) return "Serena";
   // 校验：是否已解锁
   const state = await getMascotState(studentId);
-  return state.unlockedVoices.includes(v) ? v : "Tina";
+  return state.unlockedVoices.includes(v) ? v : "Serena";
 }
 
 export async function setEquippedVoice(studentId: string, voice: string): Promise<boolean> {

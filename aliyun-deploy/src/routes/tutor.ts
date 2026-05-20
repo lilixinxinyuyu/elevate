@@ -437,7 +437,148 @@ tutor.post("/judge-handwriting", async (c) => {
   }
 });
 
-// voice 还是 proxy-fallback (qwen3.5-omni 单 call 12-15s, 跟视觉同样问题, 下个 ep)
+/**
+ * POST /api/tutor/voice — 近实时语音对话 (v0.36.22, 爸爸同意按量付费恢复).
+ *
+ * Selena 按住麦克风说话 → 客户端 base64 音频上来 → omni 多模态 (audio+text in,
+ * text out) → 返文本, 客户端 TTS 朗读. 整个回路 ~12-18s.
+ *
+ * omni 走 BAILIAN (dashscope cn-hangzhou, token-plan 不提供 omni). 实测
+ * qwen3.5-omni-flash + qwen-omni-turbo 现在 HTTP 200 可用 (之前 403 无权).
+ * 之前走 CF proxy, 删 CF 后改 ESA native.
+ */
+const VOICE_SYSTEM_PROMPT = `你是 Selena（4 年级女生）的语音老师"小进姐姐"。Selena 用语音问你问题，你用亲切、口语化的中文回答，60-120 字，像大姐姐一样温暖鼓励。引导她自己思考，不要直接报答案，除非她真的卡住或主动求答。语气活泼，多用"我们一起看看""你再想想"这类话。`;
+
+const OMNI_MODELS = ["qwen3.5-omni-flash", "qwen-omni-turbo"];
+
+function mimeToFormat(mime?: string): string {
+  const m = (mime ?? "").toLowerCase();
+  if (m.includes("webm")) return "webm";
+  if (m.includes("opus")) return "opus";
+  if (m.includes("wav")) return "wav";
+  if (m.includes("mp3") || m.includes("mpeg")) return "mp3";
+  if (m.includes("m4a") || m.includes("mp4")) return "m4a";
+  return "webm";
+}
+
+type OmniContent =
+  | string
+  | Array<
+      | { type: "text"; text: string }
+      | { type: "input_audio"; input_audio: { data: string; format: string } }
+    >;
+interface OmniMsg { role: string; content: OmniContent }
+
+tutor.post("/voice", async (c) => {
+  const apiKey = c.env.BAILIAN_API_KEY;
+  if (!apiKey) return c.json({ ok: false, error: "voice_not_configured" }, 503);
+
+  let body: {
+    audioBase64?: string;
+    mimeType?: string;
+    subjectId?: string;
+    questionContext?: { stem?: string; correctAnswer?: string; skillName?: string };
+    conversation?: { role: string; content: string }[];
+  };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: "invalid_json" }, 400);
+  }
+  if (!body.audioBase64) return c.json({ ok: false, error: "missing_audio" }, 400);
+
+  // 题目上下文注入 system
+  let systemContent = VOICE_SYSTEM_PROMPT;
+  const ctx = body.questionContext;
+  if (ctx) {
+    const lines = ["（当前 Selena 在做的题：）"];
+    if (ctx.stem) lines.push(`题目：${ctx.stem}`);
+    if (ctx.correctAnswer) lines.push(`正确答案：${ctx.correctAnswer}`);
+    if (ctx.skillName) lines.push(`技能点：${ctx.skillName}`);
+    systemContent += "\n\n" + lines.join("\n");
+  }
+
+  const messages: OmniMsg[] = [{ role: "system", content: systemContent }];
+  if (Array.isArray(body.conversation)) {
+    for (const m of body.conversation) {
+      if (m.role === "assistant" || m.role === "user") {
+        messages.push({ role: m.role, content: m.content });
+      }
+    }
+  }
+  // v0.36.22: omni 要 data URI 格式 (data:audio/<fmt>;base64,) — 裸 base64 报
+  // "provided URL not valid". 实测确认.
+  const fmt = mimeToFormat(body.mimeType);
+  const dataUri = `data:audio/${fmt};base64,${body.audioBase64}`;
+  messages.push({
+    role: "user",
+    content: [
+      { type: "input_audio", input_audio: { data: dataUri, format: fmt } },
+      { type: "text", text: "请听我刚才的语音问题，用 60-120 字亲切地回答我。" },
+    ],
+  });
+
+  const tried: { model: string; code: string }[] = [];
+  for (const model of OMNI_MODELS) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 28_000);
+    try {
+      // v0.36.22: omni 要 stream:true (非流式报 invalid_parameter). 解析 SSE 累积 content.
+      const r = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages, modalities: ["text"], stream: true, temperature: 0.7, max_tokens: 280 }),
+        signal: ctrl.signal,
+      });
+      if (!r.ok || !r.body) {
+        const errJson = (await r.json().catch(() => null)) as { error?: { code?: string } } | null;
+        tried.push({ model, code: errJson?.error?.code ?? `http_${r.status}` });
+        clearTimeout(timer);
+        continue;
+      }
+      // 解析 SSE 流: data: {...delta.content...}
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let reply = "";
+      let buf = "";
+      let sawError: string | null = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          const t = line.trim();
+          if (!t.startsWith("data:")) continue;
+          const payload = t.slice(5).trim();
+          if (payload === "[DONE]" || !payload) continue;
+          try {
+            const chunk = JSON.parse(payload) as {
+              choices?: { delta?: { content?: string } }[];
+              error?: { code?: string };
+            };
+            if (chunk.error) { sawError = chunk.error.code ?? "stream_error"; continue; }
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (delta) reply += delta;
+          } catch { /* 跳过非 JSON 行 */ }
+        }
+      }
+      clearTimeout(timer);
+      if (sawError) { tried.push({ model, code: sawError }); continue; }
+      reply = reply.trim();
+      if (!reply) { tried.push({ model, code: "empty_response" }); continue; }
+      return c.json({ ok: true, reply, model });
+    } catch (e) {
+      clearTimeout(timer);
+      tried.push({ model, code: (e as Error)?.name === "AbortError" ? "timeout" : "fetch_error" });
+    }
+  }
+  console.error("[tutor/voice] all omni failed", tried);
+  return c.json({ ok: false, error: "no_model_worked", detail: tried.map((t) => `${t.model}:${t.code}`).join(", ") }, 502);
+});
+
+// 其他 tutor/* 未 native 路径 → 501 (CF 已删)
 tutor.all("*", async (c) => {
   return proxyFallback.fetch(c.req.raw, c.env);
 });
