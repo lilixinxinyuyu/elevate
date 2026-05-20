@@ -9,6 +9,7 @@
  * - `characterPersonalization::math::<studentId>` → { hardestUnit, encouragement, etc. }
  */
 import { db } from "../db/dexie";
+import { TIERS } from "../core/tiers";
 
 export type Archetype = "scholar" | "scientist" | "explorer" | "mage" | "warrior" | "artist";
 export type Gender = "female" | "male";
@@ -66,9 +67,24 @@ export async function setPersonalization(
 }
 
 /**
+ * v0.35.91 (Phase C): 哪些 tier 已经 ship 了 per-(archetype×gender) 立绘 PNG.
+ *
+ * 现在只 ship 了 school 段 (`public/character/base-<arch>-<gender>-school-v1.png`).
+ * 等以后批量生成并 ship district/city/province/country 的 PNG, 把对应 tier id
+ * 加进这个 Set 即可 — resolver 的 walk-down 会自动开始用它们, 不用改别的代码.
+ */
+export const AVAILABLE_AVATAR_TIERS = new Set<string>(["school"]);
+
+/**
  * Build avatar URL for current tier + character choice.
- * Phase A (now): only Lv1 学校段 base available per archetype × gender.
- * 其他段位 still uses tier-<id>-v1.png (single Lv5 国家英雄 demo for now).
+ *
+ * **tier-walk-down resolver** (Phase C): tier 立绘是 per (archetype × gender × tier)
+ * 的预生成静态资产, 但还没全部 ship. 高段同学 (如 country) 在缺自己段位 PNG 时,
+ * 不该直接没头像 — 而是沿 TIERS 顺序 **往下走** (country → province → city →
+ * district → school) 找最近一个已 ship 的 tier, 用那张图. school 永远 ship,
+ * 所以保底总有图.
+ *
+ * choice 为空 (onboarding 未做) → 回到老的单张 tier-<id>-v1.png demo / null 行为.
  */
 export function characterAvatarUrl(
   tierId: string,
@@ -81,13 +97,16 @@ export function characterAvatarUrl(
     }
     return null;
   }
-  // Has choice → use archetype-gender base for school tier
-  if (tierId === "school") {
-    return `/character/base-${choice.archetype}-${choice.gender}-school-v1.png`;
-  }
-  // For other tiers, still use old default (until Phase 2b gen Lv2-5)
-  if (tierId === "country") {
-    return `/character/tier-country-v1.png`;
+  // Has choice → walk DOWN the TIERS order from tierId to the nearest tier
+  // that actually has shipped per-(archetype×gender) assets.
+  const startIdx = TIERS.findIndex((t) => t.id === tierId);
+  // Unknown tierId → start from the top so we still walk the whole list down.
+  const fromIdx = startIdx >= 0 ? startIdx : TIERS.length - 1;
+  for (let i = fromIdx; i >= 0; i--) {
+    const candidate = TIERS[i]!.id;
+    if (AVAILABLE_AVATAR_TIERS.has(candidate)) {
+      return `/character/base-${choice.archetype}-${choice.gender}-${candidate}-v1.png`;
+    }
   }
   return null;
 }
