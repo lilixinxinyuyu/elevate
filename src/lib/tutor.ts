@@ -176,6 +176,12 @@ export interface GenerateQuestionsArgs {
   term?: "上册" | "下册";
   existingStems?: string[];
   recentMistakeStems?: string[];
+  /**
+   * v0.36.38: 显式指定 game_type 强制 AI 出某种玩法的题 (cluster 补题用).
+   * 例: "poem_cloze" / "sentence_shuffle" / "glyph_detective". 不传则按 skill
+   * 权重表抽样 (gameTypeBySkill). 后端 pickGameTypeEsa(skillId, gameType) 读它.
+   */
+  gameType?: string;
 }
 
 export interface GenerateQuestionsResult {

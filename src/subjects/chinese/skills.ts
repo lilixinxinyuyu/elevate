@@ -140,6 +140,18 @@ export const SKILLS_CHINESE: Skill[] = [
     examPriority: "HIGH_BIG",
   },
   {
+    // v0.36.38: 字形侦探 cluster (C2) — 偏旁部首/形声字/会意字, 跨单元字形通考点.
+    // 锚在 U4 (动物单元有犭/猫等好例), 题目本身跨 U1-U4 (hanziDesc 标真实出处).
+    id: "C4B_GLYPH_RADICAL",
+    subjectId: "chinese",
+    unitId: "C4B_U4_ANIMALS",
+    name: "字形侦探（偏旁部首 / 形声字）",
+    ability: ab("glyph", "vocabulary"),
+    difficultyBase: 3,
+    priority: "VERY_HIGH",
+    examPriority: "MUST_BIG",
+  },
+  {
     id: "C4B_U4_DICTATION",
     subjectId: "chinese",
     unitId: "C4B_U4_ANIMALS",

@@ -41,6 +41,18 @@ export function validateQuestion(raw: unknown): ValidationResult {
   }
   const q = parsed.data as Question;
 
+  // QuestionSchema 不含 game_data (Zod 默认 strip unknown 字段), 但语文 cluster 交互题
+  // (poem_cloze/sentence_shuffle/glyph_detective/pair_match) 判分全靠 game_data — 从 raw 恢复,
+  // 否则 AI 补题存进题库后 game_data 丢失, 游戏拿不到数据.
+  const rawObj = (raw ?? {}) as Record<string, unknown>;
+  const rawGameData = rawObj.game_data;
+  if (rawGameData && typeof rawGameData === "object") {
+    (q as unknown as Record<string, unknown>).game_data = rawGameData;
+  }
+  // 交互题判分靠 game_data, options 合法为空 (poem_cloze/sentence_shuffle) → 跳过选择题校验
+  const gdKind = (rawGameData as { kind?: string } | undefined)?.kind;
+  const gameDataJudged = gdKind === "poem_cloze" || gdKind === "sentence_shuffle" || gdKind === "pair_match";
+
   if (!ALLOWED_UNIT_IDS.has(q.unit_id)) {
     issues.push({ path: "unit_id", message: `未知单元 ${q.unit_id}`, severity: "error" });
   }
@@ -67,8 +79,8 @@ export function validateQuestion(raw: unknown): ValidationResult {
     });
   }
 
-  // 选择题必须有 options
-  if (q.question_format === "single_choice") {
+  // 选择题必须有 options（game_data 交互题除外 — 它们判分靠 game_data, options 合法为空）
+  if (q.question_format === "single_choice" && !gameDataJudged) {
     if (!q.options || q.options.length < 2) {
       issues.push({ path: "options", message: "选择题必须至少提供 2 个选项", severity: "error" });
     }

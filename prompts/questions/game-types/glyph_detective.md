@@ -1,0 +1,57 @@
+## 题型：glyph_detective（字形侦探 / 偏旁部首）
+
+⏱️ **答题时间**：`estimated_time_seconds: 25`
+
+展示一个大汉字，4 选 1 让 Selena 辨认它的偏旁部首 / 形声字结构 / 会意字组成。**核心训练**：G4B 期中第 9 题型（形声字 + 偏旁规律）。前端是「民国侦探事务所」场景（C2 cluster）。
+
+### 玩法（前端）
+
+中央放大展示待鉴定汉字 + 一句结构描述，底部 4 个选项（带 emoji）。选对即「破案」。
+
+### 必须字段
+
+```json
+{
+  "game_type": "glyph_detective",
+  "question_format": "single_choice",
+  "cognitive_level": "conceptual",
+  "ability_dimension": ["accumulation"],
+  "estimated_time_seconds": 25,
+  "stem": "下面哪一组字都是用「氵」(三点水) 旁表义？",
+  "options": [
+    { "id": "a", "text": "河 / 湖 / 海 / 流" },
+    { "id": "b", "text": "河 / 何 / 荷 / 贺" },
+    { "id": "c", "text": "冰 / 冷 / 冻 / 净" },
+    { "id": "d", "text": "汪 / 王 / 主 / 住" }
+  ],
+  "answer": { "type": "choice", "value": "a" },
+  "solution_steps": ["河/湖/海/流 都是三点水(氵)表义,跟水有关。冰/冷是两点水(冫)别混。"],
+  "game_data": {
+    "kind": "glyph_detective",
+    "hanzi": "湖",
+    "hanziDesc": "氵(三点水)：跟水/液体有关 · 出自《望洞庭》",
+    "optionEmojis": ["💧", "🔊", "🧊", "❌"]
+  },
+  "feedback_correct": "破案！偏旁的规律被你抓住了。",
+  "feedback_wrong": "再仔细看，形旁往往告诉你字义。",
+  "tags": ["ai_generated", "glyph_detective", "偏旁部首"]
+}
+```
+
+### game_data 规则（铁律）
+
+- `hanzi`：待鉴定的**单个大汉字**（题目主角，G4 写字表常见字）。
+- `hanziDesc`：一句话讲它的结构（形声字 左形右声 / 会意字 / 形近字陷阱），可带课文出处。
+- `optionEmojis`：4 个 emoji，**与 options 同序**，给每个选项配个直观图标（正确项用相关图标，错误项可用 ❌）。
+- `options`：4 个，`id` 用 a/b/c/d；正确项放进 `answer.value`。每个错误项要有迷惑性。
+- 三类考点（轮换出）：
+  1. **形声字**：哪个是形旁/声旁（如 蜻=虫字旁表义 + 青声旁表音）。
+  2. **同偏旁归类**：哪一组字都用某偏旁表义（氵/扌/讠/艹/灬/忄/饣/犭）。
+  3. **形近字陷阱**：草字头 vs 竹字头（蓝/篮）、青声旁家族（晴/睛/清/请）。
+
+### ❌ 禁止
+
+- hanzi 用生僻超纲字（必须是小学 G4 常见字）
+- options 不是 4 个，或 id 不是 a/b/c/d
+- optionEmojis 个数 ≠ options 个数
+- 偏旁知识讲错（形旁/声旁要分清；冫两点水≠氵三点水）

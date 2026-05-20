@@ -132,6 +132,10 @@ const TIME_TABLE: Record<string, [number, number, number]> = {
   shop_counter: [35, 50, 70],
   clue_finder: [35, 45, 60],
   word_problem_lab: [70, 90, 130],
+  // 语文 cluster 题型 (C1 古诗补字 / C3 句子重排 / C2 字形侦探)
+  poem_cloze: [25, 28, 32],
+  sentence_shuffle: [30, 35, 42],
+  glyph_detective: [22, 25, 30],
 };
 export function estimatedTimeFor(
   gameType: string,

@@ -266,7 +266,7 @@
     { "type": "clue_finder", "weight": 2 }
   ],
 
-  "_chinese_below": "===== 语文 G4B (v0.36.15): READING→word_problem_lab(短文多问 multi_step), IMITATE→fill_blank(仿写填空), ORDER→sort_ladder(句子排序). 其他语文题型(TYPOS/VOCAB/PINYIN/DICTATION/RHETORIC)走默认 plain_choice =====",
+  "_chinese_below": "===== 语文 G4B (v0.36.38): READING→word_problem_lab(短文多问), IMITATE→fill_blank(仿写), ORDER→sort_ladder+sentence_shuffle, POEM_RECITE→poem_cloze(古诗补字 C1), GLYPH→glyph_detective(字形侦探 C2). 显式 gameType 可强制指定任意 cluster 题型(poem_cloze/sentence_shuffle/glyph_detective). 其他(TYPOS/VOCAB/PINYIN/DICTATION/RHETORIC)走默认 plain_choice =====",
 
   "C4B_U1_READING": [{ "type": "word_problem_lab", "weight": 3 }],
   "C4B_U2_READING": [{ "type": "word_problem_lab", "weight": 3 }],
@@ -275,5 +275,9 @@
   "C4B_U2_IMITATE": [{ "type": "fill_blank", "weight": 3 }],
   "C4B_U3_IMITATE": [{ "type": "fill_blank", "weight": 3 }],
   "C4B_U4_IMITATE": [{ "type": "fill_blank", "weight": 3 }],
-  "C4B_U5_ORDER": [{ "type": "sort_ladder", "weight": 3 }]
+  "C4B_U5_ORDER": [{ "type": "sort_ladder", "weight": 2 }, { "type": "sentence_shuffle", "weight": 2 }],
+  "C4B_U1_POEM_RECITE": [{ "type": "poem_cloze", "weight": 3 }],
+  "C4B_U2_POEM_RECITE": [{ "type": "poem_cloze", "weight": 3 }],
+  "C4B_U3_POEM_RECITE": [{ "type": "poem_cloze", "weight": 3 }],
+  "C4B_GLYPH_RADICAL": [{ "type": "glyph_detective", "weight": 3 }]
 }
