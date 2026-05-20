@@ -34,6 +34,10 @@ function personalizationKey(studentId: string): string {
   return `characterPersonalization::math::${studentId}`;
 }
 
+function lastSeenTierKey(studentId: string): string {
+  return `lastSeenTier::math::${studentId}`;
+}
+
 export async function getCharacterChoice(studentId: string): Promise<CharacterChoice | null> {
   const row = await db.meta.get(choiceKey(studentId));
   if (!row) return null;
@@ -67,6 +71,28 @@ export async function setPersonalization(
 }
 
 /**
+ * Phase D (升段仪式 trigger): per-student "last seen tier" persistence.
+ *
+ * 记录同学上次在角色大厅看到的段位 id (school/district/city/province/country).
+ * HubScreenV6 mount 时拿 current tier 跟它比 — 跨段前进 → 放升段动画.
+ * 第一次 (无记录) 不放, 只 silently set, 避免新同学一进来就被惊到.
+ *
+ * key: `lastSeenTier::math::<studentId>` (mirror characterChoice meta-key 体例).
+ */
+export async function getLastSeenTier(studentId: string): Promise<string | null> {
+  const row = await db.meta.get(lastSeenTierKey(studentId));
+  if (!row) return null;
+  return row.value as string;
+}
+
+export async function setLastSeenTier(studentId: string, tierId: string): Promise<void> {
+  await db.meta.put({
+    key: lastSeenTierKey(studentId),
+    value: tierId,
+  });
+}
+
+/**
  * v0.35.91 (Phase C): 哪些 tier 已经 ship 了 per-(archetype×gender) 立绘 PNG.
  *
  * 现在只 ship 了 school 段 (`public/character/base-<arch>-<gender>-school-v1.png`).
@@ -74,8 +100,9 @@ export async function setPersonalization(
  * 加进这个 Set 即可 — resolver 的 walk-down 会自动开始用它们, 不用改别的代码.
  */
 // v0.36.56: district 全 12 张已生成 (6 archetype × 2 gender) → 接通。
-// city/province/country 各 12 张生成补齐后再依次加入。
-export const AVAILABLE_AVATAR_TIERS = new Set<string>(["school", "district"]);
+// v0.36.57: city 全 12 张生成 + QA 通过 (银发跨 tier 一致) → 接通。
+// province/country 各 12 张生成补齐后再依次加入。
+export const AVAILABLE_AVATAR_TIERS = new Set<string>(["school", "district", "city"]);
 
 /**
  * Build avatar URL for current tier + character choice.

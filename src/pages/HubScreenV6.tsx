@@ -30,7 +30,13 @@ import { computeAbilityDiagnostic, type AbilityDiagnostic, type RatingResult } f
 import { TIERS } from "../core/tiers";
 import { TierCharacter } from "../components/TierCharacter";
 import { CharacterOnboardingModal } from "../components/CharacterOnboardingModal";
-import { getCharacterChoice, type CharacterChoice } from "../lib/characterChoice";
+import { CharacterTierUpModal } from "../components/CharacterTierUpModal";
+import {
+  getCharacterChoice,
+  getLastSeenTier,
+  setLastSeenTier,
+  type CharacterChoice,
+} from "../lib/characterChoice";
 
 // Fallback tier 给 TierCharacter (rating 加载前 / compute 失败时). school 段第一档.
 // TIERS 静态非空, 故 [0] 必有值.
@@ -52,6 +58,10 @@ export function HubScreenV6Page() {
   const [characterChoice, setCharacterChoice] = useState<CharacterChoice | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
+  // Phase D 升段仪式: 跨段前进时弹 CharacterTierUpModal.
+  const [tierUpOpen, setTierUpOpen] = useState(false);
+  const [tierUpOld, setTierUpOld] = useState<string | null>(null);
+  const [tierUpNew, setTierUpNew] = useState<string | null>(null);
 
   // ── 数据加载 (复用 HubV5 load pattern: students → totalXp / daily / choice / rating) ──
   useEffect(() => {
@@ -81,6 +91,41 @@ export function HubScreenV6Page() {
       try {
         const r = await computeCurrentRating(s.id, "下册");
         if (!cancelled) setRating(r);
+
+        // ── Phase D 升段仪式 trigger ──
+        // current tier id 直接取自刚算出的 rating (rating.tier.id).
+        // 跟 db.meta 里的 lastSeenTier 比 TIERS 顺序 index:
+        //   - 无记录 (第一次进) → silently set, 不放动画 (别惊新同学).
+        //   - currentIdx > lastIdx (跨段前进) → 弹 CharacterTierUpModal, onClose 再 advance.
+        //   - 相等 / 更低 → 不动. lastSeen 只前进, 永不回退.
+        // 整段 gate 在 choice 存在 (没选 character = onboarding 还没过).
+        // 自带 try/catch + 不阻塞大厅渲染.
+        try {
+          if (choice) {
+            const currentTierId = r.tier.id;
+            const lastSeen = await getLastSeenTier(s.id);
+            if (!cancelled) {
+              if (lastSeen == null) {
+                // 第一次: 静默记录, 不放仪式.
+                await setLastSeenTier(s.id, currentTierId);
+              } else {
+                const currentIdx = TIERS.findIndex((t) => t.id === currentTierId);
+                const lastIdx = TIERS.findIndex((t) => t.id === lastSeen);
+                // 只在"跨段前进"时动作; 相等或更低 → 什么都不做.
+                // lastSeen 只前进永不回退 (advance-only), 故 lower 段不写回.
+                if (currentIdx > -1 && lastIdx > -1 && currentIdx > lastIdx) {
+                  // 跨段前进 → 放升段动画 (onClose 时再 setLastSeenTier).
+                  setTierUpOld(lastSeen);
+                  setTierUpNew(currentTierId);
+                  setTierUpOpen(true);
+                }
+              }
+            }
+          }
+        } catch (tierErr) {
+          console.warn("[hub-v6] tier-up check failed (skip)", tierErr);
+        }
+
         const attempts = await db.attempts.where({ studentId: s.id }).toArray();
         const mastery = await db.mastery.where({ studentId: s.id }).toArray();
         const ab = computeAbilityDiagnostic(attempts, mastery, "下册");
@@ -361,6 +406,21 @@ export function HubScreenV6Page() {
           </div>
         </div>
       </div>
+
+      {/* Phase D 升段仪式 — 跨段前进时弹 (gate on characterChoice + 两个 tier id) */}
+      {tierUpOpen && characterChoice && tierUpOld && tierUpNew && (
+        <CharacterTierUpModal
+          open
+          oldTierId={tierUpOld}
+          newTierId={tierUpNew}
+          characterChoice={characterChoice}
+          onClose={() => {
+            // 庆祝看完 → 把 lastSeen 推进到新段 (只前进), 收起 modal.
+            if (studentId) void setLastSeenTier(studentId, tierUpNew);
+            setTierUpOpen(false);
+          }}
+        />
+      )}
 
       {/* Onboarding modal (新用户 character choice) — VERBATIM gating from HubV5 */}
       {showOnboarding && studentId && (
