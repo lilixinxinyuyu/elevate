@@ -743,6 +743,17 @@ export function TutorPanel(props: TutorPanelProps) {
       };
       const newConv = [...conversation, userMsg];
       setConversation(newConv);
+      // v0.36.24 (爸爸): voice fallback 也注入 Selena 学情 (跟 explain/realtime 一致)
+      let voiceStudentContext: string | undefined;
+      try {
+        let sid = props.studentId;
+        if (!sid) { const ss = await db.students.toArray(); sid = ss[0]?.id; }
+        if (sid) {
+          const stu = await db.students.get(sid);
+          const snap = await gatherSnapshot(sid, stu?.name ?? "Selena");
+          voiceStudentContext = snapshotToInstructions(snap);
+        }
+      } catch { /* 容错 */ }
       const r = await voiceAsk({
         audioBlob: blob,
         mimeType,
@@ -752,6 +763,7 @@ export function TutorPanel(props: TutorPanelProps) {
           : props.skillName
             ? { stem: `（关于 ${props.skillName} 的问题）`, skillName: props.skillName }
             : undefined,
+        studentContext: voiceStudentContext,
         conversation: conversation.map((m) => ({ role: m.role, content: m.content })),
       });
       const aiMsg: ChatMsg = { role: "assistant", content: r.reply, ts: Date.now() };

@@ -483,6 +483,7 @@ tutor.post("/voice", async (c) => {
     mimeType?: string;
     subjectId?: string;
     questionContext?: { stem?: string; correctAnswer?: string; skillName?: string };
+    studentContext?: string;
     conversation?: { role: string; content: string }[];
   };
   try {
@@ -501,6 +502,10 @@ tutor.post("/voice", async (c) => {
     if (ctx.correctAnswer) lines.push(`正确答案：${ctx.correctAnswer}`);
     if (ctx.skillName) lines.push(`技能点：${ctx.skillName}`);
     systemContent += "\n\n" + lines.join("\n");
+  }
+  // v0.36.24: Selena 学情注入 (弱项+错题, 跟 explain/realtime 一致)
+  if (body.studentContext) {
+    systemContent += "\n\n" + body.studentContext;
   }
 
   const messages: OmniMsg[] = [{ role: "system", content: systemContent }];

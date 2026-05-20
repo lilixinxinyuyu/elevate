@@ -75,8 +75,10 @@ export async function explainQuestion(args: ExplainArgs): Promise<ExplainResult>
 export interface VoiceAskArgs {
   audioBlob: Blob;
   mimeType: string;
-  subjectId: "math" | "chinese";
+  subjectId: "math" | "chinese" | "english";
   questionContext?: { stem?: string; correctAnswer?: string; skillName?: string };
+  /** v0.36.24: Selena 学情 (弱项+错题), 跟 explain/realtime 一致 */
+  studentContext?: string;
   conversation?: { role: "assistant" | "user"; content: string }[];
 }
 
@@ -108,6 +110,7 @@ export async function voiceAsk(args: VoiceAskArgs): Promise<VoiceAskResult> {
       mimeType: args.mimeType,
       subjectId: args.subjectId,
       questionContext: args.questionContext,
+      studentContext: args.studentContext,
       conversation: args.conversation,
     }),
   });
