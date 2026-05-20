@@ -27,6 +27,15 @@ import { getChatProviders as getChatProvidersLib, getChatModels as getChatModels
 import { normalizeAiQuestion } from "../lib/normalizeAiQuestion";
 import { persistAiQuestions } from "../lib/persistAiQuestions";
 import proxyFallback from "./proxy-fallback";
+// v0.36.15 (爸爸 P0 context engineering): ESA 改用跟 CF Pages 同一套完整 prompt 系统.
+// 之前 ESA 用简化 prompt (无 scope/rubric/keywords), 用户实际走 ESA → 出题质量差.
+import { PROMPTS } from "../generated/_prompts.generated";
+import {
+  composeQuestionUserPrompt,
+  cognitiveLevelFor,
+  estimatedTimeFor,
+  questionFormatFor,
+} from "../generated/promptComposer";
 
 const generate = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -524,7 +533,10 @@ generate.post("/variant", async (c) => {
 // cap 3 给客户端 sessionAdaptive（实际 count=1）+ tutor（小批）足够头道，
 // 想要更大批客户端可拆并发。
 const QUESTIONS_MAX = 3;
-const QUESTIONS_TIMEOUT_MS = 10_000;
+// v0.36.15 (爸爸 P0): 完整 prompt (scope+rubric+schema) 比简化版长, qwen3.6-flash
+// 单 call ~10-13s. 10s timeout 经常砍掉险过的 call → 504. 提到 25s (ESA gateway
+// 30s 内, 留 5s margin). 配合下面单 model (不 cascade) 保证总时间 < 30s.
+const QUESTIONS_TIMEOUT_MS = 25_000;
 
 interface GenReqBody {
   subjectId?: "math" | "chinese";
@@ -543,57 +555,79 @@ interface GenReqBody {
   callerTag?: string;
 }
 
+// v0.36.15: 改用 PROMPTS.questionsSystem (跟 CF Pages buildSystemPrompt 一致),
+// 不再用 ESA 自己的简化 system prompt. subject-aware (数学/语文分开).
 function buildQuestionsSystemPrompt(subjectId: string): string {
-  const label = subjectId === "chinese" ? "语文" : "数学";
-  return `你是 4 年级 ${label} AI 出题员。严格按下面 schema 返回 JSON：
-
-{
-  "questions": [
-    {
-      "question_id": "AI_<skill>_<idx>",
-      "stem": "题面（清晰、自然、不要 '（无关）' 之类元注解）",
-      "options": [{"id":"a","text":"..."},{"id":"b","text":"..."}],  // plain_choice 才需要
-      "answer": { "type": "choice"|"number"|"multi_step", "value": ... },
-      "hints": ["逐层提示，从轻到重"],
-      "common_errors": [],
-      "solution_steps": [],
-      "estimated_time_seconds": 15-90,
-      "difficulty": 1-5
-    }
-  ]
+  const subjLabel = subjectId === "math" ? "数学" : "语文";
+  const subjKey = subjectId === "math" ? "math" : "chinese";
+  const sys = PROMPTS.questionsSystem as unknown as
+    | string
+    | { math?: string; chinese?: string; raw?: string };
+  const template =
+    typeof sys === "string" ? sys : (sys[subjKey as "math" | "chinese"] ?? sys.raw ?? "");
+  return template.replace(/\{\{subjectLabel\}\}/g, subjLabel);
 }
 
-要求：
-- 数学闭合：实物=整数、钱=2 位小数、答案算得通
-- 不出 forbidden_verb 元注解；distractor 要源自学生具体误解（不是随机数字）
-- options 数量与 game_type 匹配；plain_choice 4 个，true_false 2 个
-- 不要 markdown 代码块、不要解释文字
-
-⚠ 严格的字段一致性（违反会被 normalize / 拒收）：
-- answer.type=="number" → question_format 必须是 "numeric" 或 "numeric_choice"，**绝不**写 "single_choice"
-- answer.type=="choice" → question_format=="single_choice" + 至少 2 个 options + answer.value 必须是 options 里某个 id
-- single_choice 题的 answer.value 永远写成 "a"/"b"/"c"/"d"（小写），不是数字
-- 单步题不要塞 subquestions（subquestions 只在 multi_step 多小问时用，且数量必须 ≥2）`;
+/** 解析 difficulty: "3" → 3, "2-4" → 取中值 3, undefined → 3 */
+function parseDifficultyEsa(raw: string | number | undefined): 1 | 2 | 3 | 4 | 5 {
+  if (typeof raw === "number") return Math.min(5, Math.max(1, Math.round(raw))) as 1|2|3|4|5;
+  if (!raw) return 3;
+  const single = /^([1-5])$/.exec(raw);
+  if (single) return Number(single[1]) as 1|2|3|4|5;
+  const range = /^([1-5])-([1-5])$/.exec(raw);
+  if (range) return Math.round((Number(range[1]) + Number(range[2])) / 2) as 1|2|3|4|5;
+  return 3;
 }
 
-function buildQuestionsUserPrompt(body: GenReqBody, batchStamp: string): string {
+/** game-type lookup: body.gameType > gameTypeBySkill 池第一个 > plain_choice */
+function pickGameTypeEsa(skillId: string | undefined, explicit?: string): string {
+  if (explicit) return explicit;
+  if (!skillId) return "plain_choice";
+  const raw = (PROMPTS.gameTypeBySkill as unknown as Record<string, unknown>)[skillId];
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw) && raw.length > 0) {
+    const first = raw[0];
+    return typeof first === "string" ? first : ((first as { type?: string })?.type ?? "plain_choice");
+  }
+  return "plain_choice";
+}
+
+// v0.36.15: 改用 composeQuestionUserPrompt (完整 scope + difficulty rubric + format
+// rubric + game-type schema + prefilled metadata), 跟 CF Pages buildUserPrompt 一致.
+// batchStamp 参数保留兼容签名 (composer 内部不用, question_id 由 onRequestPost 后处理 stamp).
+function buildQuestionsUserPrompt(body: GenReqBody, _batchStamp: string): string {
   const count = Math.max(1, Math.min(QUESTIONS_MAX, body.count ?? 3));
-  const excl = (body.existingStems ?? []).slice(0, 10).map((s) => `- ${s.slice(0, 80)}`).join("\n");
-  const focus = (body.recentMistakeStems ?? []).slice(0, 3).map((s) => `- ${s.slice(0, 80)}`).join("\n");
-  return `# 出题任务
-
-- skill: ${body.skillName ?? body.skillId} (${body.skillId})
-- unit: ${body.unitName ?? body.unitId} (${body.unitId})
-- term: ${body.term ?? "未指定"}
-- difficulty: ${body.difficulty ?? 3} (1=易 5=难)
-- game_type: ${body.gameType ?? "plain_choice"}
-- format: ${body.format ?? "auto"}
-- count: ${count}
-- batch_stamp: ${batchStamp}
-
-${excl ? `# 避免与下列 stem 重复\n${excl}\n` : ""}${focus ? `# 学生最近错过这些 (可作为考点焦点)\n${focus}\n` : ""}
-
-输出 JSON: { "questions": [...${count} 道...] }。每题 question_id 用 "AI_${body.skillId ?? "x"}_<idx>__${batchStamp}_<idx>" 格式。`;
+  const subjectId = body.subjectId === "chinese" ? "chinese" : "math";
+  const difficulty = parseDifficultyEsa(body.difficulty);
+  const gameType = pickGameTypeEsa(body.skillId, body.gameType);
+  const skillMeta = body.skillId
+    ? (PROMPTS.skillMetadata as unknown as Record<string, { ability: string[]; examPriority: string } | undefined>)[body.skillId]
+    : undefined;
+  const prefilledFields = {
+    grade: 4,
+    cognitiveLevel: cognitiveLevelFor(body.skillId ?? "", gameType),
+    questionFormat: questionFormatFor(gameType),
+    estimatedTimeSeconds: estimatedTimeFor(gameType, difficulty),
+    status: "approved",
+    examPriority: skillMeta?.examPriority,
+    abilityDimension: skillMeta?.ability,
+  };
+  return composeQuestionUserPrompt({
+    subjectId,
+    unitId: body.unitId ?? "",
+    unitName: body.unitName,
+    skillId: body.skillId ?? "",
+    skillName: body.skillName,
+    extraSkillIds: body.extraSkillIds,
+    term: (body.term === "上册" || body.term === "下册") ? body.term : "下册",
+    difficulty,
+    format: body.format as never,
+    gameType,
+    count,
+    existingStems: body.existingStems,
+    recentMistakeStems: body.recentMistakeStems,
+    prefilledFields,
+  });
 }
 
 function extractJsonObj(text: string): unknown {
@@ -650,7 +684,9 @@ generate.post("/questions", async (c) => {
   const errors: { provider: string; model: string; code: string; message: string }[] = [];
 
   for (const p of providers) {
-    const models = getChatModelsLib(p).filter((m: string) => /^qwen3/i.test(m)).slice(0, 2);
+    // v0.36.15: 只试 1 个 qwen3 model (qwen3.6-flash). 完整 prompt 单 call 25s,
+    // cascade 2 个会超 ESA 30s gateway → 504. 单 model fail-fast, client 可重试.
+    const models = getChatModelsLib(p).filter((m: string) => /^qwen3/i.test(m)).slice(0, 1);
     for (const model of models) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), QUESTIONS_TIMEOUT_MS);
