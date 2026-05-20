@@ -26,10 +26,17 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
 import { awardMascotXp } from "../lib/mascotProgress";
-import { submitChineseAttempt } from "../subjects/chinese/service";
+import { submitChineseAttempt, getChineseMistakeQuestionIds } from "../subjects/chinese/service";
 import { Link } from "react-router-dom";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
+import {
+  pickNextClusterIndex,
+  advanceClusterSession,
+  emptyClusterSession,
+  type ClusterCandidate,
+  type ClusterSessionState,
+} from "../lib/clusterSelect";
 import { SEED_QUESTIONS_CHINESE_READING } from "../subjects/chinese/readingPack";
 
 type ReadingPassage = {
@@ -237,6 +244,21 @@ export function ReadingLibraryPreviewPage() {
   const [comboBefore, setComboBefore] = useState(0);
   const questionStartRef = useRef(Date.now());
 
+  // ── Phase 2 流式选题 (PASSAGE 级): C6 是短文+多问, 一篇=一个 case, 在篇章层做自适应 ──
+  // 局内 session 状态 + 到期错题 id + 本篇是否答错过 (难度爬升信号; 篇章多题, 任一错即不升).
+  const sessionRef = useRef<ClusterSessionState>(emptyClusterSession(2));
+  const wrongThisPassageRef = useRef(false);
+  const lastPickWasReviewRef = useRef(false);
+  const [dueIds, setDueIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!student?.id) return;
+    let cancelled = false;
+    getChineseMistakeQuestionIds(student.id)
+      .then((ids) => { if (!cancelled) setDueIds(new Set(ids)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [student?.id]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -265,21 +287,81 @@ export function ReadingLibraryPreviewPage() {
   const curPassage = PASSAGES[passageIdx]!;
   const cur = curPassage.questions[qIdx]!;
 
-  // Phase1: 小题/篇章切换时重置计时
+  // Phase 2: 篇章级候选元数据 — 每篇 = 一个 ClusterCandidate.
+  // questionId = 该篇首题的真题 question_id (没有就用 passage.id, 保证稳定去重);
+  // difficulty = 首题难度 (代表该篇), skillId = 首题 skill_id.
+  const passageCandidates = useMemo<ClusterCandidate[]>(
+    () =>
+      PASSAGES.map((p, index) => {
+        const rep = p.questions.find((q) => q.sourceQuestion)?.sourceQuestion;
+        return {
+          index,
+          questionId: rep?.question_id ?? p.id,
+          difficulty: typeof rep?.difficulty === "number" ? rep.difficulty : 2,
+          skillId: rep?.skill_id ?? "",
+        };
+      }),
+    [PASSAGES],
+  );
+
+  // Phase1: 小题/篇章切换时重置计时; Phase2: 篇章切换时重置"本篇答错过"标记
   useEffect(() => {
     questionStartRef.current = Date.now();
   }, [qIdx, passageIdx]);
+  useEffect(() => {
+    wrongThisPassageRef.current = false;
+  }, [passageIdx]);
+
+  // Phase 2: 篇章做完后, 流式自适应挑下一篇 (局内去重 + 难度爬升 + 错题插入), 取代 passageIdx+1.
+  // 篇内小题保持顺序 (阅读理解天然按序读), 只在篇章层做选择.
+  function advanceToNextPassage() {
+    const cand = passageCandidates[passageIdx];
+    sessionRef.current = advanceClusterSession(sessionRef.current, {
+      questionId: cand?.questionId ?? curPassage.id,
+      isCorrect: !wrongThisPassageRef.current, // 本篇全对 → 连对加难; 错过 → 难度不升
+      difficulty: cand?.difficulty ?? 2,
+      wasReview: lastPickWasReviewRef.current,
+    });
+    const pick = pickNextClusterIndex(passageCandidates, sessionRef.current, {
+      baseDifficulty: 2,
+      dueMistakeIds: dueIds,
+      reviewEveryN: 3,
+    });
+    lastPickWasReviewRef.current = pick.reason === "review";
+    setPassageIdx(pick.index);
+    setQIdx(0);
+  }
+
+  // 首篇也自适应挑 (不再永远 passage 0)
+  const didInitRef = useRef(false);
+  useEffect(() => {
+    if (didInitRef.current || passageCandidates.length === 0) return;
+    didInitRef.current = true;
+    const pick = pickNextClusterIndex(passageCandidates, sessionRef.current, {
+      baseDifficulty: 2,
+      dueMistakeIds: dueIds,
+      reviewEveryN: 3,
+    });
+    lastPickWasReviewRef.current = pick.reason === "review";
+    setPassageIdx(pick.index);
+    setQIdx(0);
+  }, [passageCandidates, dueIds]);
 
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
         if (qIdx + 1 >= curPassage.questions.length) {
-          // 这篇做完 → 下一篇; 全部 3 篇做完 → allDone
-          if (passageIdx + 1 >= PASSAGES.length) {
+          // 这篇做完. Phase2: 当前篇连同已出过的篇 = 全部篇 → allDone; 否则自适应挑下一篇.
+          // (advanceClusterSession 在 advanceToNextPassage 里把本篇标记 seen, 这里先判断完成度)
+          const curQid = passageCandidates[passageIdx]?.questionId ?? curPassage.id;
+          const seenCount = sessionRef.current.seenIds.has(curQid)
+            ? sessionRef.current.seenIds.size
+            : sessionRef.current.seenIds.size + 1;
+          if (seenCount >= passageCandidates.length) {
             setAllDone(true);
           } else {
-            setPassageIdx((i) => i + 1);
-            setQIdx(0);
+            // 篇章级自适应选下一篇 (含去重/难度/错题复习), 内部已 setQIdx(0)
+            advanceToNextPassage();
             setSelectedIdx(null);
             setResult("idle");
             setEncouragePhrase(null);
@@ -293,6 +375,7 @@ export function ReadingLibraryPreviewPage() {
       }, 1800);
       return () => clearTimeout(t);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, qIdx, passageIdx, curPassage.questions.length]);
 
   async function handleChoice(idx: number) {
@@ -303,6 +386,7 @@ export function ReadingLibraryPreviewPage() {
       setResult("correct");
       setEncouragePhrase(null);
     } else {
+      wrongThisPassageRef.current = true; // Phase2: 本篇出过错 → 难度不升
       setResult("wrong");
       setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);
       setTimeout(() => setResult("idle"), 700);
@@ -326,6 +410,16 @@ export function ReadingLibraryPreviewPage() {
   }
 
   function restart() {
+    // Phase2: 重开一局 → 清空局内 session, 重新自适应挑首篇 (去重/难度从头).
+    sessionRef.current = emptyClusterSession(2);
+    wrongThisPassageRef.current = false;
+    const pick = pickNextClusterIndex(passageCandidates, sessionRef.current, {
+      baseDifficulty: 2,
+      dueMistakeIds: dueIds,
+      reviewEveryN: 3,
+    });
+    lastPickWasReviewRef.current = pick.reason === "review";
+    setPassageIdx(pick.index);
     setQIdx(0);
     setSelectedIdx(null);
     setResult("idle");

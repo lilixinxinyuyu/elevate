@@ -23,12 +23,19 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
 import { awardMascotXp } from "../lib/mascotProgress";
-import { submitChineseAttempt } from "../subjects/chinese/service";
+import { submitChineseAttempt, getChineseMistakeQuestionIds } from "../subjects/chinese/service";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { explainQuestion } from "../lib/tutor";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
+import {
+  pickNextClusterIndex,
+  advanceClusterSession,
+  emptyClusterSession,
+  buildCandidates,
+  type ClusterSessionState,
+} from "../lib/clusterSelect";
 import { SEED_QUESTIONS_CHINESE_IMITATE } from "../subjects/chinese/imitatePack";
 
 type ImitateCase = {
@@ -198,6 +205,19 @@ export function ImitatePainterPreviewPage() {
   const [sessionId] = useState(() => "cluster-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
   const [comboBefore, setComboBefore] = useState(0);
   const questionStartRef = useRef(Date.now());
+  // ── Phase 2 流式选题 (仅临摹模式): 局内 session 状态 + 到期错题 id + 首答是否错 (难度爬升信号) ──
+  const sessionRef = useRef<ClusterSessionState>(emptyClusterSession(2));
+  const wrongThisCaseRef = useRef(false);
+  const lastPickWasReviewRef = useRef(false);
+  const [dueIds, setDueIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!student?.id) return;
+    let cancelled = false;
+    getChineseMistakeQuestionIds(student.id)
+      .then((ids) => { if (!cancelled) setDueIds(new Set(ids)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [student?.id]);
   // 创作模式 state
   const [freeIdx, setFreeIdx] = useState(0);
   const [draft, setDraft] = useState("");
@@ -208,21 +228,58 @@ export function ImitatePainterPreviewPage() {
   const cur = cases[caseIdx] ?? DEMO_CASES[0]!;
   const free = FREE_PROMPTS[freeIdx]!;
 
-  // Phase1: 题目/模式切换时重置计时
+  // Phase1: 题目/模式切换时重置计时; Phase2: 同时重置本题首答错标记 (难度爬升信号)
   useEffect(() => {
     questionStartRef.current = Date.now();
+    wrongThisCaseRef.current = false;
   }, [caseIdx, cur.id, mode]);
+
+  // Phase 2: 临摹模式选下一题 (流式自适应 — 局内去重 + 难度爬升 + 错题插入), 取代 (i+1)%len
+  function advanceToNext() {
+    const sq = cur.sourceQuestion;
+    const qid = sq?.question_id ?? cur.id;
+    const diff = typeof sq?.difficulty === "number" ? sq.difficulty : 2;
+    // 首答对(没出过错)= true → 连对加难; 出过错 = false → 难度不升
+    sessionRef.current = advanceClusterSession(sessionRef.current, {
+      questionId: qid,
+      isCorrect: !wrongThisCaseRef.current,
+      difficulty: diff,
+      wasReview: lastPickWasReviewRef.current,
+    });
+    const pick = pickNextClusterIndex(buildCandidates(cases), sessionRef.current, {
+      baseDifficulty: 2,
+      dueMistakeIds: dueIds,
+      reviewEveryN: 4,
+    });
+    lastPickWasReviewRef.current = pick.reason === "review";
+    setCaseIdx(pick.index);
+  }
+
+  // Phase 2: 首题也自适应挑 (临摹模式; 不再永远 case 0)
+  const didInitRef = useRef(false);
+  useEffect(() => {
+    if (didInitRef.current || cases.length === 0) return;
+    didInitRef.current = true;
+    const pick = pickNextClusterIndex(buildCandidates(cases), sessionRef.current, {
+      baseDifficulty: 2,
+      dueMistakeIds: dueIds,
+      reviewEveryN: 4,
+    });
+    lastPickWasReviewRef.current = pick.reason === "review";
+    setCaseIdx(pick.index);
+  }, [cases, dueIds]);
 
   useEffect(() => {
     if (result === "correct") {
       const t = setTimeout(() => {
-        setCaseIdx((i) => (i + 1) % cases.length);
+        advanceToNext();
         setSelectedIdx(null);
         setResult("idle");
         setEncourage(null);
       }, 2200);
       return () => clearTimeout(t);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
   async function handleChoice(idx: number) {
@@ -233,6 +290,7 @@ export function ImitatePainterPreviewPage() {
       setResult("correct");
       setEncourage(null);
     } else {
+      wrongThisCaseRef.current = true; // Phase2: 本题出过错 → 难度不升
       setResult("wrong");
       setEncourage(ENCOURAGE[Math.floor(Math.random() * ENCOURAGE.length)] ?? null);
       setTimeout(() => setResult("idle"), 700);
