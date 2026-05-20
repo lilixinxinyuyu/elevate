@@ -23,6 +23,7 @@
  * 入口: `/chinese/poem-lantern-preview`
  */
 import { useState, useEffect } from "react";
+import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 
 type PoemCase = {
@@ -171,7 +172,7 @@ export function PoemLanternPreviewPage() {
       // judge
       const allCorrect = newFilled.every((f, i) => f === cur.blanks[i]);
       if (allCorrect) {
-        setResult("correct");
+        setResult("correct"); void awardClusterXp(1);
       } else {
         setResult("wrong");
         setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);

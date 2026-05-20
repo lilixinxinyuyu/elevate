@@ -22,6 +22,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { explainQuestion } from "../lib/tutor";
+import { awardClusterXp } from "../lib/clusterXp";
 
 type EssayPrompt = {
   id: string;
@@ -94,6 +95,7 @@ export function EssayInkstonePreviewPage() {
         hint: `请点评这个 4 年级学生的作文(${charCount}字): 1) 扣题吗? 2) 有没有用上修辞/好词? 3) 结构清楚吗? 给一句鼓励 + 一个具体改进建议。语气亲切, 不超过 70 字。`,
       });
       setCritique(r.explanation);
+      void awardClusterXp(1); // 写了作文 + 拿到点评 → 加 XP (鼓励动笔)
     } catch (e) {
       setErr((e as Error).message || "点评失败, 小进可能在研墨");
     } finally {

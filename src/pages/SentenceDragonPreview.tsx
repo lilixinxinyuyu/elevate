@@ -26,6 +26,7 @@
  * 入口: `/chinese/sentence-dragon-preview`
  */
 import { useState, useEffect } from "react";
+import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 
 type DragonCase = {
@@ -153,7 +154,7 @@ export function SentenceDragonPreviewPage() {
     if (newFilled.every((f) => f !== null)) {
       const allCorrect = newFilled.every((f, i) => f === cur.correctOrder[i]);
       if (allCorrect) {
-        setResult("correct");
+        setResult("correct"); void awardClusterXp(1);
       } else {
         setResult("wrong");
         setEncouragePhrase(ENCOURAGE_PHRASES[Math.floor(Math.random() * ENCOURAGE_PHRASES.length)] ?? null);

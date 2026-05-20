@@ -24,6 +24,7 @@
  * 入口: `/chinese/rhetoric-scroll-preview`
  */
 import { useState, useEffect } from "react";
+import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 
 type RhetoricCase = {
@@ -176,7 +177,7 @@ export function RhetoricScrollPreviewPage() {
     if (result === "correct") return;
     setSelectedIdx(idx);
     if (idx === cur.correctIdx) {
-      setResult("correct");
+      setResult("correct"); void awardClusterXp(1);
       setEncouragePhrase(null);
     } else {
       setResult("wrong");

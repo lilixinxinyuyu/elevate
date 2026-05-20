@@ -24,6 +24,7 @@
  * 入口: `/chinese/glyph-detective-preview`
  */
 import { useState, useEffect } from "react";
+import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -181,7 +182,7 @@ export function GlyphDetectivePreviewPage() {
     if (result === "correct") return;
     setSelectedIdx(idx);
     if (idx === cur.correctIdx) {
-      setResult("correct");
+      setResult("correct"); void awardClusterXp(1);
       setEncouragePhrase(null);
     } else {
       setResult("wrong");

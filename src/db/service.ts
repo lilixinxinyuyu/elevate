@@ -649,6 +649,20 @@ export async function getTotalXp(studentId: string): Promise<number> {
 }
 
 /**
+ * v0.36.29 (爸爸: cluster 接总 XP): 给当前学科 totalXp 加一笔 bonus.
+ * cluster 游戏 (preview, 不走 submitAttempt) 玩对题加分用. 加到当前 SUBJECT_NAMESPACE
+ * 的 totalXp (chinese cluster → chinese 总 XP). 返回新总 XP.
+ */
+export async function addBonusXp(studentId: string, delta: number): Promise<number> {
+  if (!studentId || delta <= 0) return getTotalXp(studentId);
+  const xpMeta = await db.meta.get(studentKey("totalXp", studentId));
+  const prevXp = typeof xpMeta?.value === "number" ? (xpMeta.value as number) : 0;
+  const next = prevXp + delta;
+  await db.meta.put({ key: studentKey("totalXp", studentId), value: next });
+  return next;
+}
+
+/**
  * Per-学期缓存的综合分。每个学期是独立赛季。
  */
 export async function getCachedRating(

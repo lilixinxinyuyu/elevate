@@ -20,6 +20,7 @@
  * 入口: `/chinese/imitate-painter-preview`
  */
 import { useState, useEffect } from "react";
+import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { explainQuestion } from "../lib/tutor";
@@ -141,7 +142,7 @@ export function ImitatePainterPreviewPage() {
     if (result === "correct") return;
     setSelectedIdx(idx);
     if (idx === cur.correctIdx) {
-      setResult("correct");
+      setResult("correct"); void awardClusterXp(1);
       setEncourage(null);
     } else {
       setResult("wrong");

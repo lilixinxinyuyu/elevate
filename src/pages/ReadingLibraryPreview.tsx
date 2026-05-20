@@ -23,6 +23,7 @@
  * 入口: `/chinese/reading-library-preview`
  */
 import { useState, useEffect } from "react";
+import { awardClusterXp } from "../lib/clusterXp";
 import { Link } from "react-router-dom";
 
 type ReadingPassage = {
@@ -219,7 +220,7 @@ export function ReadingLibraryPreviewPage() {
     if (result === "correct") return;
     setSelectedIdx(idx);
     if (idx === cur.correctIdx) {
-      setResult("correct");
+      setResult("correct"); void awardClusterXp(1);
       setEncouragePhrase(null);
     } else {
       setResult("wrong");
