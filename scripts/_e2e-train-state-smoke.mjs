@@ -213,8 +213,16 @@ await step("D.1 mock_exam ?hard=1 → 硬限时 mode (URL preserved)", async () 
 });
 
 // v0.35.25 (爸爸反馈 5-18): 加 panel-mix sampling 防 "ship 了但 user 看不到" 类问题.
-// 跑 20 fresh sessions, 统计 panel 类型分布, 跟 audit 预期对比.
-// 预期 (961 题 backfilled): canvas_scratch ~7%, multi_step ~30%, plain ~63%.
+// 跑 20 fresh sessions, 看每个 session **第 1 题** 的 panel 类型分布.
+//
+// ⚠️ canvas 天然偏低、0/20 完全正常 (2026-05-21 v0.36.72 实测确认, 别再当 bug 查):
+//   - 题库里 requiresScratch=true 占 ~19.6% (178 道下册), 但**首题** canvas 命中率远低于此, 因为:
+//     ① difficultyCap: fresh 账号 mastery 默认 50 → cap=难度3; scratch 题集中在难度 3-4,
+//        targetDifficultyRatio 又偏易 (mastery<75 时 d1+d2=55%) → scratch 题在 beginner 计划里是少数;
+//     ② GameShell 的 列算式区 面板 starterDone 后才渲染 (line ~566), 首屏(未交互)本就不显示;
+//     ③ 只采样首题 (diversifyOrder 打乱但不偏易, 所以是 ①②叠加而非排序问题)。
+//   → 真 Selena (有练习史 → mastery 高 → cap 升) 会正常解锁 scratch 题 + 列算式区。wiring 已验证 OK。
+// 预期 (实测): multi_step ~30% (= 题库占比, 稳定可断言), canvas 0-2/20 (warning-only), 其余 plain。
 await step("F.1 panel-mix sampling (20 fresh sessions) — 防 metadata 没 reload", async () => {
   // Warmup home first 让 ensureSeeded + cloud sync 跑完
   await page.goto(`${SELENA_URL}/math`, { waitUntil: "load", timeout: 90000 });
@@ -234,15 +242,15 @@ await step("F.1 panel-mix sampling (20 fresh sessions) — 防 metadata 没 relo
     else if (kind === "multistep") multistep++;
     else plain++;
   }
-  // 强制 canvas 至少 1 道 (期望 7% × 20 = 1.4 道, 0 命中 p=0.235 — 警告而非 fail)
-  // multistep 至少 3 道 (期望 30% × 20 = 6 道, ≤2 命中 p<5% — fail signal)
+  // multistep 至少 3 道 = 真正的 fail signal (期望 ~30%, ≤2 命中 p<5% → metadata/SEED 没生效)。
+  // canvas 不设硬下限: 首题命中天然低 (见上方注释①②), 0/20 是预期, 仅打 info 不 fail。
   if (multistep < 3) {
     throw new Error(`multistep too low (${multistep}/${N}, expected ~30%). 可能 SEED_VERSION 没 bump → metadata 没生效, 或 isMultiStepAppV1 flag off.`);
   }
   if (canvas === 0) {
-    console.warn(`  ⚠ canvas 0/${N} — 概率 24% 是正常, 但要重跑 verify`);
+    console.warn(`  ℹ canvas 0/${N} — 首题 canvas 命中天然低 (difficultyCap + starter 后才渲染), 预期, 非 bug`);
   }
-  return `canvas=${canvas} multistep=${multistep} plain=${plain} (expected canvas~7% multistep~30%)`;
+  return `canvas=${canvas} multistep=${multistep} plain=${plain} (multistep~30% 可断言; canvas 首题偏低属正常)`;
 });
 
 await step("E.1 console errors check", async () => {
