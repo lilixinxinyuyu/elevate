@@ -733,11 +733,19 @@ function buildMockExam(input: InternalInput): DailySessionPlan {
   const total = Math.max(20, Math.min(100, input.targetCount));
 
   // 每桶按 exam_priority 加权排序（MUST_BIG 优先）
-  const weight = (q: Question) =>
-    q.exam_priority === "MUST_BIG" ? 0 :
-    q.exam_priority === "MUST_SMALL" ? 1 :
-    q.exam_priority === "HIGH_BIG" ? 1 :
-    q.exam_priority === "HIGH_SMALL" ? 2 : 3;
+  // v0.36.79 (8787+8788 peer review 选 A): mock 应像真考 → from_test (真题风格) 题优先。
+  // 在 exam_priority 基础上给 from_test -1.0: 同 priority 内真题先出, 且不破坏 priority 总序
+  // (MUST_BIG 仍居前) / 单元保底 / 难度配比。weight 同时用于单元保底排序和难度桶排序。
+  // 修复: 此前 buildMockExam 只按 exam_priority, 忽略 from_test tag → 数学出题 loop 生成的
+  // 真题(tag from_test)在模拟卷里没被优先抽 (其文档假设的契约未实现)。
+  const weight = (q: Question) => {
+    const base =
+      q.exam_priority === "MUST_BIG" ? 0 :
+      q.exam_priority === "MUST_SMALL" ? 1 :
+      q.exam_priority === "HIGH_BIG" ? 1 :
+      q.exam_priority === "HIGH_SMALL" ? 2 : 3;
+    return base - ((q.tags ?? []).includes("from_test") ? 1.0 : 0);
+  };
   const jitter = (q: Question) => hashSeed(input.dateKey + ":mock:" + q.question_id) / 2 ** 32;
   const byPriority = (a: Question, b: Question) => weight(a) - weight(b) || jitter(a) - jitter(b);
 

@@ -82,6 +82,21 @@ describe("scheduler", () => {
     expect(without.questionIds).not.toContain(u4!.question_id);
   });
 
+  it("mock_exam 优先抽 from_test 真题（模拟卷像真考）", () => {
+    const idToTags = new Map(SEED_QUESTIONS.map((q) => [q.question_id, q.tags ?? []]));
+    const totalFromTest = SEED_QUESTIONS.filter((q) => (q.tags ?? []).includes("from_test")).length;
+    // 仅在题库确有 from_test 真题时断言（避免空库误判）
+    if (totalFromTest < 10) return;
+    const plan = buildDailySession({
+      studentId: "s1", mode: "mock_exam", targetMinutes: 60, dateKey: "2026-06-20",
+      pool: SEED_QUESTIONS, mastery: [], mistakes: [], attempts: [], overrideTargetCount: 30,
+    });
+    const ftInMock = plan.questionIds.filter((id) => (idToTags.get(id) ?? []).includes("from_test")).length;
+    const ftShareBank = totalFromTest / SEED_QUESTIONS.length;
+    // from_test 在 mock 里的占比应**显著高于**其在题库的占比 (被优先抽)
+    expect(ftInMock / 30).toBeGreaterThan(ftShareBank * 1.5);
+  });
+
   it("mock_exam 覆盖全部 6 个下册单元（保底，防 U4 观察物体被挤成 0）", () => {
     const idToUnit = new Map(SEED_QUESTIONS.map((q) => [q.question_id, q.unit_id]));
     const G4B_UNITS = [
