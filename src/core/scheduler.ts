@@ -32,6 +32,12 @@ export interface BuildSessionInput {
   now?: number;
   rng?: () => number;
   rngSeed?: string;
+  /**
+   * v0.36.73: 期末日期 (ms)。final_sprint 用它做错题"pull-forward"兜底:
+   * 8787+8788 peer review 一致 — 严格 due-gate 为主, 但临考时把那些 nextReviewAt
+   * 会落在考试**之后**的未解决错题提前捞一次 (否则永远复习不到)。缺省则退化为纯 due-gate。
+   */
+  examDateMs?: number;
 }
 
 export interface DailySessionPlan {
@@ -587,43 +593,75 @@ function buildFinalSprint(input: InternalInput): DailySessionPlan {
     return added;
   }
 
+  // v0.36.73: 给错题复活**预留** slot。之前冲刺正文先填满 targetCount, 错题 append 在后面被
+  // slice(0,targetCount) 整段切掉 → "错题复活" 实际恒为 0 (题库充足时), 临考复习错题的核心
+  // 机制形同虚设。改: 正文只填到 contentCap = targetCount - wantMistakes, 留出错题位; 错题
+  // 没填满再用正文回填到 targetCount。
+  const wantMistakes = Math.max(1, Math.round(input.targetCount * 0.12));
+  const contentCap = Math.max(1, input.targetCount - wantMistakes);
+
   // Phase 1: 每 rank 保证 1 道 (避免低权重 item 被切掉)
   for (const item of FINAL_SPRINT_G4B) {
-    if (questions.length >= input.targetCount) break;
+    if (questions.length >= contentCap) break;
     addFromItem(item, 1);
   }
 
   // Phase 2: 剩下按 weight 分给前 4 个 rank (高优先), 弥补 minQuestionsPerSession 期望
-  const remaining = input.targetCount - questions.length;
+  const remaining = contentCap - questions.length;
   if (remaining > 0) {
     const top4Weight = FINAL_SPRINT_G4B.slice(0, 4).reduce((s, it) => s + it.weight, 0);
     for (const item of FINAL_SPRINT_G4B.slice(0, 4)) {
-      if (questions.length >= input.targetCount) break;
-      // 按本 item 在 top 4 中的相对权重分剩余 slot
-      const share = Math.round((item.weight / top4Weight) * remaining);
+      if (questions.length >= contentCap) break;
+      // 按本 item 在 top 4 中的相对权重分剩余 slot (clamp 防溢出预留位)
+      const share = Math.min(Math.round((item.weight / top4Weight) * remaining), contentCap - questions.length);
       addFromItem(item, share);
     }
     // 若还差就贪心填 rank 1-2
     for (const item of FINAL_SPRINT_G4B.slice(0, 2)) {
+      if (questions.length >= contentCap) break;
+      addFromItem(item, contentCap - questions.length);
+    }
+  }
+
+  // 错题变式 10-15% (占预留 slot)
+  let addedM = 0;
+  const addMistake = (mk: MistakeReview): boolean => {
+    if (forbid.has(mk.questionId)) return false;
+    const q = input.pool.find((p) => p.question_id === mk.questionId);
+    if (!q) return false;
+    questions.push(q);
+    forbid.add(q.question_id);
+    addedM += 1;
+    return true;
+  };
+  // 主路径: 严格 due-gate (nextReviewAt <= now), 最该今日复习的优先 (scheduler 入口已按 stage/到期排好)
+  for (const mk of input.dueMistakes) {
+    if (addedM >= wantMistakes) break;
+    addMistake(mk);
+  }
+  // v0.36.73 pull-forward 兜底 (8787+8788 peer review): due 池填不满剩余 slot 时, 把那些
+  // nextReviewAt 会落在**考试之后**(否则永远复习不到)的未解决错题提前捞回, stage 低优先,
+  // 避开最近 5 天刚见过的。仅当传了 examDateMs 才启用; 绝不挤占 due 错题的 slot。
+  if (addedM < wantMistakes && typeof input.examDateMs === "number") {
+    const FIVE_DAYS = 5 * 24 * 60 * 60 * 1000;
+    const pullForward = input.mistakes
+      .filter((m) => !m.resolved && m.nextReviewAt > input.now && m.nextReviewAt > input.examDateMs! && !forbid.has(m.questionId))
+      .filter((m) => input.now - (m.lastAttemptAt ?? 0) >= FIVE_DAYS)
+      .sort((a, b) => a.stage - b.stage || a.nextReviewAt - b.nextReviewAt);
+    for (const mk of pullForward) {
+      if (addedM >= wantMistakes) break;
+      addMistake(mk);
+    }
+  }
+  breakdown.set("错题复活", addedM);
+
+  // 回填: 错题没填满预留 slot → 用冲刺正文补到 targetCount (不浪费名额)
+  if (questions.length < input.targetCount) {
+    for (const item of FINAL_SPRINT_G4B) {
       if (questions.length >= input.targetCount) break;
       addFromItem(item, input.targetCount - questions.length);
     }
   }
-
-  // 错题变式 10-15%
-  const wantMistakes = Math.max(1, Math.round(input.targetCount * 0.12));
-  let addedM = 0;
-  for (const mk of input.dueMistakes) {
-    if (addedM >= wantMistakes) break;
-    if (forbid.has(mk.questionId)) continue;
-    const q = input.pool.find((p) => p.question_id === mk.questionId);
-    if (q) {
-      questions.push(q);
-      forbid.add(q.question_id);
-      addedM += 1;
-    }
-  }
-  breakdown.set("错题复活", addedM);
 
   // v0.35.30 (爸爸第 5 次反馈): cap 到 input.targetCount (13)
   const finalList = diversifyOrder(questions.slice(0, input.targetCount), input.rng);

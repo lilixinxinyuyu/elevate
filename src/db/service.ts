@@ -9,6 +9,7 @@ import { advanceStageOnSuccess, nextReviewAt, regressStageOnFailure, REVIEW_INTE
 import { checkAndAwardTrophies, TROPHIES } from "../core/trophies";
 import { computeRating } from "../core/rating";
 import { tierIndex, tierById } from "../core/tiers";
+import { FINAL as FINAL_EXAM } from "../core/examDates";
 import type {
   Attempt,
   DailySession,
@@ -252,6 +253,7 @@ export async function getOrCreateSession(
     selectedSkillIds: opts.selectedSkillIds,
     unitId: opts.unitId,
     overrideTargetCount: opts.overrideTargetCount,
+    examDateMs: FINAL_EXAM.date.getTime(),
     rngSeed: `${studentId}:${mode}:${term}:${dateKey}:${opts.unitId ?? ""}:${opts.overrideTargetCount ?? ""}:${Date.now()}:${Math.random()}`,
   });
   const session: DailySession = {

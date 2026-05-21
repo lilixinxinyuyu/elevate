@@ -52,6 +52,36 @@ describe("scheduler", () => {
     expect(skills.some((s) => s?.startsWith("average_"))).toBe(true);
   });
 
+  it("final_sprint pull-forward: 救回 nextReviewAt 落在考试之后的未解决错题 (仅当传 examDateMs)", () => {
+    // 选一道 U4(观察物体)题 — 不是 final_sprint 技能, 不会被冲刺正文选中, 隔离 pull-forward 路径
+    const u4 = SEED_QUESTIONS.find((q) => q.unit_id === "G4B_U4_OBSERVE_OBJECTS");
+    expect(u4).toBeTruthy();
+    const now = new Date("2026-06-10").getTime();
+    const examDateMs = new Date("2026-06-29").getTime();
+    const mistake: MistakeReview = {
+      id: "m-pf",
+      studentId: "s1",
+      subjectId: "math",
+      questionId: u4!.question_id,
+      skillId: u4!.skill_id,
+      stage: 3,
+      nextReviewAt: examDateMs + 10 * 24 * 3600 * 1000, // 考试后 10 天才到期 → 正常永远复习不到
+      lastAttemptAt: now - 10 * 24 * 3600 * 1000, // 10 天没见 (>5 天阈值)
+      resolved: false,
+      errorTags: [],
+    };
+    const base = {
+      studentId: "s1", mode: "final_sprint" as const, targetMinutes: 20,
+      dateKey: "2026-06-10", pool: SEED_QUESTIONS, mastery: [], attempts: [], now,
+    };
+    // 传 examDateMs → pull-forward 救回该错题
+    const withExam = buildDailySession({ ...base, mistakes: [mistake], examDateMs });
+    expect(withExam.questionIds).toContain(u4!.question_id);
+    // 不传 examDateMs → 纯 due-gate, 该未到期错题不被选 (U4 也不在冲刺正文里)
+    const without = buildDailySession({ ...base, mistakes: [mistake] });
+    expect(without.questionIds).not.toContain(u4!.question_id);
+  });
+
   it("skill 模式只选指定技能", () => {
     const plan = buildDailySession({
       studentId: "s1",
