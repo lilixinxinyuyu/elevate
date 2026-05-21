@@ -275,7 +275,7 @@ async function doGenerateAiQuestions(
 export interface GenerateImageArgs {
   prompt: string;
   /** 默认 qwen-image-2.0-pro */
-  model?: "qwen-image-2.0-pro" | "qwen-image-2.0";
+  model?: "qwen-image-2.0-pro" | "qwen-image-2.0" | "wan2.7-image-pro" | "wan2.7-image";
   /** 默认 512*512（勋章用） */
   size?: "512*512" | "1024*1024";
   style?: string;
