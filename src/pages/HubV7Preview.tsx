@@ -49,7 +49,7 @@ export function HubV7PreviewPage() {
   // ── 真实数据 (让预览显示 Selena 的实际进度, 不是 mock; 全 dev 可验证, 无需 gen) ──
   const [real, setReal] = useState<{
     name: string; level: number; xp: number; tierName: string; tierRoman: string;
-    examShort: string; examDays: number; mistakeCount: number;
+    examShort: string; examDays: number; mistakeCount: number; streak: number;
     accuracy: number; mastery: number; continuity: number; breadth: number; composite: number;
   } | null>(null);
   useEffect(() => {
@@ -79,6 +79,7 @@ export function HubV7PreviewPage() {
           examShort: exam.name.replace("考试", ""),
           examDays: daysUntil(exam.date),
           mistakeCount: fragile.length,
+          streak: ab.raw.streak ?? 0,
           // 能力诊断 (跟 HubScreenV6 同款 components→0-100 映射; 无数据回退合理 mock)
           accuracy: has ? pct(ab.components.accuracy, 250) : 78,
           mastery: has ? pct(ab.components.mastery, 400) : 62,
@@ -139,61 +140,98 @@ export function HubV7PreviewPage() {
             <span className="text-[10px] text-white/60 tabular-nums">{real ? fmtXp(real.xp) : "0"} XP</span>
           </div>
         </div>
-      </div>
-
-      {/* 段位 chevron (顶部右侧, 避开左上 HUD) */}
-      <div className={`absolute top-4 right-4 lg:right-[6%] ${GLASS} px-4 py-2 text-center`}>
-        <div className="text-[11px] text-white/60 leading-none">当前段位</div>
-        <div className="mt-1 font-display font-black text-lg leading-none flex items-center gap-1.5">
-          <span>🏛️</span><span className="bg-gradient-to-r from-cyan-200 to-violet-200 bg-clip-text text-transparent">{real ? `${real.tierName} ${real.tierRoman}` : "和平街小学 I"}</span>
+        {/* 连胜 streak — 强留存钩子 (planner+designer 都点名) */}
+        <div className="flex flex-col items-center pl-2 ml-1 border-l border-white/15">
+          <span className="text-lg leading-none">🔥</span>
+          <span className="text-[11px] font-black text-orange-300 tabular-nums leading-none mt-0.5">{real?.streak ?? 0}</span>
         </div>
       </div>
 
-      {/* 三环 — 手机: 顶部 HUD 下方横排; sm+: 左中竖排 */}
-      <div className={`absolute z-10 left-1/2 -translate-x-1/2 top-[84px] flex flex-row items-center gap-1.5
-        sm:left-4 sm:translate-x-0 sm:top-1/2 sm:-translate-y-1/2 sm:flex-col sm:gap-3 ${GLASS} px-3 py-2`}>
-        <div className="hidden sm:block text-[11px] text-white/70 text-center font-bold">今日三环</div>
-        <Ring label="口算" pct={80} hue="#22d3ee" />
-        <Ring label="挑战" pct={45} hue="#a78bfa" />
-        <Ring label="专注" pct={100} hue="#fbbf24" />
+      {/* 段位 + 期末"史诗倒计时" (顶部右侧, 避开左上 HUD) */}
+      <div className={`absolute top-4 right-4 lg:right-[6%] ${GLASS} px-4 py-2 text-center`}>
+        <div className="text-[11px] text-white/60 leading-none flex items-center justify-center gap-1">
+          <span>🏛️</span><span className="bg-gradient-to-r from-cyan-200 to-violet-200 bg-clip-text text-transparent font-bold">{real ? `${real.tierName} ${real.tierRoman}` : "和平街小学 I"}</span>
+        </div>
+        <div className="mt-1.5 pt-1.5 border-t border-white/15 leading-none">
+          <span className="text-[10px] text-white/55">⚔️ 决战{real?.examShort ?? "期末"}</span>
+          <div className="mt-0.5 font-display font-black text-base leading-none">
+            <span className="bg-gradient-to-r from-amber-200 to-rose-300 bg-clip-text text-transparent tabular-nums">{real?.examDays ?? 39}</span>
+            <span className="text-white/60 text-[11px] ml-0.5">天</span>
+          </div>
+        </div>
       </div>
 
-      {/* 任务栈 — 手机: 底部横向滑动卡片 (CTA 上方); md+: 右中竖排 */}
-      <div className="absolute z-10 left-1/2 -translate-x-1/2 bottom-[150px] flex flex-row gap-2 w-[94vw] overflow-x-auto pb-1
-        md:left-auto md:right-4 md:translate-x-0 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:flex-col md:gap-2.5 md:w-[min(78vw,300px)] md:overflow-visible md:pb-0">
-        {[
-          { icon: "🚑", t: "红牌救援", s: real ? (real.mistakeCount > 0 ? `${real.mistakeCount} 个薄弱点待救援` : "暂无待救援 · 保持住") : "错题待复活", c: "from-rose-500/25 to-rose-400/10 border-rose-400/40" },
-          { icon: "⚔️", t: `${real?.examShort ?? "期末"} BOSS`, s: real ? `${real.examDays} 天后来袭 · 今天备战` : "备战中", c: "from-violet-500/25 to-fuchsia-400/10 border-violet-400/40" },
-          { icon: "⚡", t: "能力诊断", s: "看脑力雷达 4 维成长", c: "from-cyan-500/25 to-sky-400/10 border-cyan-400/40" },
-        ].map((m) => (
-          <div key={m.t} className={`shrink-0 w-[212px] md:w-auto rounded-2xl bg-gradient-to-br ${m.c} border backdrop-blur-md px-4 py-3 flex items-center gap-3 shadow-lg`}>
-            <div className="text-2xl">{m.icon}</div>
-            <div className="flex-1"><div className="font-display font-bold text-sm">{m.t}</div><div className="text-[11px] text-white/70">{m.s}</div></div>
-            <div className="text-white/50 text-xl">›</div>
+      {/* ════ step③ 唯一主干道: 今日三环(集成) + 动态主 CTA(自动指向下一个没闭的环) ════
+          指挥中心核心: 不让娃选, 5 秒内一个发光按钮指向"今天该练的下一步"。三环不再单独平铺左侧,
+          集成在 CTA 正上方; 红牌救援/BOSS 等任务卡砍掉, 并进环里 (错题环=救援, 挑战环=主练)。 */}
+      {(() => {
+        const ringData = [
+          { label: "速算", full: "速算热身", pct: 100, hue: "#22d3ee", to: "/math/fluency", reward: "基本功热身 ✓" },
+          { label: "挑战", full: "今日挑战", pct: 45, hue: "#a78bfa", to: "/math/train", reward: "今日主练 · +80 XP" },
+          { label: "错题", full: "错题复活", pct: real && real.mistakeCount > 0 ? 0 : 100, hue: "#fbbf24",
+            to: "/math/mistakes", reward: real && real.mistakeCount > 0 ? `复活 ${real.mistakeCount} 道错题 · +60 XP` : "错题已清 · 保持" },
+        ];
+        const next = ringData.find((r) => r.pct < 100);
+        const doneCount = ringData.filter((r) => r.pct >= 100).length;
+        return (
+          <div className="absolute bottom-[92px] lg:bottom-[5%] left-1/2 -translate-x-1/2 z-20 w-[min(92vw,460px)] flex flex-col items-center gap-2.5">
+            <div className={`${GLASS} px-4 py-2 flex items-center gap-4`}>
+              {ringData.map((r) => <Ring key={r.label} label={r.label} pct={r.pct} hue={r.hue} />)}
+            </div>
+            <Link to={next ? next.to : "/math/train?mode=mock_exam"}
+              className="w-full rounded-3xl py-4 px-6 text-center text-amber-950 shadow-[0_10px_44px_rgba(251,191,36,0.5)] bg-gradient-to-r from-amber-300 via-orange-400 to-pink-400 active:scale-[0.98] transition animate-[pulse_2.6s_ease-in-out_infinite]">
+              <div className="font-display font-black text-xl leading-none">
+                {next ? `今日 ${doneCount + 1}/3 · ${next.full} ▶` : "🎉 三环已闭 · 自由挑战 ▶"}
+              </div>
+              <div className="text-xs font-bold text-amber-900/80 mt-1">{next ? next.reward : "做套模拟卷巩固"}</div>
+            </Link>
           </div>
+        );
+      })()}
+
+      {/* ════ step② 边缘系统入口 (左右竖排 icon, 视觉低于主 CTA) — 替代回退的顶部 ribbon ════ */}
+      <div className="absolute z-10 left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+        {[
+          { icon: "🗺️", label: "技能图", to: "/math/skills" },
+          { icon: "🎯", label: "模拟卷", to: "/math/train?mode=mock_exam" },
+          { icon: "🕹️", label: "街机", to: "/math" },
+        ].map((s) => (
+          <Link key={s.to} to={s.to} className={`${GLASS} w-[52px] py-2 flex flex-col items-center gap-0.5 hover:bg-white/20 active:scale-95 transition`}>
+            <span className="text-xl leading-none">{s.icon}</span>
+            <span className="text-[9px] text-white/80 font-bold">{s.label}</span>
+          </Link>
+        ))}
+      </div>
+      <div className="absolute z-10 right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+        {[
+          { icon: "🎨", label: "工坊", to: "/math/atelier", dot: false },
+          { icon: "🏆", label: "奖杯", to: "/math/skills", dot: false },
+          { icon: "🔧", label: "错题", to: "/math/mistakes", dot: !!(real && real.mistakeCount > 0) },
+        ].map((s) => (
+          <Link key={s.label} to={s.to} className={`${GLASS} w-[52px] py-2 flex flex-col items-center gap-0.5 hover:bg-white/20 active:scale-95 transition relative`}>
+            {s.dot && <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-rose-400 animate-pulse" />}
+            <span className="text-xl leading-none">{s.icon}</span>
+            <span className="text-[9px] text-white/80 font-bold">{s.label}</span>
+          </Link>
         ))}
       </div>
 
-      {/* 主 CTA (底部中央, 压在平台前景; 手机抬高避开底部导航) */}
-      <div className="absolute bottom-20 lg:bottom-[3%] left-1/2 -translate-x-1/2 z-20 w-[min(86vw,420px)]">
-        <button className="w-full rounded-3xl py-4 px-6 font-display font-black text-xl text-amber-950 shadow-[0_10px_40px_rgba(251,191,36,0.4)] bg-gradient-to-r from-amber-300 via-orange-400 to-pink-400 active:scale-[0.98] transition">
-          ▶ 开始今日挑战
-          <div className="text-xs font-bold text-amber-900/80 mt-0.5">还差 20 题 · 赢 ⭐</div>
-        </button>
-      </div>
+      {/* ════ step⑥ 降级数值: 一句综合分 + 点开看雷达 (砍掉 4 数值"体检条") ════ */}
+      <Link to="/math/skills" className={`absolute bottom-4 left-4 ${GLASS} px-3 py-2 text-[11px] hidden sm:flex items-center gap-2 hover:bg-white/20 transition`}>
+        <span className="text-base">📈</span>
+        <span className="text-white/70">综合</span><b className="text-amber-300 tabular-nums">{real?.composite ?? 510}</b>
+        <span className="text-white/20">·</span><span className="text-white/55">点开看 4 维成长</span>
+      </Link>
 
-      {/* 数值条 (左下) */}
-      <div className={`absolute bottom-4 left-4 ${GLASS} px-4 py-2 text-[11px] hidden sm:flex items-center gap-3`}>
-        <span className="text-white/60">综合</span><span className="font-bold text-amber-300 tabular-nums">{real?.composite ?? 510}</span>
-        <span className="text-white/20">|</span>
-        <span>准确 <b className="text-cyan-300">{real?.accuracy ?? 78}</b></span>
-        <span>熟练 <b className="text-violet-300">{real?.mastery ?? 62}</b></span>
-        <span>坚持 <b className="text-orange-300">{real?.continuity ?? 0}</b></span>
-        <span>广度 <b className="text-emerald-300">{real?.breadth ?? 50}</b></span>
+      {/* 小熊猫副手 + 对话气泡 (向导嘴替, 驱动每日提示) */}
+      <div className="absolute bottom-3 right-4 z-20 flex items-end gap-2 max-w-[64vw]">
+        <div className={`${GLASS} px-3 py-2 text-[11px] text-white/85 mb-2 max-w-[200px]`}>
+          {real
+            ? (real.mistakeCount > 0 ? `有 ${real.mistakeCount} 道错题等你复活, 先清掉再冲 BOSS!` : "状态超好! 今天继续闭三环 💪")
+            : "今天也要加油哦~"}
+        </div>
+        <div className="text-4xl animate-bounce" style={{ animationDuration: "3s" }}>🐼</div>
       </div>
-
-      {/* 小熊猫副手 (右下) */}
-      <div className="absolute bottom-4 right-5 text-4xl animate-bounce z-20" style={{ animationDuration: "3s" }}>🐼</div>
 
       {/* 返回 */}
       <div className="absolute top-2 right-2 z-30 flex gap-2">
