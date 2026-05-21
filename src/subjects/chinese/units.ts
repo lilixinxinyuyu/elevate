@@ -58,4 +58,34 @@ export const UNITS_CHINESE: CurriculumUnit[] = [
       "海上日出（巴金）+ 记金华的双龙洞（叶圣陶）+ 习作例文：颐和园 / 七月的天山。重点：按游览/变化顺序写景 + 过渡句。",
     priority: "HIGH",
   },
+  {
+    id: "C4B_U6_GROWTH",
+    subjectId: "chinese",
+    term: "下册",
+    orderIndex: 6,
+    name: "第六单元 · 成长故事 + 文言文",
+    description:
+      "文言文二则（囊萤夜读 / 铁杵成针）+ 小英雄雨来（节选）+ 我们家的男子汉 + 芦花鞋（曹文轩）。重点：学习把握长文章的主要内容；从事件中感受人物成长。",
+    priority: "VERY_HIGH",
+  },
+  {
+    id: "C4B_U7_CHARACTER",
+    subjectId: "chinese",
+    term: "下册",
+    orderIndex: 7,
+    name: "第七单元 · 人物品质 + 古诗",
+    description:
+      "古诗三首（芙蓉楼送辛渐 / 塞下曲 / 墨梅）+ 黄继光 + “诺曼底号”遇难记（雨果）+ 挑山工。重点：从人物的语言、动作、神态描写中感受品质。",
+    priority: "VERY_HIGH",
+  },
+  {
+    id: "C4B_U8_FAIRYTALE",
+    subjectId: "chinese",
+    term: "下册",
+    orderIndex: 8,
+    name: "第八单元 · 童话故事",
+    description:
+      "宝葫芦的秘密（张天翼，节选）+ 巨人的花园（王尔德）+ 海的女儿（安徒生）。重点：感受童话奇妙的想象，体会人物形象，复述故事。",
+    priority: "HIGH",
+  },
 ];

@@ -22,6 +22,10 @@ import { SEED_QUESTIONS_CHINESE_BADSENT } from "./badSentPack";
 import { SEED_QUESTIONS_CHINESE_IMITATE } from "./imitatePack";
 import { SEED_QUESTIONS_CHINESE_READING } from "./readingPack";
 import { SEED_QUESTIONS_CHINESE_GLYPH } from "./glyphPack";
+import { SEED_QUESTIONS_CHINESE_U5_EXAM } from "./examPackU5";
+import { SEED_QUESTIONS_CHINESE_U6 } from "./examPackU6";
+import { SEED_QUESTIONS_CHINESE_U7 } from "./examPackU7";
+import { SEED_QUESTIONS_CHINESE_U8 } from "./examPackU8";
 import type {
   Subject,
   SubjectAbilityDef,
@@ -69,6 +73,10 @@ export const chineseSubject: Subject = {
     ...SEED_QUESTIONS_CHINESE_IMITATE,
     ...SEED_QUESTIONS_CHINESE_READING,
     ...SEED_QUESTIONS_CHINESE_GLYPH,
+    ...SEED_QUESTIONS_CHINESE_U5_EXAM,
+    ...SEED_QUESTIONS_CHINESE_U6,
+    ...SEED_QUESTIONS_CHINESE_U7,
+    ...SEED_QUESTIONS_CHINESE_U8,
   ],
 
   abilities: CHINESE_ABILITIES,

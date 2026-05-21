@@ -168,7 +168,7 @@ export function ChineseHomePage() {
           <div className="flex-1">
             <div className="font-display font-bold text-xl">{examShort}冲刺</div>
             <div className="text-xs text-slate-300 mt-0.5">
-              人教版四下 1-5 单元 · 字音字形 / 古诗 / 词语 / 修辞 / 听写
+              人教版四下 全 8 单元 · 字音字形 / 古诗文 / 词语 / 修辞 / 阅读 / 听写
             </div>
           </div>
           {days >= 0 && (
@@ -334,7 +334,7 @@ export function ChineseHomePage() {
               <div className="flex-1">
                 <div className="font-display font-bold text-violet-100">综合模拟测试</div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  跨 5 单元 20 题 · 难度梯度 D1-D4 · 一周一次
+                  跨 8 单元 20 题 · 难度梯度 D1-D4 · 一周一次
                 </div>
               </div>
               <div className="text-violet-300 text-2xl">→</div>
@@ -514,8 +514,8 @@ export function ChineseHomePage() {
       </div>
 
       <div className="text-center text-[11px] text-slate-500 mt-2 space-y-1">
-        <div>题库：{totalQuestions} 道题 · {totalSkills} 个技能 · 4 个单元（人教版四下）</div>
-        <div>期中后会扩到 200+ 题 + 课内阅读 + 错题复活专项</div>
+        <div>题库：{totalQuestions} 道题 · {totalSkills} 个技能 · {subject.units.length} 个单元（人教版四下）</div>
+        <div>已覆盖全册 1-8 单元 · 期末备考</div>
       </div>
     </div>
   );
