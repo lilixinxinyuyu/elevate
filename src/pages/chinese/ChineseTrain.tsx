@@ -485,7 +485,7 @@ export function ChineseTrainPage() {
           </div>
           <div className="text-xs text-slate-400 pt-1">
             {accuracy >= 90
-              ? "几乎全对！期中没问题。"
+              ? "几乎全对！考试没问题。"
               : accuracy >= 75
                 ? "已经很稳了，再练 1-2 组到 90%+。"
                 : accuracy >= 50

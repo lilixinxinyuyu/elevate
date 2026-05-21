@@ -797,7 +797,7 @@ export function HomePage() {
                   {displayName}，这些题你都很熟啦！
                 </div>
                 <div className="text-sm text-amber-200/90 mt-1">
-                  还剩 <span className="font-bold">{poolHealth.freshTotal}</span> 道新题没做（期中范围 {poolHealth.freshMidterm} 道）。
+                  还剩 <span className="font-bold">{poolHealth.freshTotal}</span> 道新题没做。
                 </div>
                 {poolHealth.starvedSkills.length > 0 && (
                   <div className="text-sm text-amber-200/90 mt-1">

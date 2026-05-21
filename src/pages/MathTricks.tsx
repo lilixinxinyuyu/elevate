@@ -79,7 +79,7 @@ export function MathTricksPage() {
           </div>
         </div>
         <div className="text-xs text-slate-400 mt-2">
-          这些不是教材内容，是数学基本功——会了之后做题更快、验算更稳，期中冲刺神器。
+          这些不是教材内容，是数学基本功——会了之后做题更快、验算更稳，考试冲刺神器。
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {MATH_TRICKS.map((t) => (
