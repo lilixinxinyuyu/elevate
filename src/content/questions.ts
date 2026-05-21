@@ -1919,6 +1919,7 @@ function makeVR(opts: {
   solution_steps: string[];
   hints?: Hint[];
   time?: number;
+  tags?: string[];
 }): Question {
   const correctOpt = opts.options.find((o) => o.correct);
   return {
@@ -1955,7 +1956,8 @@ function makeVR(opts: {
     ],
     feedback_correct: "你修好了这道竖式！",
     feedback_wrong: "再仔细看一下哪一步不对。",
-    tags: opts.vertLines,
+    // vertLines 是 VerticalRepair 组件读的数据通道(vert:/op:/result:)；额外 tags(如 exam)附在后面
+    tags: [...opts.vertLines, ...(opts.tags ?? [])],
   };
 }
 
@@ -3170,6 +3172,7 @@ const examFinalPackG4B3: Question[] = [
     truth: "F",
     solution_steps: ["方程是含有未知数的『等式』", "12 + 7X > 8 是不等式（用的是 >，不是等号）", "所以它不是方程"],
     hints: [{ text: "方程必须有等号 =", penalty: 1 }],
+    tags: [...EXAM_TAGS, "方程意义"],
   }),
   // U5 列方程·一步（已知和求加数）
   makeApp({
@@ -3276,6 +3279,7 @@ const examFinalPackG4B3: Question[] = [
       { id: "D", text: "13.01", correct: false, errorTag: "carry_error" },
     ],
     solution_steps: ["小数点对齐", "百分位 2+9=11，写 1 进 1；十分位 4+6+1=11，写 1 进 1；个位 5+7+1=13", "和是 13.11"],
+    tags: [...EXAM_TAGS, "竖式"],
   }),
   // U2 三角形内角和 + 分类（真题 Q19 型）
   makeChoice({
@@ -3650,6 +3654,7 @@ const examFinalPackG4B6: Question[] = [
       { id: "D", text: "72.9", correct: false, errorTag: "align_error" },
     ],
     solution_steps: ["把 90 看成 90.0，小数点对齐", "90.0 − 22.9 = 67.1"],
+    tags: [...EXAM_TAGS, "竖式"],
   }),
   // 列竖式·小数乘整十百（真题 计算Q2③）
   makeVR({
@@ -3670,6 +3675,7 @@ const examFinalPackG4B6: Question[] = [
       { id: "D", text: "1.4", correct: false, errorTag: "decimal_point_error" },
     ],
     solution_steps: ["35 × 400 = 14000", "0.35 有两位小数 → 14000 缩小到 1/100 = 140"],
+    tags: [...EXAM_TAGS, "竖式"],
   }),
   // 列竖式·小数乘小数（真题 计算Q2④）
   makeVR({
@@ -3690,6 +3696,7 @@ const examFinalPackG4B6: Question[] = [
       { id: "D", text: "1.85", correct: false, errorTag: "calc_error" },
     ],
     solution_steps: ["125 × 14 = 1750", "1.25 两位 + 1.4 一位 = 三位小数 → 1.750 = 1.75"],
+    tags: [...EXAM_TAGS, "竖式"],
   }),
   // 脱式简算·乘法分配律（真题 计算Q3②）
   makeSpeed({
@@ -4529,15 +4536,818 @@ const examFinalPackG4B10: Question[] = [
     examPriority: "HIGH_BIG",
     difficulty: 2,
     cognitive: "reasoning",
-    stem: "妈妈买菜花了 12.8 元和 7.6 元，大约一共花了多少元？（用估算）",
+    stem: "妈妈买菜花了 12.8 元和 7.6 元，用“四舍五入到个位”估算，大约一共花了多少元？",
     options: [
-      { id: "A", text: "大约 20 元（12.8≈13，7.6≈8，13+8=21，约 20 元）" },
+      { id: "A", text: "大约 21 元（12.8≈13，7.6≈8，13+8=21）" },
       { id: "B", text: "大约 30 元", errorTag: "estimate_error" },
       { id: "C", text: "大约 15 元", errorTag: "estimate_error" },
     ],
     correctId: "A",
-    solution_steps: ["12.8 ≈ 13，7.6 ≈ 8", "13 + 8 = 21，大约 20 元", "（精确值 12.8 + 7.6 = 20.4 元）"],
+    solution_steps: ["12.8 ≈ 13，7.6 ≈ 8（四舍五入到个位）", "13 + 8 = 21，大约 21 元", "（精确值 12.8 + 7.6 = 20.4 元）"],
     tags: [...EXAM_TAGS, "估算"],
+  }),
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B11 (v0.36.91, 数学出题 loop iter13)
+ * 覆盖度自评发现 U4 观察物体最薄(3 道)→补 3 道概念题平衡。tag from_test/exam/期末题。
+ * (本 iter 另确认 scheduler.buildMockExam 已对 from_test 加权 -1.0 + 每单元保底, 期末备考
+ *  中心确实优先抽 exam 题, 见 docs/math-exam-loop-state.md。)
+ * =========================================================================== */
+const examFinalPackG4B11: Question[] = [
+  makeChoice({
+    ...UNIT_OBS,
+    id: "G4B_exam_obs_4",
+    skillId: "observe_front_top_left",
+    skillName: "观察物体",
+    ability: ["spatial", "concept"],
+    examPriority: "HIGH_BIG",
+    difficulty: 3,
+    cognitive: "reasoning",
+    stem: "观察一个长方体，站在一个位置最多能同时看到它的几个面？",
+    options: [
+      { id: "A", text: "3 个面" },
+      { id: "B", text: "2 个面", errorTag: "spatial_error" },
+      { id: "C", text: "6 个面", errorTag: "spatial_error" },
+    ],
+    correctId: "A",
+    solution_steps: ["长方体有 6 个面", "站在一个角的位置看，最多能同时看到上面、前面、侧面这 3 个面", "看不到的是后面、下面和另一个侧面"],
+    tags: [...EXAM_TAGS, "观察物体"],
+  }),
+  makeTF({
+    ...UNIT_OBS,
+    id: "G4B_exam_obs_5",
+    skillId: "observe_front_top_left",
+    skillName: "观察物体",
+    ability: ["spatial", "concept"],
+    examPriority: "HIGH_BIG",
+    difficulty: 2,
+    stem: "把一个长方体横着放在桌上，从上面看到的形状是一个长方形。",
+    truth: "T",
+    solution_steps: ["长方体横放，上面那个面是长方形", "从上面往下看，看到的就是这个长方形"],
+    tags: [...EXAM_TAGS, "观察物体"],
+  }),
+  makeChoice({
+    ...UNIT_OBS,
+    id: "G4B_exam_obs_6",
+    skillId: "observe_front_top_left",
+    skillName: "观察物体",
+    ability: ["spatial", "reasoning"],
+    examPriority: "HIGH_BIG",
+    difficulty: 3,
+    cognitive: "reasoning",
+    stem: "用 4 个同样大小的小正方体摆成一个 2 个长、2 个宽、1 个高的长方体。从上面看到的形状是（ ）。",
+    options: [
+      { id: "A", text: "由 4 个小正方形组成的大正方形（2 行 2 列）" },
+      { id: "B", text: "一排 4 个小正方形", errorTag: "spatial_error" },
+      { id: "C", text: "一个小正方形", errorTag: "spatial_error" },
+    ],
+    correctId: "A",
+    solution_steps: ["2 长 × 2 宽 × 1 高，从上往下看", "看到的是 2 行 2 列共 4 个小正方形拼成的大正方形"],
+    tags: [...EXAM_TAGS, "观察物体"],
+  }),
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B12 (v0.36.92, 数学出题 loop iter14·维护期)
+ * 平衡 U6 平均数(偏薄)：求缺失数据/已知平均求某次成绩/平均数范围。
+ * (本 iter 另做质量回归: 14 道早期 exam 题过 4 模型复核全 OK。) tag from_test/exam/期末题。
+ * =========================================================================== */
+const examFinalPackG4B12: Question[] = [
+  // 平均数·求缺失的一个数（U6）
+  makeApp({
+    ...UNIT_DATA,
+    id: "G4B_exam_avg_miss_2",
+    skillId: "average_inverse_missing",
+    skillName: "平均数·求缺失数据",
+    ability: ["modeling", "data"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    stem: "5 个数的平均数是 8，其中 4 个数的和是 35。求第 5 个数。",
+    clues: ["5 个数的平均数是 8", "其中 4 个数的和是 35", "这些数都是整数"],
+    correctClueIdx: [0, 1],
+    relationshipChoices: [
+      { id: "A", text: "第 5 个数 = 5 个数的总和(8×5) − 前 4 个数的和(35)", correct: true },
+      { id: "B", text: "第 5 个数 = 8 − 35 ÷ 4", correct: false, errorTag: "relation_model_error" },
+      { id: "C", text: "第 5 个数 = 35 ÷ 4", correct: false, errorTag: "relation_model_error" },
+    ],
+    finalPrompt: "第 5 个数是多少？",
+    finalValue: 5,
+    finalUnit: "",
+    finalDistractors: [3, 8, 40],
+    expression: "8×5-35",
+    solution_steps: ["5 个数的总和：8 × 5 = 40", "第 5 个数：40 − 35 = 5"],
+    check: "(35 + 5) ÷ 5 = 8，正确",
+    tags: [...EXAM_TAGS, "平均数"],
+  }),
+  // 平均数·求需要达到的成绩（U6）
+  makeApp({
+    ...UNIT_DATA,
+    id: "G4B_exam_avg_need_1",
+    skillId: "average_inverse_missing",
+    skillName: "平均数·求某次成绩",
+    ability: ["modeling", "data"],
+    examPriority: "MUST_BIG",
+    difficulty: 4,
+    stem: "小明前 4 次数学测验的平均成绩是 90 分。第 5 次要考多少分，才能使 5 次的平均成绩达到 92 分？",
+    clues: ["前 4 次平均成绩 90 分", "要使 5 次平均成绩达到 92 分", "小明很努力"],
+    correctClueIdx: [0, 1],
+    relationshipChoices: [
+      { id: "A", text: "第 5 次成绩 = 5 次总分(92×5) − 前 4 次总分(90×4)", correct: true },
+      { id: "B", text: "第 5 次成绩 = 92 + 2", correct: false, errorTag: "relation_model_error" },
+      { id: "C", text: "第 5 次成绩 = 92 × 5 ÷ 4", correct: false, errorTag: "relation_model_error" },
+    ],
+    finalPrompt: "第 5 次要考多少分？",
+    finalValue: 100,
+    finalUnit: "分",
+    finalDistractors: [94, 98, 110],
+    expression: "92×5-90×4",
+    solution_steps: ["5 次总分：92 × 5 = 460 分", "前 4 次总分：90 × 4 = 360 分", "第 5 次：460 − 360 = 100 分"],
+    check: "(360 + 100) ÷ 5 = 92，正确",
+    tags: [...EXAM_TAGS, "平均数"],
+  }),
+  // 平均数·求一个数据使平均数为定值（U6）
+  makeSpeed({
+    ...UNIT_DATA,
+    id: "G4B_exam_avg_x_1",
+    skillId: "average_compute",
+    skillName: "平均数",
+    ability: ["data", "calculation"],
+    examPriority: "HIGH_BIG",
+    difficulty: 3,
+    stem: "12、15、18 和另一个数，这 4 个数的平均数是 15。另一个数是多少？",
+    value: 15,
+    distractors: [13, 16, 45],
+    hints: [{ text: "4 个数的总和 = 15 × 4 = 60", penalty: 1 }, { text: "再减去 12 + 15 + 18", penalty: 2 }],
+    tags: [...EXAM_TAGS, "平均数"],
+  }),
+  // 平均数·范围判断（U6）
+  makeChoice({
+    ...UNIT_DATA,
+    id: "G4B_exam_avg_range_2",
+    skillId: "average_meaning",
+    skillName: "平均数的意义",
+    ability: ["data", "reasoning"],
+    examPriority: "HIGH_BIG",
+    difficulty: 3,
+    cognitive: "reasoning",
+    stem: "一组数据中，最大的数是 20，最小的数是 8。这组数据的平均数（ ）。",
+    options: [
+      { id: "A", text: "一定在 8 和 20 之间" },
+      { id: "B", text: "可能是 5", errorTag: "average_range_error" },
+      { id: "C", text: "可能是 25", errorTag: "average_range_error" },
+    ],
+    correctId: "A",
+    solution_steps: ["平均数不会小于最小值，也不会大于最大值", "最小 8、最大 20", "所以平均数一定在 8 和 20 之间"],
+    tags: [...EXAM_TAGS, "平均数"],
+  }),
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B13 (v0.36.93, 数学出题 loop iter15·维护期)
+ * 加厚已验证可渲染的游戏玩法多样性：📊chart_detective 平均数 / 🃏memory_match 小数⇄分数·
+ * 元角分 / 🛝decimal_shifter 小数点移动。全真题考点。tag from_test/exam/期末题。
+ * =========================================================================== */
+const examFinalPackG4B13: Question[] = [
+  // 📊 求平均数
+  {
+    ...base, question_id: "G4B_exam_chart_3", term: "下册",
+    unit_id: "G4B_U6_DATA", unit_name: "数据的表示和分析",
+    skill_id: "average_compute", skill_name: "求平均数",
+    ability_dimension: ["data", "calculation"], exam_priority: "MUST_BIG",
+    game_type: "chart_detective", play_as: "chart_detective",
+    cognitive_level: "procedural", difficulty: 3, estimated_time_seconds: 45,
+    stem: "把虚线拖到 5 名同学跳远成绩的平均数位置（单位：厘米）：88、92、85、90、95。",
+    question_format: "numeric", answer: { type: "number", value: 90 },
+    solution_steps: ["总数：88+92+85+90+95 = 450", "450 ÷ 5 = 90"],
+    hints: [{ text: "总和 ÷ 5", penalty: 1 }],
+    common_errors: [{ tag: "average_formula_error", error: "漏加数据", remediation: "5 个都加上再除以 5。" }],
+    feedback_correct: "平均数定位准！", feedback_wrong: "5 个加起来除以 5 试试。",
+    tags: ["bars:88,92,85,90,95", "step:1", ...EXAM_TAGS, "平均数"],
+  },
+  // 📊 求平均数
+  {
+    ...base, question_id: "G4B_exam_chart_4", term: "下册",
+    unit_id: "G4B_U6_DATA", unit_name: "数据的表示和分析",
+    skill_id: "average_compute", skill_name: "求平均数",
+    ability_dimension: ["data", "calculation"], exam_priority: "HIGH_BIG",
+    game_type: "chart_detective", play_as: "chart_detective",
+    cognitive_level: "procedural", difficulty: 2, estimated_time_seconds: 40,
+    stem: "把虚线拖到 5 天卖出冰淇淋数量的平均数位置（单位：个）：30、40、35、45、50。",
+    question_format: "numeric", answer: { type: "number", value: 40 },
+    solution_steps: ["总数：30+40+35+45+50 = 200", "200 ÷ 5 = 40"],
+    hints: [{ text: "总和 ÷ 5", penalty: 1 }],
+    common_errors: [{ tag: "average_formula_error", error: "漏加数据", remediation: "把 5 天都加上。" }],
+    feedback_correct: "对！平均每天 40 个。", feedback_wrong: "200 ÷ 5 = ?",
+    tags: ["bars:30,40,35,45,50", "step:1", ...EXAM_TAGS, "平均数"],
+  },
+  // 🃏 小数 ⇄ 分数 配对
+  {
+    ...base, question_id: "G4B_exam_memory_3", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_meaning_place", skill_name: "小数与分数",
+    ability_dimension: ["concept"], exam_priority: "HIGH_BIG",
+    game_type: "memory_match", play_as: "memory_match",
+    cognitive_level: "recall", difficulty: 2, estimated_time_seconds: 40,
+    stem: "把相等的小数和分数配对：",
+    question_format: "numeric", answer: { type: "number", value: 1 },
+    solution_steps: ["0.1 = 1/10", "0.3 = 3/10", "0.7 = 7/10", "0.9 = 9/10"],
+    hints: [{ text: "一位小数 = 十分之几", penalty: 1 }],
+    common_errors: [{ tag: "place_value_error", error: "分母用错", remediation: "一位小数的分母是 10。" }],
+    feedback_correct: "全部配对成功！", feedback_wrong: "一位小数都是十分之几。",
+    tags: ["pair:0.1|1/10", "pair:0.3|3/10", "pair:0.7|7/10", "pair:0.9|9/10", ...EXAM_TAGS, "小数意义"],
+  },
+  // 🃏 元角分 配对
+  {
+    ...base, question_id: "G4B_exam_memory_4", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_unit_conversion", skill_name: "元角分换算",
+    ability_dimension: ["concept", "calculation"], exam_priority: "HIGH_BIG",
+    game_type: "memory_match", play_as: "memory_match",
+    cognitive_level: "procedural", difficulty: 2, estimated_time_seconds: 40,
+    stem: "把相等的金额配对（元 ↔ 元角分）：",
+    question_format: "numeric", answer: { type: "number", value: 1 },
+    solution_steps: ["1.5 元 = 1 元 5 角", "3.2 元 = 3 元 2 角", "0.8 元 = 8 角", "2.05 元 = 2 元 5 分"],
+    hints: [{ text: "1 元 = 10 角，1 角 = 10 分", penalty: 1 }],
+    common_errors: [{ tag: "unit_conversion_error", error: "角和分混淆", remediation: "十分位是角，百分位是分。" }],
+    feedback_correct: "换算很准！", feedback_wrong: "十分位表示角，百分位表示分。",
+    tags: ["pair:1.5 元|1 元 5 角", "pair:3.2 元|3 元 2 角", "pair:0.8 元|8 角", "pair:2.05 元|2 元 5 分", ...EXAM_TAGS, "单位换算"],
+  },
+  // 🛝 小数点移动·扩大10倍
+  {
+    ...base, question_id: "G4B_exam_shift_5", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_point_shift", skill_name: "小数点移动",
+    ability_dimension: ["concept", "calculation"], exam_priority: "MUST_BIG",
+    game_type: "decimal_shifter", play_as: "decimal_shifter",
+    cognitive_level: "procedural", difficulty: 2, estimated_time_seconds: 25,
+    stem: "把 2.5 扩大到原来的 10 倍，小数点向右移动，结果是多少？",
+    question_format: "numeric", answer: { type: "number", value: 25 },
+    solution_steps: ["扩大 10 倍，小数点向右移 1 位", "2.5 → 25"],
+    hints: [{ text: "扩大 10 倍 = 右移 1 位", penalty: 1 }],
+    common_errors: [{ tag: "shift_count_error", error: "移错位数", remediation: "10 倍移 1 位。" }],
+    feedback_correct: "对！2.5 → 25。", feedback_wrong: "扩大 10 倍向右移 1 位。",
+    tags: ["start:2.5", "shift:right:1", "factor:×10", ...EXAM_TAGS, "小数点移动"],
+  },
+  // 🛝 小数点移动·扩大100倍补0
+  {
+    ...base, question_id: "G4B_exam_shift_6", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_point_shift", skill_name: "小数点移动",
+    ability_dimension: ["concept", "calculation"], exam_priority: "MUST_BIG",
+    game_type: "decimal_shifter", play_as: "decimal_shifter",
+    cognitive_level: "procedural", difficulty: 3, estimated_time_seconds: 25,
+    stem: "把 0.08 扩大到原来的 100 倍，小数点向右移动，结果是多少？",
+    question_format: "numeric", answer: { type: "number", value: 8 },
+    solution_steps: ["扩大 100 倍，小数点向右移 2 位", "0.08 → 8"],
+    hints: [{ text: "扩大 100 倍 = 右移 2 位", penalty: 1 }],
+    common_errors: [{ tag: "shift_count_error", error: "只移 1 位", remediation: "100 倍移 2 位。" }],
+    feedback_correct: "对！0.08 → 8。", feedback_wrong: "100 倍向右移 2 位。",
+    tags: ["start:0.08", "shift:right:2", "factor:×100", ...EXAM_TAGS, "小数点移动"],
+  },
+  // 🛝 小数点移动·缩小到1/100
+  {
+    ...base, question_id: "G4B_exam_shift_7", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_point_shift", skill_name: "小数点移动",
+    ability_dimension: ["concept", "calculation"], exam_priority: "MUST_BIG",
+    game_type: "decimal_shifter", play_as: "decimal_shifter",
+    cognitive_level: "procedural", difficulty: 3, estimated_time_seconds: 25,
+    stem: "把 35 缩小到原来的 1/100，小数点向左移动，结果是多少？",
+    question_format: "numeric", answer: { type: "number", value: 0.35 },
+    solution_steps: ["缩小到 1/100，小数点向左移 2 位", "35 → 0.35"],
+    hints: [{ text: "缩小到 1/100 = 左移 2 位", penalty: 1 }],
+    common_errors: [{ tag: "shift_direction_error", error: "方向或位数错", remediation: "缩小向左移，1/100 移 2 位。" }],
+    feedback_correct: "对！35 → 0.35。", feedback_wrong: "缩小到 1/100，向左移 2 位。",
+    tags: ["start:35", "shift:left:2", "factor:÷100", ...EXAM_TAGS, "小数点移动"],
+  },
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B14 (v0.36.94, 数学出题 loop iter16)
+ * 🎮 激活 💸折扣漂移 discount_drift (之前未激活)。折扣=小数乘法/小数点移动应用。
+ * discount 字段类型由 DiscountSpec(core/types.ts) typecheck 强校验; 组件无 spec 时降级
+ * plain_choice → 安全。options.text = 折后价数字(显示为 ¥text), answer=正确 option id。
+ * tag from_test/exam/期末题。
+ * =========================================================================== */
+const examFinalPackG4B14: Question[] = [
+  {
+    ...base, question_id: "G4B_exam_discount_1", term: "下册",
+    unit_id: "G4B_U3_DECIMAL_MULTIPLY", unit_name: "小数乘法",
+    skill_id: "decimal_price_quantity", skill_name: "折扣应用",
+    ability_dimension: ["modeling", "calculation"], exam_priority: "HIGH_BIG",
+    game_type: "discount_drift", play_as: "discount_drift",
+    cognitive_level: "application", difficulty: 3, estimated_time_seconds: 30,
+    stem: "一件衣服原价 100 元，打 8 折出售。现价是多少元？（8 折就是按原价的 0.8 计算）",
+    question_format: "single_choice",
+    options: [
+      { id: "a", text: "80" },
+      { id: "b", text: "20", errorTag: "discount_rate_confuse" },
+      { id: "c", text: "12.5", errorTag: "wrong_operation" },
+      { id: "d", text: "92", errorTag: "yuan_off_confuse" },
+    ],
+    answer: { type: "choice", value: "a" },
+    discount: { itemName: "外套", emoji: "🧥", originalPrice: 100, discount: { kind: "percent", value: 80 } },
+    solution_steps: ["8 折 = 按原价的 0.8 算", "100 × 0.8 = 80 元"],
+    hints: [{ text: "8 折 = ×0.8", penalty: 1 }],
+    common_errors: [{ tag: "discount_rate_confuse", error: "把 8 折当成 0.2", remediation: "8 折是付 80%，×0.8。" }],
+    feedback_correct: "对！100 × 0.8 = 80 元。", feedback_wrong: "8 折是按 0.8 算：100 × 0.8。",
+    tags: [...EXAM_TAGS, "折扣", "小数乘法"],
+  },
+  {
+    ...base, question_id: "G4B_exam_discount_2", term: "下册",
+    unit_id: "G4B_U3_DECIMAL_MULTIPLY", unit_name: "小数乘法",
+    skill_id: "decimal_price_quantity", skill_name: "折扣应用",
+    ability_dimension: ["modeling", "calculation"], exam_priority: "HIGH_BIG",
+    game_type: "discount_drift", play_as: "discount_drift",
+    cognitive_level: "application", difficulty: 3, estimated_time_seconds: 30,
+    stem: "一个书包原价 50 元，打 9 折出售。现价是多少元？（9 折按原价的 0.9 计算）",
+    question_format: "single_choice",
+    options: [
+      { id: "a", text: "45" },
+      { id: "b", text: "5", errorTag: "discount_rate_confuse" },
+      { id: "c", text: "41", errorTag: "yuan_off_confuse" },
+      { id: "d", text: "55", errorTag: "wrong_operation" },
+    ],
+    answer: { type: "choice", value: "a" },
+    discount: { itemName: "书包", emoji: "🎒", originalPrice: 50, discount: { kind: "percent", value: 90 } },
+    solution_steps: ["9 折 = 按原价的 0.9 算", "50 × 0.9 = 45 元"],
+    hints: [{ text: "9 折 = ×0.9", penalty: 1 }],
+    common_errors: [{ tag: "yuan_off_confuse", error: "把 9 折当成减 9 元", remediation: "9 折是 ×0.9，不是减 9 元。" }],
+    feedback_correct: "对！50 × 0.9 = 45 元。", feedback_wrong: "9 折是按 0.9 算：50 × 0.9。",
+    tags: [...EXAM_TAGS, "折扣", "小数乘法"],
+  },
+  {
+    ...base, question_id: "G4B_exam_discount_3", term: "下册",
+    unit_id: "G4B_U3_DECIMAL_MULTIPLY", unit_name: "小数乘法",
+    skill_id: "decimal_price_quantity", skill_name: "折扣应用",
+    ability_dimension: ["modeling", "calculation"], exam_priority: "HIGH_BIG",
+    game_type: "discount_drift", play_as: "discount_drift",
+    cognitive_level: "application", difficulty: 2, estimated_time_seconds: 25,
+    stem: "一个玩具原价 80 元，打 5 折（半价，按原价的 0.5 计算）出售。现价是多少元？",
+    question_format: "single_choice",
+    options: [
+      { id: "a", text: "40" },
+      { id: "b", text: "16", errorTag: "discount_rate_confuse" },
+      { id: "c", text: "75", errorTag: "yuan_off_confuse" },
+      { id: "d", text: "30", errorTag: "calc_error" },
+    ],
+    answer: { type: "choice", value: "a" },
+    discount: { itemName: "玩具", emoji: "🧸", originalPrice: 80, discount: { kind: "percent", value: 50 } },
+    solution_steps: ["5 折（半价）= 按原价的 0.5 算", "80 × 0.5 = 40 元"],
+    hints: [{ text: "5 折就是半价，×0.5", penalty: 1 }],
+    common_errors: [{ tag: "discount_rate_confuse", error: "把 5 折当成 ×0.2", remediation: "5 折 = 半价 = ×0.5。" }],
+    feedback_correct: "对！80 × 0.5 = 40 元。", feedback_wrong: "5 折是半价：80 × 0.5 = 40。",
+    tags: [...EXAM_TAGS, "折扣", "小数乘法"],
+  },
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B15 (v0.36.96, 数学出题 loop iter17)
+ * 🎮 激活 🪙凑钱挑战 coin_combo (之前未激活)。凑钱=元角分/小数加法。coin_combo 字段
+ * (CoinComboSpec) typecheck 强校验; 组件按 correctIndices 自判, 每题的目标组合已验证唯一
+ * (不存在另一种子集也凑到 target, 避免误判正确组合)。tag from_test/exam/期末题。
+ * =========================================================================== */
+const examFinalPackG4B15: Question[] = [
+  {
+    ...base, question_id: "G4B_exam_coin_1", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_add_sub_vertical", skill_name: "元角分·小数加法",
+    ability_dimension: ["modeling", "calculation"], exam_priority: "HIGH_BIG",
+    game_type: "coin_combo", play_as: "coin_combo",
+    cognitive_level: "application", difficulty: 3, estimated_time_seconds: 35,
+    stem: "买一支 3.5 元的笔，点选下面的钱正好凑出 3.5 元。",
+    question_format: "numeric", answer: { type: "number", value: 3.5 },
+    coin_combo: { coins: [5, 0.5, 1, 0.1, 2], target: 3.5, correctIndices: [1, 2, 4] },
+    solution_steps: ["0.5 + 1 + 2 = 3.5 元", "选 0.5 元、1 元、2 元三张正好凑出 3.5 元"],
+    hints: [{ text: "先找大面值，再用小面值补足", penalty: 1 }],
+    common_errors: [{ tag: "coin_mismatch", error: "凑多或凑少", remediation: "把选中的金额加起来核对是否等于 3.5。" }],
+    feedback_correct: "凑对了！0.5+1+2=3.5 元。", feedback_wrong: "再加一加：要正好等于 3.5 元。",
+    tags: [...EXAM_TAGS, "凑钱", "小数加法"],
+  },
+  {
+    ...base, question_id: "G4B_exam_coin_2", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_add_sub_vertical", skill_name: "元角分·小数加法",
+    ability_dimension: ["modeling", "calculation"], exam_priority: "HIGH_BIG",
+    game_type: "coin_combo", play_as: "coin_combo",
+    cognitive_level: "application", difficulty: 3, estimated_time_seconds: 35,
+    stem: "点选下面的钱正好凑出 1.6 元。",
+    question_format: "numeric", answer: { type: "number", value: 1.6 },
+    coin_combo: { coins: [1, 5, 0.5, 2, 0.1], target: 1.6, correctIndices: [0, 2, 4] },
+    solution_steps: ["1 + 0.5 + 0.1 = 1.6 元", "选 1 元、0.5 元、0.1 元正好凑出 1.6 元"],
+    hints: [{ text: "1.6 元 = 1 元 6 角，想想 6 角怎么凑", penalty: 1 }],
+    common_errors: [{ tag: "coin_mismatch", error: "角的部分凑错", remediation: "6 角 = 5 角 + 1 角。" }],
+    feedback_correct: "凑对了！1+0.5+0.1=1.6 元。", feedback_wrong: "1.6 元里有 1 元和 6 角，再试试。",
+    tags: [...EXAM_TAGS, "凑钱", "小数加法"],
+  },
+  {
+    ...base, question_id: "G4B_exam_coin_3", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_add_sub_vertical", skill_name: "元角分·小数加法",
+    ability_dimension: ["modeling", "calculation"], exam_priority: "HIGH_BIG",
+    game_type: "coin_combo", play_as: "coin_combo",
+    cognitive_level: "application", difficulty: 3, estimated_time_seconds: 35,
+    stem: "买一个 7.5 元的笔记本，点选下面的钱正好凑出 7.5 元。",
+    question_format: "numeric", answer: { type: "number", value: 7.5 },
+    coin_combo: { coins: [10, 0.5, 1, 5, 2], target: 7.5, correctIndices: [1, 3, 4] },
+    solution_steps: ["0.5 + 5 + 2 = 7.5 元", "选 0.5 元、5 元、2 元正好凑出 7.5 元"],
+    hints: [{ text: "先用大面值 5 元，再补 2.5 元", penalty: 1 }],
+    common_errors: [{ tag: "coin_mismatch", error: "用了 10 元就超了", remediation: "10 元比 7.5 元大，不能用。" }],
+    feedback_correct: "凑对了！5+2+0.5=7.5 元。", feedback_wrong: "10 元太大，用 5+2+0.5 试试。",
+    tags: [...EXAM_TAGS, "凑钱", "小数加法"],
+  },
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B16 (v0.36.97, 数学出题 loop iter18)
+ * 🎮 激活 🧩方程拼装 equation_builder。本质=拼"可求值的综合算式"(组件 slot 数字、check 求值
+ * 比对; 用 tryEvaluateExpression 验, 支持 +−×÷()小数)。故用于 综合算式 而非含未知数的方程。
+ * 数据走 word_problem_steps.equation_or_expression(组件 deriveEquationSpec 的 fallback 路径)
+ * + answer numeric。play_as=equation_builder。tag from_test/exam/期末题。
+ * =========================================================================== */
+const eqBuildBase = {
+  ...base, term: "下册" as const,
+  unit_id: "G4B_U3_DECIMAL_MULTIPLY", unit_name: "小数乘法",
+  ability_dimension: ["modeling", "calculation"] as AbilityId[],
+  exam_priority: "HIGH_BIG" as ExamPriority,
+  game_type: "equation_balance", play_as: "equation_builder" as GameTemplate,
+  cognitive_level: "application" as const, question_format: "numeric" as const,
+};
+const examFinalPackG4B16: Question[] = [
+  {
+    ...eqBuildBase, question_id: "G4B_exam_eqbuild_1",
+    skill_id: "decimal_price_quantity", skill_name: "拼算式·总价",
+    difficulty: 2, estimated_time_seconds: 35,
+    stem: "苹果每千克 6.5 元，买 3.2 千克。用数字卡片拼出求总价的算式。",
+    answer: { type: "number", value: 20.8 },
+    word_problem_steps: { known: ["苹果每千克 6.5 元", "买 3.2 千克"], question: "一共多少元？", relationship: "总价 = 单价 × 数量", equation_or_expression: "6.5*3.2", check: "6.5×3.2=20.8" },
+    solution_steps: ["总价 = 单价 × 数量", "6.5 × 3.2 = 20.8 元"],
+    hints: [{ text: "总价 = 单价 × 数量", penalty: 1 }],
+    common_errors: [{ tag: "relation_model_error", error: "数字放错位置", remediation: "单价 × 数量。" }],
+    feedback_correct: "算式拼对了！6.5 × 3.2。", feedback_wrong: "总价 = 单价 × 数量，再拼一次。",
+    tags: [...EXAM_TAGS, "方程拼装", "小数乘法"],
+  },
+  {
+    ...eqBuildBase, question_id: "G4B_exam_eqbuild_2",
+    skill_id: "decimal_speed_distance", skill_name: "拼算式·路程",
+    difficulty: 2, estimated_time_seconds: 35,
+    stem: "一辆汽车每小时行 65.5 千米，行了 4 小时。用数字卡片拼出求路程的算式。",
+    answer: { type: "number", value: 262 },
+    word_problem_steps: { known: ["每小时行 65.5 千米", "行了 4 小时"], question: "一共行多少千米？", relationship: "路程 = 速度 × 时间", equation_or_expression: "65.5*4", check: "65.5×4=262" },
+    solution_steps: ["路程 = 速度 × 时间", "65.5 × 4 = 262 千米"],
+    hints: [{ text: "路程 = 速度 × 时间", penalty: 1 }],
+    common_errors: [{ tag: "relation_model_error", error: "数字放错", remediation: "速度 × 时间。" }],
+    feedback_correct: "算式拼对了！65.5 × 4。", feedback_wrong: "路程 = 速度 × 时间。",
+    tags: [...EXAM_TAGS, "方程拼装", "小数乘法"],
+  },
+  {
+    ...eqBuildBase, question_id: "G4B_exam_eqbuild_3",
+    skill_id: "decimal_mul_mix", skill_name: "拼算式·综合",
+    difficulty: 4, estimated_time_seconds: 50,
+    stem: "买 8 个篮球（每个 45.5 元）和 6 个足球（每个 38 元）。用数字卡片拼出求总价的算式。",
+    answer: { type: "number", value: 592 },
+    word_problem_steps: { known: ["篮球每个 45.5 元，买 8 个", "足球每个 38 元，买 6 个"], question: "一共多少元？", relationship: "总价 = 篮球单价 × 数量 + 足球单价 × 数量", equation_or_expression: "45.5*8+38*6", check: "364+228=592" },
+    solution_steps: ["篮球：45.5 × 8 = 364 元", "足球：38 × 6 = 228 元", "合计：364 + 228 = 592 元"],
+    hints: [{ text: "两种球分别 单价 × 数量，再相加", penalty: 1 }],
+    common_errors: [{ tag: "relation_model_error", error: "把单价或数量混用", remediation: "篮球单价配篮球数量。" }],
+    feedback_correct: "综合算式拼对了！45.5×8+38×6。", feedback_wrong: "分别算两种球再相加。",
+    tags: [...EXAM_TAGS, "方程拼装", "小数乘法"],
+  },
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B17 (v0.36.98, 数学出题 loop iter19)
+ * 🎮 激活 💎数字寻宝 number_hunt。5×5 网格挑出符合条件的数(小数比较 / 数位)。
+ * number_hunt 字段(NumberHuntSpec grid[25]/rule/targetIndices)typecheck 校验; 组件按
+ * targetIndices 自判。每格已逐一核对。tag from_test/exam/期末题。
+ * =========================================================================== */
+const examFinalPackG4B17: Question[] = [
+  {
+    ...base, question_id: "G4B_exam_hunt_1", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_compare", skill_name: "小数大小比较",
+    ability_dimension: ["concept", "reasoning"], exam_priority: "HIGH_BIG",
+    game_type: "number_hunt", play_as: "number_hunt",
+    cognitive_level: "reasoning", difficulty: 3, estimated_time_seconds: 45,
+    stem: "在下面的数中，找出所有大于 1 的小数（点选出来）。",
+    question_format: "numeric", answer: { type: "number", value: 6 },
+    number_hunt: {
+      grid: [
+        0.5, 0.8, 1.2, 0.3, 0.9,
+        0.7, 0.4, 0.6, 2.5, 0.2,
+        1.5, 0.1, 0.95, 1.4, 0.75,
+        0.35, 3.2, 0.55, 0.85, 0.65,
+        0.25, 1.8, 0.15, 0.99, 0.05,
+      ],
+      rule: "找出所有大于 1 的小数",
+      targetIndices: [2, 8, 10, 13, 16, 21],
+    },
+    solution_steps: ["大于 1 的数：1.2、2.5、1.5、1.4、3.2、1.8", "注意 0.95、0.99 都小于 1，不能选"],
+    hints: [{ text: "整数部分大于等于 1 且不等于 1 的；只看是不是比 1 大", penalty: 1 }],
+    common_errors: [{ tag: "compare_error", error: "把 0.95、0.99 当成大于 1", remediation: "0.95、0.99 都比 1 小。" }],
+    feedback_correct: "全找对了！6 个大于 1 的小数。", feedback_wrong: "再看一遍，0.9 几的都比 1 小。",
+    tags: [...EXAM_TAGS, "小数比较"],
+  },
+  {
+    ...base, question_id: "G4B_exam_hunt_2", term: "下册",
+    unit_id: "G4B_U1_DECIMAL_ADD_SUB", unit_name: "小数的意义和加减法",
+    skill_id: "decimal_meaning_place", skill_name: "数位意义",
+    ability_dimension: ["concept"], exam_priority: "HIGH_BIG",
+    game_type: "number_hunt", play_as: "number_hunt",
+    cognitive_level: "reasoning", difficulty: 3, estimated_time_seconds: 45,
+    stem: "在下面的数中，找出所有十分位上是 5 的小数（点选出来）。",
+    question_format: "numeric", answer: { type: "number", value: 6 },
+    number_hunt: {
+      grid: [
+        2.5, 0.3, 1.8, 0.52, 4.2,
+        0.7, 3.5, 0.9, 1.2, 0.58,
+        6.1, 0.4, 2.56, 0.8, 1.1,
+        0.6, 7.51, 0.2, 3.3, 0.95,
+        1.4, 0.85, 5.0, 0.1, 2.2,
+      ],
+      rule: "找出所有十分位上是 5 的小数",
+      targetIndices: [0, 3, 6, 9, 12, 16],
+    },
+    solution_steps: ["十分位 = 小数点后第一位", "十分位是 5 的：2.5、0.52、3.5、0.58、2.56、7.51", "注意 5.0 的十分位是 0，0.85 的十分位是 8，不能选"],
+    hints: [{ text: "十分位是小数点后第一位数字", penalty: 1 }],
+    common_errors: [{ tag: "place_value_error", error: "把整数部分是 5 的（5.0）也选了", remediation: "看的是十分位，不是整数部分。" }],
+    feedback_correct: "全找对了！6 个十分位是 5 的小数。", feedback_wrong: "十分位是小数点后第一位，再找找。",
+    tags: [...EXAM_TAGS, "小数意义"],
+  },
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B18 (v0.36.99, 数学出题 loop iter21)
+ * 补 U2 真实缺口: 四边形(平行四边形/梯形)——之前只覆盖三角形, 四边形是 U2"认识三角形和
+ * 四边形"核心考点(真题2024有梯形/平行四边形题)。新建 G4B skill quadrilateral_classify。
+ * tag from_test/exam/期末题。
+ * =========================================================================== */
+const examFinalPackG4B18: Question[] = [
+  makeChoice({
+    ...UNIT_TRI,
+    id: "G4B_exam_quad_1",
+    skillId: "quadrilateral_classify",
+    skillName: "四边形分类",
+    ability: ["concept", "spatial"],
+    examPriority: "HIGH_BIG",
+    difficulty: 2,
+    stem: "只有一组对边平行的四边形叫做（ ）。",
+    options: [
+      { id: "A", text: "梯形" },
+      { id: "B", text: "平行四边形", errorTag: "concept_confuse" },
+      { id: "C", text: "长方形", errorTag: "concept_confuse" },
+    ],
+    correctId: "A",
+    solution_steps: ["只有一组对边平行 → 梯形", "两组对边都平行才是平行四边形"],
+    tags: [...EXAM_TAGS, "四边形"],
+  }),
+  makeChoice({
+    ...UNIT_TRI,
+    id: "G4B_exam_quad_2",
+    skillId: "quadrilateral_classify",
+    skillName: "四边形特征",
+    ability: ["concept", "spatial"],
+    examPriority: "HIGH_BIG",
+    difficulty: 2,
+    stem: "两组对边分别平行的四边形是（ ）。",
+    options: [
+      { id: "A", text: "平行四边形" },
+      { id: "B", text: "梯形", errorTag: "concept_confuse" },
+      { id: "C", text: "三角形", errorTag: "concept_confuse" },
+    ],
+    correctId: "A",
+    solution_steps: ["两组对边分别平行 → 平行四边形", "长方形、正方形都是特殊的平行四边形"],
+    tags: [...EXAM_TAGS, "四边形"],
+  }),
+  makeTF({
+    ...UNIT_TRI,
+    id: "G4B_exam_quad_3",
+    skillId: "quadrilateral_classify",
+    skillName: "四边形从属关系",
+    ability: ["concept", "spatial"],
+    examPriority: "HIGH_BIG",
+    difficulty: 3,
+    stem: "长方形是一种特殊的平行四边形。",
+    truth: "T",
+    solution_steps: ["长方形两组对边分别平行，符合平行四边形的特征", "它是有一个角是直角的特殊平行四边形，所以是特殊的平行四边形"],
+    tags: [...EXAM_TAGS, "四边形"],
+  }),
+  makeTF({
+    ...UNIT_TRI,
+    id: "G4B_exam_quad_4",
+    skillId: "quadrilateral_classify",
+    skillName: "梯形与平行四边形关系",
+    ability: ["concept", "spatial"],
+    examPriority: "HIGH_BIG",
+    difficulty: 3,
+    stem: "梯形也是一种平行四边形。",
+    truth: "F",
+    solution_steps: ["梯形只有一组对边平行", "平行四边形两组对边都平行", "两者是并列关系，梯形不是平行四边形"],
+    hints: [{ text: "梯形只有一组对边平行", penalty: 1 }],
+    tags: [...EXAM_TAGS, "四边形"],
+  }),
+  makeTF({
+    ...UNIT_TRI,
+    id: "G4B_exam_quad_5",
+    skillId: "quadrilateral_classify",
+    skillName: "平行四边形特性",
+    ability: ["concept", "spatial"],
+    examPriority: "HIGH_BIG",
+    difficulty: 2,
+    stem: "平行四边形容易变形，三角形具有稳定性。",
+    truth: "T",
+    solution_steps: ["平行四边形拉一拉会变形（不稳定），生活中的伸缩门用了这个特性", "三角形不易变形（稳定），所以自行车架、电线杆支架做成三角形"],
+    tags: [...EXAM_TAGS, "四边形", "三角形"],
+  }),
+  makeChoice({
+    ...UNIT_TRI,
+    id: "G4B_exam_quad_6",
+    skillId: "quadrilateral_classify",
+    skillName: "四边形内角和",
+    ability: ["concept", "calculation"],
+    examPriority: "HIGH_BIG",
+    difficulty: 3,
+    cognitive: "reasoning",
+    stem: "任意一个四边形，它的四个内角的和是（ ）。",
+    options: [
+      { id: "A", text: "360°" },
+      { id: "B", text: "180°", errorTag: "angle_sum_error" },
+      { id: "C", text: "720°", errorTag: "angle_sum_error" },
+    ],
+    correctId: "A",
+    solution_steps: ["一个四边形可以分成 2 个三角形", "每个三角形内角和 180°", "所以四边形内角和 = 180° × 2 = 360°"],
+    tags: [...EXAM_TAGS, "四边形", "内角和"],
+  }),
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B19 (v0.36.100, 数学出题 loop iter22)
+ * 补覆盖缺口(逐 skill 审计发现): equation_meaning_balance 方程的意义(0 exam→补)。
+ * 另: 本 iter 修了 makeVR 的 tags bug(之前 tags=vertLines 把 exam tag 冲掉) + 给 4 道竖式
+ * exam 题、eqdef 补上 exam tag。tag from_test/exam/期末题。
+ * =========================================================================== */
+const examFinalPackG4B19: Question[] = [
+  makeTF({
+    ...UNIT_EQ,
+    id: "G4B_exam_eqdef_2",
+    skillId: "equation_meaning_balance",
+    skillName: "方程的意义",
+    ability: ["concept"],
+    examPriority: "MUST_BIG",
+    difficulty: 2,
+    stem: "含有未知数的等式叫做方程。",
+    truth: "T",
+    solution_steps: ["方程必须满足两个条件：① 是等式（有等号）② 含有未知数", "“含有未知数的等式”正是方程的定义"],
+    tags: [...EXAM_TAGS, "方程意义"],
+  }),
+  makeChoice({
+    ...UNIT_EQ,
+    id: "G4B_exam_eqdef_3",
+    skillId: "equation_meaning_balance",
+    skillName: "方程的意义",
+    ability: ["concept", "reasoning"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    cognitive: "reasoning",
+    stem: "下面各式中，是方程的是（ ）。",
+    options: [
+      { id: "A", text: "3x + 5 = 20" },
+      { id: "B", text: "8 − 3 = 5", errorTag: "no_unknown" },
+      { id: "C", text: "2x − 1 > 7", errorTag: "not_equation_sign" },
+    ],
+    correctId: "A",
+    solution_steps: ["方程 = 含未知数 + 等式", "B 没有未知数（只是算式）", "C 用的是“>”不是等号（是不等式）", "只有 A 既含未知数 x，又有等号，是方程"],
+    tags: [...EXAM_TAGS, "方程意义"],
+  }),
+  makeChoice({
+    ...UNIT_EQ,
+    id: "G4B_exam_eqdef_4",
+    skillId: "equation_meaning_balance",
+    skillName: "方程与等式关系",
+    ability: ["concept", "reasoning"],
+    examPriority: "HIGH_BIG",
+    difficulty: 3,
+    cognitive: "reasoning",
+    stem: "关于方程和等式，下面说法正确的是（ ）。",
+    options: [
+      { id: "A", text: "方程一定是等式，等式不一定是方程" },
+      { id: "B", text: "等式一定是方程", errorTag: "concept_confuse" },
+      { id: "C", text: "方程不是等式", errorTag: "concept_confuse" },
+    ],
+    correctId: "A",
+    solution_steps: ["方程是“含未知数的等式”，所以方程一定是等式", "但等式不一定含未知数（如 3+2=5 是等式不是方程）", "所以方程一定是等式，等式不一定是方程"],
+    tags: [...EXAM_TAGS, "方程意义"],
+  }),
+];
+
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B20 (v0.36.101, 数学出题 loop iter23)
+ * 均衡薄 skill(逐 skill 审计 ⚠️1 的)：三角形内角和应用/小数乘加混合/工作总量/两步方程/
+ * 已知平均求总和。各 +1。tag from_test/exam/期末题。
+ * =========================================================================== */
+const examFinalPackG4B20: Question[] = [
+  // 三角形内角和应用（等腰三角形求底角，U2）
+  makeChoice({
+    ...UNIT_TRI,
+    id: "G4B_exam_angsum_2",
+    skillId: "triangle_angle_sum",
+    skillName: "三角形内角和应用",
+    ability: ["calculation", "spatial"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    cognitive: "reasoning",
+    stem: "一个等腰三角形的顶角是 100°，它的一个底角是多少度？",
+    options: [
+      { id: "A", text: "40°" },
+      { id: "B", text: "80°", errorTag: "angle_calc_error" },
+      { id: "C", text: "50°", errorTag: "forgot_two_base" },
+    ],
+    correctId: "A",
+    solution_steps: ["等腰三角形两个底角相等", "两底角之和 = 180° − 100° = 80°", "每个底角 = 80° ÷ 2 = 40°"],
+    tags: [...EXAM_TAGS, "三角形", "内角和"],
+  }),
+  // 小数乘加混合（U3）
+  makeSpeed({
+    ...UNIT_DMUL,
+    id: "G4B_exam_mulmix_1",
+    skillId: "decimal_mul_mix",
+    skillName: "小数乘加混合",
+    ability: ["calculation"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    stem: "计算：4.5 × 3 − 2.5 = ？（先算乘法）",
+    value: 11,
+    distractors: [13.5, 16, 9.5],
+    hints: [{ text: "先算 4.5 × 3 = 13.5，再减 2.5", penalty: 1 }],
+    tags: [...EXAM_TAGS, "小数乘法"],
+  }),
+  // 工作总量应用（U3）
+  makeApp({
+    ...UNIT_DMUL,
+    id: "G4B_exam_work_1",
+    skillId: "decimal_work_total",
+    skillName: "工作总量",
+    ability: ["modeling", "calculation"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    stem: "一台机器每小时加工 12.5 个零件，工作了 6 小时。",
+    clues: ["每小时加工 12.5 个零件", "工作了 6 小时", "机器是新的"],
+    correctClueIdx: [0, 1],
+    relationshipChoices: [
+      { id: "A", text: "工作总量 = 每小时加工数 × 工作时间", correct: true },
+      { id: "B", text: "工作总量 = 每小时加工数 ÷ 工作时间", correct: false, errorTag: "relation_model_error" },
+      { id: "C", text: "工作总量 = 每小时加工数 + 工作时间", correct: false, errorTag: "relation_model_error" },
+    ],
+    finalPrompt: "一共加工多少个零件？",
+    finalValue: 75,
+    finalUnit: "个",
+    finalDistractors: [18.5, 750, 2],
+    expression: "12.5*6",
+    solution_steps: ["工作总量 = 每小时加工数 × 时间", "12.5 × 6 = 75 个"],
+    check: "12.5 × 6 = 75，正确",
+    tags: [...EXAM_TAGS, "小数乘法"],
+  }),
+  // 两步方程应用（U5）
+  makeApp({
+    ...UNIT_EQ,
+    id: "G4B_exam_eq2_1",
+    skillId: "equation_two_step_word",
+    skillName: "两步方程应用",
+    ability: ["modeling", "calculation"],
+    examPriority: "MUST_BIG",
+    difficulty: 4,
+    stem: "妈妈买了 4 千克苹果，付了 50 元，找回 24 元。苹果每千克多少元？",
+    clues: ["买了 4 千克苹果", "付了 50 元", "找回 24 元"],
+    correctClueIdx: [0, 1, 2],
+    relationshipChoices: [
+      { id: "A", text: "设每千克 x 元，列方程 4x + 24 = 50（即 4x = 50 − 24）", correct: true },
+      { id: "B", text: "4x = 50 + 24", correct: false, errorTag: "op_inverse" },
+      { id: "C", text: "4x = 50", correct: false, errorTag: "ignore_change" },
+    ],
+    finalPrompt: "苹果每千克多少元？",
+    finalValue: 6.5,
+    finalUnit: "元",
+    finalDistractors: [12.5, 18.5, 6],
+    expression: "4x+24=50",
+    solution_steps: ["花的钱：50 − 24 = 26 元", "每千克：26 ÷ 4 = 6.5 元"],
+    check: "6.5 × 4 + 24 = 50，正确",
+    tags: [...EXAM_TAGS, "列方程"],
+  }),
+  // 已知平均数求总和（U6）
+  makeSpeed({
+    ...UNIT_DATA,
+    id: "G4B_exam_avgtotal_1",
+    skillId: "average_inverse_total",
+    skillName: "已知平均数求总和",
+    ability: ["data", "calculation"],
+    examPriority: "HIGH_BIG",
+    difficulty: 2,
+    stem: "5 个数的平均数是 12，这 5 个数的总和是多少？",
+    value: 60,
+    distractors: [17, 2.4, 55],
+    hints: [{ text: "总和 = 平均数 × 个数 = 12 × 5", penalty: 1 }],
+    tags: [...EXAM_TAGS, "平均数"],
   }),
 ];
 
@@ -4583,6 +5393,16 @@ const SEED_QUESTIONS_RAW: Question[] = [
   ...examFinalPackG4B8,
   ...examFinalPackG4B9,
   ...examFinalPackG4B10,
+  ...examFinalPackG4B11,
+  ...examFinalPackG4B12,
+  ...examFinalPackG4B13,
+  ...examFinalPackG4B14,
+  ...examFinalPackG4B15,
+  ...examFinalPackG4B16,
+  ...examFinalPackG4B17,
+  ...examFinalPackG4B18,
+  ...examFinalPackG4B19,
+  ...examFinalPackG4B20,
 ];
 
 // v0.35.20 iter 49: 把 LLM-backfilled metadata overlay 应用上去.

@@ -63,7 +63,32 @@ import type { Question, StudentProfile } from "../core/types";
 //   D2 档占比 18%→21% (总 858 题)。改 chinese SEED_QUESTIONS → bump 44。
 // v0.36.89 (数学 loop iter12) 加 examFinalPackG4B10 (+8 题, 细分变式: 货比三家最优/小数排序/
 //   小数大小比较/估算够不够/三角形按边分类/小数乘法意义/元角换算/估算加法) → bump 45。
-const SEED_VERSION = 45;
+// v0.36.90 (iter12 修订) 4 模型 verifier 抓出估算题 Q8 选项自相矛盾(13+8=21 却写约20元),
+//   改成"四舍五入到个位→约21元"一致。改了 SEED 内容 → 再 bump 46。
+// v0.36.91 (数学 loop iter13) 加 examFinalPackG4B11 (+3 U4观察物体题, 平衡最薄单元) +
+//   确认 scheduler.buildMockExam 已优先抽 from_test 期末题 → bump 47。
+// v0.36.92 (数学 loop iter14·维护期) 加 examFinalPackG4B12 (+4 U6平均数变式: 求缺失数据/
+//   求某次成绩/求一个数/平均数范围) + 质量回归(14 早期题过 4 模型全 OK) → bump 48。
+// v0.36.93 (数学 loop iter15·维护期) 加 examFinalPackG4B13 (+7 题, 加厚游戏多样性:
+//   chart_detective平均数×2/memory_match小数⇄分数·元角分×2/decimal_shifter小数点移动×3) → bump 49。
+// v0.36.94 (数学 loop iter16) 激活 💸折扣漂移: 加 examFinalPackG4B14 (+3 discount_drift 折扣题,
+//   原价×0.8/×0.9/减15, discount 字段经 DiscountSpec typecheck 校验) → bump 50。
+// v0.36.95 (iter16 修订) audit L2 误报 Q3(80-15=65, 减法 heuristic 验不了) → 改成 5折半价
+//   80×0.5=40(乘法, 与 Q1/Q2 一致 + 过 audit)。再 bump 51。
+// v0.36.96 (数学 loop iter17) 激活 🪙凑钱挑战: 加 examFinalPackG4B15 (+3 coin_combo 凑钱题,
+//   3.5/1.6/7.5 元, 目标组合已验证唯一, CoinComboSpec typecheck 校验) → bump 52。
+// v0.36.97 (数学 loop iter18) 激活 🧩方程拼装: 加 examFinalPackG4B16 (+3 equation_builder 拼综合
+//   算式题 6.5×3.2 / 65.5×4 / 45.5×8+38×6, 走 word_problem_steps.equation_or_expression) → bump 53。
+// v0.36.98 (数学 loop iter19) 激活 💎数字寻宝: 加 examFinalPackG4B17 (+2 number_hunt 5×5网格挑数:
+//   找>1的小数 / 找十分位是5的小数, grid 每格已核对, NumberHuntSpec typecheck) → bump 54。
+// v0.36.99 (数学 loop iter21) 补 U2 四边形真实缺口: 新建 G4B skill quadrilateral_classify +
+//   examFinalPackG4B18 (+6 题, 平行四边形/梯形特征分类/从属/稳定性/四边形内角和360°) → bump 55。
+// v0.36.100 (数学 loop iter22) 逐 skill 审计补缺: 修 makeVR tags bug(tags=vertLines 冲掉 exam)
+//   + 给 4 道竖式 exam 题 & eqdef 补 exam tag + examFinalPackG4B19 (+3 方程意义题, 补
+//   equation_meaning_balance 0→4) → bump 56。decimal_mul_vertical 也由 0→2 exam。
+// v0.36.101 (数学 loop iter23) 均衡薄 skill: examFinalPackG4B20 (+5, 各补 triangle_angle_sum/
+//   decimal_mul_mix/decimal_work_total/equation_two_step_word/average_inverse_total) → bump 57。
+const SEED_VERSION = 57;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

@@ -32,6 +32,7 @@ export const SKILLS: Skill[] = [
   { id: "triangle_inequality", unitId: "G4B_U2_TRI_QUAD", name: "三角形三边关系", ability: ["reasoning", "spatial"], difficultyBase: 3, priority: "VERY_HIGH_SMALL", examPriority: "MUST_SMALL" },
   { id: "triangle_angle_sum", unitId: "G4B_U2_TRI_QUAD", name: "三角形内角和", ability: ["calculation", "spatial"], difficultyBase: 3, priority: "VERY_HIGH_SMALL", examPriority: "MUST_SMALL" },
   { id: "triangle_classification", unitId: "G4B_U2_TRI_QUAD", name: "按角/边给三角形分类", ability: ["concept", "spatial"], difficultyBase: 2, priority: "HIGH", examPriority: "HIGH_SMALL" },
+  { id: "quadrilateral_classify", unitId: "G4B_U2_TRI_QUAD", name: "四边形分类与特征（平行四边形/梯形）", ability: ["concept", "spatial"], difficultyBase: 2, priority: "HIGH", examPriority: "HIGH_BIG" },
   { id: "decimal_mul_meaning", unitId: "G4B_U3_DECIMAL_MULTIPLY", name: "小数乘法意义", ability: ["concept"], difficultyBase: 2, priority: "VERY_HIGH", examPriority: "MUST_SMALL" },
   { id: "decimal_point_shift", unitId: "G4B_U3_DECIMAL_MULTIPLY", name: "小数点移动规律，扩大/缩小", ability: ["concept", "strategy"], difficultyBase: 3, priority: "VERY_HIGH", examPriority: "MUST_SMALL" },
   { id: "decimal_mul_vertical", unitId: "G4B_U3_DECIMAL_MULTIPLY", name: "小数乘法竖式", ability: ["calculation"], difficultyBase: 4, priority: "VERY_HIGH", examPriority: "MUST_BIG" },
