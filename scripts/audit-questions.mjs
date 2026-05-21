@@ -354,6 +354,18 @@ function checkPureExpressionAnswer(q) {
   }
 }
 
+/**
+ * C7: 孤儿 skill_id 守卫 (跟语文 audit-chinese X6 对齐)。question.skill_id 必须在 SKILLS 里,
+ * 否则 mastery 追踪 / scheduler scoreSkill / 能力映射 对该题全失效 (静默)。守未来并发加题。
+ */
+function checkSkillExists(q) {
+  if (q.skill_id && !SKILL_MAP.has(q.skill_id)) {
+    add(q.question_id, "critical", "C7",
+      `skill_id "${q.skill_id}" 不在 SKILLS 里 (孤儿引用 → mastery/scheduler 失效)`,
+      "在 src/content/skills.ts 补该 skill, 或改题的 skill_id 指向已有 skill");
+  }
+}
+
 // 跑所有检查
 for (const q of SEED_QUESTIONS) {
   checkChoiceConsistency(q);
@@ -362,6 +374,7 @@ for (const q of SEED_QUESTIONS) {
   checkFormatVsAnswer(q);
   checkSimpleArithmetic(q);
   checkPureExpressionAnswer(q);
+  checkSkillExists(q);
   checkPinyinAnswerLeak(q);
   checkMeta(q);
 }
