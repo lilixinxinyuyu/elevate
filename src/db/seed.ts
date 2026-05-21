@@ -57,7 +57,13 @@ import type { Question, StudentProfile } from "../core/types";
 // v0.36.86 (数学 loop iter10) 加 examFinalPackG4B8 (+8 判断题 ✓✗对错冲刺, 对齐真题判断区:
 //   一位小数个数/小数点移动/等腰三角形/小数性质/折线图选择/积的小数位数/积变化规律) +
 //   makeTF 加 tags 支持 → bump 42。
-const SEED_VERSION = 42;
+// v0.36.87 (数学 loop iter11) 加 examFinalPackG4B9 (+10 题, 解决问题变式: 年龄差倍/差倍/相遇/
+//   和倍 + 字母表示数 + 积的小数位数 + 小数四则混合脱式 + 找规律 + 三视图 + 小数加减应用) → bump 43。
+// v0.36.88 (爸爸 2026-05-22 语文 loop) 加 examPackBalance (+30 D2 题) 把 U6/U7/U8 补到 110、
+//   D2 档占比 18%→21% (总 858 题)。改 chinese SEED_QUESTIONS → bump 44。
+// v0.36.89 (数学 loop iter12) 加 examFinalPackG4B10 (+8 题, 细分变式: 货比三家最优/小数排序/
+//   小数大小比较/估算够不够/三角形按边分类/小数乘法意义/元角换算/估算加法) → bump 45。
+const SEED_VERSION = 45;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题

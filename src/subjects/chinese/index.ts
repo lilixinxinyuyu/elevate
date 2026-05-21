@@ -27,6 +27,7 @@ import { SEED_QUESTIONS_CHINESE_U6 } from "./examPackU6";
 import { SEED_QUESTIONS_CHINESE_U7 } from "./examPackU7";
 import { SEED_QUESTIONS_CHINESE_U8 } from "./examPackU8";
 import { SEED_QUESTIONS_CHINESE_DIFF } from "./examPackDiffLadder";
+import { SEED_QUESTIONS_CHINESE_BALANCE } from "./examPackBalance";
 import type {
   Subject,
   SubjectAbilityDef,
@@ -79,6 +80,7 @@ export const chineseSubject: Subject = {
     ...SEED_QUESTIONS_CHINESE_U7,
     ...SEED_QUESTIONS_CHINESE_U8,
     ...SEED_QUESTIONS_CHINESE_DIFF,
+    ...SEED_QUESTIONS_CHINESE_BALANCE,
   ],
 
   abilities: CHINESE_ABILITIES,
