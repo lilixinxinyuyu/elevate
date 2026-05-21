@@ -14,10 +14,8 @@
  * 角色立绘用一张预抠好的样张 (/_fb-demo.png); 真版会是选角/升段实时生成 + 实时抠图。
  * 入口: /math/hub-v7-preview
  */
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ensureFullBodyAvatar } from "../lib/fullBodyAvatar";
-import { ARCHETYPE_META, type Archetype, type Gender } from "../lib/characterChoice";
 import { db } from "../db/dexie";
 import { getTotalXp, computeCurrentRating, getFragileSkillsToReview } from "../db/service";
 import { levelFromXp } from "../core/scoring";
@@ -43,25 +41,10 @@ function Ring({ label, pct, hue }: { label: string; pct: number; hue: string }) 
 }
 
 export function HubV7PreviewPage() {
-  // ── 实时生成 demo: 点职业 → 实时 gen 全身立绘 + 实时抠图 + 换上 (生产可用; dev 无后端会 fallback) ──
-  const [charSrc, setCharSrc] = useState("/_fb-demo.png");
-  const [gender, setGender] = useState<Gender>("female");
-  const [loading, setLoading] = useState(false);
-  const [genErr, setGenErr] = useState<string | null>(null);
-
-  const genLive = useCallback(async (archetype: Archetype) => {
-    setLoading(true);
-    setGenErr(null);
-    try {
-      // 固定 demo studentId → 同 (职业,性别) 第一次实时生成, 再点即缓存秒出 (顺带演示缓存)。
-      const dataUrl = await ensureFullBodyAvatar("hub-preview-demo", archetype, gender, "school");
-      setCharSrc(dataUrl);
-    } catch {
-      setGenErr("实时生成需要生产后端 (dev 服务器无 /api/generate/image)。生产环境点这里会真生成。");
-    } finally {
-      setLoading(false);
-    }
-  }, [gender]);
+  // v0.36.x step②: 角色立绘 = onboarding 配过一次后锁定的静态形象 (真版进大厅/升段才实时生成 +
+  // 缓存)。删掉了顶部"实时生成"demo 控制条 —— Bruce 反馈: 不允许同学频繁重生角色, 顶部应放
+  // minigame / 技能地图入口。预览用预抠样张。
+  const charSrc = "/_fb-demo.png";
 
   // ── 真实数据 (让预览显示 Selena 的实际进度, 不是 mock; 全 dev 可验证, 无需 gen) ──
   const [real, setReal] = useState<{
@@ -110,7 +93,9 @@ export function HubV7PreviewPage() {
   const fmtXp = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
 
   return (
-    <div className="relative min-h-dvh overflow-hidden text-white bg-gradient-to-b from-[#0a0e2c] via-[#1b1147] to-[#0a0e1f]">
+    // v0.36.x step①: fixed inset-0 = 铺满整个视口(含 4K), 盖住 SubjectShell 全局菜单, 单屏不滚动。
+    // 之前 min-h-dvh 套在 SubjectShell chrome 内 → 中间 50% + 顶部老菜单 + 要 scroll + 覆盖。
+    <div className="fixed inset-0 z-50 overflow-hidden text-white bg-gradient-to-b from-[#0a0e2c] via-[#1b1147] to-[#0a0e1f]">
       {/* ── 背景场景层: 星空 + 漂浮数学符号 (低透明, 不抢角色) ── */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 opacity-[0.5]"
@@ -133,17 +118,10 @@ export function HubV7PreviewPage() {
           <div className="absolute left-1/2 -translate-x-1/2 bottom-[13%] w-[clamp(190px,24vw,330px)] h-[clamp(24px,3.5vw,46px)] rounded-[50%] border-2 border-cyan-300/50 shadow-[0_0_30px_rgba(34,211,238,0.4)]" />
           {/* 接地阴影 */}
           <div className="absolute left-1/2 -translate-x-1/2 bottom-[12.5%] w-[clamp(120px,16vw,220px)] h-[clamp(14px,2vw,30px)] rounded-[50%] bg-black/45 blur-lg" />
-          {/* 全身角色立绘 (脚踩平台上方; 可被实时生成的角色替换) */}
+          {/* 全身角色立绘 (脚踩平台上方; 真版 = onboarding/升段 实时生成的形象) */}
           <img src={charSrc} alt="角色"
-            className={`relative z-10 w-auto object-contain drop-shadow-[0_18px_44px_rgba(0,0,0,0.55)] transition-opacity ${loading ? "opacity-30" : "opacity-100"}`}
+            className="relative z-10 w-auto object-contain drop-shadow-[0_18px_44px_rgba(0,0,0,0.55)]"
             style={{ height: "clamp(340px, 70vh, 720px)", marginBottom: "13%" }} />
-          {/* 生成中遮罩 (预览真实 onboarding/升段 等待 UX) */}
-          {loading && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 mb-[13%]">
-              <div className="w-12 h-12 rounded-full border-4 border-cyan-300/30 border-t-cyan-300 animate-spin" />
-              <div className="text-sm text-cyan-100 bg-black/40 rounded-full px-3 py-1.5">🐼 小进正在为你画专属角色… 约 30 秒</div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -216,25 +194,6 @@ export function HubV7PreviewPage() {
 
       {/* 小熊猫副手 (右下) */}
       <div className="absolute bottom-4 right-5 text-4xl animate-bounce z-20" style={{ animationDuration: "3s" }}>🐼</div>
-
-      {/* 实时生成 demo 控制条 (顶部中央) — 点职业 → 实时生成全身立绘 + 抠图 + 换上 */}
-      <div className={`absolute top-2 left-1/2 -translate-x-1/2 z-30 ${GLASS} px-3 py-1.5 flex items-center gap-1.5 max-w-[94vw] flex-wrap justify-center`}>
-        <span className="text-[10px] text-cyan-200 font-bold whitespace-nowrap">✨ 实时生成</span>
-        <button onClick={() => setGender("female")} disabled={loading}
-          className={`text-sm rounded-full w-7 h-7 ${gender === "female" ? "bg-pink-400/40 ring-1 ring-pink-300" : "bg-white/10"}`}>👧</button>
-        <button onClick={() => setGender("male")} disabled={loading}
-          className={`text-sm rounded-full w-7 h-7 ${gender === "male" ? "bg-sky-400/40 ring-1 ring-sky-300" : "bg-white/10"}`}>👦</button>
-        <span className="text-white/20">|</span>
-        {(Object.keys(ARCHETYPE_META) as Archetype[]).map((arc) => (
-          <button key={arc} onClick={() => genLive(arc)} disabled={loading} title={ARCHETYPE_META[arc].label}
-            className="text-base rounded-lg w-7 h-7 bg-white/10 hover:bg-white/20 disabled:opacity-40 transition">
-            {ARCHETYPE_META[arc].emoji}
-          </button>
-        ))}
-      </div>
-      {genErr && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 text-[10px] bg-amber-500/30 border border-amber-400/40 rounded-full px-3 py-1 text-amber-100 max-w-[90vw] text-center">{genErr}</div>
-      )}
 
       {/* 返回 */}
       <div className="absolute top-2 right-2 z-30 flex gap-2">
