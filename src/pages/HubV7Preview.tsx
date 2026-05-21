@@ -87,22 +87,24 @@ export function HubV7PreviewPage() {
         </div>
       </div>
 
-      {/* 三环 (左中) */}
-      <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${GLASS} px-3 py-3 hidden sm:flex flex-col gap-3`}>
-        <div className="text-[11px] text-white/70 text-center font-bold">今日三环</div>
+      {/* 三环 — 手机: 顶部 HUD 下方横排; sm+: 左中竖排 */}
+      <div className={`absolute z-10 left-1/2 -translate-x-1/2 top-[84px] flex flex-row items-center gap-1.5
+        sm:left-4 sm:translate-x-0 sm:top-1/2 sm:-translate-y-1/2 sm:flex-col sm:gap-3 ${GLASS} px-3 py-2`}>
+        <div className="hidden sm:block text-[11px] text-white/70 text-center font-bold">今日三环</div>
         <Ring label="口算" pct={80} hue="#22d3ee" />
         <Ring label="挑战" pct={45} hue="#a78bfa" />
         <Ring label="专注" pct={100} hue="#fbbf24" />
       </div>
 
-      {/* 任务栈 (右中) */}
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2.5 w-[min(78vw,300px)] hidden md:flex">
+      {/* 任务栈 — 手机: 底部横向滑动卡片 (CTA 上方); md+: 右中竖排 */}
+      <div className="absolute z-10 left-1/2 -translate-x-1/2 bottom-[150px] flex flex-row gap-2 w-[94vw] overflow-x-auto pb-1
+        md:left-auto md:right-4 md:translate-x-0 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:flex-col md:gap-2.5 md:w-[min(78vw,300px)] md:overflow-visible md:pb-0">
         {[
           { icon: "🚑", t: "红牌救援", s: "3 道错题待复活", c: "from-rose-500/25 to-rose-400/10 border-rose-400/40" },
           { icon: "⚔️", t: "期末 BOSS", s: "39 天后来袭 · 今天备战", c: "from-violet-500/25 to-fuchsia-400/10 border-violet-400/40" },
           { icon: "⚡", t: "能力诊断", s: "看脑力雷达 4 维成长", c: "from-cyan-500/25 to-sky-400/10 border-cyan-400/40" },
         ].map((m) => (
-          <div key={m.t} className={`rounded-2xl bg-gradient-to-br ${m.c} border backdrop-blur-md px-4 py-3 flex items-center gap-3 shadow-lg`}>
+          <div key={m.t} className={`shrink-0 w-[212px] md:w-auto rounded-2xl bg-gradient-to-br ${m.c} border backdrop-blur-md px-4 py-3 flex items-center gap-3 shadow-lg`}>
             <div className="text-2xl">{m.icon}</div>
             <div className="flex-1"><div className="font-display font-bold text-sm">{m.t}</div><div className="text-[11px] text-white/70">{m.s}</div></div>
             <div className="text-white/50 text-xl">›</div>
