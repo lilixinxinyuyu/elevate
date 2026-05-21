@@ -138,6 +138,23 @@ export function HubV7PreviewPage() {
         </div>
       </div>
 
+      {/* ════ step⑤ 努力落"空间": 平台已赚到的装饰道具 + 专注光环 (按里程碑/连胜解锁; 预览 mock) ════
+          designer+planner 一致: 努力要肉眼可见累积在主场景, 否则"获得感"断裂。真版接 完成单元/streak 解锁。 */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-[12.5%] z-[6] flex items-end justify-center">
+        <div className="relative w-[clamp(240px,30vw,420px)] h-0">
+          {(real?.streak ?? 0) >= 3 && (
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[clamp(200px,26vw,360px)] h-[clamp(26px,3.6vw,48px)] rounded-[50%] border border-amber-300/45 shadow-[0_0_22px_rgba(251,191,36,0.4)] animate-pulse" title="连胜≥3 解锁: 专注光环" />
+          )}
+          <div className="absolute left-[2%] bottom-1.5 text-2xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]" title="完成单元解锁">📐</div>
+          <div className="absolute right-[3%] bottom-2.5 text-2xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]" title="模拟卷符文">📖</div>
+          <div className="absolute right-[16%] -bottom-1 text-lg opacity-90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]" title="连胜奖励">🔮</div>
+        </div>
+      </div>
+      {/* 努力累积小标签 (左下, 数值条上方) — "再练解锁下一件" */}
+      <div className={`absolute bottom-[58px] left-4 ${GLASS} px-3 py-1.5 text-[11px] hidden sm:flex items-center gap-1.5`}>
+        <span>✨</span><span className="text-white/70">平台已集</span><b className="text-amber-300">3</b><span className="text-white/45">件 · 再练解锁下一件</span>
+      </div>
+
       {/* ── 浮动 HUD ── */}
       {/* 顶 HUD: 🐼 + 名字 + Lv + XP (左上) */}
       <div className={`absolute top-4 left-4 ${GLASS} px-4 py-2.5 flex items-center gap-3`}>
