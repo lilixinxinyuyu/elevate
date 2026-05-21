@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "audit:questions": "node scripts/audit-questions.mjs",
+    "audit:chinese": "node scripts/audit-chinese.mjs",
     "smoke:train": "node scripts/_e2e-train-state-smoke.mjs",
     "smoke:iter-audit": "node scripts/_session-iter-audit.mjs"
   },
