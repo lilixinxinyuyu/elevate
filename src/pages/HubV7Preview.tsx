@@ -1,7 +1,10 @@
 /**
  * v0.36.65 — Hub v7 布局预览 (Bruce 2026-05-21 反馈后重做方向 demo)。
  *
- * 给 Bruce 看"融合方向"用的**纯静态预览**, 不接真数据 / 不接实时生成。
+ * 给 Bruce 看"融合方向"用的预览 (UI/数值是静态 mock)。
+ * v0.36.68: 加"实时生成 demo"控制条 — 点性别+职业 → 真调 ensureFullBodyAvatar 实时生成
+ *   全身立绘 + 实时抠图 + 换进场景 (生产可用; dev 无 /api/generate/image 后端会 graceful
+ *   fallback 提示)。让 Bruce 看到的不只是静态布局, 而是真实管线 (生成→抠图→融场景) 跑给他看。
  * 演示要点 (回应 Bruce 反馈: 现版是相框 + 大屏空旷):
  *   - 全身角色**站在场景里**(发光平台 + 接地阴影 + 背后光环 + 星空数字背景), 不是相框。
  *   - UI 全做成**浮在画面上的玻璃 HUD**(等级/段位/三环/任务/CTA/数值/小熊猫副手),
@@ -11,7 +14,10 @@
  * 角色立绘用一张预抠好的样张 (/_fb-demo.png); 真版会是选角/升段实时生成 + 实时抠图。
  * 入口: /math/hub-v7-preview
  */
+import { useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { ensureFullBodyAvatar } from "../lib/fullBodyAvatar";
+import { ARCHETYPE_META, type Archetype, type Gender } from "../lib/characterChoice";
 
 const GLASS =
   "rounded-3xl bg-white/10 backdrop-blur-md border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.4)]";
@@ -32,6 +38,26 @@ function Ring({ label, pct, hue }: { label: string; pct: number; hue: string }) 
 }
 
 export function HubV7PreviewPage() {
+  // ── 实时生成 demo: 点职业 → 实时 gen 全身立绘 + 实时抠图 + 换上 (生产可用; dev 无后端会 fallback) ──
+  const [charSrc, setCharSrc] = useState("/_fb-demo.png");
+  const [gender, setGender] = useState<Gender>("female");
+  const [loading, setLoading] = useState(false);
+  const [genErr, setGenErr] = useState<string | null>(null);
+
+  const genLive = useCallback(async (archetype: Archetype) => {
+    setLoading(true);
+    setGenErr(null);
+    try {
+      // 固定 demo studentId → 同 (职业,性别) 第一次实时生成, 再点即缓存秒出 (顺带演示缓存)。
+      const dataUrl = await ensureFullBodyAvatar("hub-preview-demo", archetype, gender, "school");
+      setCharSrc(dataUrl);
+    } catch {
+      setGenErr("实时生成需要生产后端 (dev 服务器无 /api/generate/image)。生产环境点这里会真生成。");
+    } finally {
+      setLoading(false);
+    }
+  }, [gender]);
+
   return (
     <div className="relative min-h-dvh overflow-hidden text-white bg-gradient-to-b from-[#0a0e2c] via-[#1b1147] to-[#0a0e1f]">
       {/* ── 背景场景层: 星空 + 漂浮数学符号 (低透明, 不抢角色) ── */}
@@ -56,10 +82,17 @@ export function HubV7PreviewPage() {
           <div className="absolute left-1/2 -translate-x-1/2 bottom-[13%] w-[clamp(190px,24vw,330px)] h-[clamp(24px,3.5vw,46px)] rounded-[50%] border-2 border-cyan-300/50 shadow-[0_0_30px_rgba(34,211,238,0.4)]" />
           {/* 接地阴影 */}
           <div className="absolute left-1/2 -translate-x-1/2 bottom-[12.5%] w-[clamp(120px,16vw,220px)] h-[clamp(14px,2vw,30px)] rounded-[50%] bg-black/45 blur-lg" />
-          {/* 全身角色立绘 (脚踩平台上方) */}
-          <img src="/_fb-demo.png" alt="角色"
-            className="relative z-10 w-auto object-contain drop-shadow-[0_18px_44px_rgba(0,0,0,0.55)]"
+          {/* 全身角色立绘 (脚踩平台上方; 可被实时生成的角色替换) */}
+          <img src={charSrc} alt="角色"
+            className={`relative z-10 w-auto object-contain drop-shadow-[0_18px_44px_rgba(0,0,0,0.55)] transition-opacity ${loading ? "opacity-30" : "opacity-100"}`}
             style={{ height: "clamp(340px, 70vh, 720px)", marginBottom: "13%" }} />
+          {/* 生成中遮罩 (预览真实 onboarding/升段 等待 UX) */}
+          {loading && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 mb-[13%]">
+              <div className="w-12 h-12 rounded-full border-4 border-cyan-300/30 border-t-cyan-300 animate-spin" />
+              <div className="text-sm text-cyan-100 bg-black/40 rounded-full px-3 py-1.5">🐼 小进正在为你画专属角色… 约 30 秒</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -133,9 +166,27 @@ export function HubV7PreviewPage() {
       {/* 小熊猫副手 (右下) */}
       <div className="absolute bottom-4 right-5 text-4xl animate-bounce z-20" style={{ animationDuration: "3s" }}>🐼</div>
 
-      {/* 预览角标 + 返回 */}
+      {/* 实时生成 demo 控制条 (顶部中央) — 点职业 → 实时生成全身立绘 + 抠图 + 换上 */}
+      <div className={`absolute top-2 left-1/2 -translate-x-1/2 z-30 ${GLASS} px-3 py-1.5 flex items-center gap-1.5 max-w-[94vw] flex-wrap justify-center`}>
+        <span className="text-[10px] text-cyan-200 font-bold whitespace-nowrap">✨ 实时生成</span>
+        <button onClick={() => setGender("female")} disabled={loading}
+          className={`text-sm rounded-full w-7 h-7 ${gender === "female" ? "bg-pink-400/40 ring-1 ring-pink-300" : "bg-white/10"}`}>👧</button>
+        <button onClick={() => setGender("male")} disabled={loading}
+          className={`text-sm rounded-full w-7 h-7 ${gender === "male" ? "bg-sky-400/40 ring-1 ring-sky-300" : "bg-white/10"}`}>👦</button>
+        <span className="text-white/20">|</span>
+        {(Object.keys(ARCHETYPE_META) as Archetype[]).map((arc) => (
+          <button key={arc} onClick={() => genLive(arc)} disabled={loading} title={ARCHETYPE_META[arc].label}
+            className="text-base rounded-lg w-7 h-7 bg-white/10 hover:bg-white/20 disabled:opacity-40 transition">
+            {ARCHETYPE_META[arc].emoji}
+          </button>
+        ))}
+      </div>
+      {genErr && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 text-[10px] bg-amber-500/30 border border-amber-400/40 rounded-full px-3 py-1 text-amber-100 max-w-[90vw] text-center">{genErr}</div>
+      )}
+
+      {/* 返回 */}
       <div className="absolute top-2 right-2 z-30 flex gap-2">
-        <span className="text-[10px] bg-black/40 rounded-full px-2 py-1 text-white/60">布局预览 v7 · 静态 demo</span>
         <Link to="/math" className="text-[10px] bg-white/15 rounded-full px-2 py-1">← 返回</Link>
       </div>
     </div>
