@@ -24,7 +24,10 @@ const FIXED_PREFIX_FULLBODY =
   "Anime cel-shading style, masterpiece quality, vibrant clean line-art. " +
   "FULL-BODY character standing, entire figure visible from head to feet (including legs and shoes), " +
   "slight dynamic 3/4 hero stance, looking at viewer, " +
-  "dark navy background for transparency cutout (NOT white/transparent, very dark solid navy like #0a0e2c).";
+  "dark navy background for transparency cutout (NOT white/transparent, very dark solid navy like #0a0e2c). " +
+  "Background MUST be a completely plain empty solid navy fill — absolutely nothing else in the background: " +
+  "no floating props, no scattered objects, no stars, no crystals, no books, no scenery, no decorations, no frame, no border. " +
+  "All gear/accessories belong ON the character only, never floating around them.";
 
 const ANCHOR: Record<Gender, string> = {
   female:
@@ -41,7 +44,9 @@ const ANCHOR: Record<Gender, string> = {
 const NEGATIVE_FULLBODY =
   "cropped, close-up, half-body, only upper body, legs cut off, ugly, deformed face, extra limbs, " +
   "inconsistent proportions, different hair color, blonde hair, blue eyes, brown hair, freckles, " +
-  "messy background, text, signature, watermark, mature features, teen idol, aged-up, adult proportions";
+  "messy background, text, signature, watermark, mature features, teen idol, aged-up, adult proportions, " +
+  "floating objects, background props, scattered items, floating stars, floating crystals, floating books, " +
+  "background scenery, emblems, decorative background, frame, border, multiple objects";
 
 // Outfit per archetype × tier (英文, 跟 gen 脚本一致 — 中文短语会触发阿里云 green-net)。
 const OUTFIT: Record<Archetype, Record<string, string>> = {
