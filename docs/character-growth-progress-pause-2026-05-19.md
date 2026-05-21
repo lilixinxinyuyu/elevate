@@ -30,6 +30,32 @@ ship + 真验证。唯一剩余 = Hub v6 设默认 (gated on Selena 多日试用
 
 ---
 
+## 🧪 全身实时立绘 gen+抠图 de-risk (2026-05-21, v0.36.70→71) — #27 技术核心已证
+
+Hub 重做 (#27, Bruce 2026-05-21 拍板"全身 2D 立绘实时生成+实时抠图+场景融合") 的**最大技术
+未知 = 全身 prompt 真能不能稳出 不裁剪 + 干净可抠 的全身图**。本轮在真生产 (token-plan
+wan2.7-image-pro, `scripts/_gen-fullbody-sample.mjs`) 全面验证, 结论: **可行, 已证**。
+
+- **6 archetype 全覆盖** (scholar/warrior/mage/scientist/explorer/artist), 含最难的 country 段:
+  全身完整 (头到脚, 含腿/鞋, top/bot 不触边 = 没裁), 画风跟 anchor 一致 (10 岁圆脸大眼)。
+- **发现并修复: epic 段背景道具乱入** — legendary/country outfit 诱导 wan 在背景撒星星/水晶/
+  书/徽章, 这些会熬过 corner flood-fill 变成漂浮岛 + 撑爆 bbox (mage/country 初版 bg 抠除率
+  =0%, 全是杂物)。**修复 = 强化 `fullBodyAvatar.ts` 的 FIXED_PREFIX + NEGATIVE 禁止任何
+  非角色背景内容** (v0.36.71 已 ship)。重生后 bg 抠除率 0%→80~87%, 图干净。
+- **最难抠图 case 验证: navy-on-navy** (artist/country 一身藏青+金outfit 贴近藏青底)。直接
+  用镜像 `removeNavyBg.ts` 的算法 (corner-pixel 参考色 + 每通道 tolerance=30, 非固定阈值)
+  跑: **bg 抠除 79.5% + 人物 94% 高完整无空洞** (合成到白底逐像素查无破洞)。tolerance=30
+  够紧, 不啃藏青 outfit。
+- **注意**: QA python 用固定阈值 70 gate seed → 遇背景偏亮/有渐变会误报 bg=0% (假警报);
+  **真 prod 路径 (removeNavyBg.ts) 用角的实际像素色作参考, 更稳**, 不受底色漂移影响。
+
+**结论**: 全身实时生成 + 实时抠图 pipeline 技术上已 de-risk 完毕, 6 职业 × worst-tier ×
+worst-cutout 全过。**#27 后续只剩产品方向拍板** (Bruce "先看 preview 再 build 全套" gate):
+`/math/hub-v7-preview` 已含 真数据 HUD + 场景 + live-gen demo, 等爸爸看过方向 OK 后再接
+"进大厅自动 ensureFullBodyAvatar + onboarding + 升段重生 + flag-flip"。
+
+---
+
 ## ✅ 已完成 (5 phases, 7 iters)
 
 | Phase | Iter | 内容 | 状态 |
