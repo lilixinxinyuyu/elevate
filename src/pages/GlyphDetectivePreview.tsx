@@ -28,7 +28,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { awardClusterXp } from "../lib/clusterXp";
 import { awardMascotXp } from "../lib/mascotProgress";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import type { Question } from "../core/types";
 import { db } from "../db/dexie";
 import { submitChineseAttempt, getChineseMistakeQuestionIds } from "../subjects/chinese/service";
@@ -454,20 +454,21 @@ export function GlyphDetectivePreviewPage() {
           >
             {/* 案件 caption */}
             <div className="text-[10px] text-amber-700 uppercase tracking-widest mb-2 text-center">待鉴定汉字</div>
-            {/* 大汉字 — v0.36.7 framer-motion: 切换题时大汉字 spring entrance */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={cur.id}
-                initial={{ scale: 0, rotate: -180, opacity: 0 }}
-                animate={{ scale: 1, rotate: 0, opacity: 1 }}
-                exit={{ scale: 0.6, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 180, damping: 16 }}
-                className="text-[150px] sm:text-[180px] font-display text-amber-900 text-center leading-none select-none"
-                style={{ fontFamily: "'STKaiti', 'KaiTi', 'Songti SC', serif" }}
-              >
-                {cur.hanzi}
-              </motion.div>
-            </AnimatePresence>
+            {/* 大汉字 — v0.36.7 framer-motion spring entrance。
+                v0.36.66: 去掉 AnimatePresence + exit — 初始 cur 快速切换 (DEMO→真题→自适应选题)
+                时, AnimatePresence 的 exit 节点卡住不卸载, 大汉字停在旧字 (蜻) 而题干/标签/描述
+                已是新字 → 学生看到的字跟题对不上 (还出现新字 opacity 卡 0 不显示)。改成纯 key 重挂:
+                React 在 cur.id 变时立即卸旧挂新, 入场动画照旧, 无残留无卡死, 大汉字永远跟题同步。 */}
+            {/* v0.36.66: 纯 div 渲染 (不用 framer-motion 入场) — 之前的 initial→animate 在
+                初始 cur 快速切换时会卡在 opacity:0 (字不显示)。大汉字必须永远可见且跟题同步,
+                故牺牲入场花哨, 用纯 div 保证正确。key 仍触发 React 重挂换字。 */}
+            <div
+              key={cur.id}
+              className="text-[150px] sm:text-[180px] font-display text-amber-900 text-center leading-none select-none animate-glyph-pop"
+              style={{ fontFamily: "'STKaiti', 'KaiTi', 'Songti SC', serif" }}
+            >
+              {cur.hanzi}
+            </div>
             {/* 字描述 */}
             <motion.div
               key={cur.id + "-desc"}
