@@ -22,6 +22,7 @@ import { db } from "../db/dexie";
 import { getTotalXp, computeCurrentRating, getFragileSkillsToReview } from "../db/service";
 import { levelFromXp } from "../core/scoring";
 import { currentExam, daysUntil } from "../core/examDates";
+import { computeAbilityDiagnostic } from "../core/rating";
 
 const GLASS =
   "rounded-3xl bg-white/10 backdrop-blur-md border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.4)]";
@@ -66,6 +67,7 @@ export function HubV7PreviewPage() {
   const [real, setReal] = useState<{
     name: string; level: number; xp: number; tierName: string; tierRoman: string;
     examShort: string; examDays: number; mistakeCount: number;
+    accuracy: number; mastery: number; continuity: number; breadth: number; composite: number;
   } | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -76,8 +78,15 @@ export function HubV7PreviewPage() {
         const xp = await getTotalXp(s.id);
         const r = await computeCurrentRating(s.id, "下册");
         const fragile = await getFragileSkillsToReview(s.id);
+        const attempts = await db.attempts.where({ studentId: s.id }).toArray();
+        const mastery = await db.mastery.where({ studentId: s.id }).toArray();
+        const ab = computeAbilityDiagnostic(attempts, mastery, "下册");
         const exam = currentExam();
         if (cancelled) return;
+        // 数据够多 (≥15 题) 才显示真实诊断; 否则给鼓励性占位 — 新手/空账号不被一排 0 打击,
+        // 也避免预览在 dev 低数据账号上显示成"坏掉"的样子。Selena 真实账号数据足 → 显示她的真值。
+        const has = ab.raw.totalAttempts >= 15;
+        const pct = (v: number, d: number) => Math.min(100, Math.round((v / d) * 100));
         setReal({
           name: s.name ?? "Selena",
           level: levelFromXp(xp),
@@ -87,6 +96,12 @@ export function HubV7PreviewPage() {
           examShort: exam.name.replace("考试", ""),
           examDays: daysUntil(exam.date),
           mistakeCount: fragile.length,
+          // 能力诊断 (跟 HubScreenV6 同款 components→0-100 映射; 无数据回退合理 mock)
+          accuracy: has ? pct(ab.components.accuracy, 250) : 78,
+          mastery: has ? pct(ab.components.mastery, 400) : 62,
+          continuity: has ? pct(ab.components.continuity, 200) : (ab.raw.streak >= 7 ? 90 : Math.round((ab.raw.streak / 7) * 100)),
+          breadth: has ? pct(ab.components.volume, 150) : 50,
+          composite: has ? ab.score : 510,
         });
       } catch { /* 预览失败不影响布局展示 */ }
     })();
@@ -191,12 +206,12 @@ export function HubV7PreviewPage() {
 
       {/* 数值条 (左下) */}
       <div className={`absolute bottom-4 left-4 ${GLASS} px-4 py-2 text-[11px] hidden sm:flex items-center gap-3`}>
-        <span className="text-white/60">综合</span><span className="font-bold text-amber-300 tabular-nums">680</span>
+        <span className="text-white/60">综合</span><span className="font-bold text-amber-300 tabular-nums">{real?.composite ?? 510}</span>
         <span className="text-white/20">|</span>
-        <span>准确 <b className="text-cyan-300">86</b></span>
-        <span>熟练 <b className="text-violet-300">71</b></span>
-        <span>坚持 <b className="text-orange-300">9</b></span>
-        <span>广度 <b className="text-emerald-300">63</b></span>
+        <span>准确 <b className="text-cyan-300">{real?.accuracy ?? 78}</b></span>
+        <span>熟练 <b className="text-violet-300">{real?.mastery ?? 62}</b></span>
+        <span>坚持 <b className="text-orange-300">{real?.continuity ?? 0}</b></span>
+        <span>广度 <b className="text-emerald-300">{real?.breadth ?? 50}</b></span>
       </div>
 
       {/* 小熊猫副手 (右下) */}
