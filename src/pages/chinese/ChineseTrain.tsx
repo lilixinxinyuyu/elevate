@@ -30,7 +30,7 @@ import {
   submitChineseAttempt,
   type ChineseAttemptResult,
 } from "../../subjects/chinese/service";
-import { buildChinesePracticeQuestions } from "../../subjects/chinese/practiceSelect";
+import { buildChinesePracticeQuestions, buildChineseMockExam } from "../../subjects/chinese/practiceSelect";
 import { CHINESE_TROPHIES } from "../../subjects/chinese/trophies";
 import { TrophyIcon } from "../../components/TrophyIcon";
 import { LotteryBoxModal } from "../../components/LotteryBoxModal";
@@ -62,27 +62,6 @@ function shuffle<T>(arr: readonly T[]): T[] {
   return out;
 }
 
-/** 模拟测试按难度分桶，凑齐 5+5+6+4=20 题 */
-function buildMockExamQuestions(pool: Question[]): Question[] {
-  const buckets: Record<1 | 2 | 3 | 4 | 5, Question[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] };
-  for (const q of pool) {
-    const d = (q.difficulty >= 5 ? 5 : q.difficulty) as 1 | 2 | 3 | 4 | 5;
-    buckets[d].push(q);
-  }
-  const want = { 1: 5, 2: 5, 3: 6, 4: 4 };
-  const out: Question[] = [];
-  for (const [d, n] of Object.entries(want)) {
-    const dn = Number(d) as 1 | 2 | 3 | 4;
-    out.push(...shuffle(buckets[dn]).slice(0, n));
-  }
-  // 不够时退路：D4 不够用 D5 补；D3/D2/D1 之间互补
-  if (out.length < MOCK_SIZE) {
-    const used = new Set(out.map((q) => q.question_id));
-    const rest = pool.filter((q) => !used.has(q.question_id));
-    out.push(...shuffle(rest).slice(0, MOCK_SIZE - out.length));
-  }
-  return shuffle(out).slice(0, MOCK_SIZE);
-}
 
 interface AnswerRecord {
   qid: string;
@@ -249,7 +228,11 @@ export function ChineseTrainPage() {
           qs = mergedPool.filter((q) => idSet.has(q.question_id));
           qs = shuffle(qs).slice(0, REVIEW_SIZE);
         } else if (mode === "mock_exam") {
-          qs = buildMockExamQuestions(mergedPool);
+          qs = buildChineseMockExam(
+            mergedPool,
+            subject.skills as { id: string; ability: readonly string[] }[],
+            { size: MOCK_SIZE },
+          );
         } else {
           let pool = mergedPool;
           if (skillId) pool = pool.filter((q) => q.skill_id === skillId);
