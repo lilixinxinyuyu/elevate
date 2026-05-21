@@ -44,7 +44,20 @@ import type { Question, StudentProfile } from "../core/types";
 //   方程定义 + U2内角和/角分类 + U6条形图) → bump 36。
 // v0.36.81 (数学 loop iter6) 加 examFinalPackG4B4 (+4 图形法庭三角形三边题) + 写 shape_court/
 //   chart_detective/memory_match 三个 game-type gen prompt → bump 37。
-const SEED_VERSION = 37;
+// v0.36.82 (数学 loop iter7) 加 examFinalPackG4B5 (+11 题, 对齐成华2024-2025最新卷新考点:
+//   找规律/字母表示数/复名数换算/三角形第三边范围/平均数范围/小数估算/解方程含小数/货车限高) → bump 38。
+// v0.36.83 (数学 loop iter8) 加 examFinalPackG4B6 (+10 题, 加厚计算+解决问题: 竖式90-22.9/
+//   0.35×400/1.25×1.4、简算2.8×5+5×7.2/0.2+0.8×12.5、解方程6x÷3=24/m+9.7=100、列方程演出服、
+//   平均数变式仰卧起坐、观察物体) → bump 39。
+// v0.36.84 (数学 loop iter9) 加 examFinalPackG4B7 (+7 题, 多游戏玩法: chart_detective 平均数/读图、
+//   memory_match 小数意义/单位换算配对、decimal_shifter 小数点移动) → bump 40。
+// v0.36.85 (爸爸 2026-05-21) 语文难度梯度补满: 新增 examPackDiffLadder (+156 题) 给全 8 单元
+//   铺满 D1→D5 五个难度层 + 各单元补到 100-116 平衡 (总 828 题, 难度比例 D1~10%/D2~18%/
+//   D3~42%/D4~24%/D5~6%, 支撑自适应升级/降级)。改 chinese SEED_QUESTIONS → bump 41。
+// v0.36.86 (数学 loop iter10) 加 examFinalPackG4B8 (+8 判断题 ✓✗对错冲刺, 对齐真题判断区:
+//   一位小数个数/小数点移动/等腰三角形/小数性质/折线图选择/积的小数位数/积变化规律) +
+//   makeTF 加 tags 支持 → bump 42。
+const SEED_VERSION = 42;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
