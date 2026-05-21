@@ -185,11 +185,51 @@ admin.get("/list-reports", async (c) => {
   if (since > 0) entries = entries.filter((e) => e.createdAt > since);
   entries = entries.slice(0, limit);
 
+  // v0.36.83 fix: 之前直接返回 index entries (只有 id/questionId/reason/fixStatus/createdAt),
+  // 但前端 ReportsPanel 读的是 full 形状 (question_id / created_at / original.stem / fixed /
+  // ai_fix_succeeded / ...) → 字段对不上 → 每条报告都显示 "Invalid Date" + "(stem 缺失)"。
+  // 改成: 拉每条的 full record (OSS, 并行) 映射成前端形状; 拉不到的用 index entry 兜底。
+  const reports = await Promise.all(
+    entries.map(async (e) => {
+      const fallback = {
+        id: e.id,
+        question_id: e.questionId,
+        reason: e.reason,
+        reason_text: null as string | null,
+        original: {} as Record<string, unknown>,
+        fixed: null as Record<string, unknown> | null,
+        changes_summary: null as string | null,
+        ai_fix_succeeded: e.fixStatus === "fixed",
+        llm_error: null as string | null,
+        created_at: e.createdAt,
+      };
+      try {
+        const got = await ossGet(cfg, reportKey(userId, e.id));
+        if (!got.ok || !got.text) return { ...fallback, original: { stem: "(原始报告记录已清理)" } };
+        const rec = JSON.parse(got.text) as ReportRecord;
+        return {
+          id: rec.id,
+          question_id: rec.questionId,
+          reason: rec.reason,
+          reason_text: rec.reasonText,
+          original: rec.originalPayload ?? {},
+          fixed: rec.fixedPayload,
+          changes_summary: rec.changesSummary,
+          ai_fix_succeeded: rec.fixStatus === "fixed",
+          llm_error: rec.llmError,
+          created_at: rec.createdAt,
+        };
+      } catch {
+        return { ...fallback, original: { stem: "(报告记录损坏)" } };
+      }
+    }),
+  );
+
   return c.json({
     ok: true,
-    count: entries.length,
+    count: reports.length,
     indexUpdatedAt: index.updatedAt,
-    reports: entries,
+    reports,
   });
 });
 
