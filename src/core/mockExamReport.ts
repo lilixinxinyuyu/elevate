@@ -45,8 +45,9 @@ type Category = "mental_calc" | "multi_digit_calc" | "word_problem" | "unit_conv
 function classifyQuestion(q: Question): Category {
   // 应用题 (story + multi-step)
   if (q.word_problem_steps || (q.subquestions && q.subquestions.length > 0)) return "word_problem";
-  // 几何 (有 dot_grid / shape skill 等)
-  if (q.dot_grid || /shape|triangle|geometry|图形|三角|四边|面积/.test(q.skill_id ?? "")) return "geometry";
+  // 几何 / 空间 (dot_grid / shape skill / 观察物体). v0.36.76: 加 observe — U4 观察物体
+  // skill=observe_front_top_left 之前不匹配, 32 道全散进 口算/其它, 拉偏报告分类。
+  if (q.dot_grid || /shape|triangle|geometry|observe|图形|三角|四边|面积|观察|视图/.test(q.skill_id ?? "")) return "geometry";
   // 单位换算
   if (/unit|conversion|换算|单位/.test(q.skill_id ?? "")) return "unit_conversion";
   // 简单速算 (1 step, ≤ 2 digit)

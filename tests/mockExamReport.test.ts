@@ -116,6 +116,17 @@ describe("题型分类", () => {
     );
     expect(report.byCategory.find((c) => c.label === "单位换算")?.total).toBe(1);
   });
+
+  it("观察物体 (skill=observe_front_top_left) → geometry, 不再散进口算/其它", () => {
+    const q = mkQuestion({ question_id: "ob", skill_id: "observe_front_top_left", stem: "从正面看这个几何体是什么形状?", difficulty: 2 });
+    const report = computeMockExamReport(
+      [mkAttempt({ questionId: "ob", isCorrect: false })],
+      new Map([["ob", q]]),
+    );
+    expect(report.byCategory.find((c) => c.label === "几何")?.total).toBe(1);
+    expect(report.byCategory.find((c) => c.label === "口算")).toBeUndefined();
+    expect(report.byCategory.find((c) => c.label === "其它")).toBeUndefined();
+  });
 });
 
 describe("错题诊断 (评审 B 阈值规则)", () => {
