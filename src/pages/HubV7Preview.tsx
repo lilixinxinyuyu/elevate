@@ -93,6 +93,18 @@ export function HubV7PreviewPage() {
   }, []);
   const fmtXp = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
 
+  // step③: 今日三环状态 (预览 mock; 真版接 fluency/challengeTodayCount/dueMistakes 实数据)。
+  // CTA 与熊猫气泡**共用同一个 nextRing** → 保证"全屏唯一行动指令"一致 (designer review 铁律:
+  // 气泡不能跟 CTA 抢指令, 否则 10 岁娃会懵)。
+  const ringData = [
+    { label: "速算", full: "速算热身", pct: 100, hue: "#22d3ee", to: "/math/fluency", reward: "基本功热身 ✓" },
+    { label: "挑战", full: "今日挑战", pct: 45, hue: "#a78bfa", to: "/math/train", reward: "今日主练 · +80 XP" },
+    { label: "错题", full: "错题复活", pct: real && real.mistakeCount > 0 ? 0 : 100, hue: "#fbbf24",
+      to: "/math/mistakes", reward: real && real.mistakeCount > 0 ? `复活 ${real.mistakeCount} 道错题 · +60 XP` : "错题已清 · 保持" },
+  ];
+  const nextRing = ringData.find((r) => r.pct < 100);
+  const doneRings = ringData.filter((r) => r.pct >= 100).length;
+
   return (
     // v0.36.x step①: fixed inset-0 = 铺满整个视口(含 4K), 盖住 SubjectShell 全局菜单, 单屏不滚动。
     // 之前 min-h-dvh 套在 SubjectShell chrome 内 → 中间 50% + 顶部老菜单 + 要 scroll + 覆盖。
@@ -164,33 +176,22 @@ export function HubV7PreviewPage() {
       {/* ════ step③ 唯一主干道: 今日三环(集成) + 动态主 CTA(自动指向下一个没闭的环) ════
           指挥中心核心: 不让娃选, 5 秒内一个发光按钮指向"今天该练的下一步"。三环不再单独平铺左侧,
           集成在 CTA 正上方; 红牌救援/BOSS 等任务卡砍掉, 并进环里 (错题环=救援, 挑战环=主练)。 */}
-      {(() => {
-        const ringData = [
-          { label: "速算", full: "速算热身", pct: 100, hue: "#22d3ee", to: "/math/fluency", reward: "基本功热身 ✓" },
-          { label: "挑战", full: "今日挑战", pct: 45, hue: "#a78bfa", to: "/math/train", reward: "今日主练 · +80 XP" },
-          { label: "错题", full: "错题复活", pct: real && real.mistakeCount > 0 ? 0 : 100, hue: "#fbbf24",
-            to: "/math/mistakes", reward: real && real.mistakeCount > 0 ? `复活 ${real.mistakeCount} 道错题 · +60 XP` : "错题已清 · 保持" },
-        ];
-        const next = ringData.find((r) => r.pct < 100);
-        const doneCount = ringData.filter((r) => r.pct >= 100).length;
-        return (
-          <div className="absolute bottom-[92px] lg:bottom-[5%] left-1/2 -translate-x-1/2 z-20 w-[min(92vw,460px)] flex flex-col items-center gap-2.5">
-            <div className={`${GLASS} px-4 py-2 flex items-center gap-4`}>
-              {ringData.map((r) => <Ring key={r.label} label={r.label} pct={r.pct} hue={r.hue} />)}
-            </div>
-            <Link to={next ? next.to : "/math/train?mode=mock_exam"}
-              className="w-full rounded-3xl py-4 px-6 text-center text-amber-950 shadow-[0_10px_44px_rgba(251,191,36,0.5)] bg-gradient-to-r from-amber-300 via-orange-400 to-pink-400 active:scale-[0.98] transition animate-[pulse_2.6s_ease-in-out_infinite]">
-              <div className="font-display font-black text-xl leading-none">
-                {next ? `今日 ${doneCount + 1}/3 · ${next.full} ▶` : "🎉 三环已闭 · 自由挑战 ▶"}
-              </div>
-              <div className="text-xs font-bold text-amber-900/80 mt-1">{next ? next.reward : "做套模拟卷巩固"}</div>
-            </Link>
+      <div className="absolute bottom-[92px] lg:bottom-[5%] left-1/2 -translate-x-1/2 z-20 w-[min(92vw,460px)] flex flex-col items-center gap-2.5">
+        <div className={`${GLASS} px-4 py-2 flex items-center gap-4`}>
+          {ringData.map((r) => <Ring key={r.label} label={r.label} pct={r.pct} hue={r.hue} />)}
+        </div>
+        <Link to={nextRing ? nextRing.to : "/math/train?mode=mock_exam"}
+          className="w-full rounded-3xl py-4 px-6 text-center text-amber-950 shadow-[0_12px_50px_rgba(251,191,36,0.6)] bg-gradient-to-r from-amber-300 via-orange-400 to-pink-400 active:scale-[0.98] transition animate-[pulse_2.6s_ease-in-out_infinite]">
+          <div className="font-display font-black text-xl leading-none">
+            {nextRing ? `今日 ${doneRings + 1}/3 · ${nextRing.full} ▶` : "🎉 三环已闭 · 自由挑战 ▶"}
           </div>
-        );
-      })()}
+          <div className="text-xs font-bold text-amber-900/80 mt-1">{nextRing ? nextRing.reward : "做套模拟卷巩固"}</div>
+        </Link>
+      </div>
 
-      {/* ════ step② 边缘系统入口 (左右竖排 icon, 视觉低于主 CTA) — 替代回退的顶部 ribbon ════ */}
-      <div className="absolute z-10 left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+      {/* ════ step② 边缘系统入口 (左右竖排 icon, 视觉低于主 CTA) — 替代回退的顶部 ribbon。
+          大屏向中心聚拢避免"视线断层"(designer+planner review)。 ════ */}
+      <div className="absolute z-10 left-2 lg:left-[7%] xl:left-[11%] top-1/2 -translate-y-1/2 flex flex-col gap-2">
         {[
           { icon: "🗺️", label: "技能图", to: "/math/skills" },
           { icon: "🎯", label: "模拟卷", to: "/math/train?mode=mock_exam" },
@@ -202,7 +203,7 @@ export function HubV7PreviewPage() {
           </Link>
         ))}
       </div>
-      <div className="absolute z-10 right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2">
+      <div className="absolute z-10 right-2 lg:right-[7%] xl:right-[11%] top-1/2 -translate-y-1/2 flex flex-col gap-2">
         {[
           { icon: "🎨", label: "工坊", to: "/math/atelier", dot: false },
           { icon: "🏆", label: "奖杯", to: "/math/skills", dot: false },
@@ -226,9 +227,8 @@ export function HubV7PreviewPage() {
       {/* 小熊猫副手 + 对话气泡 (向导嘴替, 驱动每日提示) */}
       <div className="absolute bottom-3 right-4 z-20 flex items-end gap-2 max-w-[64vw]">
         <div className={`${GLASS} px-3 py-2 text-[11px] text-white/85 mb-2 max-w-[200px]`}>
-          {real
-            ? (real.mistakeCount > 0 ? `有 ${real.mistakeCount} 道错题等你复活, 先清掉再冲 BOSS!` : "状态超好! 今天继续闭三环 💪")
-            : "今天也要加油哦~"}
+          {/* designer review 铁律: 气泡必须**强化** CTA(同一 nextRing), 不能给竞争指令 */}
+          {nextRing ? `点下面金色按钮 → 今天第 ${doneRings + 1} 环: ${nextRing.full}! 💪` : "三环全闭啦, 你太强了! 🎉"}
         </div>
         <div className="text-4xl animate-bounce" style={{ animationDuration: "3s" }}>🐼</div>
       </div>
