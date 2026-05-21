@@ -584,6 +584,9 @@ export async function submitAttempt(input: SubmitAttemptInput): Promise<AttemptO
       // 最早到期的那条错题推进一级。和 "shouldAdvance" 一样的安全条件
       // （first attempt + 无 tutor）。否则 buildReview 抽 variant 会让原错题
       // 永远停在到期状态，焦点环死锁（Selena 做了 2 轮还闭不上）。
+      // 注意 (v0.36.74 评估): 故意**只**在 review 传播, 不扩到 normal — 见
+      // tests/mistakeRevive.test.ts "防误伤普通练习"。原设计是 今日挑战=学习 /
+      // 错题复习=清错题 的分工; normal 自动推进会"误伤"(把日常练习当复习清错题)。
       const propagated = await db.mistakes
         .where({ studentId, skillId: question.skill_id })
         .toArray();
