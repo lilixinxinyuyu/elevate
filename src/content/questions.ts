@@ -3129,6 +3129,213 @@ const examFinalPackG4B2: Question[] = [
   }),
 ];
 
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B3 (v0.36.80, 数学出题 loop iter4)
+ * 真题计算题型(口算/竖式验算/简便) + U5解方程/方程定义 + U2内角和/角分类 + U6数据。
+ * tag=["from_test","exam","期末题"]。算术逐题验算 + proxy 复核。
+ * =========================================================================== */
+const examFinalPackG4B3: Question[] = [
+  // U5 解方程（真题 Q22 型）
+  makeChoice({
+    ...UNIT_EQ,
+    id: "G4B_exam_solve_1",
+    skillId: "equation_solve_simple",
+    skillName: "解方程",
+    ability: ["calculation", "reasoning"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    cognitive: "procedural",
+    stem: "方程 5x − 18 = 12 的解是（ ）。",
+    options: [
+      { id: "A", text: "x = 2", errorTag: "solve_error" },
+      { id: "B", text: "x = 4", errorTag: "solve_error" },
+      { id: "C", text: "x = 6" },
+    ],
+    correctId: "C",
+    solution_steps: ["5x − 18 = 12", "5x = 12 + 18 = 30", "x = 30 ÷ 5 = 6"],
+    tags: [...EXAM_TAGS, "解方程"],
+  }),
+  // U5 方程定义判断（真题 Q13 型）
+  makeTF({
+    ...UNIT_EQ,
+    id: "G4B_exam_eqdef_1",
+    skillId: "equation_meaning_balance",
+    skillName: "方程的意义",
+    ability: ["concept"],
+    examPriority: "MUST_BIG",
+    difficulty: 2,
+    stem: "12 + 7X > 8 是一个方程。",
+    truth: "F",
+    solution_steps: ["方程是含有未知数的『等式』", "12 + 7X > 8 是不等式（用的是 >，不是等号）", "所以它不是方程"],
+    hints: [{ text: "方程必须有等号 =", penalty: 1 }],
+  }),
+  // U5 列方程·一步（已知和求加数）
+  makeApp({
+    ...UNIT_EQ,
+    id: "G4B_exam_eq1_1",
+    skillId: "equation_one_step_word",
+    skillName: "一步方程应用",
+    ability: ["modeling", "calculation"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    stem: "一个数加上 3.6 等于 10。求这个数。",
+    clues: ["一个数加上 3.6", "结果等于 10", "这个数是一位小数"],
+    correctClueIdx: [0, 1],
+    relationshipChoices: [
+      { id: "A", text: "设这个数为 x，列方程 x + 3.6 = 10", correct: true },
+      { id: "B", text: "x − 3.6 = 10", correct: false, errorTag: "op_inverse" },
+      { id: "C", text: "x × 3.6 = 10", correct: false, errorTag: "relation_model_error" },
+    ],
+    finalPrompt: "这个数是多少？",
+    finalValue: 6.4,
+    finalUnit: "",
+    finalDistractors: [13.6, 6, 4.6],
+    expression: "x+3.6=10",
+    solution_steps: ["设这个数为 x", "x + 3.6 = 10", "x = 10 − 3.6 = 6.4"],
+    check: "6.4 + 3.6 = 10，正确",
+    tags: [...EXAM_TAGS, "列方程"],
+  }),
+  // U1 简便计算·连减（真题 Q31 型）
+  makeSpeed({
+    ...UNIT_DAS,
+    id: "G4B_exam_simp_1",
+    skillId: "decimal_add_sub_simplify",
+    skillName: "小数简便计算",
+    ability: ["calculation", "strategy"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    stem: "用简便方法计算：95.6 − 18.3 − 25.6 = ？",
+    value: 51.7,
+    distractors: [51.9, 137.5, 52.7],
+    hints: [{ text: "先凑整：95.6 − 25.6 = 70", penalty: 1 }, { text: "再 70 − 18.3", penalty: 2 }],
+    tags: [...EXAM_TAGS, "简便计算"],
+  }),
+  // U1 简便计算·凑整加（真题 Q31 型）
+  makeSpeed({
+    ...UNIT_DAS,
+    id: "G4B_exam_simp_2",
+    skillId: "decimal_add_sub_simplify",
+    skillName: "小数简便计算",
+    ability: ["calculation", "strategy"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    stem: "用简便方法计算：3.9 + 3.08 + 12.92 + 6.1 = ？",
+    value: 26,
+    distractors: [25.9, 24, 26.1],
+    hints: [{ text: "凑整：3.9+6.1=10，3.08+12.92=16", penalty: 1 }],
+    tags: [...EXAM_TAGS, "简便计算"],
+  }),
+  // U3 小数乘法简便（结合律）
+  makeSpeed({
+    ...UNIT_DMUL,
+    id: "G4B_exam_simp_3",
+    skillId: "decimal_mul_simplify",
+    skillName: "小数乘法简便",
+    ability: ["calculation", "strategy"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    stem: "用简便方法计算：0.25 × 36 = ？",
+    value: 9,
+    distractors: [90, 0.9, 144],
+    hints: [{ text: "0.25 × 4 = 1，把 36 拆成 4 × 9", penalty: 1 }],
+    tags: [...EXAM_TAGS, "简便计算"],
+  }),
+  // 运算律·乘法分配律（真题 Q31 型）
+  makeSpeed({
+    ...UNIT_LAWS,
+    id: "G4B_exam_dist_1",
+    skillId: "distributive_law",
+    skillName: "乘法分配律",
+    ability: ["calculation", "strategy"],
+    examPriority: "MUST_BIG",
+    difficulty: 4,
+    stem: "用简便方法计算：324 × 15 + 324 × 87 − 324 × 2 = ？",
+    value: 32400,
+    distractors: [32076, 33048, 324],
+    hints: [{ text: "提取公因数 324：324 × (15 + 87 − 2)", penalty: 1 }, { text: "15 + 87 − 2 = 100", penalty: 2 }],
+    tags: [...EXAM_TAGS, "简便计算", "运算律"],
+  }),
+  // U1 竖式计算并验算（真题 Q30 型）
+  makeVR({
+    ...UNIT_DAS,
+    id: "G4B_exam_vr_1",
+    skillId: "decimal_add_sub_vertical",
+    skillName: "小数加减竖式",
+    ability: ["calculation"],
+    examPriority: "MUST_BIG",
+    difficulty: 3,
+    stem: "列竖式计算 5.42 + 7.69 = ？哪一项是正确的得数？",
+    vertLines: ["vert:5.42", "op:+", "vert:7.69", "result:?"],
+    prompt: "和应该是多少？",
+    options: [
+      { id: "A", text: "13.11", correct: true },
+      { id: "B", text: "12.11", correct: false, errorTag: "carry_error" },
+      { id: "C", text: "131.1", correct: false, errorTag: "decimal_point_error" },
+      { id: "D", text: "13.01", correct: false, errorTag: "carry_error" },
+    ],
+    solution_steps: ["小数点对齐", "百分位 2+9=11，写 1 进 1；十分位 4+6+1=11，写 1 进 1；个位 5+7+1=13", "和是 13.11"],
+  }),
+  // U2 三角形内角和 + 分类（真题 Q19 型）
+  makeChoice({
+    ...UNIT_TRI,
+    id: "G4B_exam_angsum_1",
+    skillId: "triangle_angle_sum",
+    skillName: "三角形内角和",
+    ability: ["concept", "reasoning"],
+    examPriority: "MUST_BIG",
+    difficulty: 4,
+    cognitive: "reasoning",
+    stem: "一个三角形其中两个角分别是 88° 和 44°。按角分，它是一个（ ）三角形。",
+    options: [
+      { id: "A", text: "锐角三角形" },
+      { id: "B", text: "钝角三角形", errorTag: "angle_sum_error" },
+      { id: "C", text: "直角三角形", errorTag: "angle_sum_error" },
+    ],
+    correctId: "A",
+    solution_steps: ["三角形内角和是 180°", "第三个角 = 180° − 88° − 44° = 48°", "三个角 88°、44°、48° 都小于 90°，所以是锐角三角形"],
+    tags: [...EXAM_TAGS, "三角形", "内角和"],
+  }),
+  // U2 角的分类（真题 Q32 型衍生）
+  makeChoice({
+    ...UNIT_TRI,
+    id: "G4B_exam_angle_1",
+    skillId: "angle_types",
+    skillName: "角的分类",
+    ability: ["concept"],
+    examPriority: "HIGH_BIG",
+    difficulty: 2,
+    stem: "一个角是 105°，按大小分，它是（ ）。",
+    options: [
+      { id: "A", text: "锐角", errorTag: "angle_type_error" },
+      { id: "B", text: "直角", errorTag: "angle_type_error" },
+      { id: "C", text: "钝角" },
+    ],
+    correctId: "C",
+    solution_steps: ["大于 90° 且小于 180° 的角是钝角", "105° 在 90°～180° 之间，所以是钝角"],
+    tags: [...EXAM_TAGS, "角"],
+  }),
+  // U6 条形统计图·读数（真题数据题型）
+  makeChoice({
+    ...UNIT_DATA,
+    id: "G4B_exam_data_1",
+    skillId: "data_bar_chart",
+    skillName: "条形统计图",
+    ability: ["data", "reasoning"],
+    examPriority: "HIGH_BIG",
+    difficulty: 2,
+    cognitive: "reasoning",
+    stem: "四(1)班同学最喜欢的运动统计：篮球 12 人、足球 8 人、跳绳 15 人、乒乓球 10 人。喜欢人数最多的运动是（ ）。",
+    options: [
+      { id: "A", text: "篮球", errorTag: "read_error" },
+      { id: "B", text: "跳绳" },
+      { id: "C", text: "乒乓球", errorTag: "read_error" },
+    ],
+    correctId: "B",
+    solution_steps: ["比较各项人数：12、8、15、10", "15 最大，对应跳绳", "所以喜欢人数最多的是跳绳"],
+    tags: [...EXAM_TAGS, "统计"],
+  }),
+];
+
 const SEED_QUESTIONS_RAW: Question[] = [
   ...decimalPriceQuantity,
   ...decimalSpeedDistance,
@@ -3163,6 +3370,7 @@ const SEED_QUESTIONS_RAW: Question[] = [
   ...DOT_GRID_DEMO_PACK,
   ...examFinalPackG4B,
   ...examFinalPackG4B2,
+  ...examFinalPackG4B3,
 ];
 
 // v0.35.20 iter 49: 把 LLM-backfilled metadata overlay 应用上去.

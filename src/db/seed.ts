@@ -40,7 +40,9 @@ import type { Question, StudentProfile } from "../core/types";
 //   tag from_test/exam/期末题, 对齐成都北师大四下真题 解决问题 高分题型) → bump 34。
 // v0.36.79 (数学 loop iter3) 加 examFinalPackG4B2 (+12 题, U1单位换算/小数意义比较/小数点移动
 //   + U6平均数 + U2三角形 + U4观察物体, 覆盖真题填空/判断/选择题型) → bump 35。
-const SEED_VERSION = 35;
+// v0.36.80 (数学 loop iter4) 加 examFinalPackG4B3 (+11 题, 计算口算/竖式验算/简便 + U5解方程/
+//   方程定义 + U2内角和/角分类 + U6条形图) → bump 36。
+const SEED_VERSION = 36;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
