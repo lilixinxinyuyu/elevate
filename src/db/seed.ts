@@ -36,7 +36,9 @@ import type { Question, StudentProfile } from "../core/types";
 // v0.36.74 (爸爸 2026-05-21) 期末备考扩量: 语文新增 examPackU5/U6/U7/U8 (+225 题, 覆盖
 //   全册第 5-8 单元) + U6/U7/U8 三个 unit + 一批 U5-U8 skill。改了 chinese SEED_QUESTIONS
 //   → bump 33。注意: 不 bump 的话 Selena 客户端 IndexedDB 仍是旧题, 新单元永远进不来。
-const SEED_VERSION = 33;
+// v0.36.78 (爸爸 2026-05-21 数学出题 loop iter2) 加 examFinalPackG4B (+8 期末解决问题题,
+//   tag from_test/exam/期末题, 对齐成都北师大四下真题 解决问题 高分题型) → bump 34。
+const SEED_VERSION = 34;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
