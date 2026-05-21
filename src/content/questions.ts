@@ -3336,6 +3336,78 @@ const examFinalPackG4B3: Question[] = [
   }),
 ];
 
+/* ===========================================================================
+ * 期末备考题包 examFinalPackG4B4 (v0.36.81, 数学出题 loop iter6)
+ * 图形法庭 shape_court：三根小棒能否围成三角形（真题 Q18 高频考点，U2 triangle_inequality）。
+ * 覆盖最易错的"恰好相等→不能"。tag from_test/exam/期末题。
+ * =========================================================================== */
+const triStickBase = {
+  ...base,
+  term: "下册" as const,
+  unit_id: "G4B_U2_TRI_QUAD",
+  unit_name: "认识三角形和四边形",
+  skill_id: "triangle_inequality",
+  skill_name: "三边关系",
+  ability_dimension: ["reasoning", "spatial"] as AbilityId[],
+  exam_priority: "MUST_BIG" as ExamPriority,
+  game_type: "shape_court",
+  play_as: "shape_court" as GameTemplate,
+  cognitive_level: "reasoning" as const,
+  estimated_time_seconds: 25,
+  question_format: "single_choice" as const,
+  options: [{ id: "T", text: "能" }, { id: "F", text: "不能" }],
+  hints: [{ text: "用最短两边相加，跟最长边比，必须严格大于", penalty: 1 }],
+  common_errors: [
+    { tag: "triangle_condition_error", error: "把『大于等于』当成条件", remediation: "两边之和必须严格大于第三边，等于也不行。" },
+  ],
+};
+const examFinalPackG4B4: Question[] = [
+  {
+    ...triStickBase,
+    question_id: "G4B_exam_tristick_1",
+    difficulty: 4,
+    stem: "用 5 厘米、5 厘米、10 厘米的三根小棒，能围成三角形吗？",
+    answer: { type: "choice", value: "F" },
+    solution_steps: ["最短两边之和：5+5=10", "10 不大于第三边 10", "所以不能围成三角形"],
+    feedback_correct: "判得准！5+5=10 不大于 10。",
+    feedback_wrong: "再想想：最短两边相加要严格大于最长边。",
+    tags: ["sticks:5,5,10", ...EXAM_TAGS, "三角形"],
+  },
+  {
+    ...triStickBase,
+    question_id: "G4B_exam_tristick_2",
+    difficulty: 3,
+    stem: "用 2 厘米、3 厘米、6 厘米的三根小棒，能围成三角形吗？",
+    answer: { type: "choice", value: "F" },
+    solution_steps: ["最短两边之和：2+3=5", "5 < 6（第三边）", "所以不能围成三角形"],
+    feedback_correct: "对！2+3=5 比 6 小，围不成。",
+    feedback_wrong: "最短两边 2+3=5，比最长边 6 小，围不成。",
+    tags: ["sticks:2,3,6", ...EXAM_TAGS, "三角形"],
+  },
+  {
+    ...triStickBase,
+    question_id: "G4B_exam_tristick_3",
+    difficulty: 2,
+    stem: "用 6 厘米、6 厘米、6 厘米的三根小棒，能围成三角形吗？",
+    answer: { type: "choice", value: "T" },
+    solution_steps: ["6+6=12 > 6", "任意两边之和都大于第三边", "能围成（而且是等边三角形）"],
+    feedback_correct: "能！三边相等是等边三角形。",
+    feedback_wrong: "6+6=12>6，可以围成等边三角形。",
+    tags: ["sticks:6,6,6", ...EXAM_TAGS, "三角形"],
+  },
+  {
+    ...triStickBase,
+    question_id: "G4B_exam_tristick_4",
+    difficulty: 3,
+    stem: "用 4 厘米、5 厘米、8 厘米的三根小棒，能围成三角形吗？",
+    answer: { type: "choice", value: "T" },
+    solution_steps: ["最短两边之和：4+5=9", "9 > 8（第三边）", "所以能围成三角形"],
+    feedback_correct: "对！4+5=9 大于 8，能围成。",
+    feedback_wrong: "最短两边 4+5=9，大于最长边 8，能围成。",
+    tags: ["sticks:4,5,8", ...EXAM_TAGS, "三角形"],
+  },
+];
+
 const SEED_QUESTIONS_RAW: Question[] = [
   ...decimalPriceQuantity,
   ...decimalSpeedDistance,
@@ -3371,6 +3443,7 @@ const SEED_QUESTIONS_RAW: Question[] = [
   ...examFinalPackG4B,
   ...examFinalPackG4B2,
   ...examFinalPackG4B3,
+  ...examFinalPackG4B4,
 ];
 
 // v0.35.20 iter 49: 把 LLM-backfilled metadata overlay 应用上去.

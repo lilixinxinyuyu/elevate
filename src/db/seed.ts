@@ -42,7 +42,9 @@ import type { Question, StudentProfile } from "../core/types";
 //   + U6平均数 + U2三角形 + U4观察物体, 覆盖真题填空/判断/选择题型) → bump 35。
 // v0.36.80 (数学 loop iter4) 加 examFinalPackG4B3 (+11 题, 计算口算/竖式验算/简便 + U5解方程/
 //   方程定义 + U2内角和/角分类 + U6条形图) → bump 36。
-const SEED_VERSION = 36;
+// v0.36.81 (数学 loop iter6) 加 examFinalPackG4B4 (+4 图形法庭三角形三边题) + 写 shape_court/
+//   chart_detective/memory_match 三个 game-type gen prompt → bump 37。
+const SEED_VERSION = 37;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
