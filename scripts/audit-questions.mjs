@@ -299,6 +299,61 @@ function checkMeta(q) {
   }
 }
 
+/**
+ * C6: 纯算式题答案核验 (deterministic, 非启发式)。
+ * 对 stem 是**纯算术表达式**(只有数字/运算符/括号, 无中文/字母) 的 number-answer 题,
+ * 精确求值后跟 answer.value 比对。不匹配 = 铁定答错的 key (最伤学习的 bug)。
+ *
+ * 高精度设计 (2026-05-21 实测 85 题 0 误报): 严格只收纯算式 LHS, 自动排除了
+ * "积有几位小数"(答案是小数位数不是积)、"1-4 月"范围记法、应用题 (都含中文 → 被过滤)。
+ * 支持括号 + 一元负号 + 全角运算符 ×÷ + Unicode 减号 −。
+ */
+function evalArith(expr) {
+  const s = expr.replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-").replace(/\s/g, "");
+  const toks = s.match(/(\d+(?:\.\d+)?|[+\-*/()])/g);
+  if (!toks) return null;
+  const out = [], ops = [], prec = { "+": 1, "-": 1, "*": 2, "/": 2 };
+  const apply = () => {
+    const op = ops.pop(), b = out.pop(), a = out.pop();
+    if (a == null || b == null) return false;
+    out.push(op === "+" ? a + b : op === "-" ? a - b : op === "*" ? a * b : a / b);
+    return true;
+  };
+  let prev = null;
+  for (const t of toks) {
+    if (/^\d/.test(t)) out.push(parseFloat(t));
+    else if (t === "(") ops.push(t);
+    else if (t === ")") {
+      while (ops.length && ops[ops.length - 1] !== "(") if (!apply()) return null;
+      if (ops.pop() !== "(") return null;
+    } else {
+      if ((prev === null || prev === "(" || prev in prec) && t === "-") out.push(0); // 一元负号
+      while (ops.length && ops[ops.length - 1] !== "(" && prec[ops[ops.length - 1]] >= prec[t]) if (!apply()) return null;
+      ops.push(t);
+    }
+    prev = t;
+  }
+  while (ops.length) { if (ops[ops.length - 1] === "(") return null; if (!apply()) return null; }
+  return out.length === 1 ? out[0] : null;
+}
+
+function checkPureExpressionAnswer(q) {
+  if (q.answer?.type !== "number") return;
+  if (/位小数|几位/.test(q.stem ?? "")) return; // 防御: "积有几位小数" 答案是位数不是积
+  const lhs = (q.stem ?? "").replace(/\s/g, "").replace(/[?？=＝].*$/, ""); // 取首个 =/? 前
+  if (!/^[\d.+\-×÷*/()−]+$/.test(lhs)) return; // 严格: LHS 纯算式 (无中文/字母)
+  if (!/[+\-×÷*/−]/.test(lhs)) return; // 必须含运算符
+  const val = evalArith(lhs);
+  if (val === null || !Number.isFinite(val)) return;
+  const ans = Number(q.answer.value);
+  if (!Number.isFinite(ans)) return;
+  if (Math.abs(val - ans) > 1e-6) {
+    add(q.question_id, "critical", "C6",
+      `纯算式 "${lhs}" 求值 = ${Math.round(val * 1e6) / 1e6} 但 answer.value = ${ans}`,
+      "答案 key 算错了, 必须改对 (纯算式精确核验, 非启发式)");
+  }
+}
+
 // 跑所有检查
 for (const q of SEED_QUESTIONS) {
   checkChoiceConsistency(q);
@@ -306,6 +361,7 @@ for (const q of SEED_QUESTIONS) {
   checkMultistepAnswer(q);
   checkFormatVsAnswer(q);
   checkSimpleArithmetic(q);
+  checkPureExpressionAnswer(q);
   checkPinyinAnswerLeak(q);
   checkMeta(q);
 }
