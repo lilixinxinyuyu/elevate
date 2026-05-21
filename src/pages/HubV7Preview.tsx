@@ -14,10 +14,14 @@
  * 角色立绘用一张预抠好的样张 (/_fb-demo.png); 真版会是选角/升段实时生成 + 实时抠图。
  * 入口: /math/hub-v7-preview
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ensureFullBodyAvatar } from "../lib/fullBodyAvatar";
 import { ARCHETYPE_META, type Archetype, type Gender } from "../lib/characterChoice";
+import { db } from "../db/dexie";
+import { getTotalXp, computeCurrentRating, getFragileSkillsToReview } from "../db/service";
+import { levelFromXp } from "../core/scoring";
+import { currentExam, daysUntil } from "../core/examDates";
 
 const GLASS =
   "rounded-3xl bg-white/10 backdrop-blur-md border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.4)]";
@@ -57,6 +61,38 @@ export function HubV7PreviewPage() {
       setLoading(false);
     }
   }, [gender]);
+
+  // ── 真实数据 (让预览显示 Selena 的实际进度, 不是 mock; 全 dev 可验证, 无需 gen) ──
+  const [real, setReal] = useState<{
+    name: string; level: number; xp: number; tierName: string; tierRoman: string;
+    examShort: string; examDays: number; mistakeCount: number;
+  } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const s = (await db.students.toArray())[0];
+        if (!s || cancelled) return;
+        const xp = await getTotalXp(s.id);
+        const r = await computeCurrentRating(s.id, "下册");
+        const fragile = await getFragileSkillsToReview(s.id);
+        const exam = currentExam();
+        if (cancelled) return;
+        setReal({
+          name: s.name ?? "Selena",
+          level: levelFromXp(xp),
+          xp,
+          tierName: r.tier.name,
+          tierRoman: r.subRankRoman,
+          examShort: exam.name.replace("考试", ""),
+          examDays: daysUntil(exam.date),
+          mistakeCount: fragile.length,
+        });
+      } catch { /* 预览失败不影响布局展示 */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const fmtXp = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
 
   return (
     <div className="relative min-h-dvh overflow-hidden text-white bg-gradient-to-b from-[#0a0e2c] via-[#1b1147] to-[#0a0e1f]">
@@ -101,13 +137,13 @@ export function HubV7PreviewPage() {
       <div className={`absolute top-4 left-4 ${GLASS} px-4 py-2.5 flex items-center gap-3`}>
         <div className="text-3xl">🐼</div>
         <div>
-          <div className="font-display font-bold text-base leading-none">Selena</div>
+          <div className="font-display font-bold text-base leading-none">{real?.name ?? "Selena"}</div>
           <div className="mt-1 flex items-center gap-2">
-            <span className="text-[11px] text-amber-300 font-bold">Lv 6</span>
+            <span className="text-[11px] text-amber-300 font-bold">Lv {real?.level ?? 1}</span>
             <div className="w-28 h-1.5 rounded-full bg-white/15 overflow-hidden">
               <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400" style={{ width: "62%" }} />
             </div>
-            <span className="text-[10px] text-white/60 tabular-nums">12.4k XP</span>
+            <span className="text-[10px] text-white/60 tabular-nums">{real ? fmtXp(real.xp) : "0"} XP</span>
           </div>
         </div>
       </div>
@@ -116,7 +152,7 @@ export function HubV7PreviewPage() {
       <div className={`absolute top-4 right-4 lg:right-[6%] ${GLASS} px-4 py-2 text-center`}>
         <div className="text-[11px] text-white/60 leading-none">当前段位</div>
         <div className="mt-1 font-display font-black text-lg leading-none flex items-center gap-1.5">
-          <span>🏛️</span><span className="bg-gradient-to-r from-cyan-200 to-violet-200 bg-clip-text text-transparent">锦江区 II</span>
+          <span>🏛️</span><span className="bg-gradient-to-r from-cyan-200 to-violet-200 bg-clip-text text-transparent">{real ? `${real.tierName} ${real.tierRoman}` : "和平街小学 I"}</span>
         </div>
       </div>
 
@@ -133,8 +169,8 @@ export function HubV7PreviewPage() {
       <div className="absolute z-10 left-1/2 -translate-x-1/2 bottom-[150px] flex flex-row gap-2 w-[94vw] overflow-x-auto pb-1
         md:left-auto md:right-4 md:translate-x-0 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:flex-col md:gap-2.5 md:w-[min(78vw,300px)] md:overflow-visible md:pb-0">
         {[
-          { icon: "🚑", t: "红牌救援", s: "3 道错题待复活", c: "from-rose-500/25 to-rose-400/10 border-rose-400/40" },
-          { icon: "⚔️", t: "期末 BOSS", s: "39 天后来袭 · 今天备战", c: "from-violet-500/25 to-fuchsia-400/10 border-violet-400/40" },
+          { icon: "🚑", t: "红牌救援", s: real ? (real.mistakeCount > 0 ? `${real.mistakeCount} 个薄弱点待救援` : "暂无待救援 · 保持住") : "错题待复活", c: "from-rose-500/25 to-rose-400/10 border-rose-400/40" },
+          { icon: "⚔️", t: `${real?.examShort ?? "期末"} BOSS`, s: real ? `${real.examDays} 天后来袭 · 今天备战` : "备战中", c: "from-violet-500/25 to-fuchsia-400/10 border-violet-400/40" },
           { icon: "⚡", t: "能力诊断", s: "看脑力雷达 4 维成长", c: "from-cyan-500/25 to-sky-400/10 border-cyan-400/40" },
         ].map((m) => (
           <div key={m.t} className={`shrink-0 w-[212px] md:w-auto rounded-2xl bg-gradient-to-br ${m.c} border backdrop-blur-md px-4 py-3 flex items-center gap-3 shadow-lg`}>
