@@ -45,26 +45,33 @@ const GAME_CORRECT = "__game_correct__";
 // 涵盖"找错字/选病句"两大类题干 (含各种病句错型名: 搭配不当/成分残缺/前后矛盾/重复啰嗦…)。
 const FIND_WRONG_RE = /(写错|错别字|用错|不正确|不是|哪个错|错的|有错|不对|错误|毛病|语病|病句|修改|有.{0,4}问题|搭配不当|残缺|矛盾|啰嗦|重复|用词不当|语序)/;
 
-async function loadChineseQuestions() {
+async function loadChineseSubject() {
   const tmp = join(tmpdir(), `audit-cn-${Date.now()}.mjs`);
   await build({ entryPoints: [ENTRY], bundle: true, format: "esm", outfile: tmp, platform: "node", logLevel: "silent" });
   const mod = await import(tmp);
   rmSync(tmp, { force: true });
-  return mod.chineseSubject.seedQuestions;
+  return { qs: mod.chineseSubject.seedQuestions, skills: mod.chineseSubject.skills ?? [] };
 }
 
 function isMinigame(q) {
   return q?.answer?.value === GAME_CORRECT || !!q?.game_data;
 }
 
-function audit(qs) {
-  const crit = { X1_no_options: [], X2_answer_not_in_options: [], X3_dup_option: [], X4_fmt_mismatch: [], X5_minigame_no_data: [] };
+function audit(qs, skills) {
+  const crit = { X1_no_options: [], X2_answer_not_in_options: [], X3_dup_option: [], X4_fmt_mismatch: [], X5_minigame_no_data: [], X6_orphan_skill: [] };
   const info = { I1_correct_has_errorTag: [] };
+  // X6: question.skill_id 必须在 SKILLS_CHINESE 里。孤儿 skill_id → mastery 追踪/能力映射/
+  //   per-ability mock 覆盖 对该题全失效 (v0.36.78: 加 U6-U8 后用此守新单元/未来并发加题)。
+  const skillIds = new Set(skills.map((s) => s.id));
   for (const q of qs) {
     const id = q.question_id;
     const fmt = q.question_format;
     const ans = q.answer;
     const opts = Array.isArray(q.options) ? q.options : [];
+
+    if (q.skill_id && skillIds.size > 0 && !skillIds.has(q.skill_id)) {
+      crit.X6_orphan_skill.push(`${id} (skill=${q.skill_id})`);
+    }
 
     if (isMinigame(q)) {
       if (!q.game_data) crit.X5_minigame_no_data.push(id);
@@ -96,8 +103,8 @@ function audit(qs) {
   return { crit, info };
 }
 
-const qs = await loadChineseQuestions();
-const { crit, info } = audit(qs);
+const { qs, skills } = await loadChineseSubject();
+const { crit, info } = audit(qs, skills);
 const critCount = Object.values(crit).reduce((n, a) => n + a.length, 0);
 const infoCount = Object.values(info).reduce((n, a) => n + a.length, 0);
 
