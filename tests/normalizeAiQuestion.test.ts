@@ -132,8 +132,14 @@ describe("normalizeAiQuestion — Q3 fix #1 generator side", () => {
     expect(report.warnings.some((w) => /R4/.test(w))).toBe(true);
   });
 
+  // 注意 (v0.36.77): R6 (v0.36.26) 会 backfill 缺失的必填 metadata (version/status/grade)
+  // 并标 changed=true。要测"format/answer 不被动" 的纯净 case, 输入必须本就带齐这 3 个必填
+  // 字段, 否则 R6 触发 → changed=true (那是对的, 不是 bug)。
+  const META = { version: 1, status: "approved", grade: 4 };
+
   it("正常 single_choice + choice answer 不动", () => {
     const { q, report } = normalizeAiQuestion({
+      ...META,
       stem: "x",
       question_format: "single_choice",
       answer: { type: "choice", value: "b" },
@@ -149,11 +155,25 @@ describe("normalizeAiQuestion — Q3 fix #1 generator side", () => {
 
   it("正常 numeric + numeric format 不动", () => {
     const { q, report } = normalizeAiQuestion({
+      ...META,
       stem: "x",
       question_format: "numeric",
       answer: { type: "number", value: 5 },
     });
     expect(q.question_format).toBe("numeric");
     expect(report.changed).toBe(false);
+  });
+
+  it("R6: 缺 version/status/grade → backfill + changed=true (守 R6 行为)", () => {
+    const { q, report } = normalizeAiQuestion({
+      stem: "x",
+      question_format: "numeric",
+      answer: { type: "number", value: 5 },
+    });
+    expect(report.changed).toBe(true);
+    expect(q.version).toBe(1);
+    expect(q.status).toBe("approved");
+    expect(q.grade).toBe(4);
+    expect(report.rules).toEqual(expect.arrayContaining(["R6.version", "R6.status", "R6.grade"]));
   });
 });
