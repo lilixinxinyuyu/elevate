@@ -38,6 +38,34 @@ function applyMetadataBackfill(qs: Question[]): Question[] {
   });
 }
 
+/**
+ * v0.36.72: 阅读时长地板 (reading-time floor)。
+ * Selena 反映"长题给的时间太短"(10 岁读字慢)。audit-questions.mjs 的 M4 规则把它当 minor
+ * flag 出来 (26 道), 但根因是个别 pack(尤其 AI 生成的) estimated_time 没按题长加成。
+ * 这里在装配末端**统一兜底**: 按 audit 同款 rubric **只抬高、绝不降低** estimated_time,
+ * 一处修全部 + 未来新 AI 题自动合规, 免去逐条手改 24 个分散 entry。
+ *   - stem ≥ 60 字  → ≥ 45s   (基础 30 + 长题加成 15)
+ *   - stem ≥ 120 字 → ≥ 50s   (超长加成 25)
+ *   - 多行/长选项(最长 ≥ 20 字) → ≥ 30s  (选项阅读加成 15)
+ * 取适用地板里的最大值, 跟原 estimated_time 再取 max。
+ */
+function applyReadingTimeFloor(qs: Question[]): Question[] {
+  return qs.map((q) => {
+    const ets = q.estimated_time_seconds;
+    if (typeof ets !== "number") return q;
+    const stemLen = (q.stem ?? "").length;
+    const opts = Array.isArray(q.options) ? q.options : [];
+    const longestOpt = opts.reduce((mx, o) => Math.max(mx, (o?.text ?? "").length), 0);
+    const hasMultiLineOpt = opts.some((o) => (o?.text ?? "").includes("\n") || (o?.text ?? "").length >= 20);
+    let floor = 0;
+    if (stemLen >= 60) floor = Math.max(floor, 45);
+    if (stemLen >= 120) floor = Math.max(floor, 50);
+    if (hasMultiLineOpt && longestOpt >= 20) floor = Math.max(floor, 30);
+    if (floor <= ets) return q;
+    return { ...q, estimated_time_seconds: floor };
+  });
+}
+
 const base = {
   version: 1 as const,
   status: "approved" as const,
@@ -2667,4 +2695,4 @@ const SEED_QUESTIONS_RAW: Question[] = [
 // v0.35.20 iter 49: 把 LLM-backfilled metadata overlay 应用上去.
 // 空 overlay {} 时无副作用. backfill 跑完 questions-backfilled-metadata.json
 // 有内容后, 主路径 EstimationGate / SpeedMatch / Scratch / MultiStep 触发率提升.
-export const SEED_QUESTIONS: Question[] = applyMetadataBackfill(SEED_QUESTIONS_RAW);
+export const SEED_QUESTIONS: Question[] = applyReadingTimeFloor(applyMetadataBackfill(SEED_QUESTIONS_RAW));

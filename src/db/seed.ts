@@ -31,7 +31,9 @@ import type { Question, StudentProfile } from "../core/types";
 // v0.35.98 加 chinese imitatePack (50 题仿写) + 4 个 IMITATE skill → bump 29.
 // v0.36.1 加 chinese readingPack (15 题阅读理解 multi-step) + 3 个 READING skill → bump 30.
 // v0.36.38 加 chinese glyphPack (15 题字形侦探/偏旁部首, C2 cluster) + C4B_GLYPH_RADICAL skill → bump 31.
-const SEED_VERSION = 31;
+// v0.36.72 装配末端加 applyReadingTimeFloor: 按 audit M4 rubric 抬高 26 道长题/多行题的
+//   estimated_time (Selena 反映"长题给的时间太短")。改了 SEED_QUESTIONS estimated_time → bump 32.
+const SEED_VERSION = 32;
 const SEED_KEY = "seedVersion";
 const AGENT_PULL_KEY = "agentQuestionsPulledAt";
 const AGENT_PULL_INTERVAL = 60 * 60 * 1000; // 每小时最多拉一次 agent 题
