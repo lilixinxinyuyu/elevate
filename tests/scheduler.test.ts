@@ -82,6 +82,25 @@ describe("scheduler", () => {
     expect(without.questionIds).not.toContain(u4!.question_id);
   });
 
+  it("mock_exam 覆盖全部 6 个下册单元（保底，防 U4 观察物体被挤成 0）", () => {
+    const idToUnit = new Map(SEED_QUESTIONS.map((q) => [q.question_id, q.unit_id]));
+    const G4B_UNITS = [
+      "G4B_U1_DECIMAL_ADD_SUB", "G4B_U2_TRI_QUAD", "G4B_U3_DECIMAL_MULTIPLY",
+      "G4B_U4_OBSERVE_OBJECTS", "G4B_U5_EQUATIONS", "G4B_U6_DATA",
+    ];
+    for (const size of [30, 60, 80]) {
+      const plan = buildDailySession({
+        studentId: "s1", mode: "mock_exam", targetMinutes: 60, dateKey: "2026-06-20",
+        pool: SEED_QUESTIONS, mastery: [], mistakes: [], attempts: [], overrideTargetCount: size,
+      });
+      const unitsHit = new Set(plan.questionIds.map((id) => idToUnit.get(id)));
+      for (const u of G4B_UNITS) {
+        expect(unitsHit.has(u), `size ${size} 应覆盖单元 ${u}`).toBe(true);
+      }
+      expect(plan.questionIds.length).toBe(size);
+    }
+  });
+
   it("skill 模式只选指定技能", () => {
     const plan = buildDailySession({
       studentId: "s1",

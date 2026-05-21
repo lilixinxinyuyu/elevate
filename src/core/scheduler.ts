@@ -729,12 +729,8 @@ function buildMockExam(input: InternalInput): DailySessionPlan {
   ];
   const candidatePool = input.pool.filter((q) => G4B_UNIT_IDS.includes(q.unit_id));
 
-  // 按难度分桶
-  const buckets: Record<1 | 2 | 3 | 4, Question[]> = { 1: [], 2: [], 3: [], 4: [] };
-  for (const q of candidatePool) {
-    const d = (q.difficulty >= 4 ? 4 : q.difficulty) as 1 | 2 | 3 | 4;
-    buckets[d].push(q);
-  }
+  // v0.35.10 (爸爸反馈): 支持 30/60/80 题 (从 Train.tsx ?size= 传 targetCount), cap 100
+  const total = Math.max(20, Math.min(100, input.targetCount));
 
   // 每桶按 exam_priority 加权排序（MUST_BIG 优先）
   const weight = (q: Question) =>
@@ -742,48 +738,72 @@ function buildMockExam(input: InternalInput): DailySessionPlan {
     q.exam_priority === "MUST_SMALL" ? 1 :
     q.exam_priority === "HIGH_BIG" ? 1 :
     q.exam_priority === "HIGH_SMALL" ? 2 : 3;
-  const sortBucket = (qs: Question[]) => {
-    return qs.map((q) => ({
-      q, w: weight(q), j: hashSeed(input.dateKey + ":mock:" + q.question_id) / 2 ** 32,
-    })).sort((a, b) => a.w - b.w || a.j - b.j).map((x) => x.q);
-  };
-  buckets[1] = sortBucket(buckets[1]);
-  buckets[2] = sortBucket(buckets[2]);
-  buckets[3] = sortBucket(buckets[3]);
-  buckets[4] = sortBucket(buckets[4]);
+  const jitter = (q: Question) => hashSeed(input.dateKey + ":mock:" + q.question_id) / 2 ** 32;
+  const byPriority = (a: Question, b: Question) => weight(a) - weight(b) || jitter(a) - jitter(b);
 
-  // 难度配比 10/30/40/20
-  // v0.35.10 (爸爸反馈): 支持 30/60/80 题 (从 Train.tsx ?size= 传 targetCount), cap 100
-  const total = Math.max(20, Math.min(100, input.targetCount));
-  const t1 = Math.round(total * 0.1);
-  const t2 = Math.round(total * 0.3);
-  const t3 = Math.round(total * 0.4);
-  const t4 = total - t1 - t2 - t3;
-
-  const picked: Question[] = [
-    ...buckets[1].slice(0, t1),
-    ...buckets[2].slice(0, t2),
-    ...buckets[3].slice(0, t3),
-    ...buckets[4].slice(0, t4),
-  ];
-
-  // 同一 skill 不超过 3 道（强制 skill 多样性）
   const perSkillCap = 3;
   const perSkillCount = new Map<string, number>();
-  const filtered: Question[] = [];
-  for (const q of picked) {
+  const tryAdd = (q: Question, into: Question[], ids: Set<string>): boolean => {
+    if (ids.has(q.question_id)) return false;
     const c = perSkillCount.get(q.skill_id) ?? 0;
-    if (c >= perSkillCap) continue;
-    filtered.push(q);
-    perSkillCount.set(q.skill_id, c + 1);
+    if (c >= perSkillCap) return false;
+    into.push(q); ids.add(q.question_id); perSkillCount.set(q.skill_id, c + 1);
+    return true;
+  };
+
+  // v0.36.74 (8787+8788 peer review 一致选 A): **每单元保底覆盖**。此前纯按难度桶+exam_priority
+  // 选 top-N, 没有 per-unit 配额 → 题量少/优先级低的单元 (U4 观察物体 / U2 几何) 被 U1/U3 挤成
+  // 0 道 (实测 30/60 题模拟卷 U4 恒 0, 80 题也 0-1)。期末考全 6 单元 → 模拟卷漏整个单元 =
+  // 假覆盖 + 考场盲区。修法: 先按 minPerUnit 给每单元留底量 (priority 排序, 受 skill cap 限),
+  // 余下再走原难度配比, 保留"真考难度感"。
+  const minPerUnit = Math.max(2, Math.floor(total / 20)); // 30→2, 60→3, 80→4
+  const selectedIds = new Set<string>();
+  const reserved: Question[] = [];
+  const byUnit = new Map<string, Question[]>();
+  for (const q of candidatePool) {
+    (byUnit.get(q.unit_id) ?? byUnit.set(q.unit_id, []).get(q.unit_id)!).push(q);
+  }
+  for (const u of G4B_UNIT_IDS) {
+    const us = (byUnit.get(u) ?? []).slice().sort(byPriority);
+    let took = 0;
+    for (const q of us) {
+      if (took >= minPerUnit || reserved.length >= total) break;
+      if (tryAdd(q, reserved, selectedIds)) took += 1;
+    }
   }
 
-  // 不够补回去
+  // 余下名额按难度桶 10/30/40/20 填 (排除已留底)
+  const buckets: Record<1 | 2 | 3 | 4, Question[]> = { 1: [], 2: [], 3: [], 4: [] };
+  for (const q of candidatePool) {
+    if (selectedIds.has(q.question_id)) continue;
+    const d = (q.difficulty >= 4 ? 4 : q.difficulty) as 1 | 2 | 3 | 4;
+    buckets[d].push(q);
+  }
+  buckets[1].sort(byPriority); buckets[2].sort(byPriority);
+  buckets[3].sort(byPriority); buckets[4].sort(byPriority);
+
+  const remaining = Math.max(0, total - reserved.length);
+  const t1 = Math.round(remaining * 0.1);
+  const t2 = Math.round(remaining * 0.3);
+  const t3 = Math.round(remaining * 0.4);
+  const t4 = remaining - t1 - t2 - t3;
+  const bucketPicked = [
+    ...buckets[1].slice(0, t1), ...buckets[2].slice(0, t2),
+    ...buckets[3].slice(0, t3), ...buckets[4].slice(0, t4),
+  ];
+
+  const filtered: Question[] = [...reserved];
+  for (const q of bucketPicked) {
+    if (filtered.length >= total) break;
+    tryAdd(q, filtered, selectedIds);
+  }
+
+  // 不够补回去（放宽 skill cap，从所有未选里捞，按难度中段优先）
   if (filtered.length < total) {
-    for (const q of [...buckets[2], ...buckets[3]]) {
+    for (const q of [...buckets[2], ...buckets[3], ...buckets[1], ...buckets[4]]) {
       if (filtered.length >= total) break;
-      if (filtered.includes(q)) continue;
-      filtered.push(q);
+      if (selectedIds.has(q.question_id)) continue;
+      filtered.push(q); selectedIds.add(q.question_id);
     }
   }
 
