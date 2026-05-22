@@ -127,6 +127,10 @@ export function HubV7PreviewPage() {
     return v;
   };
   const examDaysAnim = useCountUp(real?.examDays ?? 38);
+  // 星际航线: 飞船随考试临近右移; 阶段按剩余天数 (夯实基础≥25 / 薄弱攻坚10-24 / 冲刺<10)
+  const examDaysVal = real?.examDays ?? 38;
+  const phase = examDaysVal >= 25 ? 0 : examDaysVal >= 10 ? 1 : 2;
+  const shipPct = Math.min(96, Math.max(3, ((50 - examDaysVal) / 50) * 100));
 
   // 今日三环 (预览 mock; 真版接 fluency/challengeTodayCount/dueMistakes)。CTA 与熊猫气泡共用 nextRing。
   // 三环 = 必胜(保底启动) + 薄弱修复(补短板) + 荣耀挑战(可选, 给称号碎片) — 心理学 #3。
@@ -157,6 +161,14 @@ export function HubV7PreviewPage() {
   const topGain = abilities
     .map((a, i) => ({ label: a.label, hue: a.hue, d: a.v - lastWeek[i]! }))
     .sort((x, y) => y.d - x.d)[0]!;
+  // 薄弱点 Boss 化 (心理学 #1): 最弱维 → 拟人怪; HP 挂错题数 (修复=削血, 击败=清薄弱)。
+  // 外部化叙事: 不是"我笨", 是"有只怪在捣乱"。去羞耻 + 漏斗进补薄弱。
+  const BOSS: Record<string, { n: string; e: string }> = {
+    准确: { n: "粗心大魔王", e: "👹" }, 熟练: { n: "迷雾兽", e: "🌫️" },
+    坚持: { n: "拖延怪", e: "🦥" }, 广度: { n: "知识黑洞", e: "🕳️" },
+  };
+  const boss = BOSS[weakest.label] ?? { n: "迷雾兽", e: "🌫️" };
+  const bossHp = real ? Math.min(100, Math.max(15, real.mistakeCount * 18)) : 55;
 
   const tools = [
     { icon: "🗺️", label: "技能图", to: "/math/skills" },
@@ -246,9 +258,26 @@ export function HubV7PreviewPage() {
       <div className={`absolute z-20 right-4 lg:right-[3%] xl:right-[5%] top-1/2 -translate-y-1/2 w-[clamp(236px,23vw,304px)] ${GLASS} p-4 hidden md:flex flex-col gap-3.5 overflow-hidden`}>
         <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-cyan-300/40 to-transparent" />
         {/* 倒计时大卡 (霓虹橙红 + 发光, designer: 要冲刺情绪) */}
-        <div className="rounded-2xl bg-gradient-to-br from-orange-500/40 via-rose-500/30 to-fuchsia-500/20 border border-orange-300/50 px-3 py-3 text-center shadow-[0_0_28px_rgba(251,113,36,0.4),inset_0_1px_0_rgba(255,255,255,0.25)]">
-          <div className="text-[12px] text-orange-100 font-black tracking-wide">🔥 决战{real?.examShort ?? "期末"}</div>
-          <div className="font-display font-black leading-none mt-1"><span className="text-5xl text-white tabular-nums drop-shadow-[0_0_14px_rgba(255,200,120,0.7)]">{examDaysAnim}</span><span className="text-base text-orange-100/80 ml-1 font-bold">天</span></div>
+        <div className="rounded-2xl bg-gradient-to-br from-orange-500/40 via-rose-500/30 to-fuchsia-500/20 border border-orange-300/50 px-3 py-3 shadow-[0_0_28px_rgba(251,113,36,0.4),inset_0_1px_0_rgba(255,255,255,0.25)]">
+          <div className="text-center">
+            <div className="text-[12px] text-orange-100 font-black tracking-wide">🔥 决战{real?.examShort ?? "期末"}</div>
+            <div className="font-display font-black leading-none mt-1"><span className="text-5xl text-white tabular-nums drop-shadow-[0_0_14px_rgba(255,200,120,0.7)]">{examDaysAnim}</span><span className="text-base text-orange-100/80 ml-1 font-bold">天</span></div>
+          </div>
+          {/* 星际航线图: 把"还剩 N 天"重构成"航程" — 3 阶段 + 飞船在当前阶段 + 终点 Boss (心理学: 时间焦虑→每天前进一格) */}
+          <div className="mt-2.5">
+            <div className="relative h-2 rounded-full overflow-hidden flex shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]">
+              <div className="h-full bg-cyan-400/55" style={{ width: "42%" }} />
+              <div className="h-full bg-amber-400/55" style={{ width: "34%" }} />
+              <div className="h-full bg-rose-500/65" style={{ width: "24%" }} />
+              {/* 飞船在当前阶段位置 */}
+              <span className="absolute -top-1 text-[11px] leading-none drop-shadow-[0_0_4px_#000]" style={{ left: `calc(${shipPct}% - 6px)` }}>🚀</span>
+            </div>
+            <div className="flex justify-between text-[8px] text-white/55 mt-1 font-bold">
+              <span className={phase === 0 ? "text-cyan-200" : ""}>夯实基础</span>
+              <span className={phase === 1 ? "text-amber-200" : ""}>薄弱攻坚</span>
+              <span className={phase === 2 ? "text-rose-200" : ""}>冲刺 ⚔️</span>
+            </div>
+          </div>
         </div>
         <div className="border-t border-white/10 pt-2.5">
           <div className="text-[13px] text-white font-bold mb-2">📋 今日三环 <span className="text-white/45 text-[11px] font-normal ml-1">{doneRings}/3</span></div>
@@ -263,6 +292,18 @@ export function HubV7PreviewPage() {
             ))}
           </div>
         </div>
+        {/* 薄弱点 Boss 化 (心理学 #1): 外部化 — 击败它 = 补薄弱, 去羞耻 */}
+        <Link to="/math/mistakes" className="border-t border-white/10 pt-2.5 block group">
+          <div className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500/25 to-indigo-500/10 border border-violet-400/35 px-2.5 py-2 hover:from-violet-500/35 transition shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+            <span className="text-2xl group-hover:scale-110 transition-transform">{boss.e}</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-bold text-violet-100 truncate">{boss.n}<span className="text-white/45 font-normal"> · {weakest.label}弱点</span></div>
+              <div className="h-1.5 rounded-full bg-white/12 mt-1 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full bg-gradient-to-r from-rose-400 to-fuchsia-400 shadow-[0_0_6px_rgba(244,63,94,0.6)] transition-[width] duration-[1100ms] ease-out" style={{ width: revealed ? `${bossHp}%` : "100%" }} /></div>
+            </div>
+            <span className="text-[10px] text-rose-200 font-bold whitespace-nowrap">HP{bossHp}</span>
+          </div>
+          <div className="text-[9px] text-white/40 text-center mt-1">修复薄弱 = 削它的血 · 击败解锁奖杯 🏆</div>
+        </Link>
         <div className="border-t border-white/10 pt-2.5 grid grid-cols-2 gap-2">
           {tools.map((t) => (
             <Link key={t.label} to={t.to} className="relative rounded-xl bg-white/[0.08] border border-white/15 py-3 flex flex-col items-center gap-1 hover:bg-white/[0.18] active:scale-95 transition shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
