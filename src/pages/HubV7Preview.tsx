@@ -17,8 +17,10 @@ import { levelFromXp } from "../core/scoring";
 import { currentExam, daysUntil } from "../core/examDates";
 import { computeAbilityDiagnostic } from "../core/rating";
 
+// 高级玻璃: 顶部内高光(白) + 底部内暗边 = 厚度感; 强背景模糊 (designer: 别像平庸网页 div)。
 const GLASS =
-  "rounded-3xl bg-white/[0.07] backdrop-blur-xl border border-white/15 shadow-[0_8px_40px_rgba(0,0,0,0.5)]";
+  "rounded-3xl bg-white/[0.07] backdrop-blur-2xl border border-white/20 " +
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(0,0,0,0.3),0_10px_44px_rgba(0,0,0,0.55)]";
 
 /** 4 维能力雷达 (彩色, 高级感来源 — 从原版搬进左面板)。 */
 function Radar({ vals }: { vals: { label: string; v: number; hue: string }[] }) {
@@ -29,14 +31,21 @@ function Radar({ vals }: { vals: { label: string; v: number; hue: string }[] }) 
   };
   const poly = vals.map((d, i) => pt(i, R * Math.min(1, Math.max(0.04, d.v / 100))).join(",")).join(" ");
   return (
-    <svg width="144" height="138" viewBox="0 0 144 138">
+    <svg width="150" height="142" viewBox="0 0 150 142">
+      <defs>
+        <linearGradient id="radarFill" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#a78bfa" stopOpacity="0.4" />
+        </linearGradient>
+        <filter id="radarGlow"><feGaussianBlur stdDeviation="2.2" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+      </defs>
       {[0.33, 0.66, 1].map((g, i) => (
-        <polygon key={i} points={vals.map((_, j) => pt(j, R * g).join(",")).join(" ")} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+        <polygon key={i} points={vals.map((_, j) => pt(j, R * g).join(",")).join(" ")} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
       ))}
-      {vals.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />; })}
-      <polygon points={poly} fill="rgba(99,179,237,0.28)" stroke="#63b3ed" strokeWidth="2" />
-      {vals.map((d, i) => { const [x, y] = pt(i, R * Math.min(1, Math.max(0.04, d.v / 100))); return <circle key={i} cx={x} cy={y} r="2.5" fill={d.hue} />; })}
-      {vals.map((d, i) => { const [x, y] = pt(i, R + 13); return <text key={i} x={x} y={y} fill={d.hue} fontSize="11" fontWeight="bold" textAnchor="middle" dominantBaseline="middle">{d.label}</text>; })}
+      {vals.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />; })}
+      <polygon points={poly} fill="url(#radarFill)" stroke="#7dd3fc" strokeWidth="2.5" filter="url(#radarGlow)" strokeLinejoin="round" />
+      {vals.map((d, i) => { const [x, y] = pt(i, R * Math.min(1, Math.max(0.04, d.v / 100))); return <circle key={i} cx={x} cy={y} r="3" fill="#fff" stroke={d.hue} strokeWidth="2" />; })}
+      {vals.map((d, i) => { const [x, y] = pt(i, R + 14); return <text key={i} x={x} y={y} fill={d.hue} fontSize="12" fontWeight="bold" textAnchor="middle" dominantBaseline="middle">{d.label}</text>; })}
     </svg>
   );
 }
@@ -134,6 +143,8 @@ export function HubV7PreviewPage() {
       {/* ── 中央: 角色 + 平台 ── */}
       <div className="absolute inset-0 flex items-end justify-center">
         <div className="relative flex items-end justify-center" style={{ height: "100%" }}>
+          {/* 竖向能量光柱 (把角色从背景里"推"出来 — vision review #1: 角色与场景融合) */}
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-[10%] w-[clamp(150px,18vw,260px)] h-[78%] rounded-[50%] bg-gradient-to-t from-cyan-400/25 via-violet-400/15 to-transparent blur-2xl" />
           <div className="absolute left-1/2 -translate-x-1/2 bottom-[20%] w-[clamp(240px,32vw,460px)] aspect-square rounded-full bg-cyan-400/20 blur-3xl animate-pulse" />
           <div className="absolute left-1/2 -translate-x-1/2 bottom-[12%] w-[clamp(240px,30vw,420px)] h-[clamp(40px,6vw,80px)] rounded-[50%] bg-indigo-400/35 blur-lg" />
           <div className="absolute left-1/2 -translate-x-1/2 bottom-[13%] w-[clamp(190px,24vw,330px)] h-[clamp(24px,3.5vw,46px)] rounded-[50%] border-2 border-cyan-300/50 shadow-[0_0_30px_rgba(34,211,238,0.4)]" />
@@ -156,55 +167,64 @@ export function HubV7PreviewPage() {
         </div>
       </div>
 
-      {/* ════════ 左面板「我是谁」: Hero + 能力雷达 + 奖杯 (md+ 贴左; 手机见底部) ════════ */}
-      <div className={`absolute z-20 left-3 xl:left-6 top-1/2 -translate-y-1/2 w-[clamp(228px,23vw,300px)] ${GLASS} p-4 hidden md:flex flex-col gap-3`}>
+      {/* ════════ 左面板「我是谁」: Hero + 能力雷达 + 奖杯槽 (md+ 贴左; 手机见底部) ════════ */}
+      <div className={`absolute z-20 left-4 lg:left-[3%] xl:left-[5%] top-1/2 -translate-y-1/2 w-[clamp(236px,23vw,304px)] ${GLASS} p-4 hidden md:flex flex-col gap-3.5 overflow-hidden`}>
+        {/* 朝中心的青色内光边 (cockpit 融合感) */}
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-1 bg-gradient-to-b from-transparent via-cyan-300/40 to-transparent" />
         <div className="flex items-center gap-2.5">
-          <div className="text-3xl">🐼</div>
+          <div className="text-[40px] leading-none">🐼</div>
           <div className="flex-1 min-w-0">
-            <div className="font-display font-bold text-base leading-none truncate">{real?.name ?? "Selena"}</div>
-            <div className="text-[11px] text-cyan-200/90 mt-1 flex items-center gap-1"><span>🏛️</span>{real ? `${real.tierName} ${real.tierRoman}` : "和平街小学 I"}</div>
+            <div className="font-display font-bold text-lg leading-none truncate">{real?.name ?? "Selena"}</div>
+            <div className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-cyan-400/15 border border-cyan-300/25 px-2 py-0.5 text-[11px] font-bold text-cyan-100"><span>🏛️</span>{real ? `${real.tierName} ${real.tierRoman}` : "和平街小学 I"}</div>
           </div>
-          <div className="flex flex-col items-center"><span className="text-lg leading-none">🔥</span><span className="text-[11px] font-black text-orange-300 leading-none mt-0.5 tabular-nums">{real?.streak ?? 0}</span></div>
+          <div className="flex flex-col items-center rounded-xl bg-orange-400/15 border border-orange-300/25 px-1.5 py-1"><span className="text-base leading-none">🔥</span><span className="text-[12px] font-black text-orange-200 leading-none mt-0.5 tabular-nums">{real?.streak ?? 0}</span></div>
         </div>
         <div>
-          <div className="flex justify-between items-center text-[11px]"><span className="text-amber-300 font-bold">Lv {real?.level ?? 1}</span><span className="text-white/45 tabular-nums">{real ? fmtXp(real.xp) : 0} XP</span></div>
-          <div className="h-2 rounded-full bg-white/15 mt-1 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400" style={{ width: "62%" }} /></div>
+          <div className="flex justify-between items-center text-[12px]"><span className="text-amber-300 font-black">Lv {real?.level ?? 1}</span><span className="text-white/60 tabular-nums font-bold">{real ? fmtXp(real.xp) : 0} XP</span></div>
+          <div className="h-2.5 rounded-full bg-white/15 mt-1 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]" style={{ width: "62%" }} /></div>
         </div>
-        <div className="border-t border-white/10 pt-2">
-          <div className="text-[11px] text-white/70 font-bold mb-0.5 flex items-center gap-1">🛰️ 能力扫描 <span className="text-white/35 font-normal">综合 {real?.composite ?? 510}</span></div>
+        <div className="border-t border-white/10 pt-2.5">
+          <div className="text-[13px] text-white font-bold mb-0.5 flex items-center gap-1.5">🛰️ 能力扫描 <span className="text-white/45 text-[11px] font-normal ml-auto">综合 {real?.composite ?? 510}</span></div>
           <div className="flex justify-center"><Radar vals={abilities} /></div>
-          <div className="text-[10px] text-white/55 text-center -mt-1">薄弱：<b className="text-rose-300">{weakest.label}</b> · 今日已安排练习</div>
+          <div className="text-[11px] text-white/65 text-center -mt-1">薄弱：<b className="text-rose-300">{weakest.label}</b> · 今日已安排</div>
         </div>
-        <Link to="/math/skills" className="border-t border-white/10 pt-2.5 flex items-center gap-2 text-[12px] hover:bg-white/5 rounded-xl -mx-1.5 px-1.5 py-1 transition">
-          <span className="text-lg">🏆</span><span className="text-white/75">奖杯墙</span><span className="ml-auto text-white/40">›</span>
-        </Link>
+        <div className="border-t border-white/10 pt-2.5">
+          <div className="flex items-center text-[12px] mb-1.5"><span className="text-white/75 font-bold">🏆 奖杯墙</span><Link to="/math/skills" className="ml-auto text-cyan-200/80 hover:text-cyan-100">全部 ›</Link></div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {["🥇", "🎖️", "⭐", "🔒"].map((t, i) => (
+              <div key={i} className={`aspect-square rounded-xl flex items-center justify-center text-lg ${i < 3 ? "bg-amber-400/15 border border-amber-300/30 shadow-[0_0_10px_rgba(251,191,36,0.2)]" : "bg-white/[0.04] border border-white/10 opacity-50"}`}>{t}</div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ════════ 右面板「我要做啥」: 期末倒计时 + 今日三环 + 工具网格 (md+ 贴右; 手机见底部) ════════ */}
-      <div className={`absolute z-20 right-3 xl:right-6 top-1/2 -translate-y-1/2 w-[clamp(228px,23vw,300px)] ${GLASS} p-4 hidden md:flex flex-col gap-3`}>
-        <div className="rounded-2xl bg-gradient-to-br from-rose-500/30 to-orange-500/15 border border-rose-400/40 px-3 py-2.5 text-center shadow-[0_0_24px_rgba(244,63,94,0.25)]">
-          <div className="text-[11px] text-rose-200/90 font-bold">🔥 决战{real?.examShort ?? "期末"}</div>
-          <div className="font-display font-black leading-none mt-0.5"><span className="text-4xl bg-gradient-to-r from-amber-200 to-rose-300 bg-clip-text text-transparent tabular-nums">{real?.examDays ?? 39}</span><span className="text-sm text-white/60 ml-1">天</span></div>
+      <div className={`absolute z-20 right-4 lg:right-[3%] xl:right-[5%] top-1/2 -translate-y-1/2 w-[clamp(236px,23vw,304px)] ${GLASS} p-4 hidden md:flex flex-col gap-3.5 overflow-hidden`}>
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-cyan-300/40 to-transparent" />
+        {/* 倒计时大卡 (霓虹橙红 + 发光, designer: 要冲刺情绪) */}
+        <div className="rounded-2xl bg-gradient-to-br from-orange-500/40 via-rose-500/30 to-fuchsia-500/20 border border-orange-300/50 px-3 py-3 text-center shadow-[0_0_28px_rgba(251,113,36,0.4),inset_0_1px_0_rgba(255,255,255,0.25)]">
+          <div className="text-[12px] text-orange-100 font-black tracking-wide">🔥 决战{real?.examShort ?? "期末"}</div>
+          <div className="font-display font-black leading-none mt-1"><span className="text-5xl text-white tabular-nums drop-shadow-[0_0_14px_rgba(255,200,120,0.7)]">{real?.examDays ?? 39}</span><span className="text-base text-orange-100/80 ml-1 font-bold">天</span></div>
         </div>
-        <div className="border-t border-white/10 pt-2">
-          <div className="text-[11px] text-white/70 font-bold mb-1.5">📋 今日三环 · {doneRings}/3</div>
-          <div className="flex flex-col gap-1.5">
+        <div className="border-t border-white/10 pt-2.5">
+          <div className="text-[13px] text-white font-bold mb-2">📋 今日三环 <span className="text-white/45 text-[11px] font-normal ml-1">{doneRings}/3</span></div>
+          <div className="flex flex-col gap-2">
             {ringData.map((r) => (
               <Link key={r.label} to={r.to} className="flex items-center gap-2 hover:bg-white/5 rounded-lg px-1 py-0.5 transition">
-                <span className="text-sm w-5 text-center">{r.pct >= 100 ? "✅" : "⭕"}</span>
-                <span className={`text-[12px] font-bold w-12 ${r.pct >= 100 ? "text-emerald-300" : "text-white/85"}`}>{r.full.slice(0, 4)}</span>
-                <div className="flex-1 h-1.5 rounded-full bg-white/12 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${r.pct}%`, background: r.hue }} /></div>
-                <span className="text-[10px] tabular-nums w-8 text-right" style={{ color: r.hue }}>{r.pct}%</span>
+                <span className="text-sm w-5 text-center">{r.pct >= 100 ? "✅" : "⬜"}</span>
+                <span className={`text-[12px] font-bold w-11 ${r.pct >= 100 ? "text-emerald-300" : "text-white/90"}`}>{r.full.slice(0, 4)}</span>
+                <div className="flex-1 h-2 rounded-full bg-white/12 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full" style={{ width: `${r.pct}%`, background: r.pct >= 100 ? "#34d399" : r.hue, boxShadow: `0 0 6px ${r.hue}` }} /></div>
+                <span className="text-[11px] font-bold tabular-nums w-9 text-right" style={{ color: r.pct >= 100 ? "#34d399" : r.hue }}>{r.pct}%</span>
               </Link>
             ))}
           </div>
         </div>
         <div className="border-t border-white/10 pt-2.5 grid grid-cols-2 gap-2">
           {tools.map((t) => (
-            <Link key={t.label} to={t.to} className="relative rounded-xl bg-white/[0.06] border border-white/10 py-2.5 flex flex-col items-center gap-0.5 hover:bg-white/15 active:scale-95 transition">
-              {t.dot && <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-rose-400 animate-pulse" />}
-              <span className="text-xl leading-none">{t.icon}</span>
-              <span className="text-[10px] text-white/80 font-bold">{t.label}</span>
+            <Link key={t.label} to={t.to} className="relative rounded-xl bg-white/[0.08] border border-white/15 py-3 flex flex-col items-center gap-1 hover:bg-white/[0.18] active:scale-95 transition shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+              {t.dot && <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-rose-400 animate-pulse shadow-[0_0_6px_rgba(244,63,94,0.8)]" />}
+              <span className="text-2xl leading-none">{t.icon}</span>
+              <span className="text-[11px] text-white/90 font-bold">{t.label}</span>
             </Link>
           ))}
         </div>
@@ -217,7 +237,7 @@ export function HubV7PreviewPage() {
           <span className="text-lg">🐼</span>{nextRing ? `点这里 → 第 ${doneRings + 1} 环: ${nextRing.full}!` : "三环全闭, 你太强了!"}
         </div>
         <Link to={nextRing ? nextRing.to : "/math/train?mode=mock_exam"}
-          className="w-full rounded-3xl py-4 px-6 text-center text-amber-950 shadow-[0_12px_50px_rgba(251,191,36,0.6)] bg-gradient-to-r from-amber-300 via-orange-400 to-pink-400 active:scale-[0.98] transition animate-[pulse_2.6s_ease-in-out_infinite]">
+          className="w-full rounded-3xl py-4 px-6 text-center text-amber-950 border-b-[5px] border-orange-600/60 shadow-[0_14px_54px_rgba(251,191,36,0.65),inset_0_2px_0_rgba(255,255,255,0.5)] bg-gradient-to-r from-amber-200 via-orange-400 to-pink-400 active:scale-[0.98] active:translate-y-0.5 active:border-b-2 transition animate-[pulse_2.6s_ease-in-out_infinite]">
           <div className="font-display font-black text-xl leading-none">{ctaTitle}</div>
           <div className="text-xs font-bold text-amber-900/80 mt-1">{ctaSub}</div>
         </Link>
