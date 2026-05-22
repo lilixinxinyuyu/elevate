@@ -230,16 +230,17 @@ export function HubV7PreviewPage() {
         </div>
       </div>
 
-      {/* ════════ 底部唯一主 CTA (动态指向下一环) ════════ */}
-      <div className="absolute bottom-[88px] md:bottom-[5%] left-1/2 -translate-x-1/2 z-30 w-[min(90vw,420px)] flex flex-col items-center gap-2">
-        {/* 熊猫气泡 (强化 CTA, 不抢指令) */}
-        <div className={`${GLASS} px-3 py-1.5 text-[11px] text-white/85 flex items-center gap-1.5 self-end mr-1`}>
-          <span className="text-lg">🐼</span>{nextRing ? `点这里 → 第 ${doneRings + 1} 环: ${nextRing.full}!` : "三环全闭, 你太强了!"}
+      {/* ════════ 底部唯一主 CTA (动态指向下一环) — vision review: 上移避开脚部, 白字, 气泡换暖色引导 ════════ */}
+      <div className="absolute bottom-[92px] md:bottom-[8%] left-1/2 -translate-x-1/2 z-30 w-[min(90vw,440px)] flex flex-col items-center gap-2">
+        {/* 暖色引导胶囊 + 呼吸下箭头 (替换灰色网页风气泡; 强化 CTA 不抢指令) */}
+        <div className="flex items-center gap-1.5 rounded-full bg-amber-400/20 border border-amber-300/40 backdrop-blur-md px-3 py-1 text-[12px] font-bold text-amber-100 shadow-[0_0_16px_rgba(251,191,36,0.3)]">
+          <span className="text-base">🐼</span>{nextRing ? `第 ${doneRings + 1} 环, 冲!` : "三环全闭, 你太强了!"}
+          <span className="text-amber-200 animate-bounce" style={{ animationDuration: "1.2s" }}>▾</span>
         </div>
         <Link to={nextRing ? nextRing.to : "/math/train?mode=mock_exam"}
-          className="w-full rounded-3xl py-4 px-6 text-center text-amber-950 border-b-[5px] border-orange-600/60 shadow-[0_14px_54px_rgba(251,191,36,0.65),inset_0_2px_0_rgba(255,255,255,0.5)] bg-gradient-to-r from-amber-200 via-orange-400 to-pink-400 active:scale-[0.98] active:translate-y-0.5 active:border-b-2 transition animate-[pulse_2.6s_ease-in-out_infinite]">
-          <div className="font-display font-black text-xl leading-none">{ctaTitle}</div>
-          <div className="text-xs font-bold text-amber-900/80 mt-1">{ctaSub}</div>
+          className="w-full rounded-3xl py-4 px-6 text-center text-white border-b-[5px] border-orange-700/70 shadow-[0_16px_56px_rgba(251,146,36,0.7),inset_0_2px_0_rgba(255,255,255,0.45)] bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 active:scale-[0.98] active:translate-y-0.5 active:border-b-2 transition animate-[pulse_2.6s_ease-in-out_infinite]">
+          <div className="font-display font-black text-xl leading-none drop-shadow-[0_2px_4px_rgba(120,40,0,0.6)]">{ctaTitle}</div>
+          <div className="text-xs font-bold text-white/90 mt-1 drop-shadow-[0_1px_2px_rgba(120,40,0,0.5)]">{ctaSub}</div>
         </Link>
       </div>
 
