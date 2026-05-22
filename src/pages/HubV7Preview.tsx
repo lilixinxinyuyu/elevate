@@ -120,7 +120,7 @@ export function HubV7PreviewPage() {
       };
       raf = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(raf);
-    }, [target, ms]);
+    }, [target, ms, revealed]); // 必须含 revealed: 它在 target settle 后才翻 true, 漏了会卡在 0
     return v;
   };
   const examDaysAnim = useCountUp(real?.examDays ?? 38);
