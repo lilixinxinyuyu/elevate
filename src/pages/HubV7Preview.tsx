@@ -221,7 +221,7 @@ export function HubV7PreviewPage() {
       {/* ════════ 左面板「我是谁」: Hero + 能力雷达 + 奖杯槽 (md+ 贴左; 手机见底部) ════════ */}
       <div className={`absolute z-20 left-4 lg:left-[3%] xl:left-[5%] top-1/2 -translate-y-1/2 w-[clamp(236px,23vw,304px)] ${GLASS} p-4 hidden md:flex flex-col gap-3.5 overflow-hidden`}>
         {/* 朝中心的青色内光边 (cockpit 融合感) */}
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-1 bg-gradient-to-b from-transparent via-cyan-300/40 to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-1 bg-gradient-to-b from-transparent via-cyan-300/40 to-transparent animate-[pulse_4s_ease-in-out_infinite]" />
         <div className="flex items-center gap-2.5">
           <div className="text-[40px] leading-none">🐼</div>
           <div className="flex-1 min-w-0">
@@ -242,7 +242,7 @@ export function HubV7PreviewPage() {
             <span className="text-base">📈</span>
             <span className="text-[13px] font-black text-emerald-200">比上周 <span style={{ color: topGain.hue }}>{topGain.label} +{topGain.d}</span></span>
           </div>
-          <div className="text-[10px] text-white/60 text-center mt-1">虚线=上周的你 · 补 <b className="text-amber-200">{weakest.label}</b> 把雷达拉满 ⬆</div>
+          <div className="text-[11px] text-white/80 text-center mt-1 font-medium">虚线=上周的你 · 补 <b className="text-amber-200">{weakest.label}</b> 把雷达拉满 ⬆</div>
         </div>
         <div className="border-t border-white/10 pt-2.5">
           <div className="flex items-center text-[12px] mb-1.5"><span className="text-white/75 font-bold">🏆 奖杯墙</span><Link to="/math/skills" className="ml-auto text-cyan-200/80 hover:text-cyan-100">全部 ›</Link></div>
@@ -256,7 +256,7 @@ export function HubV7PreviewPage() {
 
       {/* ════════ 右面板「我要做啥」: 期末倒计时 + 今日三环 + 工具网格 (md+ 贴右; 手机见底部) ════════ */}
       <div className={`absolute z-20 right-4 lg:right-[3%] xl:right-[5%] top-1/2 -translate-y-1/2 w-[clamp(236px,23vw,304px)] ${GLASS} p-4 hidden md:flex flex-col gap-3.5 overflow-hidden`}>
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-cyan-300/40 to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-cyan-300/40 to-transparent animate-[pulse_4s_ease-in-out_infinite]" />
         {/* 倒计时大卡 (霓虹橙红 + 发光, designer: 要冲刺情绪) */}
         <div className="rounded-2xl bg-gradient-to-br from-orange-500/40 via-rose-500/30 to-fuchsia-500/20 border border-orange-300/50 px-3 py-3 shadow-[0_0_28px_rgba(251,113,36,0.4),inset_0_1px_0_rgba(255,255,255,0.25)]">
           <div className="text-center">
@@ -265,18 +265,18 @@ export function HubV7PreviewPage() {
           </div>
           {/* 星际航线图: 把"还剩 N 天"重构成"航程" — 3 阶段 + 飞船在当前阶段 + 终点 Boss (心理学: 时间焦虑→每天前进一格) */}
           <div className="mt-3">
-            <div className="relative h-3.5 rounded-full overflow-hidden flex shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
-              <div className="h-full bg-cyan-400/60" style={{ width: "42%" }} />
+            <div className="relative h-3.5 rounded-full flex shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div className="h-full rounded-l-full bg-cyan-400/60" style={{ width: "42%" }} />
               <div className="h-full bg-amber-400/60" style={{ width: "34%" }} />
               <div className="h-full bg-rose-500/70" style={{ width: "24%" }} />
-              {/* 终点 Boss 旗 + 飞船随临近右移 (放大, 让"每天前进一格"砸脸上) */}
-              <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[13px] leading-none drop-shadow-[0_0_4px_#000]">⚔️</span>
-              <span className="absolute -top-[7px] text-[18px] leading-none drop-shadow-[0_0_5px_#000] transition-[left] duration-[1200ms] ease-out" style={{ left: `calc(${revealed ? shipPct : 0}% - 9px)` }}>🚀</span>
+              {/* 终点 = 期末大魔王 (破框溢出 + 发光, 让"打谁"砸脸上) + 飞船随临近右移 */}
+              <span className="absolute -right-2 -top-2 text-[22px] leading-none drop-shadow-[0_0_8px_rgba(244,63,94,0.9)]">🐲</span>
+              <span className="absolute -top-[9px] text-[22px] leading-none drop-shadow-[0_0_6px_#000] transition-[left] duration-[1200ms] ease-out" style={{ left: `calc(${revealed ? shipPct : 0}% - 11px)` }}>🚀</span>
             </div>
-            <div className="flex justify-between text-[9px] mt-1.5 font-bold">
+            <div className="flex justify-between text-[9px] mt-2 font-bold">
               <span className={phase === 0 ? "text-cyan-200" : "text-white/40"}>夯实基础</span>
               <span className={phase === 1 ? "text-amber-200" : "text-white/40"}>薄弱攻坚</span>
-              <span className={phase === 2 ? "text-rose-200" : "text-white/40"}>冲刺决战</span>
+              <span className={phase === 2 ? "text-rose-200" : "text-rose-300/70"}>期末大魔王 🐲</span>
             </div>
           </div>
         </div>
@@ -289,7 +289,7 @@ export function HubV7PreviewPage() {
               const c = isBoss ? "#fb7185" : r.pct >= 100 ? "#34d399" : r.hue;
               return (
                 <Link key={r.label} to={r.to} className={`flex items-center gap-2 rounded-lg px-1.5 py-1 transition ${isBoss ? "bg-violet-500/15 border border-violet-400/30 hover:bg-violet-500/25" : "hover:bg-white/5"}`}>
-                  <span className={`text-center ${isBoss ? "text-xl w-6" : "text-sm w-5"}`}>{isBoss ? boss.e : r.pct >= 100 ? "✅" : "⬜"}</span>
+                  <span className={`text-center ${isBoss ? "text-2xl w-7 drop-shadow-[0_0_7px_rgba(244,63,94,0.75)]" : "text-sm w-5"}`}>{isBoss ? boss.e : r.pct >= 100 ? "✅" : "⬜"}</span>
                   <span className={`font-bold ${isBoss ? "text-[12px] text-violet-100" : "text-[12px] w-11 " + (r.pct >= 100 ? "text-emerald-300" : "text-white/90")}`}>{isBoss ? boss.n : r.full.slice(0, 4)}</span>
                   <div className={`flex-1 rounded-full bg-white/12 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] ${isBoss ? "h-3" : "h-2"}`}><div className="h-full rounded-full transition-[width] duration-[1100ms] ease-out" style={{ width: revealed ? `${w}%` : isBoss ? "100%" : "0%", background: isBoss ? "linear-gradient(90deg,#fb7185,#e879f9)" : r.pct >= 100 ? "#34d399" : r.hue, boxShadow: `0 0 6px ${c}` }} /></div>
                   <span className="text-[11px] font-bold tabular-nums w-10 text-right" style={{ color: isBoss ? "#fda4af" : c }}>{isBoss ? `HP${bossHp}` : `${r.pct}%`}</span>
