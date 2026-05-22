@@ -23,13 +23,15 @@ const GLASS =
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(0,0,0,0.3),0_10px_44px_rgba(0,0,0,0.55)]";
 
 /** 4 维能力雷达 (彩色, 高级感来源 — 从原版搬进左面板)。 */
-function Radar({ vals, grow }: { vals: { label: string; v: number; hue: string }[]; grow?: boolean }) {
+function Radar({ vals, prev, grow }: { vals: { label: string; v: number; hue: string }[]; prev?: number[]; grow?: boolean }) {
   const cx = 72, cy = 70, R = 50, n = vals.length;
   const pt = (i: number, r: number): [number, number] => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2;
     return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
   };
   const poly = vals.map((d, i) => pt(i, R * Math.min(1, Math.max(0.04, d.v / 100))).join(",")).join(" ");
+  // 上周的自己 (虚线轮廓) — 安全的单用户攀比: 跟过去的自己比, 看见成长 (心理学 #2)
+  const prevPoly = prev ? prev.map((v, i) => pt(i, R * Math.min(1, Math.max(0.04, v / 100))).join(",")).join(" ") : null;
   return (
     <svg width="150" height="142" viewBox="0 0 150 142">
       <defs>
@@ -43,6 +45,7 @@ function Radar({ vals, grow }: { vals: { label: string; v: number; hue: string }
         <polygon key={i} points={vals.map((_, j) => pt(j, R * g).join(",")).join(" ")} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
       ))}
       {vals.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />; })}
+      {prevPoly && <polygon points={prevPoly} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeDasharray="3 3" strokeLinejoin="round" />}
       <g style={{ transformOrigin: `${cx}px ${cy}px`, transform: grow ? "scale(1)" : "scale(0.02)", opacity: grow ? 1 : 0, transition: "transform 0.9s cubic-bezier(0.34,1.56,0.64,1), opacity 0.5s ease-out" }}>
         <polygon points={poly} fill="url(#radarFill)" stroke="#7dd3fc" strokeWidth="2.5" filter="url(#radarGlow)" strokeLinejoin="round" />
         {vals.map((d, i) => { const [x, y] = pt(i, R * Math.min(1, Math.max(0.04, d.v / 100))); return <circle key={i} cx={x} cy={y} r="3" fill="#fff" stroke={d.hue} strokeWidth="2" />; })}
@@ -126,11 +129,13 @@ export function HubV7PreviewPage() {
   const examDaysAnim = useCountUp(real?.examDays ?? 38);
 
   // 今日三环 (预览 mock; 真版接 fluency/challengeTodayCount/dueMistakes)。CTA 与熊猫气泡共用 nextRing。
+  // 三环 = 必胜(保底启动) + 薄弱修复(补短板) + 荣耀挑战(可选, 给称号碎片) — 心理学 #3。
+  // 错题用正向"修复"框架(非红色羞辱告警)。
   const ringData = [
-    { label: "速算", full: "速算热身", pct: 100, hue: "#22d3ee", to: "/math/fluency", reward: "基本功热身 ✓" },
-    { label: "挑战", full: "今日挑战", pct: 45, hue: "#a78bfa", to: "/math/train", reward: "今日主练 · +80 XP" },
-    { label: "错题", full: "错题复活", pct: real && real.mistakeCount > 0 ? 0 : 100, hue: "#fbbf24",
-      to: "/math/mistakes", reward: real && real.mistakeCount > 0 ? `复活 ${real.mistakeCount} 道错题 · +60 XP` : "错题已清 · 保持" },
+    { label: "必胜", full: "速算热身", pct: 100, hue: "#22d3ee", to: "/math/fluency", reward: "今日必胜 ✓ 已启动" },
+    { label: "修复", full: "薄弱修复", pct: real && real.mistakeCount > 0 ? 0 : 100, hue: "#a78bfa",
+      to: "/math/mistakes", reward: real && real.mistakeCount > 0 ? `修复 ${real.mistakeCount} 处薄弱 · +60 XP` : "薄弱已清 · 保持" },
+    { label: "荣耀", full: "荣耀挑战", pct: 45, hue: "#fbbf24", to: "/math/train", reward: "今日主练 · 解锁称号碎片" },
   ];
   const nextRing = ringData.find((r) => r.pct < 100);
   const doneRings = ringData.filter((r) => r.pct >= 100).length;
@@ -147,6 +152,11 @@ export function HubV7PreviewPage() {
       ]
     : [{ label: "准确", v: 78, hue: "#22d3ee" }, { label: "熟练", v: 62, hue: "#a78bfa" }, { label: "坚持", v: 40, hue: "#fb923c" }, { label: "广度", v: 50, hue: "#34d399" }];
   const weakest = abilities.reduce((a, b) => (b.v < a.v ? b : a));
+  // 上周的自己 (预览 mock = 当前的 ~82-90%; 真版接 7 天前快照) → 雷达虚线 + 成长率 (心理学 #2)
+  const lastWeek = abilities.map((a, i) => Math.max(8, Math.round(a.v * (0.82 + 0.025 * i))));
+  const topGain = abilities
+    .map((a, i) => ({ label: a.label, hue: a.hue, d: a.v - lastWeek[i]! }))
+    .sort((x, y) => y.d - x.d)[0]!;
 
   const tools = [
     { icon: "🗺️", label: "技能图", to: "/math/skills" },
@@ -214,8 +224,13 @@ export function HubV7PreviewPage() {
         </div>
         <div className="border-t border-white/10 pt-2.5">
           <div className="text-[13px] text-white font-bold mb-0.5 flex items-center gap-1.5">🛰️ 能力扫描 <span className="text-white/45 text-[11px] font-normal ml-auto">综合 {real?.composite ?? 510}</span></div>
-          <div className="flex justify-center"><Radar vals={abilities} grow={revealed} /></div>
-          <div className="text-[11px] text-white/65 text-center -mt-1">薄弱：<b className="text-rose-300">{weakest.label}</b> · 今日已安排</div>
+          <div className="flex justify-center"><Radar vals={abilities} prev={lastWeek} grow={revealed} /></div>
+          {/* 成长镜像: 跟上周的自己比 (安全攀比) + 木桶薄弱提示 */}
+          <div className="flex items-center justify-center gap-2 text-[11px] -mt-1">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 px-1.5 py-0.5 font-bold" style={{ color: topGain.hue }}>📈 {topGain.label} 比上周 +{topGain.d}</span>
+            <span className="text-white/60">补 <b className="text-amber-200">{weakest.label}</b> 拉满</span>
+          </div>
+          <div className="text-[9px] text-white/30 text-center mt-0.5">虚线 = 上周的你</div>
         </div>
         <div className="border-t border-white/10 pt-2.5">
           <div className="flex items-center text-[12px] mb-1.5"><span className="text-white/75 font-bold">🏆 奖杯墙</span><Link to="/math/skills" className="ml-auto text-cyan-200/80 hover:text-cyan-100">全部 ›</Link></div>
