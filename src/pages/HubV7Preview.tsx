@@ -237,12 +237,12 @@ export function HubV7PreviewPage() {
         <div className="border-t border-white/10 pt-2.5">
           <div className="text-[13px] text-white font-bold mb-0.5 flex items-center gap-1.5">🛰️ 能力扫描 <span className="text-white/45 text-[11px] font-normal ml-auto">综合 {real?.composite ?? 510}</span></div>
           <div className="flex justify-center"><Radar vals={abilities} prev={lastWeek} grow={revealed} /></div>
-          {/* 成长镜像: 跟上周的自己比 (安全攀比) + 木桶薄弱提示 */}
-          <div className="flex items-center justify-center gap-2 text-[11px] -mt-1">
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 px-1.5 py-0.5 font-bold" style={{ color: topGain.hue }}>📈 {topGain.label} 比上周 +{topGain.d}</span>
-            <span className="text-white/60">补 <b className="text-amber-200">{weakest.label}</b> 拉满</span>
+          {/* 成长镜像: 跟上周的自己比 (安全攀比) — 放大成主徽章, 砸脸上 */}
+          <div className="-mt-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-400/25 to-cyan-400/15 border border-emerald-300/40 px-2.5 py-1.5 shadow-[0_0_14px_rgba(52,211,153,0.3)]">
+            <span className="text-base">📈</span>
+            <span className="text-[13px] font-black text-emerald-200">比上周 <span style={{ color: topGain.hue }}>{topGain.label} +{topGain.d}</span></span>
           </div>
-          <div className="text-[9px] text-white/30 text-center mt-0.5">虚线 = 上周的你</div>
+          <div className="text-[10px] text-white/60 text-center mt-1">虚线=上周的你 · 补 <b className="text-amber-200">{weakest.label}</b> 把雷达拉满 ⬆</div>
         </div>
         <div className="border-t border-white/10 pt-2.5">
           <div className="flex items-center text-[12px] mb-1.5"><span className="text-white/75 font-bold">🏆 奖杯墙</span><Link to="/math/skills" className="ml-auto text-cyan-200/80 hover:text-cyan-100">全部 ›</Link></div>
@@ -264,46 +264,41 @@ export function HubV7PreviewPage() {
             <div className="font-display font-black leading-none mt-1"><span className="text-5xl text-white tabular-nums drop-shadow-[0_0_14px_rgba(255,200,120,0.7)]">{examDaysAnim}</span><span className="text-base text-orange-100/80 ml-1 font-bold">天</span></div>
           </div>
           {/* 星际航线图: 把"还剩 N 天"重构成"航程" — 3 阶段 + 飞船在当前阶段 + 终点 Boss (心理学: 时间焦虑→每天前进一格) */}
-          <div className="mt-2.5">
-            <div className="relative h-2 rounded-full overflow-hidden flex shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]">
-              <div className="h-full bg-cyan-400/55" style={{ width: "42%" }} />
-              <div className="h-full bg-amber-400/55" style={{ width: "34%" }} />
-              <div className="h-full bg-rose-500/65" style={{ width: "24%" }} />
-              {/* 飞船在当前阶段位置 */}
-              <span className="absolute -top-1 text-[11px] leading-none drop-shadow-[0_0_4px_#000]" style={{ left: `calc(${shipPct}% - 6px)` }}>🚀</span>
+          <div className="mt-3">
+            <div className="relative h-3.5 rounded-full overflow-hidden flex shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
+              <div className="h-full bg-cyan-400/60" style={{ width: "42%" }} />
+              <div className="h-full bg-amber-400/60" style={{ width: "34%" }} />
+              <div className="h-full bg-rose-500/70" style={{ width: "24%" }} />
+              {/* 终点 Boss 旗 + 飞船随临近右移 (放大, 让"每天前进一格"砸脸上) */}
+              <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[13px] leading-none drop-shadow-[0_0_4px_#000]">⚔️</span>
+              <span className="absolute -top-[7px] text-[18px] leading-none drop-shadow-[0_0_5px_#000] transition-[left] duration-[1200ms] ease-out" style={{ left: `calc(${revealed ? shipPct : 0}% - 9px)` }}>🚀</span>
             </div>
-            <div className="flex justify-between text-[8px] text-white/55 mt-1 font-bold">
-              <span className={phase === 0 ? "text-cyan-200" : ""}>夯实基础</span>
-              <span className={phase === 1 ? "text-amber-200" : ""}>薄弱攻坚</span>
-              <span className={phase === 2 ? "text-rose-200" : ""}>冲刺 ⚔️</span>
+            <div className="flex justify-between text-[9px] mt-1.5 font-bold">
+              <span className={phase === 0 ? "text-cyan-200" : "text-white/40"}>夯实基础</span>
+              <span className={phase === 1 ? "text-amber-200" : "text-white/40"}>薄弱攻坚</span>
+              <span className={phase === 2 ? "text-rose-200" : "text-white/40"}>冲刺决战</span>
             </div>
           </div>
         </div>
         <div className="border-t border-white/10 pt-2.5">
           <div className="text-[13px] text-white font-bold mb-2">📋 今日三环 <span className="text-white/45 text-[11px] font-normal ml-1">{doneRings}/3</span></div>
           <div className="flex flex-col gap-2">
-            {ringData.map((r) => (
-              <Link key={r.label} to={r.to} className="flex items-center gap-2 hover:bg-white/5 rounded-lg px-1 py-0.5 transition">
-                <span className="text-sm w-5 text-center">{r.pct >= 100 ? "✅" : "⬜"}</span>
-                <span className={`text-[12px] font-bold w-11 ${r.pct >= 100 ? "text-emerald-300" : "text-white/90"}`}>{r.full.slice(0, 4)}</span>
-                <div className="flex-1 h-2 rounded-full bg-white/12 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full transition-[width] duration-[1100ms] ease-out" style={{ width: revealed ? `${r.pct}%` : "0%", background: r.pct >= 100 ? "#34d399" : r.hue, boxShadow: `0 0 6px ${r.hue}` }} /></div>
-                <span className="text-[11px] font-bold tabular-nums w-9 text-right" style={{ color: r.pct >= 100 ? "#34d399" : r.hue }}>{r.pct}%</span>
-              </Link>
-            ))}
+            {ringData.map((r) => {
+              const isBoss = r.label === "修复"; // 薄弱修复环 = 薄弱点 Boss (心理学 #1, 合并进三环, 不再单列卡)
+              const w = isBoss ? bossHp : r.pct;
+              const c = isBoss ? "#fb7185" : r.pct >= 100 ? "#34d399" : r.hue;
+              return (
+                <Link key={r.label} to={r.to} className={`flex items-center gap-2 rounded-lg px-1.5 py-1 transition ${isBoss ? "bg-violet-500/15 border border-violet-400/30 hover:bg-violet-500/25" : "hover:bg-white/5"}`}>
+                  <span className={`text-center ${isBoss ? "text-xl w-6" : "text-sm w-5"}`}>{isBoss ? boss.e : r.pct >= 100 ? "✅" : "⬜"}</span>
+                  <span className={`font-bold ${isBoss ? "text-[12px] text-violet-100" : "text-[12px] w-11 " + (r.pct >= 100 ? "text-emerald-300" : "text-white/90")}`}>{isBoss ? boss.n : r.full.slice(0, 4)}</span>
+                  <div className={`flex-1 rounded-full bg-white/12 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)] ${isBoss ? "h-3" : "h-2"}`}><div className="h-full rounded-full transition-[width] duration-[1100ms] ease-out" style={{ width: revealed ? `${w}%` : isBoss ? "100%" : "0%", background: isBoss ? "linear-gradient(90deg,#fb7185,#e879f9)" : r.pct >= 100 ? "#34d399" : r.hue, boxShadow: `0 0 6px ${c}` }} /></div>
+                  <span className="text-[11px] font-bold tabular-nums w-10 text-right" style={{ color: isBoss ? "#fda4af" : c }}>{isBoss ? `HP${bossHp}` : `${r.pct}%`}</span>
+                </Link>
+              );
+            })}
           </div>
+          <div className="text-[9px] text-white/45 mt-1.5 pl-1">⚔️ 修复 1 题 = {boss.n} −1 HP · 击败解锁奖杯 🏆</div>
         </div>
-        {/* 薄弱点 Boss 化 (心理学 #1): 外部化 — 击败它 = 补薄弱, 去羞耻 */}
-        <Link to="/math/mistakes" className="border-t border-white/10 pt-2.5 block group">
-          <div className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500/25 to-indigo-500/10 border border-violet-400/35 px-2.5 py-2 hover:from-violet-500/35 transition shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-            <span className="text-2xl group-hover:scale-110 transition-transform">{boss.e}</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-bold text-violet-100 truncate">{boss.n}<span className="text-white/45 font-normal"> · {weakest.label}弱点</span></div>
-              <div className="h-1.5 rounded-full bg-white/12 mt-1 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full bg-gradient-to-r from-rose-400 to-fuchsia-400 shadow-[0_0_6px_rgba(244,63,94,0.6)] transition-[width] duration-[1100ms] ease-out" style={{ width: revealed ? `${bossHp}%` : "100%" }} /></div>
-            </div>
-            <span className="text-[10px] text-rose-200 font-bold whitespace-nowrap">HP{bossHp}</span>
-          </div>
-          <div className="text-[9px] text-white/40 text-center mt-1">修复薄弱 = 削它的血 · 击败解锁奖杯 🏆</div>
-        </Link>
         <div className="border-t border-white/10 pt-2.5 grid grid-cols-2 gap-2">
           {tools.map((t) => (
             <Link key={t.label} to={t.to} className="relative rounded-xl bg-white/[0.08] border border-white/15 py-3 flex flex-col items-center gap-1 hover:bg-white/[0.18] active:scale-95 transition shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
