@@ -23,7 +23,7 @@ const GLASS =
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(0,0,0,0.3),0_10px_44px_rgba(0,0,0,0.55)]";
 
 /** 4 维能力雷达 (彩色, 高级感来源 — 从原版搬进左面板)。 */
-function Radar({ vals }: { vals: { label: string; v: number; hue: string }[] }) {
+function Radar({ vals, grow }: { vals: { label: string; v: number; hue: string }[]; grow?: boolean }) {
   const cx = 72, cy = 70, R = 50, n = vals.length;
   const pt = (i: number, r: number): [number, number] => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2;
@@ -43,8 +43,10 @@ function Radar({ vals }: { vals: { label: string; v: number; hue: string }[] }) 
         <polygon key={i} points={vals.map((_, j) => pt(j, R * g).join(",")).join(" ")} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
       ))}
       {vals.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />; })}
-      <polygon points={poly} fill="url(#radarFill)" stroke="#7dd3fc" strokeWidth="2.5" filter="url(#radarGlow)" strokeLinejoin="round" />
-      {vals.map((d, i) => { const [x, y] = pt(i, R * Math.min(1, Math.max(0.04, d.v / 100))); return <circle key={i} cx={x} cy={y} r="3" fill="#fff" stroke={d.hue} strokeWidth="2" />; })}
+      <g style={{ transformOrigin: `${cx}px ${cy}px`, transform: grow ? "scale(1)" : "scale(0.02)", opacity: grow ? 1 : 0, transition: "transform 0.9s cubic-bezier(0.34,1.56,0.64,1), opacity 0.5s ease-out" }}>
+        <polygon points={poly} fill="url(#radarFill)" stroke="#7dd3fc" strokeWidth="2.5" filter="url(#radarGlow)" strokeLinejoin="round" />
+        {vals.map((d, i) => { const [x, y] = pt(i, R * Math.min(1, Math.max(0.04, d.v / 100))); return <circle key={i} cx={x} cy={y} r="3" fill="#fff" stroke={d.hue} strokeWidth="2" />; })}
+      </g>
       {vals.map((d, i) => { const [x, y] = pt(i, R + 14); return <text key={i} x={x} y={y} fill={d.hue} fontSize="12" fontWeight="bold" textAnchor="middle" dominantBaseline="middle">{d.label}</text>; })}
     </svg>
   );
@@ -95,6 +97,33 @@ export function HubV7PreviewPage() {
     return () => { cancelled = true; };
   }, []);
   const fmtXp = (n: number) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
+
+  // step④ 返场 juice: 数据到位后触发"填充"动画 (XP/三环条 0→目标缓动涨, 雷达 pop, 数字 count-up)。
+  // 真版在"练完回大厅"时播; 预览里进场即播一次, 给 Bruce 看 juice 方向。
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!real) return;
+    const t = setTimeout(() => setRevealed(true), 90);
+    return () => clearTimeout(t);
+  }, [real]);
+  // 大数字 count-up (倒计时 / XP)
+  const useCountUp = (target: number, ms = 900) => {
+    const [v, setV] = useState(0);
+    useEffect(() => {
+      if (!revealed) return;
+      const t0 = performance.now();
+      let raf = 0;
+      const tick = (t: number) => {
+        const p = Math.min(1, (t - t0) / ms);
+        setV(Math.round(target * (1 - Math.pow(1 - p, 3)))); // ease-out cubic
+        if (p < 1) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(raf);
+    }, [target, ms]);
+    return v;
+  };
+  const examDaysAnim = useCountUp(real?.examDays ?? 38);
 
   // 今日三环 (预览 mock; 真版接 fluency/challengeTodayCount/dueMistakes)。CTA 与熊猫气泡共用 nextRing。
   const ringData = [
@@ -181,11 +210,11 @@ export function HubV7PreviewPage() {
         </div>
         <div>
           <div className="flex justify-between items-center text-[12px]"><span className="text-amber-300 font-black">Lv {real?.level ?? 1}</span><span className="text-white/60 tabular-nums font-bold">{real ? fmtXp(real.xp) : 0} XP</span></div>
-          <div className="h-2.5 rounded-full bg-white/15 mt-1 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]" style={{ width: "62%" }} /></div>
+          <div className="h-2.5 rounded-full bg-white/15 mt-1 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400 shadow-[0_0_8px_rgba(251,191,36,0.6)] transition-[width] duration-[1100ms] ease-out" style={{ width: revealed ? "62%" : "0%" }} /></div>
         </div>
         <div className="border-t border-white/10 pt-2.5">
           <div className="text-[13px] text-white font-bold mb-0.5 flex items-center gap-1.5">🛰️ 能力扫描 <span className="text-white/45 text-[11px] font-normal ml-auto">综合 {real?.composite ?? 510}</span></div>
-          <div className="flex justify-center"><Radar vals={abilities} /></div>
+          <div className="flex justify-center"><Radar vals={abilities} grow={revealed} /></div>
           <div className="text-[11px] text-white/65 text-center -mt-1">薄弱：<b className="text-rose-300">{weakest.label}</b> · 今日已安排</div>
         </div>
         <div className="border-t border-white/10 pt-2.5">
@@ -204,7 +233,7 @@ export function HubV7PreviewPage() {
         {/* 倒计时大卡 (霓虹橙红 + 发光, designer: 要冲刺情绪) */}
         <div className="rounded-2xl bg-gradient-to-br from-orange-500/40 via-rose-500/30 to-fuchsia-500/20 border border-orange-300/50 px-3 py-3 text-center shadow-[0_0_28px_rgba(251,113,36,0.4),inset_0_1px_0_rgba(255,255,255,0.25)]">
           <div className="text-[12px] text-orange-100 font-black tracking-wide">🔥 决战{real?.examShort ?? "期末"}</div>
-          <div className="font-display font-black leading-none mt-1"><span className="text-5xl text-white tabular-nums drop-shadow-[0_0_14px_rgba(255,200,120,0.7)]">{real?.examDays ?? 39}</span><span className="text-base text-orange-100/80 ml-1 font-bold">天</span></div>
+          <div className="font-display font-black leading-none mt-1"><span className="text-5xl text-white tabular-nums drop-shadow-[0_0_14px_rgba(255,200,120,0.7)]">{examDaysAnim}</span><span className="text-base text-orange-100/80 ml-1 font-bold">天</span></div>
         </div>
         <div className="border-t border-white/10 pt-2.5">
           <div className="text-[13px] text-white font-bold mb-2">📋 今日三环 <span className="text-white/45 text-[11px] font-normal ml-1">{doneRings}/3</span></div>
@@ -213,7 +242,7 @@ export function HubV7PreviewPage() {
               <Link key={r.label} to={r.to} className="flex items-center gap-2 hover:bg-white/5 rounded-lg px-1 py-0.5 transition">
                 <span className="text-sm w-5 text-center">{r.pct >= 100 ? "✅" : "⬜"}</span>
                 <span className={`text-[12px] font-bold w-11 ${r.pct >= 100 ? "text-emerald-300" : "text-white/90"}`}>{r.full.slice(0, 4)}</span>
-                <div className="flex-1 h-2 rounded-full bg-white/12 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full" style={{ width: `${r.pct}%`, background: r.pct >= 100 ? "#34d399" : r.hue, boxShadow: `0 0 6px ${r.hue}` }} /></div>
+                <div className="flex-1 h-2 rounded-full bg-white/12 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]"><div className="h-full rounded-full transition-[width] duration-[1100ms] ease-out" style={{ width: revealed ? `${r.pct}%` : "0%", background: r.pct >= 100 ? "#34d399" : r.hue, boxShadow: `0 0 6px ${r.hue}` }} /></div>
                 <span className="text-[11px] font-bold tabular-nums w-9 text-right" style={{ color: r.pct >= 100 ? "#34d399" : r.hue }}>{r.pct}%</span>
               </Link>
             ))}
@@ -238,9 +267,10 @@ export function HubV7PreviewPage() {
           <span className="text-amber-200 animate-bounce" style={{ animationDuration: "1.2s" }}>▾</span>
         </div>
         <Link to={nextRing ? nextRing.to : "/math/train?mode=mock_exam"}
-          className="w-full rounded-3xl py-4 px-6 text-center text-white border-b-[5px] border-orange-700/70 shadow-[0_16px_56px_rgba(251,146,36,0.7),inset_0_2px_0_rgba(255,255,255,0.45)] bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 active:scale-[0.98] active:translate-y-0.5 active:border-b-2 transition animate-[pulse_2.6s_ease-in-out_infinite]">
-          <div className="font-display font-black text-xl leading-none drop-shadow-[0_2px_4px_rgba(120,40,0,0.6)]">{ctaTitle}</div>
-          <div className="text-xs font-bold text-white/90 mt-1 drop-shadow-[0_1px_2px_rgba(120,40,0,0.5)]">{ctaSub}</div>
+          className="relative overflow-hidden w-full rounded-3xl py-4 px-6 text-center text-white border-b-[5px] border-orange-700/70 shadow-[0_16px_56px_rgba(251,146,36,0.7),inset_0_2px_0_rgba(255,255,255,0.45)] bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 active:scale-[0.98] active:translate-y-0.5 active:border-b-2 transition animate-[pulse_2.6s_ease-in-out_infinite]">
+          <span className="hubv7-cta-shimmer" aria-hidden />
+          <div className="relative font-display font-black text-xl leading-none drop-shadow-[0_2px_4px_rgba(120,40,0,0.6)]">{ctaTitle}</div>
+          <div className="relative text-xs font-bold text-white/90 mt-1 drop-shadow-[0_1px_2px_rgba(120,40,0,0.5)]">{ctaSub}</div>
         </Link>
       </div>
 
